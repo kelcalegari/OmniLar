@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/domain/value_objects/money.dart';
+import '../../../../core/widgets/money_input_field.dart';
 import '../../domain/entities/house_expense.dart';
 import '../../domain/entities/split_rule.dart';
 import '../../domain/entities/category.dart';
@@ -17,7 +18,6 @@ class AddExpensePage extends StatefulWidget {
 
 class _AddExpensePageState extends State<AddExpensePage> {
   final _titleController = TextEditingController();
-  final _amountController = TextEditingController();
 
   String? _selectedCategoryId;
   String? _selectedPaidByMemberId;
@@ -31,14 +31,7 @@ class _AddExpensePageState extends State<AddExpensePage> {
   @override
   void dispose() {
     _titleController.dispose();
-    _amountController.dispose();
     super.dispose();
-  }
-
-  void _onAmountChanged(String value) {
-    setState(() {
-      _cents = Money.parse(value).cents;
-    });
   }
 
   void _submit() {
@@ -120,38 +113,19 @@ class _AddExpensePageState extends State<AddExpensePage> {
           body: ListView(
             padding: const EdgeInsets.all(20),
             children: [
-              // Display de Valor Grande
-              Center(
-                child: Column(
-                  children: [
-                    Text('Valor da Despesa', style: theme.textTheme.bodySmall),
-                    const SizedBox(height: 4),
-                    Text(
-                      Money(_cents).format(),
-                      style: TextStyle(
-                        fontSize: 38,
-                        fontWeight: FontWeight.bold,
-                        color: _cents > 0 ? AppColors.primary : theme.textTheme.bodySmall?.color,
-                        letterSpacing: -0.5,
-                      ),
-                    ),
-                  ],
-                ),
+              // Campo ATM Contínuo de Valor
+              MoneyInputField(
+                label: 'Valor da Despesa',
+                initialValue: Money(_cents),
+                primaryColor: AppColors.primary,
+                quickAddCents: const [1000, 2000, 5000, 10000], // +10, +20, +50, +100
+                onChanged: (money) {
+                  setState(() {
+                    _cents = money.cents;
+                  });
+                },
               ),
-              const SizedBox(height: 16),
-
-              // Input de Digitação de Valor
-              TextField(
-                keyboardType: TextInputType.number,
-                decoration: InputDecoration(
-                  labelText: 'Digitar Valor (R\$)',
-                  hintText: '0,00',
-                  prefixIcon: const Icon(Icons.attach_money_rounded),
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                ),
-                onChanged: _onAmountChanged,
-              ),
-              const SizedBox(height: 16),
+              const SizedBox(height: 20),
 
               // Input de Nome / Descrição
               TextField(

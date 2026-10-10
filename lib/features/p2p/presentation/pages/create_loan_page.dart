@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/domain/value_objects/money.dart';
+import '../../../../core/widgets/money_input_field.dart';
 import '../../domain/entities/p2p_loan.dart';
 import '../../domain/services/p2p_calculator.dart';
 import '../cubit/p2p_cubit.dart';
@@ -28,12 +29,6 @@ class _CreateLoanPageState extends State<CreateLoanPage> {
     _titleController.dispose();
     _descriptionController.dispose();
     super.dispose();
-  }
-
-  void _onAmountChanged(String value) {
-    setState(() {
-      _cents = Money.parse(value).cents;
-    });
   }
 
   void _submit() {
@@ -97,36 +92,19 @@ class _CreateLoanPageState extends State<CreateLoanPage> {
       body: ListView(
         padding: const EdgeInsets.all(20),
         children: [
-          Center(
-            child: Column(
-              children: [
-                Text('Valor Total', style: theme.textTheme.bodySmall),
-                const SizedBox(height: 4),
-                Text(
-                  Money(_cents).format(),
-                  style: TextStyle(
-                    fontSize: 38,
-                    fontWeight: FontWeight.bold,
-                    color: _cents > 0 ? AppColors.accent : theme.textTheme.bodySmall?.color,
-                    letterSpacing: -0.5,
-                  ),
-                ),
-              ],
-            ),
+          // Campo ATM Contínuo de Valor
+          MoneyInputField(
+            label: 'Valor Total do Empréstimo',
+            initialValue: Money(_cents),
+            primaryColor: AppColors.accent,
+            quickAddCents: const [5000, 10000, 20000, 50000], // +50, +100, +200, +500
+            onChanged: (money) {
+              setState(() {
+                _cents = money.cents;
+              });
+            },
           ),
           const SizedBox(height: 20),
-
-          TextField(
-            keyboardType: TextInputType.number,
-            decoration: InputDecoration(
-              labelText: 'Valor (R\$)',
-              hintText: '0,00',
-              prefixIcon: const Icon(Icons.monetization_on_outlined, color: AppColors.accent),
-              border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-            ),
-            onChanged: _onAmountChanged,
-          ),
-          const SizedBox(height: 16),
 
           TextField(
             controller: _titleController,

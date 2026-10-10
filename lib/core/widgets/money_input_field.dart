@@ -16,6 +16,8 @@ class MoneyInputField extends StatefulWidget {
   final ValueChanged<Money> onChanged;
   final String label;
   final bool autoFocus;
+  final bool showKeypad;
+  final Color? primaryColor;
   final List<int>? quickAddCents; // Ex: [1000, 5000, 10000] para +R$10, +R$50, +R$100
 
   const MoneyInputField({
@@ -24,6 +26,8 @@ class MoneyInputField extends StatefulWidget {
     required this.onChanged,
     this.label = 'Valor',
     this.autoFocus = false,
+    this.showKeypad = true,
+    this.primaryColor,
     this.quickAddCents,
   });
 
@@ -78,6 +82,7 @@ class _MoneyInputFieldState extends State<MoneyInputField> {
     final theme = Theme.of(context);
     final money = Money(_cents);
     final formatted = money.format();
+    final accentColor = widget.primaryColor ?? theme.colorScheme.primary;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -98,7 +103,7 @@ class _MoneyInputFieldState extends State<MoneyInputField> {
                     fontSize: 40,
                     fontWeight: FontWeight.bold,
                     letterSpacing: -0.5,
-                    color: _cents > 0 ? theme.colorScheme.primary : theme.textTheme.bodySmall?.color,
+                    color: _cents > 0 ? accentColor : theme.textTheme.bodySmall?.color,
                   ),
                 ),
               ),
@@ -119,9 +124,10 @@ class _MoneyInputFieldState extends State<MoneyInputField> {
             }).toList(),
           ),
         ],
-        const SizedBox(height: 20),
-        // Teclado Numérico Embutido Elegante
-        _buildNumericKeypad(theme),
+        if (widget.showKeypad) ...[
+          const SizedBox(height: 20),
+          _buildNumericKeypad(theme),
+        ],
       ],
     );
   }
