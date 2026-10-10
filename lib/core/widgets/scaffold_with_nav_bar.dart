@@ -67,7 +67,7 @@ class ScaffoldWithNavBar extends StatelessWidget {
                 NavigationRailDestination(
                   icon: Icon(Icons.checklist_rtl_outlined),
                   selectedIcon: Icon(Icons.checklist_rtl_rounded),
-                  label: Text('Tarefas & Compras'),
+                  label: Text('Tarefas'),
                 ),
                 NavigationRailDestination(
                   icon: Icon(Icons.calendar_today_outlined),
@@ -119,7 +119,7 @@ class ScaffoldWithNavBar extends StatelessWidget {
           NavigationDestination(
             icon: Icon(Icons.checklist_rtl_outlined),
             selectedIcon: Icon(Icons.checklist_rtl_rounded),
-            label: 'Tarefas & Compras',
+            label: 'Tarefas',
           ),
           NavigationDestination(
             icon: Icon(Icons.calendar_today_outlined),
