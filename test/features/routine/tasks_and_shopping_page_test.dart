@@ -94,5 +94,30 @@ void main() {
       // Deve encontrar checkboxes de tarefas
       expect(find.byType(Checkbox), findsWidgets);
     });
+
+    testWidgets('Em Desktop (1280x800), renderiza Dual-Pane simultâneo e KPIs no topo sem abas',
+        (tester) async {
+      tester.view.physicalSize = const Size(1280, 800);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.resetPhysicalSize);
+
+      await tester.pumpWidget(buildTasksAndShoppingPage());
+      await tester.pumpAndSettle();
+
+      // No Desktop, o TabBar inferior do AppBar NÃO é exibido
+      expect(find.byType(TabBar), findsNothing);
+
+      // KPIs superiores
+      expect(find.text('Tarefas Pendentes'), findsOneWidget);
+      expect(find.text('Tarefas Atrasadas'), findsOneWidget);
+      expect(find.text('Itens a Comprar'), findsOneWidget);
+      expect(find.text('No Carrinho'), findsOneWidget);
+
+      // Ambas as seções aparecem lado a lado simultaneamente
+      expect(find.textContaining('Tarefas da Casa ('), findsOneWidget);
+      expect(find.textContaining('Lista de Compras ('), findsOneWidget);
+      expect(find.text('Nova Tarefa'), findsOneWidget);
+      expect(find.text('Adicionar'), findsOneWidget);
+    });
   });
 }

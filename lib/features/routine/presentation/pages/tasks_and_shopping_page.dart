@@ -3,6 +3,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:intl/intl.dart';
 import '../../../../core/domain/value_objects/money.dart';
 import '../../../../core/theme/app_colors.dart';
+import '../../../../core/utils/responsive.dart';
 import '../../../../core/widgets/responsive_container.dart';
 import '../../../calendar/domain/entities/task_item.dart';
 import '../../../calendar/presentation/cubit/calendar_cubit.dart';
@@ -57,6 +58,19 @@ class _TasksAndShoppingPageState extends State<TasksAndShoppingPage> with Single
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final isDesktop = context.isDesktop;
+
+    if (isDesktop) {
+      return Scaffold(
+        appBar: AppBar(
+          title: const Text(
+            'Tarefas & Compras',
+            style: TextStyle(fontWeight: FontWeight.bold),
+          ),
+        ),
+        body: _buildDesktopDualPane(context, theme),
+      );
+    }
 
     return Scaffold(
       appBar: AppBar(
@@ -130,114 +144,360 @@ class _TasksAndShoppingPageState extends State<TasksAndShoppingPage> with Single
   }
 
   // ==========================================
+  // DESKTOP DUAL-PANE & KPIs DE ROTINA
+  // ==========================================
+  Widget _buildDesktopDualPane(BuildContext context, ThemeData theme) {
+    return BlocBuilder<CalendarCubit, CalendarState>(
+      builder: (context, calState) {
+        return BlocBuilder<ShoppingCubit, ShoppingState>(
+          builder: (context, shopState) {
+            return ResponsiveContainer(
+              maxWidth: kMaxContentWidth,
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                child: Column(
+                  children: [
+                    // Linha Superior de KPIs
+                    _buildKpisHeader(calState, shopState, theme),
+                    const SizedBox(height: 14),
+
+                    // Painéis Lado a Lado
+                    Expanded(
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          // Coluna 1: Tarefas da Casa
+                          Expanded(
+                            child: Card(
+                              elevation: 0,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(16),
+                                side: BorderSide(color: Colors.grey.withValues(alpha: 0.15)),
+                              ),
+                              child: Padding(
+                                padding: const EdgeInsets.all(16),
+                                child: _buildTasksColumnContent(
+                                  context,
+                                  calState,
+                                  theme,
+                                  isDesktop: true,
+                                ),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 16),
+
+                          // Coluna 2: Lista de Compras
+                          Expanded(
+                            child: Card(
+                              elevation: 0,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(16),
+                                side: BorderSide(color: Colors.grey.withValues(alpha: 0.15)),
+                              ),
+                              child: Padding(
+                                padding: const EdgeInsets.all(16),
+                                child: _buildShoppingColumnContent(
+                                  context,
+                                  shopState,
+                                  theme,
+                                  isDesktop: true,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Widget _buildKpisHeader(CalendarState calState, ShoppingState shopState, ThemeData theme) {
+    final pendingTasks = calState.tasks.where((t) => !t.isCompleted).length;
+    final overdueTasks = calState.tasks.where((t) => !t.isCompleted && t.isOverdue).length;
+    final pendingShopping = shopState.items.where((i) => !i.isBought).length;
+    final cartItems = shopState.items.where((i) => i.isBought).length;
+
+    return Row(
+      children: [
+        Expanded(
+          child: _buildKpiCard(
+            title: 'Tarefas Pendentes',
+            count: pendingTasks.toString(),
+            icon: Icons.check_circle_outline_rounded,
+            color: AppColors.primary,
+            theme: theme,
+          ),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: _buildKpiCard(
+            title: 'Tarefas Atrasadas',
+            count: overdueTasks.toString(),
+            icon: Icons.warning_amber_rounded,
+            color: overdueTasks > 0 ? AppColors.debtRed : Colors.grey,
+            theme: theme,
+          ),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: _buildKpiCard(
+            title: 'Itens a Comprar',
+            count: pendingShopping.toString(),
+            icon: Icons.shopping_basket_outlined,
+            color: Colors.orange,
+            theme: theme,
+          ),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: _buildKpiCard(
+            title: 'No Carrinho',
+            count: cartItems.toString(),
+            icon: Icons.shopping_bag_outlined,
+            color: AppColors.creditGreen,
+            theme: theme,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildKpiCard({
+    required String title,
+    required String count,
+    required IconData icon,
+    required Color color,
+    required ThemeData theme,
+  }) {
+    return Card(
+      elevation: 0,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(14),
+        side: BorderSide(color: Colors.grey.withValues(alpha: 0.15)),
+      ),
+      color: theme.cardColor,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        child: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: color.withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Icon(icon, color: color, size: 22),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    count,
+                    style: TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.bold,
+                      color: color,
+                    ),
+                  ),
+                  Text(
+                    title,
+                    style: const TextStyle(fontSize: 12, color: Colors.grey, fontWeight: FontWeight.w500),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // ==========================================
   // ABA 1: TAREFAS DA CASA
   // ==========================================
   Widget _buildTasksTab(BuildContext context, ThemeData theme) {
     return BlocBuilder<CalendarCubit, CalendarState>(
       builder: (context, state) {
-        final cubit = context.read<CalendarCubit>();
-        List<TaskItem> filteredTasks = state.tasks;
-
-        if (_taskFilter == 'pending') {
-          filteredTasks = filteredTasks.where((t) => !t.isCompleted).toList();
-        } else if (_taskFilter == 'completed') {
-          filteredTasks = filteredTasks.where((t) => t.isCompleted).toList();
-        }
-
-        final pendingCount = state.tasks.where((t) => !t.isCompleted).length;
-        final completedCount = state.tasks.where((t) => t.isCompleted).length;
-
         return ResponsiveContainer(
           maxWidth: 900,
-          child: Column(
-            children: [
-              // Barra de Filtros e Ação
-              Padding(
-                padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
-                child: SingleChildScrollView(
-                  scrollDirection: Axis.horizontal,
-                  child: Row(
-                    children: [
-                      ChoiceChip(
-                        label: Text('Todas (${state.tasks.length})'),
-                        selected: _taskFilter == 'all',
-                        onSelected: (_) => setState(() => _taskFilter = 'all'),
-                      ),
-                      const SizedBox(width: 8),
-                      ChoiceChip(
-                        label: Text('Pendentes ($pendingCount)'),
-                        selected: _taskFilter == 'pending',
-                        onSelected: (_) => setState(() => _taskFilter = 'pending'),
-                      ),
-                      const SizedBox(width: 8),
-                      ChoiceChip(
-                        label: Text('Concluídas ($completedCount)'),
-                        selected: _taskFilter == 'completed',
-                        onSelected: (_) => setState(() => _taskFilter = 'completed'),
-                      ),
-                      const SizedBox(width: 16),
-                      FilledButton.icon(
-                        onPressed: () => AddTaskSheet.show(context, state.activeMemberId),
-                        icon: const Icon(Icons.add_rounded, size: 18),
-                        label: const Text('Nova Tarefa'),
-                        style: FilledButton.styleFrom(
-                          backgroundColor: AppColors.primary,
-                          visualDensity: VisualDensity.compact,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-
-              // Lista de Tarefas
-              Expanded(
-                child: filteredTasks.isEmpty
-                    ? Center(
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(
-                              _taskFilter == 'completed'
-                                  ? Icons.checklist_rtl_rounded
-                                  : Icons.task_alt_rounded,
-                              size: 56,
-                              color: Colors.grey.withValues(alpha: 0.4),
-                            ),
-                            const SizedBox(height: 12),
-                            Text(
-                              _taskFilter == 'completed'
-                                  ? 'Nenhuma tarefa concluída ainda'
-                                  : 'Nenhuma tarefa pendente! Tudo em ordem no lar.',
-                              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: Colors.grey),
-                            ),
-                            const SizedBox(height: 6),
-                            const Text(
-                              'Adicione tarefas para organizar a rotina compartilhada.',
-                              style: TextStyle(fontSize: 12, color: Colors.grey),
-                            ),
-                            const SizedBox(height: 16),
-                            FilledButton.tonalIcon(
-                              onPressed: () => AddTaskSheet.show(context, state.activeMemberId),
-                              icon: const Icon(Icons.add_rounded),
-                              label: const Text('Criar Tarefa'),
-                            ),
-                          ],
-                        ),
-                      )
-                    : ListView.builder(
-                        padding: const EdgeInsets.fromLTRB(16, 4, 16, 80),
-                        itemCount: filteredTasks.length,
-                        itemBuilder: (context, index) {
-                          final task = filteredTasks[index];
-                          return _buildTaskCard(context, task, cubit, theme);
-                        },
-                      ),
-              ),
-            ],
+          child: _buildTasksColumnContent(
+            context,
+            state,
+            theme,
+            isDesktop: false,
           ),
         );
       },
+    );
+  }
+
+  Widget _buildTasksColumnContent(
+    BuildContext context,
+    CalendarState state,
+    ThemeData theme, {
+    required bool isDesktop,
+  }) {
+    final cubit = context.read<CalendarCubit>();
+    List<TaskItem> filteredTasks = state.tasks;
+
+    if (_taskFilter == 'pending') {
+      filteredTasks = filteredTasks.where((t) => !t.isCompleted).toList();
+    } else if (_taskFilter == 'completed') {
+      filteredTasks = filteredTasks.where((t) => t.isCompleted).toList();
+    }
+
+    final pendingCount = state.tasks.where((t) => !t.isCompleted).length;
+    final completedCount = state.tasks.where((t) => t.isCompleted).length;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        if (isDesktop) ...[
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Expanded(
+                child: Row(
+                  children: [
+                    const Icon(Icons.check_circle_outline_rounded, color: AppColors.primary, size: 22),
+                    const SizedBox(width: 8),
+                    Flexible(
+                      child: Text(
+                        'Tarefas da Casa (${state.tasks.length})',
+                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
+              FilledButton.icon(
+                onPressed: () => AddTaskSheet.show(context, state.activeMemberId),
+                icon: const Icon(Icons.add_rounded, size: 18),
+                label: const Text('Nova Tarefa'),
+                style: FilledButton.styleFrom(
+                  backgroundColor: AppColors.primary,
+                  visualDensity: VisualDensity.compact,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+        ],
+
+        // Barra de Filtros e Ação
+        Padding(
+          padding: EdgeInsets.fromLTRB(
+            isDesktop ? 0 : 16,
+            isDesktop ? 0 : 12,
+            isDesktop ? 0 : 16,
+            8,
+          ),
+          child: SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(
+              children: [
+                ChoiceChip(
+                  label: Text('Todas (${state.tasks.length})'),
+                  selected: _taskFilter == 'all',
+                  onSelected: (_) => setState(() => _taskFilter = 'all'),
+                ),
+                const SizedBox(width: 8),
+                ChoiceChip(
+                  label: Text('Pendentes ($pendingCount)'),
+                  selected: _taskFilter == 'pending',
+                  onSelected: (_) => setState(() => _taskFilter = 'pending'),
+                ),
+                const SizedBox(width: 8),
+                ChoiceChip(
+                  label: Text('Concluídas ($completedCount)'),
+                  selected: _taskFilter == 'completed',
+                  onSelected: (_) => setState(() => _taskFilter = 'completed'),
+                ),
+                if (!isDesktop) ...[
+                  const SizedBox(width: 16),
+                  FilledButton.icon(
+                    onPressed: () => AddTaskSheet.show(context, state.activeMemberId),
+                    icon: const Icon(Icons.add_rounded, size: 18),
+                    label: const Text('Nova Tarefa'),
+                    style: FilledButton.styleFrom(
+                      backgroundColor: AppColors.primary,
+                      visualDensity: VisualDensity.compact,
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ),
+
+        // Lista de Tarefas
+        Expanded(
+          child: filteredTasks.isEmpty
+              ? _buildEmptyTasksWidget(context, _taskFilter, state.activeMemberId)
+              : ListView.builder(
+                  padding: EdgeInsets.fromLTRB(
+                    isDesktop ? 0 : 16,
+                    4,
+                    isDesktop ? 0 : 16,
+                    isDesktop ? 16 : 80,
+                  ),
+                  itemCount: filteredTasks.length,
+                  itemBuilder: (context, index) {
+                    final task = filteredTasks[index];
+                    return _buildTaskCard(context, task, cubit, theme);
+                  },
+                ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildEmptyTasksWidget(BuildContext context, String taskFilter, String activeMemberId) {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(
+            taskFilter == 'completed'
+                ? Icons.checklist_rtl_rounded
+                : Icons.task_alt_rounded,
+            size: 56,
+            color: Colors.grey.withValues(alpha: 0.4),
+          ),
+          const SizedBox(height: 12),
+          Text(
+            taskFilter == 'completed'
+                ? 'Nenhuma tarefa concluída ainda'
+                : 'Nenhuma tarefa pendente! Tudo em ordem no lar.',
+            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: Colors.grey),
+          ),
+          const SizedBox(height: 6),
+          const Text(
+            'Adicione tarefas para organizar a rotina compartilhada.',
+            style: TextStyle(fontSize: 12, color: Colors.grey),
+          ),
+          const SizedBox(height: 16),
+          FilledButton.tonalIcon(
+            onPressed: () => AddTaskSheet.show(context, activeMemberId),
+            icon: const Icon(Icons.add_rounded),
+            label: const Text('Criar Tarefa'),
+          ),
+        ],
+      ),
     );
   }
 
@@ -372,142 +632,213 @@ class _TasksAndShoppingPageState extends State<TasksAndShoppingPage> with Single
   Widget _buildShoppingTab(BuildContext context, ThemeData theme) {
     return BlocBuilder<ShoppingCubit, ShoppingState>(
       builder: (context, state) {
-        final shoppingCubit = context.read<ShoppingCubit>();
-        final pendingItems = state.items.where((i) => !i.isBought).toList();
-        final boughtItems = state.items.where((i) => i.isBought).toList();
-
         return ResponsiveContainer(
           maxWidth: 900,
-          child: Column(
+          child: _buildShoppingColumnContent(
+            context,
+            state,
+            theme,
+            isDesktop: false,
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildShoppingColumnContent(
+    BuildContext context,
+    ShoppingState state,
+    ThemeData theme, {
+    required bool isDesktop,
+  }) {
+    final shoppingCubit = context.read<ShoppingCubit>();
+    final pendingItems = state.items.where((i) => !i.isBought).toList();
+    final boughtItems = state.items.where((i) => i.isBought).toList();
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        if (isDesktop) ...[
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              // Barra de Adição Rápida de Item
-              Padding(
-                padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+              Expanded(
                 child: Row(
                   children: [
-                    Expanded(
-                      child: TextField(
-                        controller: _addShoppingController,
-                        decoration: InputDecoration(
-                          hintText: 'Adicionar à lista (ex: Café, Detergente...)',
-                          prefixIcon: const Icon(Icons.add_shopping_cart_rounded, size: 20),
-                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                          contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                          suffixIcon: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              FilterChip(
-                                label: const Text('Pessoal', style: TextStyle(fontSize: 11)),
-                                selected: _isPersonalShoppingItem,
-                                visualDensity: VisualDensity.compact,
-                                onSelected: (val) => setState(() => _isPersonalShoppingItem = val),
-                              ),
-                              const SizedBox(width: 6),
-                            ],
-                          ),
-                        ),
-                        onSubmitted: (_) => _onAddShoppingItem(),
-                      ),
-                    ),
+                    const Icon(Icons.shopping_cart_outlined, color: AppColors.primary, size: 22),
                     const SizedBox(width: 8),
-                    FilledButton(
-                      onPressed: _onAddShoppingItem,
-                      style: FilledButton.styleFrom(
-                        backgroundColor: AppColors.primary,
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                    Flexible(
+                      child: Text(
+                        'Lista de Compras (${state.items.length})',
+                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                        overflow: TextOverflow.ellipsis,
                       ),
-                      child: const Text('Adicionar'),
                     ),
                   ],
                 ),
               ),
-
-              // Barra de Ação de Finalizar Compras (quando há itens comprados)
-              if (boughtItems.isNotEmpty)
-                Container(
-                  margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: AppColors.primary.withValues(alpha: 0.1),
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: AppColors.primary.withValues(alpha: 0.2)),
-                  ),
-                  child: Row(
-                    children: [
-                      const Icon(Icons.shopping_bag_rounded, color: AppColors.primary),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: Text(
-                          '${boughtItems.length} item(ns) no carrinho de compras',
-                          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
-                        ),
-                      ),
-                      FilledButton.icon(
-                        onPressed: () => _showFinishTripDialog(context, state),
-                        icon: const Icon(Icons.receipt_long_rounded, size: 16),
-                        label: const Text('Finalizar Compra'),
-                        style: FilledButton.styleFrom(
-                          backgroundColor: AppColors.primary,
-                          visualDensity: VisualDensity.compact,
-                        ),
-                      ),
-                    ],
+              if (boughtItems.isNotEmpty) ...[
+                const SizedBox(width: 8),
+                FilledButton.icon(
+                  onPressed: () => _showFinishTripDialog(context, state),
+                  icon: const Icon(Icons.receipt_long_rounded, size: 16),
+                  label: const Text('Finalizar Compra'),
+                  style: FilledButton.styleFrom(
+                    backgroundColor: AppColors.creditGreen,
+                    visualDensity: VisualDensity.compact,
                   ),
                 ),
+              ],
+            ],
+          ),
+          const SizedBox(height: 12),
+        ],
 
-              // Listas de Itens (Pendentes e No Carrinho)
+        // Barra de Adição Rápida de Item
+        Padding(
+          padding: EdgeInsets.fromLTRB(
+            isDesktop ? 0 : 16,
+            isDesktop ? 0 : 12,
+            isDesktop ? 0 : 16,
+            8,
+          ),
+          child: Row(
+            children: [
               Expanded(
-                child: state.items.isEmpty
-                    ? Center(
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(Icons.shopping_basket_outlined, size: 56, color: Colors.grey.withValues(alpha: 0.4)),
-                            const SizedBox(height: 12),
-                            const Text(
-                              'A lista de compras está vazia!',
-                              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: Colors.grey),
-                            ),
-                            const SizedBox(height: 4),
-                            const Text(
-                              'Digite os itens acima para montar a lista coletiva do lar.',
-                              style: TextStyle(fontSize: 12, color: Colors.grey),
-                            ),
-                          ],
+                child: TextField(
+                  controller: _addShoppingController,
+                  decoration: InputDecoration(
+                    hintText: 'Adicionar à lista (ex: Café, Detergente...)',
+                    prefixIcon: const Icon(Icons.add_shopping_cart_rounded, size: 20),
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                    suffixIcon: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        FilterChip(
+                          label: const Text('Pessoal', style: TextStyle(fontSize: 11)),
+                          selected: _isPersonalShoppingItem,
+                          visualDensity: VisualDensity.compact,
+                          onSelected: (val) => setState(() => _isPersonalShoppingItem = val),
                         ),
-                      )
-                    : ListView(
-                        padding: const EdgeInsets.fromLTRB(16, 4, 16, 80),
-                        children: [
-                          if (pendingItems.isNotEmpty) ...[
-                            Padding(
-                              padding: const EdgeInsets.only(left: 4, bottom: 8, top: 4),
-                              child: Text(
-                                'A Comprar (${pendingItems.length})',
-                                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
-                              ),
-                            ),
-                            ...pendingItems.map((item) => _buildShoppingItemCard(context, item, shoppingCubit, theme)),
-                          ],
-                          if (boughtItems.isNotEmpty) ...[
-                            const SizedBox(height: 12),
-                            Padding(
-                              padding: const EdgeInsets.only(left: 4, bottom: 8),
-                              child: Text(
-                                'No Carrinho / Comprados (${boughtItems.length})',
-                                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: AppColors.creditGreen),
-                              ),
-                            ),
-                            ...boughtItems.map((item) => _buildShoppingItemCard(context, item, shoppingCubit, theme)),
-                          ],
-                        ],
-                      ),
+                        const SizedBox(width: 6),
+                      ],
+                    ),
+                  ),
+                  onSubmitted: (_) => _onAddShoppingItem(),
+                ),
+              ),
+              const SizedBox(width: 8),
+              FilledButton(
+                onPressed: _onAddShoppingItem,
+                style: FilledButton.styleFrom(
+                  backgroundColor: AppColors.primary,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                ),
+                child: const Text('Adicionar'),
               ),
             ],
           ),
-        );
-      },
+        ),
+
+        // Barra de Ação de Finalizar Compras (quando há itens comprados)
+        if (boughtItems.isNotEmpty)
+          Container(
+            margin: EdgeInsets.fromLTRB(
+              isDesktop ? 0 : 16,
+              4,
+              isDesktop ? 0 : 16,
+              isDesktop ? 10 : 6,
+            ),
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: AppColors.primary.withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: AppColors.primary.withValues(alpha: 0.2)),
+            ),
+            child: Row(
+              children: [
+                const Icon(Icons.shopping_bag_rounded, color: AppColors.primary),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    '${boughtItems.length} item(ns) no carrinho de compras',
+                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                  ),
+                ),
+                if (!isDesktop)
+                  FilledButton.icon(
+                    onPressed: () => _showFinishTripDialog(context, state),
+                    icon: const Icon(Icons.receipt_long_rounded, size: 16),
+                    label: const Text('Finalizar Compra'),
+                    style: FilledButton.styleFrom(
+                      backgroundColor: AppColors.primary,
+                      visualDensity: VisualDensity.compact,
+                    ),
+                  ),
+              ],
+            ),
+          ),
+
+        // Listas de Itens (Pendentes e No Carrinho)
+        Expanded(
+          child: state.items.isEmpty
+              ? _buildEmptyShoppingWidget()
+              : ListView(
+                  padding: EdgeInsets.fromLTRB(
+                    isDesktop ? 0 : 16,
+                    4,
+                    isDesktop ? 0 : 16,
+                    isDesktop ? 16 : 80,
+                  ),
+                  children: [
+                    if (pendingItems.isNotEmpty) ...[
+                      Padding(
+                        padding: const EdgeInsets.only(left: 4, bottom: 8, top: 4),
+                        child: Text(
+                          'A Comprar (${pendingItems.length})',
+                          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                        ),
+                      ),
+                      ...pendingItems.map((item) => _buildShoppingItemCard(context, item, shoppingCubit, theme)),
+                    ],
+                    if (boughtItems.isNotEmpty) ...[
+                      const SizedBox(height: 12),
+                      Padding(
+                        padding: const EdgeInsets.only(left: 4, bottom: 8),
+                        child: Text(
+                          'No Carrinho / Comprados (${boughtItems.length})',
+                          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: AppColors.creditGreen),
+                        ),
+                      ),
+                      ...boughtItems.map((item) => _buildShoppingItemCard(context, item, shoppingCubit, theme)),
+                    ],
+                  ],
+                ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildEmptyShoppingWidget() {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(Icons.shopping_basket_outlined, size: 56, color: Colors.grey.withValues(alpha: 0.4)),
+          const SizedBox(height: 12),
+          const Text(
+            'A lista de compras está vazia!',
+            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: Colors.grey),
+          ),
+          const SizedBox(height: 4),
+          const Text(
+            'Digite os itens acima para montar a lista coletiva do lar.',
+            style: TextStyle(fontSize: 12, color: Colors.grey),
+          ),
+        ],
+      ),
     );
   }
 
@@ -627,7 +958,7 @@ class _TasksAndShoppingPageState extends State<TasksAndShoppingPage> with Single
                       ),
                       const SizedBox(height: 12),
                       DropdownButtonFormField<String>(
-                        value: selectedPmId,
+                        initialValue: selectedPmId,
                         decoration: InputDecoration(
                           labelText: 'Forma de Pagamento',
                           border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
@@ -641,7 +972,7 @@ class _TasksAndShoppingPageState extends State<TasksAndShoppingPage> with Single
                       ),
                       const SizedBox(height: 12),
                       DropdownButtonFormField<String>(
-                        value: selectedPayerId,
+                        initialValue: selectedPayerId,
                         decoration: InputDecoration(
                           labelText: 'Quem Pagou no Caixa',
                           border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
