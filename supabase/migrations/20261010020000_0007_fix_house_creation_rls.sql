@@ -27,7 +27,33 @@ create policy "house_members_insert_owner_or_admin" on public.house_members for 
     exists (select 1 from public.houses h where h.id = house_id and h.created_by = auth.uid())
   );
 
--- 5. RPC atômica e segura para criação de casa com membro owner
+-- 5. Adiciona coluna de e-mail na tabela profiles caso não exista
+alter table public.profiles add column if not exists email text;
+
+-- 6. Atualiza o trigger de cadastro automático de perfil
+create or replace function public.handle_new_user()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  insert into public.profiles (id, full_name, email, avatar_url, phone)
+  values (
+    new.id,
+    coalesce(new.raw_user_meta_data->>'full_name', new.email, 'Usuário'),
+    new.email,
+    new.raw_user_meta_data->>'avatar_url',
+    new.raw_user_meta_data->>'phone'
+  )
+  on conflict (id) do update set
+    full_name = coalesce(excluded.full_name, public.profiles.full_name),
+    email = coalesce(excluded.email, public.profiles.email);
+  return new;
+end;
+$$;
+
+-- 7. RPC atômica e segura para criação de casa com membro owner
 create or replace function public.create_house_with_owner(
   p_name text,
   p_cycle_start_day integer default 5,

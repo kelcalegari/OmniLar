@@ -131,7 +131,6 @@ class SupabaseAuthDataSource implements AuthDataSource {
       // Upsert inicial no profile
       await _client.from('profiles').upsert({
         'id': user.id,
-        'email': user.email,
         'full_name': fullName.trim(),
       });
 
