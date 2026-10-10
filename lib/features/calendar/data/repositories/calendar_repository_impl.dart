@@ -1,3 +1,4 @@
+import '../../../../core/domain/enums/recurrence.dart';
 import '../../domain/entities/calendar_event.dart';
 import '../../domain/entities/event_participant.dart';
 import '../../domain/entities/task_item.dart';
@@ -14,6 +15,20 @@ class CalendarRepositoryImpl implements CalendarRepository {
 
   @override
   Future<void> addEvent(CalendarEvent event) => _dataSource.addEvent(event);
+
+  @override
+  Future<void> updateEvent(
+    CalendarEvent event, {
+    RecurrenceScope scope = RecurrenceScope.thisInstanceOnly,
+  }) =>
+      _dataSource.updateEvent(event, scope: scope);
+
+  @override
+  Future<void> deleteEvent(
+    String eventId, {
+    RecurrenceScope scope = RecurrenceScope.thisInstanceOnly,
+  }) =>
+      _dataSource.deleteEvent(eventId, scope: scope);
 
   @override
   Future<void> updateRsvp({

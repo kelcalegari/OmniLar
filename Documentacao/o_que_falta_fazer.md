@@ -22,9 +22,10 @@ Este documento consolida o estado atual do desenvolvimento e mapeia com clareza 
 | **Humanização & UX** (Input ATM centavos nativo, Modo Privacidade, 3 Colunas) | Concluído ✅ | 100% |
 | **Despesas Compostas & Boletos Segmentados** (Condomínio com Água, Gás e Obras) | Concluído ✅ | 100% |
 | **Despesas Retroativas & Contas Atrasadas** (Vencidas, Carry-forward de Passivos, Alertas) | Concluído ✅ | 100% |
+| **Eventos & Despesas Recorrentes** (3 Escopos de Edição/Exclusão RFC 5545) | Concluído ✅ | 100% |
 | **Backend & Infra SQL** (Migrações 0001 a 0004 com RLS, Fila Offline) | Concluído ✅ | 100% |
 
-> **Métrica de Confiabilidade:** **91 testes automatizados (unitários e widgets) passando (100% verde)** e cobertura contínua de regressão.
+> **Métrica de Confiabilidade:** **101 testes automatizados (unitários e widgets) passando (100% verde)** e cobertura contínua de regressão.
 
 ---
 
@@ -93,7 +94,25 @@ flowchart TD
 
 ---
 
-### Frente 3: Conexão Real com o Backend (Supabase & Edge Functions)
+### Frente 3: Eventos e Despesas Recorrentes com Escopo de Edição e Exclusão
+*Padrão RFC 5545 / Google Calendar com 3 escopos: Única Instância, Esta e Futuras, Todas.*
+
+- [x] **Enums Universais de Recorrência (`RecurrenceFrequency` e `RecurrenceScope`):**
+  - `RecurrenceFrequency`: `none`, `daily`, `weekly`, `biweekly`, `monthly`, `yearly`.
+  - `RecurrenceScope`: `thisInstanceOnly`, `thisAndFuture`, `allInstances`.
+- [x] **Componente de UX Compartilhado (`RecurrenceScopeDialog`):**
+  - Diálogo adaptativo para selecionar o escopo em operações de alteração e exclusão com feedback visual claro.
+- [x] **Eventos da Agenda (`CalendarEvent`, `CalendarRepository`, `AddEventSheet`, `CalendarPage`):**
+  - Seletor de repetição no cadastro de evento.
+  - Projeção de instâncias da série no DataSource.
+  - Ações de Edição e Exclusão com escopo (apenas esta, esta e futuras, todas).
+- [x] **Despesas Recorrentes (`HouseExpense`, `FinanceRepository`, `ExpenseTimelineItem`, `SettingsPage`):**
+  - Vínculo por `recurringSeriesId`.
+  - Edição e Exclusão com escopo (apenas este mês, deste mês em diante, toda a série).
+
+---
+
+### Frente 4: Conexão Real com o Backend (Supabase & Edge Functions)
 Atualmente, o app utiliza **DataSources Mockados** altamente consistentes em memória para permitir desenvolvimento e testes ágeis sem dependência de rede.
 
 - [ ] **DataSources Reais de Banco:**

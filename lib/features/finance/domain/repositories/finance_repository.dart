@@ -1,3 +1,4 @@
+import '../../../../core/domain/enums/recurrence.dart';
 import '../entities/house_member.dart';
 import '../entities/category.dart';
 import '../entities/payment_method.dart';
@@ -18,7 +19,14 @@ abstract class FinanceRepository {
   Future<FinancialCycleSummary> getCycleSummary(FinancialCycle cycle);
 
   Future<void> addExpense(HouseExpense expense);
-  Future<void> updateExpense(HouseExpense expense);
+  Future<void> updateExpense(
+    HouseExpense expense, {
+    RecurrenceScope scope = RecurrenceScope.thisInstanceOnly,
+  });
+  Future<void> deleteExpense(
+    String expenseId, {
+    RecurrenceScope scope = RecurrenceScope.thisInstanceOnly,
+  });
   Future<List<HouseExpense>> getRecurringExpenses();
   Future<void> addContribution(Contribution contribution);
   Future<void> addCategory(ExpenseCategory category);

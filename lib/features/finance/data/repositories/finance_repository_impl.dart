@@ -7,6 +7,7 @@ import '../../domain/entities/financial_cycle_summary.dart';
 import '../../domain/repositories/finance_repository.dart';
 import '../datasources/mock_finance_datasource.dart';
 import '../../domain/entities/savings_vault.dart';
+import '../../../../core/domain/enums/recurrence.dart';
 import '../../../../core/domain/value_objects/money.dart';
 import '../../../../core/domain/value_objects/financial_cycle.dart';
 
@@ -40,7 +41,18 @@ class FinanceRepositoryImpl implements FinanceRepository {
   Future<void> addExpense(HouseExpense expense) => _dataSource.addExpense(expense);
 
   @override
-  Future<void> updateExpense(HouseExpense expense) => _dataSource.updateExpense(expense);
+  Future<void> updateExpense(
+    HouseExpense expense, {
+    RecurrenceScope scope = RecurrenceScope.thisInstanceOnly,
+  }) =>
+      _dataSource.updateExpense(expense, scope: scope);
+
+  @override
+  Future<void> deleteExpense(
+    String expenseId, {
+    RecurrenceScope scope = RecurrenceScope.thisInstanceOnly,
+  }) =>
+      _dataSource.deleteExpense(expenseId, scope: scope);
 
   @override
   Future<List<HouseExpense>> getRecurringExpenses() => _dataSource.getRecurringExpenses();

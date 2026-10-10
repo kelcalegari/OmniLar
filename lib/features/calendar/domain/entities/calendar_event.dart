@@ -1,4 +1,5 @@
 import 'package:equatable/equatable.dart';
+import '../../../../core/domain/enums/recurrence.dart';
 import 'event_participant.dart';
 
 enum EventDerivedStatus {
@@ -27,6 +28,10 @@ class CalendarEvent extends Equatable {
   final EventVisibility visibility;
   final bool isCancelled;
   final List<EventParticipant> participants;
+  final RecurrenceFrequency recurrenceFrequency;
+  final String? seriesId;
+  final DateTime? recurrenceEndDate;
+  final bool isRecurringException;
 
   const CalendarEvent({
     required this.id,
@@ -40,7 +45,14 @@ class CalendarEvent extends Equatable {
     this.visibility = EventVisibility.house,
     this.isCancelled = false,
     this.participants = const [],
+    this.recurrenceFrequency = RecurrenceFrequency.none,
+    this.seriesId,
+    this.recurrenceEndDate,
+    this.isRecurringException = false,
   });
+
+  bool get isRecurring =>
+      recurrenceFrequency != RecurrenceFrequency.none || (seriesId != null && seriesId!.isNotEmpty);
 
   /// RN01: Status derivado a partir das respostas dos participantes Necessários
   EventDerivedStatus get derivedStatus {
@@ -79,6 +91,11 @@ class CalendarEvent extends Equatable {
     EventVisibility? visibility,
     bool? isCancelled,
     List<EventParticipant>? participants,
+    RecurrenceFrequency? recurrenceFrequency,
+    String? seriesId,
+    bool clearSeriesId = false,
+    DateTime? recurrenceEndDate,
+    bool? isRecurringException,
   }) {
     return CalendarEvent(
       id: id ?? this.id,
@@ -92,6 +109,10 @@ class CalendarEvent extends Equatable {
       visibility: visibility ?? this.visibility,
       isCancelled: isCancelled ?? this.isCancelled,
       participants: participants ?? this.participants,
+      recurrenceFrequency: recurrenceFrequency ?? this.recurrenceFrequency,
+      seriesId: clearSeriesId ? null : (seriesId ?? this.seriesId),
+      recurrenceEndDate: recurrenceEndDate ?? this.recurrenceEndDate,
+      isRecurringException: isRecurringException ?? this.isRecurringException,
     );
   }
 
@@ -108,5 +129,9 @@ class CalendarEvent extends Equatable {
         visibility,
         isCancelled,
         participants,
+        recurrenceFrequency,
+        seriesId,
+        recurrenceEndDate,
+        isRecurringException,
       ];
 }

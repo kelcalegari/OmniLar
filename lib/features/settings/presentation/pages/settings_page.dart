@@ -13,6 +13,8 @@ import '../../../finance/presentation/cubit/finance_state.dart';
 import '../../../finance/presentation/pages/add_expense_page.dart';
 import '../../../reconciliation/presentation/widgets/split_invoice_modal.dart';
 import '../../../../core/domain/value_objects/money.dart';
+import '../../../../core/domain/enums/recurrence.dart';
+import '../../../../core/widgets/recurrence_scope_dialog.dart';
 
 class SettingsPage extends StatelessWidget {
   const SettingsPage({super.key});
@@ -1142,9 +1144,44 @@ class SettingsPage extends StatelessWidget {
                                     ],
                                   ),
                                 ),
-                                Text(
-                                  item.amount.format(),
-                                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                                Column(
+                                  crossAxisAlignment: CrossAxisAlignment.end,
+                                  children: [
+                                    Text(
+                                      item.amount.format(),
+                                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                                    ),
+                                    const SizedBox(height: 4),
+                                    InkWell(
+                                      onTap: () async {
+                                        final scope = await showRecurrenceScopeDialog(
+                                          context: context,
+                                          itemTitle: item.title,
+                                          isDelete: true,
+                                          isExpense: true,
+                                        );
+                                        if (scope != null) {
+                                          await context.read<FinanceCubit>().deleteExpense(item.id, scope: scope);
+                                          if (context.mounted) {
+                                            ScaffoldMessenger.of(context).showSnackBar(
+                                              SnackBar(content: Text('Assinatura "${item.title}" atualizada.')),
+                                            );
+                                          }
+                                        }
+                                      },
+                                      child: const Padding(
+                                        padding: EdgeInsets.symmetric(vertical: 2, horizontal: 4),
+                                        child: Text(
+                                          'Excluir',
+                                          style: TextStyle(
+                                            fontSize: 11,
+                                            color: AppColors.debtRed,
+                                            fontWeight: FontWeight.w600,
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                  ],
                                 ),
                               ],
                             ),

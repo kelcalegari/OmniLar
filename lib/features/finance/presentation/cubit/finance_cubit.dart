@@ -5,6 +5,7 @@ import '../../domain/entities/contribution.dart';
 import '../../domain/entities/category.dart';
 import '../../domain/entities/payment_method.dart';
 import '../../domain/entities/savings_vault.dart';
+import '../../../../core/domain/enums/recurrence.dart';
 import '../../../../core/domain/value_objects/money.dart';
 import '../../../../core/domain/value_objects/financial_cycle.dart';
 import 'finance_state.dart';
@@ -77,14 +78,32 @@ class FinanceCubit extends Cubit<FinanceState> {
     }
   }
 
-  Future<void> updateExpense(HouseExpense expense) async {
+  Future<void> updateExpense(
+    HouseExpense expense, {
+    RecurrenceScope scope = RecurrenceScope.thisInstanceOnly,
+  }) async {
     try {
-      await _repository.updateExpense(expense);
+      await _repository.updateExpense(expense, scope: scope);
       await loadCycleData(cycle: state.currentCycle);
     } catch (e) {
       emit(state.copyWith(
         status: FinanceStatus.failure,
         errorMessage: 'Erro ao atualizar despesa: $e',
+      ));
+    }
+  }
+
+  Future<void> deleteExpense(
+    String expenseId, {
+    RecurrenceScope scope = RecurrenceScope.thisInstanceOnly,
+  }) async {
+    try {
+      await _repository.deleteExpense(expenseId, scope: scope);
+      await loadCycleData(cycle: state.currentCycle);
+    } catch (e) {
+      emit(state.copyWith(
+        status: FinanceStatus.failure,
+        errorMessage: 'Erro ao excluir despesa: $e',
       ));
     }
   }

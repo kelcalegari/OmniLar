@@ -26,6 +26,7 @@ class HouseExpense extends Equatable {
   final bool paidOutOfPocket;
   final String? notes;
   final List<HouseExpenseItem> items;
+  final String? recurringSeriesId; // Vincula esta despesa à série/assinatura recorrente matriz
 
   const HouseExpense({
     required this.id,
@@ -45,6 +46,7 @@ class HouseExpense extends Equatable {
     this.paidOutOfPocket = false,
     this.notes,
     this.items = const [],
+    this.recurringSeriesId,
   });
 
   bool get isPaid => status == ExpenseStatus.paid;
@@ -98,6 +100,7 @@ class HouseExpense extends Equatable {
     bool? paidOutOfPocket,
     String? notes,
     List<HouseExpenseItem>? items,
+    String? recurringSeriesId,
   }) {
     return HouseExpense(
       id: id ?? this.id,
@@ -117,6 +120,7 @@ class HouseExpense extends Equatable {
       paidOutOfPocket: paidOutOfPocket ?? this.paidOutOfPocket,
       notes: notes ?? this.notes,
       items: items ?? this.items,
+      recurringSeriesId: recurringSeriesId ?? this.recurringSeriesId,
     );
   }
 
@@ -139,5 +143,6 @@ class HouseExpense extends Equatable {
         paidOutOfPocket,
         notes,
         items,
+        recurringSeriesId,
       ];
 }

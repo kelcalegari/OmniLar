@@ -2,9 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:intl/intl.dart';
 import '../../../../core/domain/value_objects/money.dart';
+import '../../../../core/domain/enums/recurrence.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/utils/responsive.dart';
 import '../../../../core/widgets/money_input_field.dart';
+import '../../../../core/widgets/recurrence_scope_dialog.dart';
 import '../../domain/entities/house_expense.dart';
 import '../../domain/entities/category.dart';
 import '../../domain/entities/payment_method.dart';
@@ -237,6 +239,55 @@ class ExpenseTimelineItem extends StatelessWidget {
                       );
                     },
                     child: const Text('Confirmar Pagamento', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Center(
+                  child: TextButton.icon(
+                    style: TextButton.styleFrom(foregroundColor: AppColors.debtRed),
+                    icon: const Icon(Icons.delete_outline_rounded, size: 16),
+                    label: const Text('Excluir esta conta', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
+                    onPressed: () async {
+                      RecurrenceScope scope = RecurrenceScope.thisInstanceOnly;
+                      if (expense.isRecurring) {
+                        final chosenScope = await showRecurrenceScopeDialog(
+                          context: modalContext,
+                          itemTitle: expense.title,
+                          isDelete: true,
+                          isExpense: true,
+                        );
+                        if (chosenScope == null) return;
+                        scope = chosenScope;
+                      } else {
+                        final confirmed = await showDialog<bool>(
+                          context: modalContext,
+                          builder: (ctx) => AlertDialog(
+                            title: const Text('Excluir Despesa'),
+                            content: Text('Tem certeza que deseja excluir "${expense.title}"?'),
+                            actions: [
+                              TextButton(
+                                onPressed: () => Navigator.pop(ctx, false),
+                                child: const Text('Cancelar'),
+                              ),
+                              ElevatedButton(
+                                style: ElevatedButton.styleFrom(backgroundColor: AppColors.debtRed, foregroundColor: Colors.white),
+                                onPressed: () => Navigator.pop(ctx, true),
+                                child: const Text('Excluir'),
+                              ),
+                            ],
+                          ),
+                        );
+                        if (confirmed != true) return;
+                      }
+
+                      if (modalContext.mounted) Navigator.pop(modalContext);
+                      if (context.mounted) {
+                        await context.read<FinanceCubit>().deleteExpense(expense.id, scope: scope);
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(content: Text('Despesa "${expense.title}" excluída.')),
+                        );
+                      }
+                    },
                   ),
                 ),
               ],

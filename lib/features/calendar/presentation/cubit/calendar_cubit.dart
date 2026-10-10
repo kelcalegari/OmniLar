@@ -1,4 +1,5 @@
 import 'package:flutter_bloc/flutter_bloc.dart';
+import '../../../../core/domain/enums/recurrence.dart';
 import '../../domain/entities/calendar_event.dart';
 import '../../domain/entities/event_participant.dart';
 import '../../domain/entities/task_item.dart';
@@ -60,6 +61,32 @@ class CalendarCubit extends Cubit<CalendarState> {
       emit(state.copyWith(events: events));
     } catch (e) {
       emit(state.copyWith(errorMessage: 'Erro ao criar evento: $e'));
+    }
+  }
+
+  Future<void> updateEvent(
+    CalendarEvent event, {
+    RecurrenceScope scope = RecurrenceScope.thisInstanceOnly,
+  }) async {
+    try {
+      await _repository.updateEvent(event, scope: scope);
+      final events = await _repository.getEvents();
+      emit(state.copyWith(events: events));
+    } catch (e) {
+      emit(state.copyWith(errorMessage: 'Erro ao atualizar evento: $e'));
+    }
+  }
+
+  Future<void> deleteEvent(
+    String eventId, {
+    RecurrenceScope scope = RecurrenceScope.thisInstanceOnly,
+  }) async {
+    try {
+      await _repository.deleteEvent(eventId, scope: scope);
+      final events = await _repository.getEvents();
+      emit(state.copyWith(events: events));
+    } catch (e) {
+      emit(state.copyWith(errorMessage: 'Erro ao excluir evento: $e'));
     }
   }
 

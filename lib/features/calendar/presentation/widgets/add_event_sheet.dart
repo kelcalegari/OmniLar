@@ -1,25 +1,32 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:intl/intl.dart';
+import '../../../../core/domain/enums/recurrence.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/utils/responsive.dart';
+import '../../../../core/widgets/recurrence_scope_dialog.dart';
 import '../../domain/entities/calendar_event.dart';
 import '../../domain/entities/event_participant.dart';
 import '../cubit/calendar_cubit.dart';
 
 class AddEventSheet extends StatefulWidget {
   final String activeMemberId;
+  final CalendarEvent? initialEvent;
 
   const AddEventSheet({
     required this.activeMemberId,
+    this.initialEvent,
     super.key,
   });
 
-  static Future<void> show(BuildContext context, String activeMemberId) {
+  static Future<void> show(BuildContext context, String activeMemberId, {CalendarEvent? initialEvent}) {
     return showAdaptiveModal(
       context: context,
       maxWidth: 560,
-      child: AddEventSheet(activeMemberId: activeMemberId),
+      child: AddEventSheet(
+        activeMemberId: activeMemberId,
+        initialEvent: initialEvent,
+      ),
     );
   }
 
@@ -29,16 +36,17 @@ class AddEventSheet extends StatefulWidget {
 
 class _AddEventSheetState extends State<AddEventSheet> {
   final _formKey = GlobalKey<FormState>();
-  final _titleController = TextEditingController();
-  final _locationController = TextEditingController();
-  final _descriptionController = TextEditingController();
+  late final TextEditingController _titleController;
+  late final TextEditingController _locationController;
+  late final TextEditingController _descriptionController;
 
-  DateTime _startDate = DateTime.now().add(const Duration(hours: 1));
-  TimeOfDay _startTime = TimeOfDay.fromDateTime(DateTime.now().add(const Duration(hours: 1)));
-  DateTime _endDate = DateTime.now().add(const Duration(hours: 2));
-  TimeOfDay _endTime = TimeOfDay.fromDateTime(DateTime.now().add(const Duration(hours: 2)));
-  bool _isAllDay = false;
-  EventVisibility _visibility = EventVisibility.house;
+  late DateTime _startDate;
+  late TimeOfDay _startTime;
+  late DateTime _endDate;
+  late TimeOfDay _endTime;
+  late bool _isAllDay;
+  late EventVisibility _visibility;
+  late RecurrenceFrequency _recurrenceFrequency;
 
   // Participantes e seus papéis selecionados
   // null = não convidado
@@ -51,6 +59,39 @@ class _AddEventSheetState extends State<AddEventSheet> {
     'member_carlos': 'Carlos',
     'member_marina': 'Marina',
   };
+
+  @override
+  void initState() {
+    super.initState();
+    final ev = widget.initialEvent;
+    if (ev != null) {
+      _titleController = TextEditingController(text: ev.title);
+      _locationController = TextEditingController(text: ev.location ?? '');
+      _descriptionController = TextEditingController(text: ev.description ?? '');
+      _startDate = ev.startTime;
+      _startTime = TimeOfDay.fromDateTime(ev.startTime);
+      _endDate = ev.endTime;
+      _endTime = TimeOfDay.fromDateTime(ev.endTime);
+      _isAllDay = ev.isAllDay;
+      _visibility = ev.visibility;
+      _recurrenceFrequency = ev.recurrenceFrequency;
+
+      for (final p in ev.participants) {
+        _selectedRoles[p.memberId] = p.role;
+      }
+    } else {
+      _titleController = TextEditingController();
+      _locationController = TextEditingController();
+      _descriptionController = TextEditingController();
+      _startDate = DateTime.now().add(const Duration(hours: 1));
+      _startTime = TimeOfDay.fromDateTime(DateTime.now().add(const Duration(hours: 1)));
+      _endDate = DateTime.now().add(const Duration(hours: 2));
+      _endTime = TimeOfDay.fromDateTime(DateTime.now().add(const Duration(hours: 2)));
+      _isAllDay = false;
+      _visibility = EventVisibility.house;
+      _recurrenceFrequency = RecurrenceFrequency.none;
+    }
+  }
 
   @override
   void dispose() {
@@ -99,7 +140,7 @@ class _AddEventSheetState extends State<AddEventSheet> {
     }
   }
 
-  void _submit() {
+  Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
 
     final startDateTime = _isAllDay
@@ -110,50 +151,99 @@ class _AddEventSheetState extends State<AddEventSheet> {
         ? DateTime(_endDate.year, _endDate.month, _endDate.day, 23, 59)
         : DateTime(_endDate.year, _endDate.month, _endDate.day, _endTime.hour, _endTime.minute);
 
-    final eventId = 'event_${DateTime.now().millisecondsSinceEpoch}';
+    final eventId = widget.initialEvent?.id ?? 'event_${DateTime.now().millisecondsSinceEpoch}';
 
     // Monta a lista de participantes
     final participants = <EventParticipant>[];
     _selectedRoles.forEach((memberId, role) {
       if (role != null) {
         final isCreator = memberId == widget.activeMemberId;
-        participants.add(
-          EventParticipant(
+        final existingParticipant = widget.initialEvent?.participants.firstWhere(
+          (p) => p.memberId == memberId,
+          orElse: () => EventParticipant(
             id: 'part_${eventId}_$memberId',
             eventId: eventId,
             memberId: memberId,
             memberName: _memberNames[memberId] ?? 'Membro',
             role: role,
-            // O criador já aceita automaticamente, os demais começam como pending
             rsvpStatus: isCreator ? RsvpStatus.accepted : RsvpStatus.pending,
             respondedAt: isCreator ? DateTime.now() : null,
+          ),
+        );
+
+        participants.add(
+          existingParticipant!.copyWith(
+            role: role,
           ),
         );
       }
     });
 
-    final newEvent = CalendarEvent(
-      id: eventId,
-      title: _titleController.text.trim(),
-      description: _descriptionController.text.trim().isEmpty ? null : _descriptionController.text.trim(),
-      location: _locationController.text.trim().isEmpty ? null : _locationController.text.trim(),
-      startTime: startDateTime,
-      endTime: endDateTime,
-      isAllDay: _isAllDay,
-      createdByMemberId: widget.activeMemberId,
-      visibility: _visibility,
-      participants: participants,
-    );
+    final cubit = context.read<CalendarCubit>();
+    final messenger = ScaffoldMessenger.of(context);
 
-    context.read<CalendarCubit>().addEvent(newEvent);
-    Navigator.pop(context);
+    if (widget.initialEvent != null) {
+      final updatedEvent = widget.initialEvent!.copyWith(
+        title: _titleController.text.trim(),
+        description: _descriptionController.text.trim().isEmpty ? null : _descriptionController.text.trim(),
+        location: _locationController.text.trim().isEmpty ? null : _locationController.text.trim(),
+        startTime: startDateTime,
+        endTime: endDateTime,
+        isAllDay: _isAllDay,
+        visibility: _visibility,
+        participants: participants,
+        recurrenceFrequency: _recurrenceFrequency,
+      );
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('Evento "${newEvent.title}" criado com sucesso!'),
-        backgroundColor: AppColors.primary,
-      ),
-    );
+      RecurrenceScope scope = RecurrenceScope.thisInstanceOnly;
+      if (widget.initialEvent!.isRecurring) {
+        final chosenScope = await showRecurrenceScopeDialog(
+          context: context,
+          itemTitle: updatedEvent.title,
+          isDelete: false,
+        );
+        if (chosenScope == null) return; // cancelou
+        scope = chosenScope;
+      }
+
+      await cubit.updateEvent(updatedEvent, scope: scope);
+      if (mounted) Navigator.pop(context);
+
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text('Compromisso "${updatedEvent.title}" atualizado! 🎉'),
+          backgroundColor: AppColors.primary,
+        ),
+      );
+    } else {
+      final newEvent = CalendarEvent(
+        id: eventId,
+        title: _titleController.text.trim(),
+        description: _descriptionController.text.trim().isEmpty ? null : _descriptionController.text.trim(),
+        location: _locationController.text.trim().isEmpty ? null : _locationController.text.trim(),
+        startTime: startDateTime,
+        endTime: endDateTime,
+        isAllDay: _isAllDay,
+        createdByMemberId: widget.activeMemberId,
+        visibility: _visibility,
+        participants: participants,
+        recurrenceFrequency: _recurrenceFrequency,
+      );
+
+      await cubit.addEvent(newEvent);
+      if (mounted) Navigator.pop(context);
+
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text(
+            newEvent.isRecurring
+                ? 'Série de eventos "${newEvent.title}" programada com sucesso! 🔁'
+                : 'Evento "${newEvent.title}" criado com sucesso! 🎉',
+          ),
+          backgroundColor: AppColors.primary,
+        ),
+      );
+    }
   }
 
   @override
@@ -186,13 +276,17 @@ class _AddEventSheetState extends State<AddEventSheet> {
                 ),
               ),
               const SizedBox(height: 16),
-              const Row(
+              Row(
                 children: [
-                  Icon(Icons.event_available_rounded, color: AppColors.primary, size: 28),
-                  SizedBox(width: 10),
+                  Icon(
+                    widget.initialEvent != null ? Icons.edit_calendar_rounded : Icons.event_available_rounded,
+                    color: AppColors.primary,
+                    size: 28,
+                  ),
+                  const SizedBox(width: 10),
                   Text(
-                    'Novo Compromisso',
-                    style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                    widget.initialEvent != null ? 'Editar Compromisso' : 'Novo Compromisso',
+                    style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
                   ),
                 ],
               ),
@@ -298,7 +392,41 @@ class _AddEventSheetState extends State<AddEventSheet> {
                   ],
                 ],
               ),
-              const SizedBox(height: 20),
+              const SizedBox(height: 14),
+
+              // Repetição do Evento
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+                decoration: BoxDecoration(
+                  color: theme.cardColor,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: Colors.grey.withValues(alpha: 0.2)),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(Icons.repeat_rounded, color: AppColors.primary, size: 20),
+                    const SizedBox(width: 10),
+                    const Text('Repetição:', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
+                    const Spacer(),
+                    DropdownButton<RecurrenceFrequency>(
+                      value: _recurrenceFrequency,
+                      underline: const SizedBox.shrink(),
+                      items: RecurrenceFrequency.values.map((freq) {
+                        return DropdownMenuItem(
+                          value: freq,
+                          child: Text(freq.label, style: const TextStyle(fontSize: 13)),
+                        );
+                      }).toList(),
+                      onChanged: (newFreq) {
+                        if (newFreq != null) {
+                          setState(() => _recurrenceFrequency = newFreq);
+                        }
+                      },
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 16),
 
               // Participantes e Papel (RN01 e RN02)
               const Text(
@@ -402,9 +530,9 @@ class _AddEventSheetState extends State<AddEventSheet> {
                   padding: const EdgeInsets.symmetric(vertical: 14),
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                 ),
-                child: const Text(
-                  'Salvar Compromisso',
-                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                child: Text(
+                  widget.initialEvent != null ? 'Salvar Alterações' : 'Salvar Compromisso',
+                  style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
                 ),
               ),
               const SizedBox(height: 20),

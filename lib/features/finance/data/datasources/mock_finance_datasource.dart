@@ -7,6 +7,7 @@ import '../../domain/entities/contribution.dart';
 import '../../domain/entities/split_rule.dart';
 import '../../domain/entities/financial_cycle_summary.dart';
 import '../../domain/entities/savings_vault.dart';
+import '../../../../core/domain/enums/recurrence.dart';
 import '../../../../core/domain/value_objects/money.dart';
 import '../../../../core/domain/value_objects/financial_cycle.dart';
 
@@ -307,12 +308,120 @@ class MockFinanceDataSource {
     _expenses.insert(0, expense);
   }
 
-  Future<void> updateExpense(HouseExpense expense) async {
+  Future<void> updateExpense(
+    HouseExpense expense, {
+    RecurrenceScope scope = RecurrenceScope.thisInstanceOnly,
+  }) async {
     final index = _expenses.indexWhere((e) => e.id == expense.id);
-    if (index != -1) {
-      _expenses[index] = expense;
-    } else {
+    if (index == -1) {
       _expenses.insert(0, expense);
+      return;
+    }
+    final current = _expenses[index];
+
+    switch (scope) {
+      case RecurrenceScope.thisInstanceOnly:
+        _expenses[index] = expense;
+        break;
+
+      case RecurrenceScope.thisAndFuture:
+        final seriesId = current.recurringSeriesId ?? (current.isRecurring ? current.id : null);
+        if (seriesId != null) {
+          final fromDate = current.date;
+          for (int i = 0; i < _expenses.length; i++) {
+            final e = _expenses[i];
+            final matches = e.recurringSeriesId == seriesId ||
+                e.id == seriesId ||
+                (e.title == current.title && e.isRecurring);
+            if (matches && !e.date.isBefore(fromDate)) {
+              _expenses[i] = e.copyWith(
+                title: expense.title,
+                amount: expense.amount,
+                categoryId: expense.categoryId,
+                paymentMethodId: expense.paymentMethodId,
+                splitRule: expense.splitRule,
+                isVariable: expense.isVariable,
+                dueDay: expense.dueDay,
+              );
+            }
+          }
+        } else {
+          _expenses[index] = expense;
+        }
+        break;
+
+      case RecurrenceScope.allInstances:
+        final seriesId = current.recurringSeriesId ?? (current.isRecurring ? current.id : null);
+        if (seriesId != null) {
+          for (int i = 0; i < _expenses.length; i++) {
+            final e = _expenses[i];
+            final matches = e.recurringSeriesId == seriesId ||
+                e.id == seriesId ||
+                (e.title == current.title && e.isRecurring);
+            if (matches) {
+              _expenses[i] = e.copyWith(
+                title: expense.title,
+                amount: expense.amount,
+                categoryId: expense.categoryId,
+                paymentMethodId: expense.paymentMethodId,
+                splitRule: expense.splitRule,
+                isVariable: expense.isVariable,
+                dueDay: expense.dueDay,
+              );
+            }
+          }
+        } else {
+          _expenses[index] = expense;
+        }
+        break;
+    }
+  }
+
+  Future<void> deleteExpense(
+    String expenseId, {
+    RecurrenceScope scope = RecurrenceScope.thisInstanceOnly,
+  }) async {
+    final index = _expenses.indexWhere((e) => e.id == expenseId);
+    if (index == -1) return;
+    final current = _expenses[index];
+
+    switch (scope) {
+      case RecurrenceScope.thisInstanceOnly:
+        _expenses.removeAt(index);
+        break;
+
+      case RecurrenceScope.thisAndFuture:
+        final seriesId = current.recurringSeriesId ?? (current.isRecurring ? current.id : null);
+        if (seriesId != null) {
+          final fromDate = current.date;
+          for (int i = 0; i < _expenses.length; i++) {
+            if (_expenses[i].id == seriesId ||
+                (_expenses[i].title == current.title && _expenses[i].isRecurring)) {
+              _expenses[i] = _expenses[i].copyWith(isActive: false);
+            }
+          }
+          _expenses.removeWhere((e) {
+            final matches = e.recurringSeriesId == seriesId ||
+                e.id == seriesId ||
+                (e.title == current.title && e.isRecurring);
+            return matches && !e.date.isBefore(fromDate);
+          });
+        } else {
+          _expenses.removeAt(index);
+        }
+        break;
+
+      case RecurrenceScope.allInstances:
+        final seriesId = current.recurringSeriesId ?? (current.isRecurring ? current.id : null);
+        if (seriesId != null) {
+          _expenses.removeWhere((e) =>
+              e.recurringSeriesId == seriesId ||
+              e.id == seriesId ||
+              (e.title == current.title && e.isRecurring));
+        } else {
+          _expenses.removeAt(index);
+        }
+        break;
     }
   }
 

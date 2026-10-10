@@ -1,4 +1,5 @@
 import '../../../../core/domain/value_objects/money.dart';
+import '../../../../core/domain/enums/recurrence.dart';
 import '../../domain/entities/calendar_event.dart';
 import '../../domain/entities/event_participant.dart';
 import '../../domain/entities/task_item.dart';
@@ -134,7 +135,202 @@ class MockCalendarDataSource {
   Future<List<CalendarEvent>> getEvents() async => List.unmodifiable(_events);
 
   Future<void> addEvent(CalendarEvent event) async {
-    _events.insert(0, event);
+    if (event.recurrenceFrequency == RecurrenceFrequency.none) {
+      _events.insert(0, event);
+      return;
+    }
+
+    final seriesId = event.seriesId ?? 'series_${DateTime.now().millisecondsSinceEpoch}_${event.id}';
+    final masterEvent = event.copyWith(seriesId: seriesId);
+    _events.insert(0, masterEvent);
+
+    int count = 0;
+    switch (event.recurrenceFrequency) {
+      case RecurrenceFrequency.daily:
+        count = 14;
+        break;
+      case RecurrenceFrequency.weekly:
+        count = 8;
+        break;
+      case RecurrenceFrequency.biweekly:
+        count = 4;
+        break;
+      case RecurrenceFrequency.monthly:
+        count = 6;
+        break;
+      case RecurrenceFrequency.yearly:
+        count = 2;
+        break;
+      case RecurrenceFrequency.none:
+        count = 0;
+        break;
+    }
+
+    final duration = event.endTime.difference(event.startTime);
+
+    for (int i = 1; i <= count; i++) {
+      DateTime nextStart;
+      switch (event.recurrenceFrequency) {
+        case RecurrenceFrequency.daily:
+          nextStart = event.startTime.add(Duration(days: i));
+          break;
+        case RecurrenceFrequency.weekly:
+          nextStart = event.startTime.add(Duration(days: 7 * i));
+          break;
+        case RecurrenceFrequency.biweekly:
+          nextStart = event.startTime.add(Duration(days: 14 * i));
+          break;
+        case RecurrenceFrequency.monthly:
+          nextStart = DateTime(
+            event.startTime.year,
+            event.startTime.month + i,
+            event.startTime.day,
+            event.startTime.hour,
+            event.startTime.minute,
+          );
+          break;
+        case RecurrenceFrequency.yearly:
+          nextStart = DateTime(
+            event.startTime.year + i,
+            event.startTime.month,
+            event.startTime.day,
+            event.startTime.hour,
+            event.startTime.minute,
+          );
+          break;
+        case RecurrenceFrequency.none:
+          nextStart = event.startTime;
+          break;
+      }
+
+      if (event.recurrenceEndDate != null && nextStart.isAfter(event.recurrenceEndDate!)) {
+        break;
+      }
+
+      final instance = event.copyWith(
+        id: '${seriesId}_instance_$i',
+        seriesId: seriesId,
+        startTime: nextStart,
+        endTime: nextStart.add(duration),
+      );
+      _events.add(instance);
+    }
+  }
+
+  Future<void> updateEvent(
+    CalendarEvent event, {
+    RecurrenceScope scope = RecurrenceScope.thisInstanceOnly,
+  }) async {
+    final index = _events.indexWhere((e) => e.id == event.id);
+    if (index == -1) return;
+    final current = _events[index];
+
+    switch (scope) {
+      case RecurrenceScope.thisInstanceOnly:
+        _events[index] = event.copyWith(
+          clearSeriesId: current.seriesId != null,
+          recurrenceFrequency: RecurrenceFrequency.none,
+          isRecurringException: current.seriesId != null,
+        );
+        break;
+
+      case RecurrenceScope.thisAndFuture:
+        if (current.seriesId != null) {
+          final targetSeriesId = current.seriesId!;
+          final fromTime = current.startTime;
+          for (int i = 0; i < _events.length; i++) {
+            final e = _events[i];
+            if (e.seriesId == targetSeriesId && !e.startTime.isBefore(fromTime)) {
+              final duration = e.endTime.difference(e.startTime);
+              final newStartTime = DateTime(
+                e.startTime.year,
+                e.startTime.month,
+                e.startTime.day,
+                event.startTime.hour,
+                event.startTime.minute,
+              );
+              _events[i] = e.copyWith(
+                title: event.title,
+                description: event.description,
+                location: event.location,
+                startTime: newStartTime,
+                endTime: newStartTime.add(duration),
+                isAllDay: event.isAllDay,
+                visibility: event.visibility,
+                participants: event.participants,
+              );
+            }
+          }
+        } else {
+          _events[index] = event;
+        }
+        break;
+
+      case RecurrenceScope.allInstances:
+        if (current.seriesId != null) {
+          final targetSeriesId = current.seriesId!;
+          for (int i = 0; i < _events.length; i++) {
+            final e = _events[i];
+            if (e.seriesId == targetSeriesId) {
+              final duration = e.endTime.difference(e.startTime);
+              final newStartTime = DateTime(
+                e.startTime.year,
+                e.startTime.month,
+                e.startTime.day,
+                event.startTime.hour,
+                event.startTime.minute,
+              );
+              _events[i] = e.copyWith(
+                title: event.title,
+                description: event.description,
+                location: event.location,
+                startTime: newStartTime,
+                endTime: newStartTime.add(duration),
+                isAllDay: event.isAllDay,
+                visibility: event.visibility,
+                participants: event.participants,
+              );
+            }
+          }
+        } else {
+          _events[index] = event;
+        }
+        break;
+    }
+  }
+
+  Future<void> deleteEvent(
+    String eventId, {
+    RecurrenceScope scope = RecurrenceScope.thisInstanceOnly,
+  }) async {
+    final index = _events.indexWhere((e) => e.id == eventId);
+    if (index == -1) return;
+    final current = _events[index];
+
+    switch (scope) {
+      case RecurrenceScope.thisInstanceOnly:
+        _events.removeAt(index);
+        break;
+
+      case RecurrenceScope.thisAndFuture:
+        if (current.seriesId != null) {
+          final targetSeriesId = current.seriesId!;
+          final fromTime = current.startTime;
+          _events.removeWhere((e) => e.seriesId == targetSeriesId && !e.startTime.isBefore(fromTime));
+        } else {
+          _events.removeAt(index);
+        }
+        break;
+
+      case RecurrenceScope.allInstances:
+        if (current.seriesId != null) {
+          final targetSeriesId = current.seriesId!;
+          _events.removeWhere((e) => e.seriesId == targetSeriesId);
+        } else {
+          _events.removeAt(index);
+        }
+        break;
+    }
   }
 
   Future<void> updateRsvp({
