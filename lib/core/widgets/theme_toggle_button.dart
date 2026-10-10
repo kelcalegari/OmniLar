@@ -37,7 +37,7 @@ class ThemeToggleButton extends StatelessWidget {
         ),
       ),
       onPressed: cubit != null ? () => cubit!.toggleTheme(context) : null,
-      onLongPress: cubit != null ? () => showThemeSelectionDialog(context) : null,
+      onLongPress: () => showThemeSelectionDialog(context),
     );
   }
 }
@@ -55,79 +55,83 @@ void showThemeSelectionDialog(BuildContext context) {
   showAdaptiveModal(
     context: context,
     maxWidth: 420,
-    child: SafeArea(
-      child: Padding(
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Center(
-              child: Container(
-                width: 40,
-                height: 4,
-                decoration: BoxDecoration(
-                  color: Colors.grey.withValues(alpha: 0.3),
-                  borderRadius: BorderRadius.circular(2),
-                ),
-              ),
-            ),
-            const SizedBox(height: 16),
-            const Row(
+    child: Builder(
+      builder: (modalCtx) {
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.all(20),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                Icon(Icons.palette_rounded, color: Colors.blueAccent, size: 24),
-                SizedBox(width: 10),
-                Text(
-                  'Aparência & Tema',
-                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                Center(
+                  child: Container(
+                    width: 40,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: Colors.grey.withValues(alpha: 0.3),
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
                 ),
+                const SizedBox(height: 16),
+                const Row(
+                  children: [
+                    Icon(Icons.palette_rounded, color: Colors.blueAccent, size: 24),
+                    SizedBox(width: 10),
+                    Text(
+                      'Aparência & Tema',
+                      style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 6),
+                const Text(
+                  'Escolha a forma como o Omni Lar é exibido.',
+                  style: TextStyle(color: Colors.grey, fontSize: 13),
+                ),
+                const SizedBox(height: 16),
+
+                _buildOption(
+                  context: modalCtx,
+                  mode: ThemeMode.light,
+                  current: currentMode,
+                  icon: Icons.light_mode_rounded,
+                  iconColor: Colors.amber,
+                  title: 'Modo Claro',
+                  subtitle: 'Cores claras e alto brilho para o dia',
+                  cubit: cubit,
+                ),
+                const SizedBox(height: 8),
+
+                _buildOption(
+                  context: modalCtx,
+                  mode: ThemeMode.dark,
+                  current: currentMode,
+                  icon: Icons.dark_mode_rounded,
+                  iconColor: Colors.indigoAccent,
+                  title: 'Modo Escuro',
+                  subtitle: 'Tons escuros confortáveis para a visão',
+                  cubit: cubit,
+                ),
+                const SizedBox(height: 8),
+
+                _buildOption(
+                  context: modalCtx,
+                  mode: ThemeMode.system,
+                  current: currentMode,
+                  icon: Icons.settings_brightness_rounded,
+                  iconColor: Colors.teal,
+                  title: 'Padrão do Sistema',
+                  subtitle: 'Acompanha o modo configurado no dispositivo',
+                  cubit: cubit,
+                ),
+                const SizedBox(height: 12),
               ],
             ),
-            const SizedBox(height: 6),
-            const Text(
-              'Escolha a forma como o Omni Lar é exibido.',
-              style: TextStyle(color: Colors.grey, fontSize: 13),
-            ),
-            const SizedBox(height: 16),
-
-            _buildOption(
-              context: context,
-              mode: ThemeMode.light,
-              current: currentMode,
-              icon: Icons.light_mode_rounded,
-              iconColor: Colors.amber,
-              title: 'Modo Claro',
-              subtitle: 'Cores claras e alto brilho para o dia',
-              cubit: cubit,
-            ),
-            const SizedBox(height: 8),
-
-            _buildOption(
-              context: context,
-              mode: ThemeMode.dark,
-              current: currentMode,
-              icon: Icons.dark_mode_rounded,
-              iconColor: Colors.indigoAccent,
-              title: 'Modo Escuro',
-              subtitle: 'Tons escuros confortáveis para a visão',
-              cubit: cubit,
-            ),
-            const SizedBox(height: 8),
-
-            _buildOption(
-              context: context,
-              mode: ThemeMode.system,
-              current: currentMode,
-              icon: Icons.settings_brightness_rounded,
-              iconColor: Colors.teal,
-              title: 'Padrão do Sistema',
-              subtitle: 'Acompanha o modo configurado no dispositivo',
-              cubit: cubit,
-            ),
-            const SizedBox(height: 12),
-          ],
-        ),
-      ),
+          ),
+        );
+      },
     ),
   );
 }
@@ -148,7 +152,10 @@ Widget _buildOption({
   return InkWell(
     onTap: () {
       cubit?.setThemeMode(mode);
-      Navigator.of(context).pop();
+      // Fecha APENAS o modal usando o modalCtx interno
+      if (Navigator.of(context).canPop()) {
+        Navigator.of(context).pop();
+      }
     },
     borderRadius: BorderRadius.circular(12),
     child: Container(
