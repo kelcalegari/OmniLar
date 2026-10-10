@@ -10,6 +10,7 @@ import '../../features/calendar/presentation/cubit/calendar_cubit.dart';
 import '../../features/calendar/presentation/widgets/add_event_sheet.dart';
 import '../../features/calendar/presentation/widgets/add_task_sheet.dart';
 import '../../features/capture/presentation/pages/smart_scanner_page.dart';
+import '../../features/reconciliation/presentation/widgets/split_invoice_modal.dart';
 
 class SmartFAB extends StatelessWidget {
   final bool isExtended;
@@ -192,6 +193,17 @@ class _SmartFABContent extends StatelessWidget {
                 onTap: () {
                   Navigator.pop(context);
                   context.push('/fechamento');
+                },
+              ),
+              const SizedBox(width: 12),
+              _buildActionButton(
+                context,
+                icon: Icons.call_split_rounded,
+                label: 'Rachar Fatura',
+                color: AppColors.accent,
+                onTap: () {
+                  Navigator.pop(context);
+                  SplitInvoiceModal.show(context);
                 },
               ),
             ],
