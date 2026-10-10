@@ -19,6 +19,9 @@ class HouseExpense extends Equatable {
   final SplitRule splitRule;
   final ExpenseStatus status;
   final bool isRecurring;
+  final bool isVariable; // Se true: valor varia mês a mês (consumo: luz, água). Se false: fixa (assinatura: Netflix, internet).
+  final int? dueDay; // Dia do vencimento no mês (1-31)
+  final bool isActive; // Se a assinatura/recorrência está ativa
   final bool paidOutOfPocket;
   final String? notes;
 
@@ -34,12 +37,53 @@ class HouseExpense extends Equatable {
     required this.splitRule,
     this.status = ExpenseStatus.paid,
     this.isRecurring = false,
+    this.isVariable = false,
+    this.dueDay,
+    this.isActive = true,
     this.paidOutOfPocket = false,
     this.notes,
   });
 
   bool get isPaid => status == ExpenseStatus.paid;
   bool get isPending => status == ExpenseStatus.pending;
+
+  HouseExpense copyWith({
+    String? id,
+    String? title,
+    Money? amount,
+    DateTime? date,
+    DateTime? dueDate,
+    String? categoryId,
+    String? paidByMemberId,
+    String? paymentMethodId,
+    SplitRule? splitRule,
+    ExpenseStatus? status,
+    bool? isRecurring,
+    bool? isVariable,
+    int? dueDay,
+    bool? isActive,
+    bool? paidOutOfPocket,
+    String? notes,
+  }) {
+    return HouseExpense(
+      id: id ?? this.id,
+      title: title ?? this.title,
+      amount: amount ?? this.amount,
+      date: date ?? this.date,
+      dueDate: dueDate ?? this.dueDate,
+      categoryId: categoryId ?? this.categoryId,
+      paidByMemberId: paidByMemberId ?? this.paidByMemberId,
+      paymentMethodId: paymentMethodId ?? this.paymentMethodId,
+      splitRule: splitRule ?? this.splitRule,
+      status: status ?? this.status,
+      isRecurring: isRecurring ?? this.isRecurring,
+      isVariable: isVariable ?? this.isVariable,
+      dueDay: dueDay ?? this.dueDay,
+      isActive: isActive ?? this.isActive,
+      paidOutOfPocket: paidOutOfPocket ?? this.paidOutOfPocket,
+      notes: notes ?? this.notes,
+    );
+  }
 
   @override
   List<Object?> get props => [
@@ -54,6 +98,9 @@ class HouseExpense extends Equatable {
         splitRule,
         status,
         isRecurring,
+        isVariable,
+        dueDay,
+        isActive,
         paidOutOfPocket,
         notes,
       ];

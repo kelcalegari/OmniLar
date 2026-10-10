@@ -77,6 +77,36 @@ class FinanceCubit extends Cubit<FinanceState> {
     }
   }
 
+  Future<void> updateExpense(HouseExpense expense) async {
+    try {
+      await _repository.updateExpense(expense);
+      await loadCycleData(cycle: state.currentCycle);
+    } catch (e) {
+      emit(state.copyWith(
+        status: FinanceStatus.failure,
+        errorMessage: 'Erro ao atualizar despesa: $e',
+      ));
+    }
+  }
+
+  Future<void> markExpenseAsPaid(String expenseId, {Money? actualAmount}) async {
+    try {
+      final expense = state.expenses.firstWhere((e) => e.id == expenseId);
+      final updated = expense.copyWith(
+        status: ExpenseStatus.paid,
+        amount: actualAmount ?? expense.amount,
+        date: DateTime.now(),
+      );
+      await _repository.updateExpense(updated);
+      await loadCycleData(cycle: state.currentCycle);
+    } catch (e) {
+      emit(state.copyWith(
+        status: FinanceStatus.failure,
+        errorMessage: 'Erro ao confirmar pagamento: $e',
+      ));
+    }
+  }
+
   Future<void> addContribution(Contribution contribution) async {
     try {
       await _repository.addContribution(contribution);

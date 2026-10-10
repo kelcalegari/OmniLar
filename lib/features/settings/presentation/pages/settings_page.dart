@@ -9,6 +9,8 @@ import '../../../auth/presentation/cubit/auth_state.dart';
 import '../../../finance/presentation/cubit/finance_cubit.dart';
 import '../../../finance/domain/entities/category.dart';
 import '../../../finance/domain/entities/payment_method.dart';
+import '../../../finance/presentation/cubit/finance_state.dart';
+import '../../../finance/presentation/pages/add_expense_page.dart';
 import '../../../../core/domain/value_objects/money.dart';
 
 class SettingsPage extends StatelessWidget {
@@ -1006,6 +1008,177 @@ class SettingsPage extends StatelessWidget {
     );
   }
 
+  void _showRecurringExpensesModal(BuildContext context) {
+    showAdaptiveModal(
+      context: context,
+      maxWidth: 540,
+      child: SafeArea(
+        child: BlocBuilder<FinanceCubit, FinanceState>(
+          builder: (context, financeState) {
+            final recurring = financeState.expenses.where((e) => e.isRecurring).toList();
+            final totalCents = recurring.fold(0, (sum, e) => sum + e.amount.cents);
+
+            return Padding(
+              padding: const EdgeInsets.all(20),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Center(
+                    child: Container(
+                      width: 40,
+                      height: 4,
+                      decoration: BoxDecoration(
+                        color: Colors.grey.withValues(alpha: 0.3),
+                        borderRadius: BorderRadius.circular(2),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Expanded(
+                        child: Text(
+                          'Assinaturas & Contas Fixas',
+                          style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                        ),
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.close_rounded),
+                        onPressed: () => Navigator.pop(context),
+                      ),
+                    ],
+                  ),
+                  const Text(
+                    'Compromissos mensais provisionados automaticamente no Fôlego da Casa.',
+                    style: TextStyle(color: Colors.grey, fontSize: 13),
+                  ),
+                  const SizedBox(height: 16),
+
+                  // Card de Resumo do Custo Mensal
+                  Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: AppColors.primary.withValues(alpha: 0.08),
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: AppColors.primary.withValues(alpha: 0.25)),
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        const Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Comprometimento Mensal',
+                                style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Colors.grey),
+                              ),
+                              SizedBox(height: 4),
+                              Text(
+                                'Total Provisionado',
+                                style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
+                              ),
+                            ],
+                          ),
+                        ),
+                        Text(
+                          Money(totalCents).format(),
+                          style: const TextStyle(
+                            fontSize: 20,
+                            fontWeight: FontWeight.bold,
+                            color: AppColors.primary,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+
+                  // Lista de Despesas Recorrentes
+                  if (recurring.isEmpty)
+                    const Padding(
+                      padding: EdgeInsets.symmetric(vertical: 24),
+                      child: Center(child: Text('Nenhuma despesa recorrente cadastrada ainda.')),
+                    )
+                  else
+                    ConstrainedBox(
+                      constraints: const BoxConstraints(maxHeight: 280),
+                      child: ListView.separated(
+                        shrinkWrap: true,
+                        itemCount: recurring.length,
+                        separatorBuilder: (_, __) => const SizedBox(height: 8),
+                        itemBuilder: (context, index) {
+                          final item = recurring[index];
+                          return Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                            decoration: BoxDecoration(
+                              color: Theme.of(context).cardColor,
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(color: Colors.grey.withValues(alpha: 0.15)),
+                            ),
+                            child: Row(
+                              children: [
+                                Icon(
+                                  item.isVariable ? Icons.trending_up_rounded : Icons.lock_clock_rounded,
+                                  color: AppColors.primary,
+                                  size: 20,
+                                ),
+                                const SizedBox(width: 10),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        item.title,
+                                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                                      ),
+                                      Text(
+                                        '${item.isVariable ? "Consumo Variável" : "Assinatura Fixa"} • Vence dia ${item.dueDay ?? item.dueDate?.day ?? "—"}',
+                                        style: const TextStyle(color: Colors.grey, fontSize: 11),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                Text(
+                                  item.amount.format(),
+                                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                                ),
+                              ],
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+
+                  const SizedBox(height: 20),
+                  FilledButton.icon(
+                    style: FilledButton.styleFrom(
+                      backgroundColor: AppColors.primary,
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    ),
+                    icon: const Icon(Icons.add_rounded),
+                    label: const Text('Cadastrar Nova Recorrente', style: TextStyle(fontWeight: FontWeight.bold)),
+                    onPressed: () {
+                      Navigator.pop(context);
+                      showAdaptiveModal(
+                        context: context,
+                        maxWidth: 540,
+                        child: const AddExpensePage(isRecurringDefault: true),
+                      );
+                    },
+                  ),
+                ],
+              ),
+            );
+          },
+        ),
+      ),
+    );
+  }
+
   void _showCycleDayDialog(BuildContext context, int currentDay) {
     int selectedDay = currentDay;
 
@@ -1215,6 +1388,14 @@ class SettingsPage extends StatelessWidget {
                 subtitle: const Text('Nubank Carlos, Inter Marina, VR Alelo'),
                 trailing: const Icon(Icons.chevron_right_rounded),
                 onTap: () => _showPaymentMethodsModal(context),
+              ),
+              const Divider(),
+              ListTile(
+                leading: const Icon(Icons.repeat_rounded, color: Colors.indigoAccent),
+                title: const Text('Assinaturas & Contas Fixas'),
+                subtitle: const Text('Aluguel, Luz, Internet, Netflix e consumo'),
+                trailing: const Icon(Icons.chevron_right_rounded),
+                onTap: () => _showRecurringExpensesModal(context),
               ),
               const Divider(),
               ListTile(

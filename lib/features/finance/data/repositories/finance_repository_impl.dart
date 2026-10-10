@@ -40,6 +40,12 @@ class FinanceRepositoryImpl implements FinanceRepository {
   Future<void> addExpense(HouseExpense expense) => _dataSource.addExpense(expense);
 
   @override
+  Future<void> updateExpense(HouseExpense expense) => _dataSource.updateExpense(expense);
+
+  @override
+  Future<List<HouseExpense>> getRecurringExpenses() => _dataSource.getRecurringExpenses();
+
+  @override
   Future<void> addContribution(Contribution contribution) =>
       _dataSource.addContribution(contribution);
 

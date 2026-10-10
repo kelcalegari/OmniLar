@@ -10,7 +10,12 @@ import '../cubit/finance_cubit.dart';
 import '../cubit/finance_state.dart';
 
 class AddExpensePage extends StatefulWidget {
-  const AddExpensePage({super.key});
+  final bool isRecurringDefault;
+
+  const AddExpensePage({
+    super.key,
+    this.isRecurringDefault = false,
+  });
 
   @override
   State<AddExpensePage> createState() => _AddExpensePageState();
@@ -24,9 +29,22 @@ class _AddExpensePageState extends State<AddExpensePage> {
   String? _selectedPaymentMethodId;
   final SplitType _selectedSplitType = SplitType.percentage;
   final DateTime _selectedDate = DateTime.now();
-  final bool _isRecurring = false;
+
+  late bool _isRecurring;
+  bool _isVariable = false;
+  int _dueDay = DateTime.now().day;
+  ExpenseStatus _expenseStatus = ExpenseStatus.paid;
 
   int _cents = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _isRecurring = widget.isRecurringDefault;
+    if (_isRecurring) {
+      _expenseStatus = ExpenseStatus.pending;
+    }
+  }
 
   @override
   void dispose() {
@@ -63,20 +81,42 @@ class _AddExpensePageState extends State<AddExpensePage> {
       rule = const SplitRule.percentage({'member_carlos': 60.0, 'member_marina': 40.0});
     }
 
+    final now = DateTime.now();
+    DateTime expenseDate = _selectedDate;
+    DateTime? dueDate;
+
+    if (_isRecurring) {
+      final daysInMonth = DateTime(now.year, now.month + 1, 0).day;
+      final safeDay = _dueDay.clamp(1, daysInMonth);
+      dueDate = DateTime(now.year, now.month, safeDay);
+      expenseDate = _expenseStatus == ExpenseStatus.paid ? now : dueDate;
+    }
+
     final expense = HouseExpense(
       id: 'exp_${DateTime.now().millisecondsSinceEpoch}',
       title: _titleController.text.trim(),
       amount: Money(_cents),
-      date: _selectedDate,
+      date: expenseDate,
+      dueDate: dueDate,
       categoryId: catId,
       paidByMemberId: paidById,
       paymentMethodId: pmId,
       splitRule: rule,
+      status: _expenseStatus,
       isRecurring: _isRecurring,
+      isVariable: _isVariable,
+      dueDay: _isRecurring ? _dueDay : null,
     );
 
     context.read<FinanceCubit>().addExpense(expense);
     Navigator.pop(context);
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(_isRecurring
+            ? 'Despesa recorrente cadastrada com sucesso! 🔁'
+            : 'Gasto da casa lançado com sucesso! 🎉'),
+      ),
+    );
   }
 
   @override
@@ -104,7 +144,10 @@ class _AddExpensePageState extends State<AddExpensePage> {
 
         return Scaffold(
           appBar: AppBar(
-            title: const Text('Gasto da Casa', style: TextStyle(fontWeight: FontWeight.bold)),
+            title: Text(
+              _isRecurring ? 'Nova Despesa Recorrente' : 'Gasto da Casa',
+              style: const TextStyle(fontWeight: FontWeight.bold),
+            ),
             leading: IconButton(
               icon: const Icon(Icons.close_rounded),
               onPressed: () => Navigator.pop(context),
@@ -115,7 +158,7 @@ class _AddExpensePageState extends State<AddExpensePage> {
             children: [
               // Campo ATM Contínuo de Valor
               MoneyInputField(
-                label: 'Valor da Despesa',
+                label: _isRecurring && _isVariable ? 'Valor Estimado do Mês' : 'Valor da Despesa',
                 initialValue: Money(_cents),
                 primaryColor: AppColors.primary,
                 quickAddCents: const [1000, 2000, 5000, 10000], // +10, +20, +50, +100
@@ -132,9 +175,170 @@ class _AddExpensePageState extends State<AddExpensePage> {
                 controller: _titleController,
                 decoration: InputDecoration(
                   labelText: 'O que foi pago?',
-                  hintText: 'Ex: Supermercado, Aluguel, Luz',
+                  hintText: 'Ex: Supermercado, Aluguel, Luz, Netflix',
                   prefixIcon: const Icon(Icons.receipt_long_outlined),
                   border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                ),
+              ),
+              const SizedBox(height: 20),
+
+              // Seção de Recorrência (Assinaturas / Contas Fixas / Variáveis)
+              Material(
+                color: _isRecurring
+                    ? AppColors.primary.withValues(alpha: 0.06)
+                    : theme.cardColor,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(16),
+                  side: BorderSide(
+                    color: _isRecurring
+                        ? AppColors.primary.withValues(alpha: 0.4)
+                        : theme.dividerColor,
+                    width: _isRecurring ? 1.5 : 1,
+                  ),
+                ),
+                child: Column(
+                  children: [
+                    SwitchListTile(
+                      secondary: Icon(
+                        Icons.repeat_rounded,
+                        color: _isRecurring ? AppColors.primary : Colors.grey,
+                      ),
+                      title: const Text(
+                        'Repetir todo mês (Recorrente)',
+                        style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+                      ),
+                      subtitle: Text(
+                        _isRecurring
+                            ? (_isVariable
+                                ? 'Conta de consumo (Luz, Água, Gás)'
+                                : 'Assinatura fixa (Netflix, Internet, Aluguel)')
+                            : 'Ative para contas fixas ou assinaturas mensais',
+                        style: const TextStyle(fontSize: 12),
+                      ),
+                      value: _isRecurring,
+                      onChanged: (val) {
+                        setState(() {
+                          _isRecurring = val;
+                          if (_isRecurring) {
+                            _expenseStatus = ExpenseStatus.pending;
+                          }
+                        });
+                      },
+                    ),
+                    if (_isRecurring) ...[
+                      const Divider(height: 1),
+                      Padding(
+                        padding: const EdgeInsets.all(16),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            // Tipo de Recorrência: Fixa vs Variável
+                            const Text(
+                              'Tipo de Conta',
+                              style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
+                            ),
+                            const SizedBox(height: 8),
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: ChoiceChip(
+                                    avatar: const Icon(Icons.lock_clock_rounded, size: 16),
+                                    label: const Center(child: Text('Valor Fixo')),
+                                    selected: !_isVariable,
+                                    selectedColor: AppColors.primary.withValues(alpha: 0.15),
+                                    onSelected: (selected) {
+                                      if (selected) setState(() => _isVariable = false);
+                                    },
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: ChoiceChip(
+                                    avatar: const Icon(Icons.trending_up_rounded, size: 16),
+                                    label: const Center(child: Text('Valor Variável')),
+                                    selected: _isVariable,
+                                    selectedColor: AppColors.primary.withValues(alpha: 0.15),
+                                    onSelected: (selected) {
+                                      if (selected) setState(() => _isVariable = true);
+                                    },
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 14),
+
+                            // Dia do Vencimento
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                const Text(
+                                  'Dia do Vencimento',
+                                  style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
+                                ),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                                  decoration: BoxDecoration(
+                                    color: AppColors.primary.withValues(alpha: 0.12),
+                                    borderRadius: BorderRadius.circular(10),
+                                  ),
+                                  child: DropdownButton<int>(
+                                    value: _dueDay,
+                                    underline: const SizedBox(),
+                                    isDense: true,
+                                    items: List.generate(31, (i) => i + 1).map((day) {
+                                      return DropdownMenuItem<int>(
+                                        value: day,
+                                        child: Text('Todo dia $day',
+                                            style: const TextStyle(fontWeight: FontWeight.bold)),
+                                      );
+                                    }).toList(),
+                                    onChanged: (val) {
+                                      if (val != null) setState(() => _dueDay = val);
+                                    },
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 14),
+
+                            // Situação no Ciclo Atual
+                            const Text(
+                              'Situação no Ciclo Atual',
+                              style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
+                            ),
+                            const SizedBox(height: 8),
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: ChoiceChip(
+                                    avatar: const Icon(Icons.check_circle_outline, size: 16),
+                                    label: const Center(child: Text('Já Paga')),
+                                    selected: _expenseStatus == ExpenseStatus.paid,
+                                    selectedColor: AppColors.creditGreen.withValues(alpha: 0.15),
+                                    onSelected: (selected) {
+                                      if (selected) setState(() => _expenseStatus = ExpenseStatus.paid);
+                                    },
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: ChoiceChip(
+                                    avatar: const Icon(Icons.schedule_rounded, size: 16),
+                                    label: const Center(child: Text('A Vencer')),
+                                    selected: _expenseStatus == ExpenseStatus.pending,
+                                    selectedColor: AppColors.folegoWarning.withValues(alpha: 0.2),
+                                    onSelected: (selected) {
+                                      if (selected) setState(() => _expenseStatus = ExpenseStatus.pending);
+                                    },
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ],
                 ),
               ),
               const SizedBox(height: 20),
@@ -195,7 +399,7 @@ class _AddExpensePageState extends State<AddExpensePage> {
               const SizedBox(height: 20),
 
               // Quem Pagou
-              Text('Quem Pagou?', style: theme.textTheme.titleSmall),
+              Text('Quem Pagou / É Responsável?', style: theme.textTheme.titleSmall),
               const SizedBox(height: 8),
               Row(
                 children: state.members.map((m) {
@@ -266,9 +470,9 @@ class _AddExpensePageState extends State<AddExpensePage> {
                     elevation: 2,
                   ),
                   onPressed: _submit,
-                  child: const Text(
-                    'Lançar Gasto da Casa',
-                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                  child: Text(
+                    _isRecurring ? 'Salvar Despesa Recorrente' : 'Lançar Gasto da Casa',
+                    style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
                   ),
                 ),
               ),

@@ -123,6 +123,9 @@ class MockFinanceDataSource {
         paymentMethodId: 'pm_caixa',
         splitRule: const SplitRule.percentage({'member_carlos': 60.0, 'member_marina': 40.0}),
         status: ExpenseStatus.paid,
+        isRecurring: true,
+        isVariable: false,
+        dueDay: 6,
       ),
       HouseExpense(
         id: 'exp_2',
@@ -146,11 +149,11 @@ class MockFinanceDataSource {
         splitRule: const SplitRule.singleResponsible('member_carlos'),
         status: ExpenseStatus.paid,
       ),
-      // Conta futura / provisionada
+      // Contas recorrentes futuras / provisionadas
       HouseExpense(
         id: 'exp_4',
         title: 'Conta de Luz (Enel)',
-        amount: const Money(21000), // R$ 210,00
+        amount: const Money(21000), // R$ 210,00 estimado
         date: DateTime(now.year, now.month, 20),
         dueDate: DateTime(now.year, now.month, 20),
         categoryId: 'cat_contas',
@@ -158,11 +161,14 @@ class MockFinanceDataSource {
         paymentMethodId: 'pm_caixa',
         splitRule: const SplitRule.percentage({'member_carlos': 60.0, 'member_marina': 40.0}),
         status: ExpenseStatus.pending,
+        isRecurring: true,
+        isVariable: true,
+        dueDay: 20,
       ),
       HouseExpense(
         id: 'exp_5',
         title: 'Internet Fibra',
-        amount: const Money(12000), // R$ 120,00
+        amount: const Money(12000), // R$ 120,00 fixo
         date: DateTime(now.year, now.month, 25),
         dueDate: DateTime(now.year, now.month, 25),
         categoryId: 'cat_contas',
@@ -170,6 +176,24 @@ class MockFinanceDataSource {
         paymentMethodId: 'pm_caixa',
         splitRule: const SplitRule.percentage({'member_carlos': 60.0, 'member_marina': 40.0}),
         status: ExpenseStatus.pending,
+        isRecurring: true,
+        isVariable: false,
+        dueDay: 25,
+      ),
+      HouseExpense(
+        id: 'exp_6',
+        title: 'Netflix Assinatura',
+        amount: const Money(5590), // R$ 55,90 fixo
+        date: DateTime(now.year, now.month, 10),
+        dueDate: DateTime(now.year, now.month, 10),
+        categoryId: 'cat_lazer',
+        paidByMemberId: 'member_marina',
+        paymentMethodId: 'pm_card_marina',
+        splitRule: const SplitRule.percentage({'member_carlos': 60.0, 'member_marina': 40.0}),
+        status: ExpenseStatus.paid,
+        isRecurring: true,
+        isVariable: false,
+        dueDay: 10,
       ),
     ]);
   }
@@ -228,6 +252,19 @@ class MockFinanceDataSource {
 
   Future<void> addExpense(HouseExpense expense) async {
     _expenses.insert(0, expense);
+  }
+
+  Future<void> updateExpense(HouseExpense expense) async {
+    final index = _expenses.indexWhere((e) => e.id == expense.id);
+    if (index != -1) {
+      _expenses[index] = expense;
+    } else {
+      _expenses.insert(0, expense);
+    }
+  }
+
+  Future<List<HouseExpense>> getRecurringExpenses() async {
+    return _expenses.where((e) => e.isRecurring && e.isActive).toList();
   }
 
   Future<void> addContribution(Contribution contribution) async {

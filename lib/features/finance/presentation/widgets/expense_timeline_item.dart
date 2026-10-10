@@ -1,11 +1,15 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:intl/intl.dart';
+import '../../../../core/domain/value_objects/money.dart';
 import '../../../../core/theme/app_colors.dart';
+import '../../../../core/widgets/money_input_field.dart';
 import '../../domain/entities/house_expense.dart';
 import '../../domain/entities/category.dart';
 import '../../domain/entities/payment_method.dart';
 import '../../domain/entities/house_member.dart';
 import '../../domain/entities/split_rule.dart';
+import '../cubit/finance_cubit.dart';
 
 class ExpenseTimelineItem extends StatelessWidget {
   final HouseExpense expense;
@@ -57,6 +61,138 @@ class ExpenseTimelineItem extends StatelessWidget {
     }
   }
 
+  void _showConfirmPaymentModal(BuildContext context) {
+    Money confirmedAmount = expense.amount;
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (bottomSheetContext) {
+        return StatefulBuilder(
+          builder: (ctx, setModalState) {
+            return Padding(
+              padding: EdgeInsets.only(
+                left: 20,
+                right: 20,
+                top: 20,
+                bottom: MediaQuery.of(bottomSheetContext).viewInsets.bottom + 20,
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Center(
+                    child: Container(
+                      width: 40,
+                      height: 4,
+                      decoration: BoxDecoration(
+                        color: Colors.grey.withValues(alpha: 0.3),
+                        borderRadius: BorderRadius.circular(2),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: AppColors.creditGreen.withValues(alpha: 0.12),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: const Icon(Icons.check_circle_outline, color: AppColors.creditGreen),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Confirmar Pagamento',
+                              style: Theme.of(ctx).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
+                            ),
+                            Text(
+                              expense.title,
+                              style: const TextStyle(color: Colors.grey, fontSize: 13),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+
+                  if (expense.isVariable) ...[
+                    const Text(
+                      'Esta é uma conta com valor variável. Confirme ou ajuste o valor real da fatura:',
+                      style: TextStyle(fontSize: 13),
+                    ),
+                    const SizedBox(height: 12),
+                    MoneyInputField(
+                      label: 'Valor Real Pago',
+                      initialValue: confirmedAmount,
+                      primaryColor: AppColors.primary,
+                      onChanged: (money) {
+                        setModalState(() {
+                          confirmedAmount = money;
+                        });
+                      },
+                    ),
+                  ] else ...[
+                    Container(
+                      padding: const EdgeInsets.all(14),
+                      decoration: BoxDecoration(
+                        color: Theme.of(ctx).cardColor,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: Colors.grey.withValues(alpha: 0.2)),
+                      ),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          const Text('Valor da Conta:', style: TextStyle(fontWeight: FontWeight.w600)),
+                          Text(
+                            expense.amount.format(),
+                            style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+
+                  const SizedBox(height: 20),
+                  SizedBox(
+                    height: 48,
+                    child: ElevatedButton(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppColors.creditGreen,
+                        foregroundColor: Colors.white,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      ),
+                      onPressed: () {
+                        context.read<FinanceCubit>().markExpenseAsPaid(
+                              expense.id,
+                              actualAmount: confirmedAmount,
+                            );
+                        Navigator.pop(bottomSheetContext);
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(content: Text('Pagamento de "${expense.title}" confirmado! 🎉')),
+                        );
+                      },
+                      child: const Text('Confirmar Pagamento', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+                    ),
+                  ),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -64,126 +200,180 @@ class ExpenseTimelineItem extends StatelessWidget {
     final catColor = _parseColor(category?.colorHex);
     final dateFormatted = DateFormat('dd/MM').format(expense.dueDate ?? expense.date);
 
-    return Container(
-      margin: const EdgeInsets.only(bottom: 10),
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: theme.cardTheme.color,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: isPending
-              ? AppColors.folegoWarning.withValues(alpha: 0.4)
-              : (theme.brightness == Brightness.dark ? AppColors.borderDark : AppColors.borderLight),
-          width: isPending ? 1.5 : 1,
-        ),
-      ),
-      child: Row(
-        children: [
-          // Ícone da Categoria
-          Container(
-            width: 44,
-            height: 44,
-            decoration: BoxDecoration(
-              color: catColor.withValues(alpha: 0.12),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Icon(
-              _getCategoryIcon(category?.icon ?? ''),
-              color: catColor,
-              size: 22,
-            ),
+    return InkWell(
+      borderRadius: BorderRadius.circular(16),
+      onTap: isPending ? () => _showConfirmPaymentModal(context) : null,
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 10),
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: theme.cardTheme.color,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+            color: isPending
+                ? AppColors.folegoWarning.withValues(alpha: 0.4)
+                : (theme.brightness == Brightness.dark ? AppColors.borderDark : AppColors.borderLight),
+            width: isPending ? 1.5 : 1,
           ),
-          const SizedBox(width: 12),
+        ),
+        child: Row(
+          children: [
+            // Ícone da Categoria
+            Container(
+              width: 44,
+              height: 44,
+              decoration: BoxDecoration(
+                color: catColor.withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Icon(
+                _getCategoryIcon(category?.icon ?? ''),
+                color: catColor,
+                size: 22,
+              ),
+            ),
+            const SizedBox(width: 12),
 
-          // Informações da Despesa
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Flexible(
-                      child: Text(
-                        expense.title,
-                        style: const TextStyle(
-                          fontSize: 15,
-                          fontWeight: FontWeight.w600,
-                        ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ),
-                    if (isPending) ...[
-                      const SizedBox(width: 6),
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                        decoration: BoxDecoration(
-                          color: AppColors.folegoWarning.withValues(alpha: 0.15),
-                          borderRadius: BorderRadius.circular(4),
-                        ),
-                        child: const Text(
-                          'A vencer',
-                          style: TextStyle(
-                            fontSize: 10,
-                            fontWeight: FontWeight.bold,
-                            color: AppColors.folegoWarning,
+            // Informações da Despesa
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Flexible(
+                        child: Text(
+                          expense.title,
+                          style: const TextStyle(
+                            fontSize: 15,
+                            fontWeight: FontWeight.w600,
                           ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      if (expense.isRecurring) ...[
+                        const SizedBox(width: 6),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: AppColors.primary.withValues(alpha: 0.12),
+                            borderRadius: BorderRadius.circular(4),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Icon(Icons.repeat_rounded, size: 10, color: AppColors.primary),
+                              const SizedBox(width: 2),
+                              Text(
+                                expense.isVariable ? 'Variável' : 'Fixa',
+                                style: const TextStyle(
+                                  fontSize: 9,
+                                  fontWeight: FontWeight.bold,
+                                  color: AppColors.primary,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                      if (isPending) ...[
+                        const SizedBox(width: 6),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: AppColors.folegoWarning.withValues(alpha: 0.15),
+                            borderRadius: BorderRadius.circular(4),
+                          ),
+                          child: const Text(
+                            'A vencer',
+                            style: TextStyle(
+                              fontSize: 10,
+                              fontWeight: FontWeight.bold,
+                              color: AppColors.folegoWarning,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                  const SizedBox(height: 4),
+                  Row(
+                    children: [
+                      Flexible(
+                        child: Text(
+                          '$dateFormatted • ${paidByMember?.name ?? "Membro"}${paymentMethod != null ? " • ${paymentMethod!.name}" : ""}',
+                          style: theme.textTheme.bodySmall?.copyWith(fontSize: 12),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
                         ),
                       ),
                     ],
-                  ],
-                ),
-                const SizedBox(height: 4),
-                Row(
-                  children: [
-                    Flexible(
-                      child: Text(
-                        '$dateFormatted • ${paidByMember?.name ?? "Membro"}${paymentMethod != null ? " • ${paymentMethod!.name}" : ""}',
-                        style: theme.textTheme.bodySmall?.copyWith(fontSize: 12),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(width: 8),
-
-          // Valor e Badge de Rateio
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              Text(
-                expense.amount.format(),
-                style: TextStyle(
-                  fontSize: 15,
-                  fontWeight: FontWeight.bold,
-                  color: isPending ? AppColors.folegoWarning : null,
-                ),
+                  ),
+                ],
               ),
-              const SizedBox(height: 4),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                decoration: BoxDecoration(
-                  color: theme.brightness == Brightness.dark
-                      ? Colors.white10
-                      : Colors.black.withValues(alpha: 0.05),
-                  borderRadius: BorderRadius.circular(6),
-                ),
-                child: Text(
-                  _getSplitBadgeText(),
+            ),
+            const SizedBox(width: 8),
+
+            // Valor e Badge de Rateio / Ação de pagamento
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                Text(
+                  expense.amount.format(),
                   style: TextStyle(
-                    fontSize: 10,
-                    fontWeight: FontWeight.w600,
-                    color: theme.textTheme.bodySmall?.color,
+                    fontSize: 15,
+                    fontWeight: FontWeight.bold,
+                    color: isPending ? AppColors.folegoWarning : null,
                   ),
                 ),
-              ),
-            ],
-          ),
-        ],
+                const SizedBox(height: 4),
+                if (isPending)
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: AppColors.creditGreen.withValues(alpha: 0.12),
+                      borderRadius: BorderRadius.circular(6),
+                      border: Border.all(color: AppColors.creditGreen.withValues(alpha: 0.3)),
+                    ),
+                    child: const Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.check_rounded, size: 11, color: AppColors.creditGreen),
+                        SizedBox(width: 2),
+                        Text(
+                          'Pagar',
+                          style: TextStyle(
+                            fontSize: 10,
+                            fontWeight: FontWeight.bold,
+                            color: AppColors.creditGreen,
+                          ),
+                        ),
+                      ],
+                    ),
+                  )
+                else
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: theme.brightness == Brightness.dark
+                          ? Colors.white10
+                          : Colors.black.withValues(alpha: 0.05),
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                    child: Text(
+                      _getSplitBadgeText(),
+                      style: TextStyle(
+                        fontSize: 10,
+                        fontWeight: FontWeight.w600,
+                        color: theme.textTheme.bodySmall?.color,
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+          ],
+        ),
       ),
     );
   }

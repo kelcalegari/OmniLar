@@ -8,6 +8,7 @@ import '../../domain/entities/p2p_loan.dart';
 import '../cubit/p2p_cubit.dart';
 import '../cubit/p2p_state.dart';
 import '../widgets/loan_card.dart';
+import 'create_loan_page.dart';
 
 class P2PPage extends StatelessWidget {
   const P2PPage({super.key});
@@ -40,8 +41,19 @@ class _P2PPageContent extends StatelessWidget {
           return Scaffold(
             appBar: AppBar(
               title: const Text('Empréstimos P2P', style: TextStyle(fontWeight: FontWeight.bold)),
-              actions: const [
-                PrivacyToggleButton(),
+              actions: [
+                IconButton(
+                  icon: const Icon(Icons.add_rounded),
+                  tooltip: 'Novo Empréstimo',
+                  onPressed: () {
+                    showAdaptiveModal(
+                      context: context,
+                      maxWidth: 540,
+                      child: const CreateLoanPage(),
+                    );
+                  },
+                ),
+                const PrivacyToggleButton(),
               ],
             ),
             body: SingleChildScrollView(
@@ -155,8 +167,19 @@ class _P2PPageContent extends StatelessWidget {
           child: Scaffold(
             appBar: AppBar(
               title: const Text('Empréstimos P2P', style: TextStyle(fontWeight: FontWeight.bold)),
-              actions: const [
-                PrivacyToggleButton(),
+              actions: [
+                IconButton(
+                  icon: const Icon(Icons.add_rounded),
+                  tooltip: 'Novo Empréstimo',
+                  onPressed: () {
+                    showAdaptiveModal(
+                      context: context,
+                      maxWidth: 540,
+                      child: const CreateLoanPage(),
+                    );
+                  },
+                ),
+                const PrivacyToggleButton(),
               ],
             ),
             body: Column(

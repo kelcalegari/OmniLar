@@ -18,6 +18,8 @@ abstract class FinanceRepository {
   Future<FinancialCycleSummary> getCycleSummary(FinancialCycle cycle);
 
   Future<void> addExpense(HouseExpense expense);
+  Future<void> updateExpense(HouseExpense expense);
+  Future<List<HouseExpense>> getRecurringExpenses();
   Future<void> addContribution(Contribution contribution);
   Future<void> addCategory(ExpenseCategory category);
   Future<void> addPaymentMethod(PaymentMethod paymentMethod);

@@ -38,6 +38,7 @@ void main() {
     expect(find.text('Categorias de Gastos'), findsOneWidget);
     expect(find.text('Modelos de Rateio'), findsOneWidget);
     expect(find.text('Cartões e Formas de Pagamento'), findsOneWidget);
+    expect(find.text('Assinaturas & Contas Fixas'), findsOneWidget);
     expect(find.text('Ciclo Financeiro'), findsOneWidget);
     expect(find.text('Assistente IA'), findsOneWidget);
   });
@@ -77,6 +78,21 @@ void main() {
     expect(find.text('Cadastrar Cartão ou VR'), findsOneWidget);
   });
 
+  testWidgets('Can open Assinaturas & Contas Fixas modal and view recurring expenses', (tester) async {
+    await sl<FinanceCubit>().loadCycleData();
+
+    await tester.pumpWidget(buildTestableWidget());
+    await tester.pumpAndSettle();
+
+    final tile = find.text('Assinaturas & Contas Fixas');
+    await tester.ensureVisible(tile);
+    await tester.tap(tile);
+    await tester.pumpAndSettle();
+
+    expect(find.text('Comprometimento Mensal'), findsOneWidget);
+    expect(find.text('Cadastrar Nova Recorrente'), findsOneWidget);
+  });
+
   testWidgets('Can open Modelos de Rateio and see options including Valor Fixo Estipulado', (tester) async {
     await sl<FinanceCubit>().loadCycleData();
 
@@ -106,7 +122,9 @@ void main() {
     await tester.pumpWidget(buildTestableWidget());
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('Ciclo Financeiro'));
+    final tile = find.text('Ciclo Financeiro');
+    await tester.ensureVisible(tile);
+    await tester.tap(tile);
     await tester.pumpAndSettle();
 
     expect(find.text('Dia de Início do Ciclo'), findsOneWidget);
