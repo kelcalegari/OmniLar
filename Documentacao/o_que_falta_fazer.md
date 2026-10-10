@@ -10,7 +10,8 @@ Este documento consolida o estado atual do desenvolvimento e mapeia com clareza 
 |---|---|---|
 | **Fase 0 — Fundação** (Auth, Casa, Membros, Router, Shell) | Concluído ✅ | 100% |
 | **Fase 1 — Despesas da Casa** (Caixa, Fôlego, Rateio, Aportes) | Concluído ✅ | 100% |
-| **Fase 2 — Empréstimos P2P** (Parcelas, Parcial, Perdão, Renegociação) | Concluído ✅ | 100% |
+| **Fase 1.1 — Despesas Recorrentes & Assinaturas** (Fixas, Variáveis, Fôlego e Gestão) | Concluído ✅ | 100% |
+| **Fase 2 — Empréstimos P2P** (Parcelas 1x-12x, Parcial, Perdão, Renegociação) | Concluído ✅ | 100% |
 | **Fase 3 — Motor de Fechamento** (Global Clearing Engine / Super Pix) | Concluído ✅ | 100% |
 | **Fase 4 — Organização** (Agenda do Lar com Visão Dia/Semana/Mês/Lista, Seção Tarefas & Compras, Pessoal P2P) | Concluído ✅ | 100% |
 | **Fase 5 — Captura Inteligente** (Boleto 47 dígitos, NFC-e, Revisão) | Concluído ✅ | 100% |
@@ -18,10 +19,10 @@ Este documento consolida o estado atual do desenvolvimento e mapeia com clareza 
 | **Fase 7 — Assistente de IA** (Chat, Motor Determinístico, Confirmação) | Concluído ✅ | 100% |
 | **Ajustes & Configurações** (Categorias com Dono, Cartões/VR, Rateio Fixo/Proporcional, Ciclo) | Concluído ✅ | 100% |
 | **Caixinhas & Metas da Casa** (Reserva Blindada, Metas com Progresso, Aportes/Resgates) | Concluído ✅ | 100% |
-| **Humanização & UX** (Input ATM centavos, Modo Privacidade, 3 Colunas) | Concluído ✅ | 100% |
+| **Humanização & UX** (Input ATM centavos nativo, Modo Privacidade, 3 Colunas) | Concluído ✅ | 100% |
 | **Backend & Infra SQL** (Migrações 0001 a 0004 com RLS, Fila Offline) | Concluído ✅ | 100% |
 
-> **Métrica de Confiabilidade:** **69 testes automatizados (unitários e widgets) passando (100% verde)** e cobertura contínua de regressão.
+> **Métrica de Confiabilidade:** **77 testes automatizados (unitários e widgets) passando (100% verde)** e cobertura contínua de regressão.
 
 ---
 
@@ -31,19 +32,20 @@ Abaixo estão divididos por prioridade técnica os blocos de trabalho que restam
 
 ```mermaid
 flowchart TD
-    subgraph P1["Prioridade 1: Integração de Dados Reais"]
+    subgraph P1["Prioridade 1: Integração de Dados Reais & Despesas Compostas"]
         A[Datasources Reais Supabase] --> B[Edge Functions & Gemini API]
         B --> C[Realtime Sync Compras/Tarefas]
+        C --> D[Segmentação de Boletos / Despesas Compostas]
     end
 
     subgraph P2["Prioridade 2: Segurança & Experiência"]
-        D[Biometria local_auth RN07] --> E[Compartilhamento WhatsApp / Super Pix]
-        E --> F[Fila Offline com Armazenamento Seguro]
+        E[Biometria local_auth RN07] --> F[Compartilhamento WhatsApp / Super Pix]
+        F --> G[Fila Offline com Armazenamento Seguro]
     end
 
     subgraph P3["Prioridade 3: Lojas & Publicação"]
-        G[Splash Screen & Ícones de App] --> H[Assinatura Android / Bundle iOS]
-        H --> I[Deploy Supabase & Ambientes]
+        H[Splash Screen & Ícones de App] --> I[Assinatura Android / Bundle iOS]
+        I --> J[Deploy Supabase & Ambientes]
     end
 
     P1 --> P2
@@ -54,12 +56,31 @@ flowchart TD
 
 ## 3. Detalhamento por Frente de Trabalho
 
-### Frente 1: Conexão Real com o Backend (Supabase & Edge Functions)
+### Frente 1: Segmentação de Boletos / Despesas Compostas (Condomínio com Água, Gás e Obras)
+*Necessidade identificada para resolver boletos bancários unificados que misturam naturezas e regras de rateio diferentes.*
+
+- [ ] **Modelo de Dados (Sub-itens):**
+  - Criar entidade `HouseExpenseItem` vinculada a `HouseExpense`:
+    - `id`, `expenseId`, `title` (ex: "Taxa Condomínio", "Consumo Água", "Gás Encanado", "Fundo de Reserva/Obras").
+    - `amount` em centavos (com validação estrita: soma dos itens == total do boleto).
+    - `categoryId` independente por item (permite que a água vá para a categoria de Água e a taxa para Moradia).
+    - `splitRule` ou `responsibleMemberId` independente (ex: obras e benfeitorias estruturais atribuídas 100% ao proprietário do imóvel, enquanto a taxa ordinária é dividida 60/40 ou 50/50).
+- [ ] **Interface de Cadastro (`AddExpensePage`):**
+  - Adicionar botão expansível `+ Desmembrar em Sub-itens (Boleto Composto)`.
+  - Contador visual de conferência em tempo real: *"Distribuído: R$ 850,00 de R$ 850,00 (100% batendo)"*.
+- [ ] **Visualização e Timeline (`ExpenseTimelineItem`):**
+  - Exibir accordion/chips discriminando as fatias daquele boleto.
+- [ ] **Integração com Captura Inteligente (OCR / Gemini):**
+  - Enriquecer o prompt da Edge Function `capture-read` para ler a tabela do demonstrativo de condomínio e sugerir os sub-itens desmembrados automaticamente.
+
+---
+
+### Frente 2: Conexão Real com o Backend (Supabase & Edge Functions)
 Atualmente, o app utiliza **DataSources Mockados** altamente consistentes em memória para permitir desenvolvimento e testes ágeis sem dependência de rede.
 
 - [ ] **DataSources Reais de Banco:**
   - Substituir os `Mock*DataSource` por implementações que chamam `supabase.from('...')`:
-    - `SupabaseFinanceDataSource` (`house_expenses`, `contributions`, `categories`).
+    - `SupabaseFinanceDataSource` (`house_expenses`, `house_expense_items`, `contributions`, `categories`).
     - `SupabaseP2PDataSource` (`loans`, `installments`, `payments`).
     - `SupabaseShoppingDataSource` (`shopping_lists`, `shopping_items`, `shopping_trips`).
     - `SupabaseCalendarDataSource` (`events`, `tasks`).
@@ -71,7 +92,7 @@ Atualmente, o app utiliza **DataSources Mockados** altamente consistentes em mem
 
 ---
 
-### Frente 2: Segurança e Confirmação de Risco (RN07)
+### Frente 3: Segurança e Confirmação de Risco (RN07)
 A especificação do projeto prevê que ações de alto impacto financeiro não possam ser disparadas acidentalmente.
 
 - [ ] **Integração com `local_auth`:**
@@ -83,7 +104,7 @@ A especificação do projeto prevê que ações de alto impacto financeiro não 
 
 ---
 
-### Frente 3: Compartilhamento e Notificações Push
+### Frente 4: Compartilhamento e Notificações Push
 O objetivo do Omni Lar é "viver junto sem atrito". Para isso, a comunicação entre os moradores precisa ser fluida.
 
 - [ ] **Compartilhamento do Super Pix (Comprovante / Veredito):**
@@ -95,7 +116,7 @@ O objetivo do Omni Lar é "viver junto sem atrito". Para isso, a comunicação e
 
 ---
 
-### Frente 4: Assets, Identidade Visual e Lojas
+### Frente 5: Assets, Identidade Visual e Lojas
 Preparar o binário para distribuição pública.
 
 - [ ] **Ícone do Aplicativo e Splash Screen:**
@@ -112,7 +133,7 @@ Preparar o binário para distribuição pública.
 
 ## 4. Ordem Recomendada de Execução
 
-1. **Sprint 1 (Conexão Supabase):** Criar os repositórios reais do Supabase e ligá-los no `ServiceLocator`.
+1. **Sprint 1 (Despesas Compostas & Conexão Supabase):** Modelar `HouseExpenseItem` para segmentação de condomínio e ligar os repositórios reais do Supabase.
 2. **Sprint 2 (Segurança & Compartilhamento):** Adicionar biometria nas ações de risco e botão de enviar o Pix no WhatsApp.
 3. **Sprint 3 (Realtime & Edge Functions):** Ativar a sincronização em tempo real e subir o OCR na nuvem.
 4. **Sprint 4 (Assets & Publicação):** Gerar ícones, splash, assinar app e gerar builds release (`.aab` e `.ipa`).
