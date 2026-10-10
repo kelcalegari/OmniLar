@@ -15,8 +15,12 @@ import '../utils/app_haptics.dart';
 /// garante que cliques acidentais no meio do texto não quebrem o buffer de centavos.
 class MoneyInputFormatter extends TextInputFormatter {
   final int maxCents;
+  final bool allowEmpty;
 
-  const MoneyInputFormatter({this.maxCents = 100000000});
+  const MoneyInputFormatter({
+    this.maxCents = 100000000,
+    this.allowEmpty = false,
+  });
 
   @override
   TextEditingValue formatEditUpdate(
@@ -25,6 +29,12 @@ class MoneyInputFormatter extends TextInputFormatter {
   ) {
     // 1. Campo limpo
     if (newValue.text.isEmpty) {
+      if (allowEmpty) {
+        return const TextEditingValue(
+          text: '',
+          selection: TextSelection.collapsed(offset: 0),
+        );
+      }
       final formatted = const Money.zero().format();
       return TextEditingValue(
         text: formatted,
@@ -43,6 +53,12 @@ class MoneyInputFormatter extends TextInputFormatter {
     final hasMaskPrefix = newValue.text.contains('R\$');
     if (!hasMaskPrefix) {
       final digits = newValue.text.replaceAll(RegExp(r'[^0-9]'), '');
+      if (allowEmpty && digits.isEmpty) {
+        return const TextEditingValue(
+          text: '',
+          selection: TextSelection.collapsed(offset: 0),
+        );
+      }
       var newCents = int.tryParse(digits) ?? 0;
       if (newCents > maxCents) newCents = maxCents;
       final formatted = Money(newCents).format();
@@ -57,6 +73,12 @@ class MoneyInputFormatter extends TextInputFormatter {
       final oldDigits = oldValue.text.replaceAll(RegExp(r'[^0-9]'), '');
       final oldCents = int.tryParse(oldDigits) ?? 0;
       final newCents = oldCents ~/ 10;
+      if (allowEmpty && oldCents == 0) {
+        return const TextEditingValue(
+          text: '',
+          selection: TextSelection.collapsed(offset: 0),
+        );
+      }
       final formatted = Money(newCents).format();
       return TextEditingValue(
         text: formatted,
@@ -124,14 +146,216 @@ class MoneyInputFormatter extends TextInputFormatter {
   }
 }
 
-/// Controller especializado que força a seleção/cursor sempre para o final do texto
-class _MoneyTextEditingController extends TextEditingController {
-  _MoneyTextEditingController();
+/// Controller especializado para valores monetários que força a seleção/cursor sempre para o final do texto
+/// e oferece getters diretos para [Money] e centavos [cents].
+class MoneyTextEditingController extends TextEditingController {
+  final bool allowEmpty;
+
+  MoneyTextEditingController({
+    Money? initialMoney,
+    String? text,
+    this.allowEmpty = false,
+  }) : super(
+          text: text ??
+              (initialMoney != null && (initialMoney.cents > 0 || !allowEmpty)
+                  ? initialMoney.format()
+                  : ''),
+        );
 
   @override
   set value(TextEditingValue newValue) {
     super.value = newValue.copyWith(
       selection: TextSelection.collapsed(offset: newValue.text.length),
+    );
+  }
+
+  /// Retorna o valor atual como [Money]
+  Money get money {
+    final digits = text.replaceAll(RegExp(r'[^0-9]'), '');
+    final cents = int.tryParse(digits) ?? 0;
+    return Money(cents);
+  }
+
+  /// Retorna os centavos atuais
+  int get cents => money.cents;
+
+  /// Atualiza o valor com um objeto [Money]
+  void setMoney(Money newMoney) {
+    if (newMoney.cents == 0 && allowEmpty) {
+      value = TextEditingValue.empty;
+    } else {
+      final formatted = newMoney.format();
+      value = TextEditingValue(
+        text: formatted,
+        selection: TextSelection.collapsed(offset: formatted.length),
+      );
+    }
+  }
+
+  /// Limpa o campo
+  @override
+  void clear() {
+    if (allowEmpty) {
+      value = TextEditingValue.empty;
+    } else {
+      final formatted = const Money.zero().format();
+      value = TextEditingValue(
+        text: formatted,
+        selection: TextSelection.collapsed(offset: formatted.length),
+      );
+    }
+  }
+}
+
+/// Campo de texto de formulário com entrada monetária contínua no estilo ATM/Fintech.
+/// Perfeito para formulários que usam InputDecoration (borda, rótulo, ícones, texto de ajuda).
+class MoneyTextFormField extends StatefulWidget {
+  final MoneyTextEditingController? controller;
+  final Money? initialValue;
+  final ValueChanged<Money>? onChanged;
+  final FormFieldValidator<String>? validator;
+  final String? labelText;
+  final String? hintText;
+  final String? helperText;
+  final Widget? prefixIcon;
+  final InputDecoration? decoration;
+  final bool allowEmpty;
+  final bool autofocus;
+  final FocusNode? focusNode;
+  final TextStyle? style;
+  final bool readOnly;
+  final bool enabled;
+  final TextAlign textAlign;
+  final TextInputAction? textInputAction;
+  final ValueChanged<String>? onFieldSubmitted;
+
+  const MoneyTextFormField({
+    super.key,
+    this.controller,
+    this.initialValue,
+    this.onChanged,
+    this.validator,
+    this.labelText,
+    this.hintText,
+    this.helperText,
+    this.prefixIcon,
+    this.decoration,
+    this.allowEmpty = true,
+    this.autofocus = false,
+    this.focusNode,
+    this.style,
+    this.readOnly = false,
+    this.enabled = true,
+    this.textAlign = TextAlign.start,
+    this.textInputAction,
+    this.onFieldSubmitted,
+  });
+
+  @override
+  State<MoneyTextFormField> createState() => _MoneyTextFormFieldState();
+}
+
+class _MoneyTextFormFieldState extends State<MoneyTextFormField> {
+  late MoneyTextEditingController _controller;
+  late FocusNode _focusNode;
+  bool _ownsController = false;
+  bool _ownsFocusNode = false;
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.controller != null) {
+      _controller = widget.controller!;
+    } else {
+      _ownsController = true;
+      _controller = MoneyTextEditingController(
+        initialMoney: widget.initialValue,
+        allowEmpty: widget.allowEmpty,
+      );
+    }
+
+    if (widget.focusNode != null) {
+      _focusNode = widget.focusNode!;
+    } else {
+      _ownsFocusNode = true;
+      _focusNode = FocusNode();
+    }
+
+    _focusNode.addListener(_onFocusChange);
+  }
+
+  void _onFocusChange() {
+    if (_focusNode.hasFocus) {
+      _controller.selection = TextSelection.collapsed(offset: _controller.text.length);
+    }
+  }
+
+  @override
+  void didUpdateWidget(covariant MoneyTextFormField oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.initialValue != null &&
+        widget.initialValue != oldWidget.initialValue &&
+        widget.initialValue?.cents != _controller.cents) {
+      _controller.value = TextEditingValue(
+        text: widget.initialValue!.cents > 0 || !widget.allowEmpty
+            ? widget.initialValue!.format()
+            : '',
+        selection: TextSelection.collapsed(
+          offset: widget.initialValue!.cents > 0 || !widget.allowEmpty
+              ? widget.initialValue!.format().length
+              : 0,
+        ),
+      );
+    }
+  }
+
+  @override
+  void dispose() {
+    _focusNode.removeListener(_onFocusChange);
+    if (_ownsFocusNode) _focusNode.dispose();
+    if (_ownsController) _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final effectiveDecoration = (widget.decoration ??
+            InputDecoration(
+              labelText: widget.labelText,
+              hintText: widget.hintText ?? (widget.allowEmpty ? 'R\$ 0,00' : null),
+              helperText: widget.helperText,
+              prefixIcon: widget.prefixIcon,
+              border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+            ))
+        .copyWith(
+          // Garante que não haja duplicidade de prefixText "R$" pois o valor formatado já o inclui
+          prefixText: null,
+        );
+
+    return TextFormField(
+      controller: _controller,
+      focusNode: _focusNode,
+      autofocus: widget.autofocus,
+      readOnly: widget.readOnly,
+      enabled: widget.enabled,
+      textAlign: widget.textAlign,
+      textInputAction: widget.textInputAction ?? TextInputAction.next,
+      keyboardType: TextInputType.number,
+      inputFormatters: [
+        MoneyInputFormatter(allowEmpty: widget.allowEmpty),
+      ],
+      style: widget.style,
+      decoration: effectiveDecoration,
+      validator: widget.validator,
+      onTap: () {
+        _controller.selection = TextSelection.collapsed(offset: _controller.text.length);
+      },
+      onChanged: (text) {
+        if (widget.onChanged != null) {
+          widget.onChanged!(_controller.money);
+        }
+      },
+      onFieldSubmitted: widget.onFieldSubmitted,
     );
   }
 }
@@ -176,7 +400,7 @@ class _MoneyInputFieldState extends State<MoneyInputField> {
   void initState() {
     super.initState();
     _cents = widget.initialValue.cents;
-    _controller = _MoneyTextEditingController();
+    _controller = MoneyTextEditingController();
     _focusNode = FocusNode();
     _syncController();
 

@@ -42,6 +42,22 @@ class OfflineQueuedAction extends Equatable {
     );
   }
 
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'type': type.name,
+        'payload': payload,
+        'createdAt': createdAt.toIso8601String(),
+        'retryCount': retryCount,
+      };
+
+  factory OfflineQueuedAction.fromJson(Map<String, dynamic> json) => OfflineQueuedAction(
+        id: json['id'] as String,
+        type: OfflineActionType.values.byName(json['type'] as String),
+        payload: Map<String, dynamic>.from(json['payload'] as Map),
+        createdAt: DateTime.parse(json['createdAt'] as String),
+        retryCount: json['retryCount'] as int? ?? 0,
+      );
+
   @override
   List<Object?> get props => [id, type, payload, createdAt, retryCount];
 }
@@ -73,6 +89,24 @@ class OfflineQueueManager {
 
   void clear() {
     _queue.clear();
+    _controller.add(List.unmodifiable(_queue));
+  }
+
+  List<Map<String, dynamic>> dumpToJson() {
+    return _queue.map((a) => a.toJson()).toList();
+  }
+
+  void restoreFromJson(List<dynamic> rawList) {
+    _queue.clear();
+    for (final item in rawList) {
+      try {
+        if (item is Map<String, dynamic>) {
+          _queue.add(OfflineQueuedAction.fromJson(item));
+        } else if (item is Map) {
+          _queue.add(OfflineQueuedAction.fromJson(Map<String, dynamic>.from(item)));
+        }
+      } catch (_) {}
+    }
     _controller.add(List.unmodifiable(_queue));
   }
 

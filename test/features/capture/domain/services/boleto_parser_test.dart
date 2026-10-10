@@ -17,6 +17,22 @@ void main() {
       expect(proposal.date.isAfter(DateTime(2020)), isTrue);
     });
 
+    test('RN10: BoletoParser suporta rollover FEBRABAN 2025 para boletos emitidos em 2025/2026', () {
+      // Fator 1000 representa 22/02/2025 no novo ciclo
+      final dateFactor1000 = BoletoParser.calculateDueDateFromFactor(
+        1000,
+        referenceDate: DateTime(2026, 1, 1),
+      );
+      expect(dateFactor1000, equals(DateTime(2025, 2, 22)));
+
+      // Fator 1368 representa 25/02/2026 no novo ciclo (22/02/2025 + 368 dias)
+      final dateFactor1368 = BoletoParser.calculateDueDateFromFactor(
+        1368,
+        referenceDate: DateTime(2026, 1, 1),
+      );
+      expect(dateFactor1368, equals(DateTime(2026, 2, 25)));
+    });
+
     test('RN03 e RN09: Parse de NFC-e gera itens e calcula divisão entre Casa e Pessoal', () {
       final proposal = BoletoParser.parseNfceQrCodeUrl('https://sefaz.sp.gov.br/nfce/qrcode?p=123');
 

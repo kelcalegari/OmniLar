@@ -171,17 +171,37 @@ class MockP2PDataSource {
         return inst;
       }).toList();
 
-      // Gera as novas parcelas
-      final newInstallments = P2PCalculator.generateInstallments(
-        loanId: loanId,
-        totalAmount: remaining,
-        installmentsCount: newInstallmentsCount,
-        firstDueDate: newFirstDueDate,
-      );
+      final paidOldInstallments = updatedOldInstallments.where((i) => i.isFullyPaid).toList();
+      final paidCount = paidOldInstallments.length;
+      final totalCombinedCount = paidCount + newInstallmentsCount;
+
+      // Gera as novas parcelas sequenciais a partir do paidCount
+      final splitAmounts = remaining.splitEqually(newInstallmentsCount);
+      final newInstallments = <P2PInstallment>[];
+
+      for (int i = 0; i < newInstallmentsCount; i++) {
+        final dueMonth = newFirstDueDate.month + i;
+        final dueYear = newFirstDueDate.year + ((dueMonth - 1) ~/ 12);
+        final normalizedMonth = ((dueMonth - 1) % 12) + 1;
+        final maxDayInMonth = DateTime(dueYear, normalizedMonth + 1, 0).day;
+        final safeDay = newFirstDueDate.day > maxDayInMonth ? maxDayInMonth : newFirstDueDate.day;
+        final dueDate = DateTime(dueYear, normalizedMonth, safeDay);
+
+        newInstallments.add(
+          P2PInstallment(
+            id: '${loanId}_reneg_${i + 1}',
+            loanId: loanId,
+            number: paidCount + i + 1,
+            totalCount: totalCombinedCount,
+            amount: splitAmounts[i],
+            dueDate: dueDate,
+          ),
+        );
+      }
 
       _loans[index] = loan.copyWith(
-        installmentsCount: newInstallmentsCount,
-        installments: [...updatedOldInstallments.where((i) => i.isFullyPaid), ...newInstallments],
+        installmentsCount: totalCombinedCount,
+        installments: [...paidOldInstallments, ...newInstallments],
         status: LoanStatus.renegotiated,
       );
     }

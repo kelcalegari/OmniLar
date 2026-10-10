@@ -107,7 +107,21 @@ class GlobalClearingEngine {
 
     // 4. Calcular créditos e débitos por membro
     final List<MemberNetBalance> memberBalances = [];
+    final memberIdsSet = members.map((m) => m.id).toSet();
+
+    // Total de parcelas P2P que vencem neste ciclo
     int totalP2PClearedCents = 0;
+    for (final loan in loans) {
+      if (!memberIdsSet.contains(loan.lenderMemberId) && !memberIdsSet.contains(loan.borrowerMemberId)) {
+        continue;
+      }
+      for (final installment in loan.installments) {
+        final isDueInCycle = cycle.contains(installment.dueDate);
+        if (isDueInCycle && !installment.isFullyPaid && !installment.isForgiven && !installment.isCancelled) {
+          totalP2PClearedCents += installment.remainingAmount.cents;
+        }
+      }
+    }
 
     for (final member in members) {
       // Aporte devido
@@ -125,7 +139,7 @@ class GlobalClearingEngine {
           .fold<int>(0, (acc, e) => acc + e.amount.cents);
       final outOfPocket = Money(outOfPocketCents);
 
-      // Parcelas P2P que vencem neste ciclo
+      // Parcelas P2P que vencem neste ciclo para este membro
       int p2pLentCents = 0;
       int p2pBorrowedCents = 0;
 
@@ -133,12 +147,11 @@ class GlobalClearingEngine {
         for (final installment in loan.installments) {
           // Verifica se a parcela vence dentro do ciclo e está pendente/parcial
           final isDueInCycle = cycle.contains(installment.dueDate);
-          if (isDueInCycle && !installment.isFullyPaid && !installment.isForgiven) {
+          if (isDueInCycle && !installment.isFullyPaid && !installment.isForgiven && !installment.isCancelled) {
             final remainingCents = installment.remainingAmount.cents;
 
             if (loan.lenderMemberId == member.id) {
               p2pLentCents += remainingCents;
-              totalP2PClearedCents += remainingCents;
             } else if (loan.borrowerMemberId == member.id) {
               p2pBorrowedCents += remainingCents;
             }
@@ -172,7 +185,7 @@ class GlobalClearingEngine {
       transfers: transfers,
       totalHouseExpenses: totalHouseExpenses,
       totalContributions: totalContributions,
-      totalP2PCleared: Money(totalP2PClearedCents ~/ 2), // Cada parcela tem credor e devedor
+      totalP2PCleared: Money(totalP2PClearedCents),
       houseTreasuryBalance: Money(houseTreasuryCents),
       status: SettlementStatus.readyToSettle,
     );

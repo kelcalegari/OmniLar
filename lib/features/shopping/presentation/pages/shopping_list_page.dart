@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../../../core/domain/value_objects/money.dart';
 import '../../../../core/theme/app_colors.dart';
+import '../../../../core/widgets/money_input_field.dart';
 import '../../../finance/presentation/cubit/finance_cubit.dart';
 import '../../domain/entities/shopping_item.dart';
 import '../cubit/shopping_cubit.dart';
@@ -48,8 +49,8 @@ class _ShoppingListPageState extends State<ShoppingListPage> {
     final personalItems = state.items.where((i) => i.isBought && i.isPersonal).toList();
     final hasPersonal = personalItems.isNotEmpty;
 
-    final amountController = TextEditingController();
-    final personalAmountController = TextEditingController();
+    final amountController = MoneyTextEditingController(allowEmpty: false);
+    final personalAmountController = MoneyTextEditingController(allowEmpty: true);
     String? selectedPmId = paymentMethods.isNotEmpty ? paymentMethods.first.id : null;
     String selectedPayerId = 'member_carlos';
     String selectedDebtorId = 'member_marina';
@@ -103,14 +104,12 @@ class _ShoppingListPageState extends State<ShoppingListPage> {
                   const SizedBox(height: 16),
 
                   // Valor Total
-                  TextField(
+                  MoneyTextFormField(
                     controller: amountController,
-                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                    decoration: InputDecoration(
-                      labelText: 'Valor Total da Compra (Nota Fiscal)',
-                      prefixText: 'R\$ ',
-                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                    ),
+                    labelText: 'Valor Total da Compra (Nota Fiscal)',
+                    hintText: 'R\$ 0,00',
+                    prefixIcon: const Icon(Icons.receipt_long_rounded),
+                    allowEmpty: false,
                   ),
                   const SizedBox(height: 12),
 
@@ -175,15 +174,12 @@ class _ShoppingListPageState extends State<ShoppingListPage> {
                             ],
                           ),
                           const SizedBox(height: 8),
-                          TextField(
+                          MoneyTextFormField(
                             controller: personalAmountController,
-                            keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                            decoration: InputDecoration(
-                              labelText: 'Subtotal dos Itens Pessoais',
-                              prefixText: 'R\$ ',
-                              isDense: true,
-                              border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
-                            ),
+                            labelText: 'Subtotal dos Itens Pessoais',
+                            hintText: 'R\$ 0,00',
+                            prefixIcon: const Icon(Icons.person_pin_circle_outlined),
+                            allowEmpty: true,
                           ),
                         ],
                       ),
@@ -195,7 +191,7 @@ class _ShoppingListPageState extends State<ShoppingListPage> {
                     width: double.infinity,
                     child: FilledButton.icon(
                       onPressed: () {
-                        final total = Money.parse(amountController.text);
+                        final total = amountController.money;
                         if (total.isZero) {
                           ScaffoldMessenger.of(context).showSnackBar(
                             const SnackBar(content: Text('Informe o valor total da compra')),
@@ -204,8 +200,8 @@ class _ShoppingListPageState extends State<ShoppingListPage> {
                         }
 
                         Money? personalMoney;
-                        if (personalAmountController.text.isNotEmpty) {
-                          personalMoney = Money.parse(personalAmountController.text);
+                        if (personalAmountController.text.isNotEmpty && personalAmountController.cents > 0) {
+                          personalMoney = personalAmountController.money;
                         }
 
                         Navigator.pop(sheetCtx);

@@ -285,10 +285,14 @@ class MockFinanceDataSource implements FinanceDataSource {
     ]);
   }
 
+  @override
   Future<List<HouseMember>> getMembers() async => List.unmodifiable(_members);
+  @override
   Future<List<ExpenseCategory>> getCategories() async => List.unmodifiable(_categories);
+  @override
   Future<List<PaymentMethod>> getPaymentMethods() async => List.unmodifiable(_paymentMethods);
 
+  @override
   Future<List<HouseExpense>> getExpensesForCycle(FinancialCycle cycle) async {
     return _expenses.where((e) {
       // Despesas de projeto vivem apenas no projeto (não pesam no Caixa/Fôlego/fechamento)
@@ -302,16 +306,19 @@ class MockFinanceDataSource implements FinanceDataSource {
   }
 
   /// Todas as despesas do projeto, de qualquer ciclo (viagens e obras atravessam meses).
+  @override
   Future<List<HouseExpense>> getExpensesForProject(String projectId) async {
     return _expenses.where((e) => e.projectId == projectId).toList()
       ..sort((a, b) => b.date.compareTo(a.date));
   }
 
+  @override
   Future<List<Contribution>> getContributionsForCycle(FinancialCycle cycle) async {
     return _contributions.where((c) => cycle.contains(c.date)).toList()
       ..sort((a, b) => b.date.compareTo(a.date));
   }
 
+  @override
   Future<FinancialCycleSummary> getCycleSummary(FinancialCycle cycle) async {
     final cycleExpenses = await getExpensesForCycle(cycle);
     final cycleContributions = await getContributionsForCycle(cycle);
@@ -350,10 +357,12 @@ class MockFinanceDataSource implements FinanceDataSource {
     );
   }
 
+  @override
   Future<void> addExpense(HouseExpense expense) async {
     _expenses.insert(0, expense);
   }
 
+  @override
   Future<void> updateExpense(
     HouseExpense expense, {
     RecurrenceScope scope = RecurrenceScope.thisInstanceOnly,
@@ -423,6 +432,7 @@ class MockFinanceDataSource implements FinanceDataSource {
     }
   }
 
+  @override
   Future<void> deleteExpense(
     String expenseId, {
     RecurrenceScope scope = RecurrenceScope.thisInstanceOnly,
@@ -471,14 +481,17 @@ class MockFinanceDataSource implements FinanceDataSource {
     }
   }
 
+  @override
   Future<List<HouseExpense>> getRecurringExpenses() async {
     return _expenses.where((e) => e.isRecurring && e.isActive).toList();
   }
 
+  @override
   Future<void> addContribution(Contribution contribution) async {
     _contributions.insert(0, contribution);
   }
 
+  @override
   Future<void> addCategory(ExpenseCategory category) async {
     _categories.add(category);
   }
@@ -515,19 +528,23 @@ class MockFinanceDataSource implements FinanceDataSource {
 
   final List<SavingsTransaction> _savingsTransactions = [];
 
+  @override
   Future<void> addPaymentMethod(PaymentMethod paymentMethod) async {
     _paymentMethods.add(paymentMethod);
   }
 
   // --- Caixinhas & Metas da Casa (Dinheiro Blindado) ---
+  @override
   Future<List<SavingsVault>> getSavingsVaults() async {
     return List.unmodifiable(_savingsVaults);
   }
 
+  @override
   Future<void> createSavingsVault(SavingsVault vault) async {
     _savingsVaults.add(vault);
   }
 
+  @override
   Future<void> depositToVault({
     required String vaultId,
     required String memberId,
@@ -552,6 +569,7 @@ class MockFinanceDataSource implements FinanceDataSource {
     }
   }
 
+  @override
   Future<void> withdrawFromVault({
     required String vaultId,
     required String memberId,

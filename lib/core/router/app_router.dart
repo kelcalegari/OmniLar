@@ -15,7 +15,6 @@ import '../../features/calendar/presentation/pages/calendar_page.dart';
 import '../../features/reports/presentation/pages/reports_page.dart';
 import '../../features/settings/presentation/pages/settings_page.dart';
 import '../../features/settlement/presentation/pages/settlement_hub_page.dart';
-import '../../features/shopping/presentation/pages/shopping_list_page.dart';
 import '../../features/finance/presentation/pages/savings_vaults_page.dart';
 import '../../features/projects/presentation/cubit/projects_cubit.dart';
 import '../../features/projects/presentation/pages/projects_hub_page.dart';
@@ -104,8 +103,7 @@ class AppRouter {
                   ),
                   GoRoute(
                     path: 'compras',
-                    name: 'shopping',
-                    builder: (context, state) => const ShoppingListPage(),
+                    redirect: (context, state) => '/tarefas-compras?tab=compras',
                   ),
                   GoRoute(
                     path: 'caixinhas',

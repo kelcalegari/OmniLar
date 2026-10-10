@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 import '../../../../core/domain/value_objects/money.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/utils/responsive.dart';
+import '../../../../core/widgets/money_input_field.dart';
 import '../../domain/entities/task_item.dart';
 import '../cubit/calendar_cubit.dart';
 
@@ -31,7 +32,7 @@ class _AddTaskSheetState extends State<AddTaskSheet> {
   final _formKey = GlobalKey<FormState>();
   final _titleController = TextEditingController();
   final _descriptionController = TextEditingController();
-  final _costController = TextEditingController();
+  final _costController = MoneyTextEditingController(allowEmpty: true);
 
   DateTime? _dueDate = DateTime.now().add(const Duration(days: 1));
   TaskPriority _priority = TaskPriority.medium;
@@ -66,13 +67,8 @@ class _AddTaskSheetState extends State<AddTaskSheet> {
     if (!_formKey.currentState!.validate()) return;
 
     Money? cost;
-    if (_costController.text.trim().isNotEmpty) {
-      try {
-        final parsed = Money.parse(_costController.text);
-        if (parsed.cents > 0) {
-          cost = parsed;
-        }
-      } catch (_) {}
+    if (_costController.text.trim().isNotEmpty && _costController.cents > 0) {
+      cost = _costController.money;
     }
 
     final now = DateTime.now();
@@ -200,23 +196,22 @@ class _AddTaskSheetState extends State<AddTaskSheet> {
                 style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
               ),
               const SizedBox(height: 8),
-              Row(
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
                 children: [
                   ..._members.entries.map((entry) {
                     final isSelected = _assignedMemberId == entry.key;
-                    return Padding(
-                      padding: const EdgeInsets.only(right: 8),
-                      child: ChoiceChip(
-                        avatar: CircleAvatar(
-                          backgroundColor: entry.key == 'member_carlos' ? AppColors.primary : AppColors.accent,
-                          child: Text(entry.value[0], style: const TextStyle(color: Colors.white, fontSize: 11)),
-                        ),
-                        label: Text(entry.value),
-                        selected: isSelected,
-                        onSelected: (val) {
-                          setState(() => _assignedMemberId = val ? entry.key : null);
-                        },
+                    return ChoiceChip(
+                      avatar: CircleAvatar(
+                        backgroundColor: entry.key == 'member_carlos' ? AppColors.primary : AppColors.accent,
+                        child: Text(entry.value[0], style: const TextStyle(color: Colors.white, fontSize: 11)),
                       ),
+                      label: Text(entry.value),
+                      selected: isSelected,
+                      onSelected: (val) {
+                        setState(() => _assignedMemberId = val ? entry.key : null);
+                      },
                     );
                   }),
                   ChoiceChip(
@@ -235,31 +230,29 @@ class _AddTaskSheetState extends State<AddTaskSheet> {
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   const Text('Prioridade:', style: TextStyle(fontWeight: FontWeight.w600)),
-                  SegmentedButton<TaskPriority>(
-                    segments: const [
-                      ButtonSegment(value: TaskPriority.low, label: Text('Baixa')),
-                      ButtonSegment(value: TaskPriority.medium, label: Text('Média')),
-                      ButtonSegment(value: TaskPriority.high, label: Text('Alta')),
-                    ],
-                    selected: {_priority},
-                    onSelectionChanged: (val) => setState(() => _priority = val.first),
+                  Flexible(
+                    child: SegmentedButton<TaskPriority>(
+                      segments: const [
+                        ButtonSegment(value: TaskPriority.low, label: Text('Baixa')),
+                        ButtonSegment(value: TaskPriority.medium, label: Text('Média')),
+                        ButtonSegment(value: TaskPriority.high, label: Text('Alta')),
+                      ],
+                      selected: {_priority},
+                      onSelectionChanged: (val) => setState(() => _priority = val.first),
+                    ),
                   ),
                 ],
               ),
               const SizedBox(height: 16),
 
               // Custo Estimado (Opcional - integração com financeiro)
-              TextFormField(
+              MoneyTextFormField(
                 controller: _costController,
-                keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                decoration: InputDecoration(
-                  labelText: 'Custo estimado (opcional)',
-                  hintText: 'Ex: 45,00',
-                  prefixText: 'R\$ ',
-                  prefixIcon: const Icon(Icons.attach_money_rounded),
-                  helperText: 'Tarefas com custo podem ser lançadas como Despesa da Casa',
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                ),
+                labelText: 'Custo estimado (opcional)',
+                hintText: 'Ex: R\$ 45,00',
+                prefixIcon: const Icon(Icons.attach_money_rounded),
+                helperText: 'Tarefas com custo podem ser lançadas como Despesa da Casa',
+                allowEmpty: true,
               ),
               const SizedBox(height: 24),
 

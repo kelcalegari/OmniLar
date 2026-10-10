@@ -42,5 +42,26 @@ void main() {
       queue.clear();
       expect(queue.pendingActions, isEmpty);
     });
+
+    test('Serializa para JSON e restaura fila preservando integridade das mutações', () {
+      queue.enqueue(OfflineActionType.addExpense, {'title': 'Feira', 'cents': 4200});
+      queue.enqueue(OfflineActionType.payInstallment, {'loanId': 'l1', 'cents': 1500});
+
+      final dumped = queue.dumpToJson();
+      expect(dumped.length, 2);
+      expect(dumped[0]['type'], 'addExpense');
+      expect(dumped[0]['payload']['cents'], 4200);
+
+      final newQueue = OfflineQueueManager();
+      newQueue.restoreFromJson(dumped);
+
+      expect(newQueue.pendingActions.length, 2);
+      expect(newQueue.pendingActions[0].type, OfflineActionType.addExpense);
+      expect(newQueue.pendingActions[0].payload['title'], 'Feira');
+      expect(newQueue.pendingActions[1].type, OfflineActionType.payInstallment);
+      expect(newQueue.pendingActions[1].payload['cents'], 1500);
+
+      newQueue.dispose();
+    });
   });
 }

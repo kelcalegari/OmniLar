@@ -39,7 +39,11 @@ class AssistantInterpreterService {
   /// Processa a mensagem em linguagem natural.
   /// Implementa o princípio "Código primeiro, IA determinística":
   /// Responde perguntas da casa com dados reais e propõe ações que exigem confirmação humana (RN01, RN02).
-  Future<NaturalLanguageInterpretation> interpretMessage(String query, {FinancialCycle? currentCycle}) async {
+  Future<NaturalLanguageInterpretation> interpretMessage(
+    String query, {
+    FinancialCycle? currentCycle,
+    String activeMemberId = 'member_carlos',
+  }) async {
     final lower = query.toLowerCase().trim();
     final cycle = currentCycle ?? FinancialCycle.fromDate(date: DateTime.now(), cycleStartDay: 5);
 
@@ -76,9 +80,9 @@ class AssistantInterpreterService {
 
       for (final loan in loans) {
         if (loan.status == LoanStatus.active) {
-          if (loan.lenderMemberId == 'member_carlos') {
+          if (loan.lenderMemberId == activeMemberId) {
             toReceiveCents += loan.remainingAmount.cents;
-          } else if (loan.borrowerMemberId == 'member_carlos') {
+          } else if (loan.borrowerMemberId == activeMemberId) {
             toPayCents += loan.remainingAmount.cents;
           }
         }
@@ -184,6 +188,7 @@ class AssistantInterpreterService {
           arguments: {
             'title': cleanDesc.isEmpty ? 'Despesa' : cleanDesc,
             'cents': parsedMoney.cents,
+            'paidByMemberId': activeMemberId,
           },
           status: AssistantActionStatus.proposed,
         );
@@ -231,12 +236,19 @@ class AssistantInterpreterService {
   }
 
   /// Executa uma proposta previamente confirmada pelo usuário (RN01)
-  Future<void> executeAction(AssistantActionProposal proposal) async {
+  Future<void> executeAction(AssistantActionProposal proposal, {String? activeMemberId}) async {
     switch (proposal.toolName) {
       case 'shopping.addItem':
+        String targetListId = proposal.arguments['listId'] as String? ?? 'list_groceries';
+        if (targetListId == 'list_groceries') {
+          final lists = await shoppingRepository.getLists();
+          if (lists.isNotEmpty) {
+            targetListId = lists.firstWhere((l) => l.isDefault, orElse: () => lists.first).id;
+          }
+        }
         final item = ShoppingItem(
           id: 'shop_${DateTime.now().millisecondsSinceEpoch}',
-          listId: 'list_groceries',
+          listId: targetListId,
           name: proposal.arguments['name'] as String? ?? 'Item',
           quantity: (proposal.arguments['quantity'] as num?)?.toDouble() ?? 1.0,
           unit: proposal.arguments['unit'] as String? ?? 'un',
@@ -247,15 +259,28 @@ class AssistantInterpreterService {
         break;
 
       case 'finance.addExpense':
+        final payerId = proposal.arguments['paidByMemberId'] as String? ?? activeMemberId ?? 'member_carlos';
+        final members = await financeRepository.getMembers();
+        final splitRule = members.isNotEmpty
+            ? SplitRule.percentage({
+                for (final m in members) m.id: m.defaultSplitPercent > 0 ? m.defaultSplitPercent : (100.0 / members.length),
+              })
+            : const SplitRule.percentage({'member_carlos': 50.0, 'member_marina': 50.0});
+
+        final paymentMethods = await financeRepository.getPaymentMethods();
+        final payerMethod = paymentMethods.where((pm) => pm.ownerMemberId == payerId).firstOrNull;
+        final paymentMethodId = payerMethod?.id ?? (paymentMethods.isNotEmpty ? paymentMethods.first.id : 'pm_card_carlos');
+
         final expense = HouseExpense(
           id: 'exp_${DateTime.now().millisecondsSinceEpoch}',
           title: proposal.arguments['title'] as String? ?? 'Despesa',
           amount: Money(proposal.arguments['cents'] as int? ?? 0),
           date: DateTime.now(),
-          categoryId: 'cat_groceries',
-          paidByMemberId: 'member_carlos',
-          paymentMethodId: 'pm_card_carlos',
-          splitRule: const SplitRule.percentage({'member_carlos': 50.0, 'member_marina': 50.0}),
+          categoryId: proposal.arguments['categoryId'] as String? ?? 'cat_groceries',
+          paidByMemberId: payerId,
+          paymentMethodId: paymentMethodId,
+          paidOutOfPocket: true,
+          splitRule: splitRule,
         );
         await financeRepository.addExpense(expense);
         break;

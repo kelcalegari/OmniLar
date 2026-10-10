@@ -159,5 +159,129 @@ void main() {
       );
       expect(afterBackspace.text, equals(const Money(1).format())); // R$ 0,01
     });
+
+    test('MoneyInputFormatter com allowEmpty permite campo opcional vazio e limpa no backspace', () {
+      const formatter = MoneyInputFormatter(allowEmpty: true);
+
+      // Inicia vazio
+      const empty = TextEditingValue.empty;
+      expect(formatter.formatEditUpdate(empty, empty).text, equals(''));
+
+      // Digita '1' em campo vazio
+      final firstDigit = formatter.formatEditUpdate(
+        empty,
+        const TextEditingValue(text: '1', selection: TextSelection.collapsed(offset: 1)),
+      );
+      expect(firstDigit.text, equals(const Money(1).format())); // R$ 0,01
+
+      // Digita '5'
+      final secondDigit = formatter.formatEditUpdate(
+        firstDigit,
+        TextEditingValue(
+          text: '${firstDigit.text}5',
+          selection: TextSelection.collapsed(offset: firstDigit.text.length + 1),
+        ),
+      );
+      expect(secondDigit.text, equals(const Money(15).format())); // R$ 0,15
+
+      // Backspace 1: volta para R$ 0,01
+      final bs1 = formatter.formatEditUpdate(
+        secondDigit,
+        TextEditingValue(
+          text: secondDigit.text.substring(0, secondDigit.text.length - 1),
+          selection: TextSelection.collapsed(offset: secondDigit.text.length - 1),
+        ),
+      );
+      expect(bs1.text, equals(const Money(1).format())); // R$ 0,01
+
+      // Backspace 2: volta para R$ 0,00
+      final bs2 = formatter.formatEditUpdate(
+        bs1,
+        TextEditingValue(
+          text: bs1.text.substring(0, bs1.text.length - 1),
+          selection: TextSelection.collapsed(offset: bs1.text.length - 1),
+        ),
+      );
+      expect(bs2.text, equals(const Money(0).format())); // R$ 0,00
+
+      // Backspace 3 em R$ 0,00: limpa o campo para vazio
+      final bs3 = formatter.formatEditUpdate(
+        bs2,
+        TextEditingValue(
+          text: bs2.text.substring(0, bs2.text.length - 1),
+          selection: TextSelection.collapsed(offset: bs2.text.length - 1),
+        ),
+      );
+      expect(bs3.text, equals(''));
+    });
+
+    test('MoneyTextEditingController expõe Money e cents diretamente com seleção correta', () {
+      final ctrl = MoneyTextEditingController(initialMoney: const Money(4500));
+      expect(ctrl.text, equals(const Money(4500).format()));
+      expect(ctrl.cents, equals(4500));
+      expect(ctrl.money, equals(const Money(4500)));
+
+      ctrl.setMoney(const Money(1));
+      expect(ctrl.text, equals(const Money(1).format()));
+      expect(ctrl.cents, equals(1));
+      expect(ctrl.selection.baseOffset, equals(ctrl.text.length));
+
+      ctrl.clear();
+      expect(ctrl.text, equals(const Money(0).format()));
+
+      final optionalCtrl = MoneyTextEditingController(allowEmpty: true);
+      expect(optionalCtrl.text, equals(''));
+      expect(optionalCtrl.cents, equals(0));
+      optionalCtrl.clear();
+      expect(optionalCtrl.text, equals(''));
+    });
+
+    testWidgets('MoneyTextFormField formata tecla a tecla 1 -> 0,01, 11 -> 0,11, 110 -> 1,10', (tester) async {
+      Money? changedMoney;
+      final controller = MoneyTextEditingController(allowEmpty: true);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: MoneyTextFormField(
+              controller: controller,
+              labelText: 'Custo estimado',
+              onChanged: (m) => changedMoney = m,
+              allowEmpty: true,
+            ),
+          ),
+        ),
+      );
+
+      final formField = find.byType(TextFormField);
+      expect(formField, findsOneWidget);
+
+      // Inicia vazio por ser allowEmpty: true
+      expect(controller.text, equals(''));
+
+      // Digita '1' -> vira R$ 0,01
+      await tester.enterText(formField, '1');
+      await tester.pumpAndSettle();
+      expect(controller.text, equals(const Money(1).format()));
+      expect(changedMoney?.cents, equals(1));
+
+      // Digita outro '1' -> vira R$ 0,11
+      await tester.enterText(formField, '${controller.text}1');
+      await tester.pumpAndSettle();
+      expect(controller.text, equals(const Money(11).format()));
+      expect(changedMoney?.cents, equals(11));
+
+      // Digita '0' -> vira R$ 1,10
+      await tester.enterText(formField, '${controller.text}0');
+      await tester.pumpAndSettle();
+      expect(controller.text, equals(const Money(110).format()));
+      expect(changedMoney?.cents, equals(110));
+
+      // Digita '0' -> vira R$ 11,00
+      await tester.enterText(formField, '${controller.text}0');
+      await tester.pumpAndSettle();
+      expect(controller.text, equals(const Money(1100).format()));
+      expect(changedMoney?.cents, equals(1100));
+    });
   });
 }

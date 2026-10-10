@@ -154,6 +154,7 @@ class MockShoppingDataSource {
           categoryId: 'cat_mercado',
           paidByMemberId: paidByMemberId,
           paymentMethodId: paymentMethodId,
+          paidOutOfPocket: true,
           splitRule: SplitRule.percentage(splitPercentages),
         ),
       );

@@ -99,6 +99,37 @@ void main() {
       expect(result.actions, isEmpty);
     });
 
+    test('Consulta de empréstimos com activeMemberId dinâmico (ex: Marina)', () async {
+      final loan = P2PLoan(
+        id: 'loan_1',
+        title: 'Camisa',
+        totalAmount: const Money(25000),
+        lenderMemberId: 'member_carlos',
+        borrowerMemberId: 'member_marina',
+        installmentsCount: 1,
+        createdAt: DateTime.now(),
+        firstDueDate: DateTime.now(),
+        status: LoanStatus.active,
+        installments: [
+          P2PInstallment(
+            id: 'loan_1_inst_1',
+            loanId: 'loan_1',
+            number: 1,
+            totalCount: 1,
+            amount: const Money(25000),
+            dueDate: DateTime.now(),
+          ),
+        ],
+      );
+
+      when(() => mockP2P.getLoans()).thenAnswer((_) async => [loan]);
+
+      final result = await service.interpretMessage('Quem deve para quem?', activeMemberId: 'member_marina');
+
+      expect(result.textResponse, contains('A pagar para outros: ${const Money(25000).format()}'));
+      expect(result.textResponse, contains('Saldo P2P líquido: ${(-const Money(25000)).format()}'));
+    });
+
     test('Pedido de adicionar compras gera proposta que exige confirmação (RN01)', () async {
       final result = await service.interpretMessage('Adicionar leite e ovos na lista');
 

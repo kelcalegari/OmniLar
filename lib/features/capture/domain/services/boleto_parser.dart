@@ -15,6 +15,27 @@ class BoletoParser {
     return clean.length == 47 || clean.length == 48;
   }
 
+  /// Calcula a data de vencimento a partir do fator de vencimento FEBRABAN/BACEN.
+  /// Trata o rollover de 22/02/2025, onde o fator de 4 dígitos reiniciou em 1000.
+  static DateTime calculateDueDateFromFactor(int factor, {DateTime? referenceDate}) {
+    final now = referenceDate ?? DateTime.now();
+    if (factor <= 0) {
+      return now.add(const Duration(days: 5));
+    }
+
+    final rolloverDate = DateTime(2025, 2, 22);
+    final dateCycle1 = DateTime(1997, 10, 7).add(Duration(days: factor));
+
+    if (now.isAfter(rolloverDate) || now.isAtSameMomentAs(rolloverDate)) {
+      if (dateCycle1.isBefore(rolloverDate)) {
+        // Ciclo 2 FEBRABAN: fator 1000 corresponde a 22/02/2025
+        return DateTime(2025, 2, 22).add(Duration(days: factor - 1000));
+      }
+    }
+
+    return dateCycle1;
+  }
+
   /// Extrai valor e vencimento de uma linha digitável de boleto bancário (47 dígitos)
   /// Exemplo de boleto bancário:
   /// Campo 5 (últimos 14 dígitos): 4 dígitos fator de vencimento + 10 dígitos valor em centavos
@@ -30,13 +51,8 @@ class BoletoParser {
       final factorStr = clean.substring(33, 37);
       final factor = int.tryParse(factorStr) ?? 0;
 
-      // Data base do Banco Central: 07/10/1997
-      DateTime dueDate;
-      if (factor > 0) {
-        dueDate = DateTime(1997, 10, 7).add(Duration(days: factor));
-      } else {
-        dueDate = DateTime.now().add(const Duration(days: 5));
-      }
+      // Data base do Banco Central / FEBRABAN com tratamento do rollover de 2025
+      final dueDate = calculateDueDateFromFactor(factor);
 
       // Valor (últimos 10 dígitos da linha digitável em centavos)
       final valueStr = clean.substring(37, 47);

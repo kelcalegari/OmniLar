@@ -119,6 +119,9 @@ void main() {
       );
       expect(transferToCris.fromMemberId, equals('member_kelvynn'));
       expect(transferToCris.amount.cents, equals(10000)); // R$ 100,00 para o Cris
+
+      // Total P2P compensado no ciclo deve ser exatamente R$ 100,00 (sem divisão indevida)
+      expect(summary.totalP2PCleared.cents, equals(10000));
     });
 
     test('Consistência Matemática: soma de saldos com divisões em centavos', () {

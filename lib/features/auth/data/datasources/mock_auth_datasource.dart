@@ -91,12 +91,17 @@ class MockAuthDataSource implements AuthDataSource {
     }
   }
 
+  @override
   Stream<UserProfile?> get authStateChanges => _authStateController.stream;
+  @override
   Stream<House?> get houseChanges => _houseStateController.stream;
 
+  @override
   UserProfile? get currentUser => _currentUser;
+  @override
   House? get currentHouse => _currentHouse;
 
+  @override
   Future<UserProfile> signInWithEmailPassword(String email, String password) async {
     await Future.delayed(const Duration(milliseconds: 300));
     final normalizedEmail = email.trim().toLowerCase();
@@ -124,6 +129,7 @@ class MockAuthDataSource implements AuthDataSource {
     return user;
   }
 
+  @override
   Future<UserProfile> signUpWithEmailPassword({
     required String email,
     required String password,
@@ -154,6 +160,7 @@ class MockAuthDataSource implements AuthDataSource {
     return newUser;
   }
 
+  @override
   Future<void> signInDemo({required String memberId}) async {
     await Future.delayed(const Duration(milliseconds: 200));
     final user = _users.values.firstWhere(
@@ -167,6 +174,7 @@ class MockAuthDataSource implements AuthDataSource {
     _houseStateController.add(_currentHouse);
   }
 
+  @override
   Future<void> signOut() async {
     await Future.delayed(const Duration(milliseconds: 100));
     _currentUser = null;
@@ -175,6 +183,7 @@ class MockAuthDataSource implements AuthDataSource {
     _houseStateController.add(null);
   }
 
+  @override
   Future<List<House>> getUserHouses() async {
     if (_currentUser == null) return [];
     final userId = _currentUser!.id;
@@ -189,6 +198,7 @@ class MockAuthDataSource implements AuthDataSource {
     return userHouseIds.map((id) => _houses[id]!).toList();
   }
 
+  @override
   Future<House> createHouse({
     required String name,
     int cycleStartDay = 5,
@@ -229,6 +239,7 @@ class MockAuthDataSource implements AuthDataSource {
     return newHouse;
   }
 
+  @override
   Future<House> joinHouseWithInvite(String inviteCode) async {
     if (_currentUser == null) {
       throw const AuthFailure('Você precisa estar autenticado para entrar em uma casa.');
@@ -264,6 +275,7 @@ class MockAuthDataSource implements AuthDataSource {
     return house;
   }
 
+  @override
   Future<void> selectHouse(String houseId) async {
     final house = _houses[houseId];
     if (house == null) throw const NotFoundFailure('Casa não encontrada.');
@@ -271,10 +283,12 @@ class MockAuthDataSource implements AuthDataSource {
     _houseStateController.add(_currentHouse);
   }
 
+  @override
   Future<List<HouseMemberInfo>> getHouseMembers(String houseId) async {
     return _houseMembers[houseId] ?? [];
   }
 
+  @override
   Future<String> createHouseInvite(String houseId) async {
     // Retorna código existente ou gera um novo
     for (final entry in _invites.entries) {

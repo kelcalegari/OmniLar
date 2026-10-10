@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 import '../../../../core/domain/value_objects/money.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/utils/responsive.dart';
+import '../../../../core/widgets/money_input_field.dart';
 import '../../../../core/widgets/responsive_container.dart';
 import '../../../calendar/domain/entities/task_item.dart';
 import '../../../calendar/presentation/cubit/calendar_cubit.dart';
@@ -46,6 +47,14 @@ class _TasksAndShoppingPageState extends State<TasksAndShoppingPage> with Single
         context.read<ShoppingCubit>().loadShoppingData();
       }
     });
+  }
+
+  @override
+  void didUpdateWidget(TasksAndShoppingPage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.initialTabIndex != oldWidget.initialTabIndex) {
+      _tabController.animateTo(widget.initialTabIndex.clamp(0, 1));
+    }
   }
 
   @override
@@ -912,8 +921,8 @@ class _TasksAndShoppingPageState extends State<TasksAndShoppingPage> with Single
     final paymentMethods = financeState.paymentMethods;
     final members = financeState.members;
 
-    final amountController = TextEditingController();
-    final personalAmountController = TextEditingController();
+    final amountController = MoneyTextEditingController(allowEmpty: false);
+    final personalAmountController = MoneyTextEditingController(allowEmpty: true);
     String? selectedPmId = paymentMethods.isNotEmpty ? paymentMethods.first.id : null;
     String selectedPayerId = 'member_carlos';
     String selectedDebtorId = 'member_marina';
@@ -947,14 +956,12 @@ class _TasksAndShoppingPageState extends State<TasksAndShoppingPage> with Single
                         style: TextStyle(fontSize: 12, color: Colors.grey),
                       ),
                       const SizedBox(height: 16),
-                      TextField(
+                      MoneyTextFormField(
                         controller: amountController,
-                        keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                        decoration: InputDecoration(
-                          labelText: 'Valor Total da Nota Fiscal',
-                          prefixText: 'R\$ ',
-                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                        ),
+                        labelText: 'Valor Total da Nota Fiscal',
+                        hintText: 'R\$ 0,00',
+                        prefixIcon: const Icon(Icons.receipt_long_rounded),
+                        allowEmpty: false,
                       ),
                       const SizedBox(height: 12),
                       DropdownButtonFormField<String>(
@@ -1001,14 +1008,12 @@ class _TasksAndShoppingPageState extends State<TasksAndShoppingPage> with Single
                                 style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Colors.orange),
                               ),
                               const SizedBox(height: 8),
-                              TextField(
+                              MoneyTextFormField(
                                 controller: personalAmountController,
-                                keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                                decoration: InputDecoration(
-                                  labelText: 'Subtotal dos Itens Pessoais',
-                                  prefixText: 'R\$ ',
-                                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
-                                ),
+                                labelText: 'Subtotal dos Itens Pessoais',
+                                hintText: 'R\$ 0,00',
+                                prefixIcon: const Icon(Icons.person_pin_circle_outlined),
+                                allowEmpty: true,
                               ),
                             ],
                           ),
@@ -1025,12 +1030,12 @@ class _TasksAndShoppingPageState extends State<TasksAndShoppingPage> with Single
                 ),
                 FilledButton(
                   onPressed: () {
-                    final total = Money.parse(amountController.text);
+                    final total = amountController.money;
                     if (total.isZero) return;
 
                     Money? personalMoney;
-                    if (personalAmountController.text.isNotEmpty) {
-                      personalMoney = Money.parse(personalAmountController.text);
+                    if (personalAmountController.text.isNotEmpty && personalAmountController.cents > 0) {
+                      personalMoney = personalAmountController.money;
                     }
 
                     Navigator.pop(dialogCtx);
