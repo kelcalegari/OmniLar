@@ -29,6 +29,9 @@ import '../../features/calendar/data/repositories/calendar_repository_impl.dart'
 import '../../features/calendar/domain/repositories/calendar_repository.dart';
 import '../../features/calendar/presentation/cubit/calendar_cubit.dart';
 
+import '../../features/assistant/domain/services/assistant_interpreter_service.dart';
+import '../../features/assistant/presentation/cubit/assistant_cubit.dart';
+
 final sl = GetIt.instance;
 
 Future<void> initServiceLocator() async {
@@ -67,4 +70,15 @@ Future<void> initServiceLocator() async {
   sl.registerLazySingleton<MockCalendarDataSource>(() => MockCalendarDataSource());
   sl.registerLazySingleton<CalendarRepository>(() => CalendarRepositoryImpl(sl()));
   sl.registerLazySingleton<CalendarCubit>(() => CalendarCubit(sl()));
+
+  // Assistant Feature (Fase 7: Assistente de IA Determinístico)
+  sl.registerLazySingleton<AssistantInterpreterService>(() => AssistantInterpreterService(
+        financeRepository: sl(),
+        p2pRepository: sl(),
+        shoppingRepository: sl(),
+        calendarRepository: sl(),
+      ));
+  sl.registerFactory<AssistantCubit>(() => AssistantCubit(
+        interpreterService: sl(),
+      ));
 }

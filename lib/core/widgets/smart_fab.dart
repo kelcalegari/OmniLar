@@ -11,6 +11,7 @@ import '../../features/calendar/presentation/widgets/add_event_sheet.dart';
 import '../../features/calendar/presentation/widgets/add_task_sheet.dart';
 import '../../features/capture/presentation/pages/smart_scanner_page.dart';
 import '../../features/reconciliation/presentation/widgets/split_invoice_modal.dart';
+import '../../features/assistant/presentation/pages/assistant_chat_page.dart';
 
 class SmartFAB extends StatelessWidget {
   final bool isExtended;
@@ -127,9 +128,7 @@ class _SmartFABContent extends StatelessWidget {
                 color: AppColors.accent,
                 onTap: () {
                   Navigator.pop(context);
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Assistente IA em breve (Fase 7)')),
-                  );
+                  AssistantChatPage.show(context);
                 },
               ),
             ],
