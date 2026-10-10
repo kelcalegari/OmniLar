@@ -171,7 +171,8 @@ alter table public.event_participants enable row level security;
 -- ==============================================================================
 
 -- View: Status do Evento (Confirmado, Em Risco, Aguardando)
-create or replace view public.v_event_status as
+create or replace view public.v_event_status
+with (security_invoker = true) as
 select
   e.id as event_id,
   e.title,
@@ -196,7 +197,8 @@ select
 from public.events e;
 
 -- View: Tarefas Atrasadas
-create or replace view public.v_task_status as
+create or replace view public.v_task_status
+with (security_invoker = true) as
 select
   t.id as task_id,
   t.title,

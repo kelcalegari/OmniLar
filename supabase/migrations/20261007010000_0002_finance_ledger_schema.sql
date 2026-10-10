@@ -324,28 +324,29 @@ create policy "settlement_transfers_update_party" on public.settlement_transfers
 -- VIEWS DERIVADAS
 -- ==============================================================================
 
--- View: Resumo do Ciclo Financeiro
-create or replace view public.v_cycle_summary as
+-- View: Resumo do Ciclo Financeiro (com security_invoker para respeitar RLS por casa)
+create or replace view public.v_cycle_summary
+with (security_invoker = true) as
 select
-  h.id as house_id,
-  c.cycle_start_date,
-  coalesce(sum(c.amount_cents), 0) as total_contributions_cents,
-  coalesce((
-    select sum(e.amount_cents)
-    from public.house_expenses e
-    where e.house_id = h.id and e.cycle_start_date = c.cycle_start_date and e.deleted_at is null
-  ), 0) as total_expenses_cents
-from public.houses h
-cross join (
-  select distinct cycle_start_date from public.contributions
-  union
-  select distinct cycle_start_date from public.house_expenses
+  coalesce(c.house_id, e.house_id) as house_id,
+  coalesce(c.cycle_start_date, e.cycle_start_date) as cycle_start_date,
+  coalesce(c.total_contributions_cents, 0) as total_contributions_cents,
+  coalesce(e.total_expenses_cents, 0) as total_expenses_cents
+from (
+  select house_id, cycle_start_date, sum(amount_cents) as total_contributions_cents
+  from public.contributions
+  group by house_id, cycle_start_date
 ) c
-left join public.contributions con on con.house_id = h.id and con.cycle_start_date = c.cycle_start_date
-group by h.id, c.cycle_start_date;
+full outer join (
+  select house_id, cycle_start_date, sum(amount_cents) as total_expenses_cents
+  from public.house_expenses
+  where deleted_at is null
+  group by house_id, cycle_start_date
+) e on c.house_id = e.house_id and c.cycle_start_date = e.cycle_start_date;
 
--- View: Status Atualizado de Parcelas
-create or replace view public.v_installment_status as
+-- View: Status Atualizado de Parcelas (com security_invoker para respeitar RLS de credor/devedor)
+create or replace view public.v_installment_status
+with (security_invoker = true) as
 select
   i.id as installment_id,
   i.loan_id,

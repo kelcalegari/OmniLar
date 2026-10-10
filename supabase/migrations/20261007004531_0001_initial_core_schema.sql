@@ -65,8 +65,8 @@ create table if not exists public.house_members (
   unique(house_id, user_id)
 );
 
-create index if index_house_members_house on public.house_members (house_id);
-create index if index_house_members_user on public.house_members (user_id);
+create index if not exists idx_house_members_house on public.house_members (house_id);
+create index if not exists idx_house_members_user on public.house_members (user_id);
 
 alter table public.house_members enable row level security;
 
@@ -110,8 +110,8 @@ create table if not exists public.house_invites (
   created_at timestamptz not null default now()
 );
 
-create index if index_house_invites_house on public.house_invites (house_id);
-create index if index_house_invites_code on public.house_invites (code);
+create index if not exists idx_house_invites_house on public.house_invites (house_id);
+create index if not exists idx_house_invites_code on public.house_invites (code);
 
 alter table public.house_invites enable row level security;
 
@@ -131,7 +131,7 @@ create table if not exists public.payment_methods (
   updated_at timestamptz not null default now()
 );
 
-create index if index_payment_methods_house on public.payment_methods (house_id);
+create index if not exists idx_payment_methods_house on public.payment_methods (house_id);
 
 alter table public.payment_methods enable row level security;
 
@@ -153,7 +153,7 @@ create table if not exists public.categories (
   updated_at timestamptz not null default now()
 );
 
-create index if index_categories_house on public.categories (house_id);
+create index if not exists idx_categories_house on public.categories (house_id);
 
 alter table public.categories enable row level security;
 
@@ -175,8 +175,8 @@ create table if not exists public.attachments (
   created_at timestamptz not null default now()
 );
 
-create index if index_attachments_house on public.attachments (house_id);
-create index if index_attachments_owner on public.attachments (owner_type, owner_id);
+create index if not exists idx_attachments_house on public.attachments (house_id);
+create index if not exists idx_attachments_owner on public.attachments (owner_type, owner_id);
 
 alter table public.attachments enable row level security;
 
@@ -194,7 +194,7 @@ create table if not exists public.notifications (
   created_at timestamptz not null default now()
 );
 
-create index if index_notifications_user on public.notifications (user_id, read_at);
+create index if not exists idx_notifications_user on public.notifications (user_id, read_at);
 
 alter table public.notifications enable row level security;
 
@@ -210,26 +210,9 @@ create table if not exists public.audit_log (
   created_at timestamptz not null default now()
 );
 
-create index if index_audit_log_house on public.audit_log (house_id, created_at);
+create index if not exists idx_audit_log_house on public.audit_log (house_id, created_at);
 
 alter table public.audit_log enable row level security;
-
--- 13. TABELA AI_USAGE
-create table if not exists public.ai_usage (
-  id uuid primary key default gen_random_uuid(),
-  house_id uuid references public.houses(id) on delete set null,
-  user_id uuid not null references auth.users(id) on delete cascade,
-  feature text not null check (feature in ('capture', 'import', 'assistant')),
-  model text not null,
-  tokens_in integer not null default 0,
-  tokens_out integer not null default 0,
-  status text not null default 'success',
-  created_at timestamptz not null default now()
-);
-
-create index if index_ai_usage_house_user on public.ai_usage (house_id, user_id, created_at);
-
-alter table public.ai_usage enable row level security;
 
 -- ==============================================================================
 -- RLS POLICIES
@@ -339,13 +322,6 @@ create policy "notifications_update_own" on public.notifications for update
 -- Audit Log (Somente leitura para membros da casa):
 create policy "audit_log_select_member" on public.audit_log for select
   using (house_id is not null and public.is_house_member(house_id));
-
--- AI Usage (Somente leitura própria ou admin):
-create policy "ai_usage_select_own_or_admin" on public.ai_usage for select
-  using (user_id = auth.uid() or (house_id is not null and public.is_house_admin(house_id)));
-
-create policy "ai_usage_insert_service_or_own" on public.ai_usage for insert
-  with check (user_id = auth.uid());
 
 -- ==============================================================================
 -- TRIGGER PARA NOVO USUÁRIO (CRIAR PROFILE AUTOMATICAMENTE)
