@@ -95,7 +95,7 @@ void main() {
     expect(find.text('Cadastrar Nova Recorrente'), findsOneWidget);
   });
 
-  testWidgets('Can open Modelos de Rateio and see options including Valor Fixo Estipulado', (tester) async {
+  testWidgets('Can open Modelos de Rateio and see options including Aportes Fixos (Balde Comum)', (tester) async {
     await sl<FinanceCubit>().loadCycleData();
 
     await tester.pumpWidget(buildTestableWidget());
@@ -105,17 +105,20 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Porcentagem Personalizada'), findsOneWidget);
-    expect(find.text('Valor Fixo Estipulado'), findsOneWidget);
+    expect(find.text('Aportes Fixos (Balde Comum)'), findsOneWidget);
     expect(find.text('Por Categoria de Gasto'), findsOneWidget);
     expect(find.text('Salvar Modelo de Rateio'), findsOneWidget);
 
-    // Clica na opção Valor Fixo Estipulado
-    await tester.tap(find.text('Valor Fixo Estipulado'));
+    // Clica na opção Aportes Fixos (Balde Comum)
+    await tester.tap(find.text('Aportes Fixos (Balde Comum)'));
     await tester.pumpAndSettle();
 
-    expect(find.text('Quem paga o valor fixo estipulado?'), findsOneWidget);
-    expect(find.text('Valor Fixo Mensal:'), findsOneWidget);
-    expect(find.text(const Money(150000).format()), findsWidgets);
+    expect(find.text('Balde Mensal Previsto:'), findsOneWidget);
+    expect(find.text('Aporte de Carlos'), findsOneWidget);
+    expect(find.text('Aporte de Marina'), findsOneWidget);
+    expect(find.text(const Money(70000).format()), findsWidgets);
+    expect(find.text(const Money(130000).format()), findsWidgets);
+    expect(find.text(const Money(200000).format()), findsWidgets);
   });
 
   testWidgets('Can open Ciclo Financeiro dialog', (tester) async {

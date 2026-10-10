@@ -135,6 +135,19 @@ class SupabaseAuthDataSource implements AuthDataSource {
         'full_name': fullName.trim(),
       });
 
+      if (res.session == null) {
+        try {
+          final loginRes = await _client.auth.signInWithPassword(
+            email: email.trim(),
+            password: password,
+          );
+          if (loginRes.user != null) {
+            await _loadProfileAndHouse(loginRes.user!);
+            return _currentUser ?? UserProfile(id: loginRes.user!.id, email: email, fullName: fullName);
+          }
+        } catch (_) {}
+      }
+
       await _loadProfileAndHouse(user);
       return _currentUser ?? UserProfile(id: user.id, email: user.email ?? '', fullName: fullName);
     } on AuthException catch (e) {
@@ -215,6 +228,32 @@ class SupabaseAuthDataSource implements AuthDataSource {
     }
 
     try {
+      // 1. Tenta criar através da RPC atômica segura (evita conflito de RLS entre houses e house_members)
+      try {
+        final rpcResult = await _client.rpc('create_house_with_owner', params: {
+          'p_name': name.trim(),
+          'p_cycle_start_day': cycleStartDay,
+        });
+
+        if (rpcResult != null) {
+          final houseMap = rpcResult as Map<String, dynamic>;
+          final house = House(
+            id: houseMap['id'] as String,
+            name: houseMap['name'] as String,
+            cycleStartDay: (houseMap['cycle_start_day'] as num?)?.toInt() ?? cycleStartDay,
+            timezone: houseMap['timezone'] as String? ?? 'America/Sao_Paulo',
+            createdBy: userId,
+          );
+
+          _currentHouse = house;
+          _houseStateController.add(_currentHouse);
+          return house;
+        }
+      } catch (_) {
+        // Segue para fallback direto caso a RPC ainda não tenha sido executada no SQL Editor
+      }
+
+      // 2. Inserção direta nas tabelas
       final houseRow = await _client.from('houses').insert({
         'name': name.trim(),
         'cycle_start_day': cycleStartDay,

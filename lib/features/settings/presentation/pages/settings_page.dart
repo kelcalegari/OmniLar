@@ -473,18 +473,25 @@ class SettingsPage extends StatelessWidget {
     double carlosPercent = members.isNotEmpty ? members[0].defaultSplitPercent : 50.0;
     double marinaPercent = members.length > 1 ? members[1].defaultSplitPercent : (100.0 - carlosPercent);
     String selectedModel = 'percentage'; // 'percentage', 'fixed', 'category'
-    String fixedMemberId = members.isNotEmpty ? members[0].id : 'member_carlos';
-    int fixedAmountCents = 150000; // R$ 1.500,00 padrão
+
+    // Aportes fixos por membro (ex: Carlos R$ 700,00 e Marina R$ 1.300,00 -> Balde R$ 2.000,00)
+    final fixedAmountsByMember = <String, int>{};
+    if (members.isNotEmpty) {
+      fixedAmountsByMember[members[0].id] = 70000; // R$ 700,00
+    }
+    if (members.length > 1) {
+      fixedAmountsByMember[members[1].id] = 130000; // R$ 1.300,00
+    }
+    for (int i = 2; i < members.length; i++) {
+      fixedAmountsByMember[members[i].id] = 100000;
+    }
+    String deficitPolicy = 'proportional'; // 'proportional' ou 'equal'
 
     showAdaptiveModal(
       context: context,
       maxWidth: 500,
       child: StatefulBuilder(
         builder: (context, setModalState) {
-          final fixedMember = members.where((m) => m.id == fixedMemberId).firstOrNull ?? (members.isNotEmpty ? members[0] : null);
-          final otherMembers = members.where((m) => m.id != fixedMemberId).toList();
-          final otherName = otherMembers.isNotEmpty ? otherMembers.first.name : 'os demais membros';
-
           return SafeArea(
             child: Padding(
               padding: const EdgeInsets.all(20),
@@ -597,10 +604,10 @@ class SettingsPage extends StatelessWidget {
 
                   const Divider(),
 
-                  // 2. Valor Fixo Estipulado
+                  // 2. Aportes Fixos (Balde Comum / Orçamento Base)
                   RadioListTile<String>(
-                    title: const Text('Valor Fixo Estipulado', style: TextStyle(fontWeight: FontWeight.w600)),
-                    subtitle: const Text('Um membro paga um valor fixo em reais; o outro cobre o restante das contas.'),
+                    title: const Text('Aportes Fixos (Balde Comum)', style: TextStyle(fontWeight: FontWeight.w600)),
+                    subtitle: const Text('Cada membro aporta um valor fixo estipulado. Sobras vão pro cofre e déficit é coberto pela reserva ou rateado.'),
                     value: 'fixed',
                     groupValue: selectedModel,
                     onChanged: (val) => setModalState(() => selectedModel = val!),
@@ -608,67 +615,239 @@ class SettingsPage extends StatelessWidget {
                   ),
                   if (selectedModel == 'fixed') ...[
                     Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
-                          const Text('Quem paga o valor fixo estipulado?', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.grey)),
-                          const SizedBox(height: 6),
-                          DropdownButtonFormField<String>(
-                            initialValue: fixedMemberId,
-                            decoration: InputDecoration(
-                              border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                              contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                            ),
-                            items: members
-                                .map((m) => DropdownMenuItem(
-                                      value: m.id,
-                                      child: Text(m.name),
-                                    ))
-                                .toList(),
-                            onChanged: (val) {
-                              if (val != null) setModalState(() => fixedMemberId = val);
-                            },
-                          ),
-                          const SizedBox(height: 12),
-                          const Text('Valor Fixo Mensal:', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.grey)),
-                          const SizedBox(height: 6),
-                          Wrap(
-                            spacing: 8,
-                            runSpacing: 6,
-                            children: [80000, 100000, 150000, 200000, 250000].map((cents) {
-                              final isSelected = fixedAmountCents == cents;
-                              return ChoiceChip(
-                                label: Text(Money(cents).format()),
-                                selected: isSelected,
-                                selectedColor: AppColors.primary.withValues(alpha: 0.2),
-                                onSelected: (sel) {
-                                  if (sel) setModalState(() => fixedAmountCents = cents);
-                                },
-                              );
-                            }).toList(),
-                          ),
-                          const SizedBox(height: 12),
-                          Container(
-                            padding: const EdgeInsets.all(12),
-                            decoration: BoxDecoration(
-                              color: AppColors.accent.withValues(alpha: 0.08),
-                              borderRadius: BorderRadius.circular(12),
-                              border: Border.all(color: AppColors.accent.withValues(alpha: 0.3)),
-                            ),
-                            child: Row(
-                              children: [
-                                const Icon(Icons.info_outline, color: AppColors.accent, size: 20),
-                                const SizedBox(width: 10),
-                                Expanded(
-                                  child: Text(
-                                    '${fixedMember?.name ?? "Membro"} contribuirá com o valor fixo de ${Money(fixedAmountCents).format()} a cada ciclo. $otherName cobrirá o excedente das contas da casa.',
-                                    style: const TextStyle(fontSize: 12, color: AppColors.accent, fontWeight: FontWeight.w500),
+                          ...members.map((m) {
+                            final currentCents = fixedAmountsByMember[m.id] ?? 100000;
+                            return Container(
+                              margin: const EdgeInsets.only(bottom: 12),
+                              padding: const EdgeInsets.all(12),
+                              decoration: BoxDecoration(
+                                color: Theme.of(context).cardColor,
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(color: Colors.grey.withValues(alpha: 0.2)),
+                              ),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Row(
+                                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                    children: [
+                                      Expanded(
+                                        child: Text(
+                                          'Aporte de ${m.name}',
+                                          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                      ),
+                                      const SizedBox(width: 8),
+                                      InkWell(
+                                        borderRadius: BorderRadius.circular(8),
+                                        onTap: () {
+                                          final controller = TextEditingController(text: (currentCents / 100).toStringAsFixed(0));
+                                          showDialog(
+                                            context: context,
+                                            builder: (dialogCtx) => AlertDialog(
+                                              title: Text('Aporte de ${m.name}'),
+                                              content: TextField(
+                                                controller: controller,
+                                                keyboardType: TextInputType.number,
+                                                autofocus: true,
+                                                decoration: const InputDecoration(
+                                                  prefixText: 'R\$ ',
+                                                  labelText: 'Valor mensal',
+                                                  border: OutlineInputBorder(),
+                                                ),
+                                              ),
+                                              actions: [
+                                                TextButton(
+                                                  onPressed: () => Navigator.pop(dialogCtx),
+                                                  child: const Text('Cancelar'),
+                                                ),
+                                                FilledButton(
+                                                  onPressed: () {
+                                                    final val = double.tryParse(controller.text.replaceAll(',', '.'));
+                                                    if (val != null && val > 0) {
+                                                      setModalState(() {
+                                                        fixedAmountsByMember[m.id] = (val * 100).round();
+                                                      });
+                                                    }
+                                                    Navigator.pop(dialogCtx);
+                                                  },
+                                                  child: const Text('Confirmar'),
+                                                ),
+                                              ],
+                                            ),
+                                          );
+                                        },
+                                        child: Container(
+                                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                                          decoration: BoxDecoration(
+                                            color: AppColors.primary.withValues(alpha: 0.12),
+                                            borderRadius: BorderRadius.circular(8),
+                                          ),
+                                          child: Row(
+                                            mainAxisSize: MainAxisSize.min,
+                                            children: [
+                                              Text(
+                                                Money(currentCents).format(),
+                                                style: const TextStyle(fontWeight: FontWeight.bold, color: AppColors.primary, fontSize: 14),
+                                              ),
+                                              const SizedBox(width: 4),
+                                              const Icon(Icons.edit_outlined, size: 14, color: AppColors.primary),
+                                            ],
+                                          ),
+                                        ),
+                                      ),
+                                    ],
                                   ),
-                                ),
-                              ],
-                            ),
-                          ),
+                                  const SizedBox(height: 8),
+                                  SingleChildScrollView(
+                                    scrollDirection: Axis.horizontal,
+                                    child: Row(
+                                      children: [50000, 70000, 100000, 130000, 150000, 200000].map((cents) {
+                                        final isSelected = currentCents == cents;
+                                        return Padding(
+                                          padding: const EdgeInsets.only(right: 6),
+                                          child: ChoiceChip(
+                                            visualDensity: VisualDensity.compact,
+                                            label: Text(Money(cents).format(), style: const TextStyle(fontSize: 11)),
+                                            selected: isSelected,
+                                            selectedColor: AppColors.primary.withValues(alpha: 0.2),
+                                            onSelected: (sel) {
+                                              if (sel) {
+                                                setModalState(() {
+                                                  fixedAmountsByMember[m.id] = cents;
+                                                });
+                                              }
+                                            },
+                                          ),
+                                        );
+                                      }).toList(),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            );
+                          }),
+                          Builder(builder: (ctx) {
+                            final totalBalde = fixedAmountsByMember.values.fold<int>(0, (a, b) => a + b);
+                            final proportions = members.map((m) {
+                              final val = fixedAmountsByMember[m.id] ?? 0;
+                              final pct = totalBalde > 0 ? (val / totalBalde * 100).round() : 0;
+                              return '${m.name} ($pct%)';
+                            }).join(' • ');
+
+                            return Container(
+                              padding: const EdgeInsets.all(12),
+                              decoration: BoxDecoration(
+                                color: AppColors.primary.withValues(alpha: 0.08),
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(color: AppColors.primary.withValues(alpha: 0.25)),
+                              ),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.stretch,
+                                children: [
+                                  Row(
+                                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                    children: [
+                                      const Expanded(
+                                        child: Row(
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: [
+                                            Icon(Icons.account_balance_wallet_outlined, color: AppColors.primary, size: 18),
+                                            SizedBox(width: 8),
+                                            Flexible(
+                                              child: Text(
+                                                'Balde Mensal Previsto:',
+                                                style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold),
+                                                overflow: TextOverflow.ellipsis,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                      const SizedBox(width: 8),
+                                      Text(
+                                        Money(totalBalde).format(),
+                                        style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: AppColors.primary),
+                                      ),
+                                    ],
+                                  ),
+                                  if (proportions.isNotEmpty) ...[
+                                    const SizedBox(height: 4),
+                                    Text(
+                                      'Proporção calculada: $proportions',
+                                      style: TextStyle(fontSize: 11, color: Colors.grey.shade600),
+                                    ),
+                                  ],
+                                  const Divider(height: 16),
+                                  Row(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      const Icon(Icons.savings_outlined, color: Colors.green, size: 16),
+                                      const SizedBox(width: 6),
+                                      Expanded(
+                                        child: Text(
+                                          'Sobra do ciclo: Se os gastos forem menores que o balde, a sobra fica no Cofre da Casa como reserva.',
+                                          style: TextStyle(fontSize: 11, color: Colors.grey.shade800),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 8),
+                                  Row(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      const Icon(Icons.shield_outlined, color: Colors.orange, size: 16),
+                                      const SizedBox(width: 6),
+                                      Expanded(
+                                        child: Text(
+                                          'Se faltar (Déficit): A Casa consome primeiro a reserva do cofre. Se o cofre não cobrir, haverá rateio do excedente.',
+                                          style: TextStyle(fontSize: 11, color: Colors.grey.shade800),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 10),
+                                  const Text(
+                                    'Divisão do excedente (se o cofre não cobrir):',
+                                    style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.grey),
+                                  ),
+                                  const SizedBox(height: 4),
+                                  Row(
+                                    children: [
+                                      Expanded(
+                                        child: ChoiceChip(
+                                          visualDensity: VisualDensity.compact,
+                                          label: const Text('Proporcional', style: TextStyle(fontSize: 11)),
+                                          selected: deficitPolicy == 'proportional',
+                                          selectedColor: AppColors.primary.withValues(alpha: 0.2),
+                                          onSelected: (sel) {
+                                            if (sel) setModalState(() => deficitPolicy = 'proportional');
+                                          },
+                                        ),
+                                      ),
+                                      const SizedBox(width: 8),
+                                      Expanded(
+                                        child: ChoiceChip(
+                                          visualDensity: VisualDensity.compact,
+                                          label: const Text('50% / 50%', style: TextStyle(fontSize: 11)),
+                                          selected: deficitPolicy == 'equal',
+                                          selectedColor: AppColors.primary.withValues(alpha: 0.2),
+                                          onSelected: (sel) {
+                                            if (sel) setModalState(() => deficitPolicy = 'equal');
+                                          },
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ],
+                              ),
+                            );
+                          }),
                         ],
                       ),
                     ),
@@ -694,7 +873,12 @@ class SettingsPage extends StatelessWidget {
                       if (selectedModel == 'percentage') {
                         feedback = 'Rateio atualizado: ${carlosPercent.round()}% Carlos e ${marinaPercent.round()}% Marina.';
                       } else if (selectedModel == 'fixed') {
-                        feedback = 'Rateio atualizado: ${fixedMember?.name ?? "Membro"} com valor fixo de ${Money(fixedAmountCents).format()} e $otherName com o restante.';
+                        final totalBalde = fixedAmountsByMember.values.fold<int>(0, (a, b) => a + b);
+                        final parts = members.map((m) {
+                          final val = fixedAmountsByMember[m.id] ?? 0;
+                          return '${m.name}: ${Money(val).format()}';
+                        }).join(' + ');
+                        feedback = 'Rateio atualizado: Balde de ${Money(totalBalde).format()} ($parts). Sobras para o cofre da casa.';
                       } else {
                         feedback = 'Rateio atualizado para: Por Categoria de Gasto.';
                       }
@@ -1432,7 +1616,7 @@ class SettingsPage extends StatelessWidget {
               ListTile(
                 leading: const Icon(Icons.tune_rounded, color: AppColors.accent),
                 title: const Text('Modelos de Rateio'),
-                subtitle: const Text('Porcentagem (50/50), fixo ou categoria'),
+                subtitle: const Text('Porcentagem (50/50), balde de aportes fixos ou categoria'),
                 trailing: const Icon(Icons.chevron_right_rounded),
                 onTap: () => _showSplitModelsModal(context),
               ),
