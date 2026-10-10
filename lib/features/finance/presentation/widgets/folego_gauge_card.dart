@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../../../core/theme/app_colors.dart';
+import '../../../../core/widgets/privacy_toggle.dart';
 import '../../../../core/domain/value_objects/financial_cycle.dart';
 import '../../domain/entities/financial_cycle_summary.dart';
 
@@ -114,7 +115,7 @@ class FolegoGaugeCard extends StatelessWidget {
             const SizedBox(height: 10),
 
             // Valor Principal do Fôlego
-            Text(
+            PrivacySensitiveText(
               summary.folego.format(),
               style: TextStyle(
                 fontSize: 34,

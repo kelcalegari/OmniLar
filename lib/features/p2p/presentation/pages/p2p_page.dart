@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/utils/responsive.dart';
+import '../../../../core/widgets/privacy_toggle.dart';
 import '../../../../core/widgets/responsive_container.dart';
 import '../../domain/entities/p2p_loan.dart';
 import '../cubit/p2p_cubit.dart';
@@ -39,6 +40,9 @@ class _P2PPageContent extends StatelessWidget {
           return Scaffold(
             appBar: AppBar(
               title: const Text('Empréstimos P2P (Visão Geral)', style: TextStyle(fontWeight: FontWeight.bold)),
+              actions: const [
+                PrivacyToggleButton(),
+              ],
             ),
             body: SingleChildScrollView(
               child: ResponsiveContainer(
@@ -150,6 +154,9 @@ class _P2PPageContent extends StatelessWidget {
           child: Scaffold(
             appBar: AppBar(
               title: const Text('Empréstimos P2P', style: TextStyle(fontWeight: FontWeight.bold)),
+              actions: const [
+                PrivacyToggleButton(),
+              ],
               bottom: PreferredSize(
                 preferredSize: const Size.fromHeight(130),
                 child: Column(
@@ -220,7 +227,7 @@ class _P2PPageContent extends StatelessWidget {
                   style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Colors.grey),
                 ),
                 const SizedBox(height: 2),
-                Text(
+                PrivacySensitiveText(
                   netBalance.formatSigned(),
                   style: TextStyle(
                     fontSize: 20,

@@ -3,6 +3,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/utils/responsive.dart';
+import '../../../../core/widgets/privacy_toggle.dart';
 import '../../../../core/widgets/responsive_container.dart';
 import '../../../finance/presentation/cubit/finance_cubit.dart';
 import '../../../finance/presentation/cubit/finance_state.dart';
@@ -36,6 +37,7 @@ class _HomePageContent extends StatelessWidget {
           ],
         ),
         actions: [
+          const PrivacyToggleButton(),
           IconButton(
             icon: const Icon(Icons.notifications_none_rounded),
             onPressed: () {},
