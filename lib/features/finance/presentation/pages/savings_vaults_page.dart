@@ -89,8 +89,13 @@ class SavingsVaultsPage extends StatelessWidget {
                         avatar: Icon(item.$2, size: 16, color: isSelected ? Colors.white : Colors.grey),
                         label: Text(item.$1 == 'savings' ? 'Poupança' : item.$1 == 'shield' ? 'Reserva' : item.$1 == 'flight' ? 'Viagem' : item.$1 == 'home' ? 'Casa' : 'Carro'),
                         selected: isSelected,
-                        selectedColor: AppColors.primary,
-                        labelStyle: TextStyle(color: isSelected ? Colors.white : Colors.black87),
+                        labelStyle: TextStyle(
+                          color: isSelected
+                              ? Colors.white
+                              : (Theme.of(dialogCtx).brightness == Brightness.dark
+                                  ? Colors.white70
+                                  : Colors.black87),
+                        ),
                         onSelected: (sel) {
                           if (sel) {
                             setDialogState(() {

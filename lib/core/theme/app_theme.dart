@@ -49,6 +49,36 @@ class AppTheme {
         backgroundColor: AppColors.surfaceLight,
         surfaceTintColor: Colors.transparent,
       ),
+      dividerTheme: const DividerThemeData(
+        color: AppColors.borderLight,
+        thickness: 1,
+        space: 1,
+      ),
+      inputDecorationTheme: InputDecorationTheme(
+        filled: true,
+        fillColor: AppColors.surfaceLight,
+        hintStyle: const TextStyle(color: AppColors.textTertiaryLight),
+        labelStyle: const TextStyle(color: AppColors.textSecondaryLight),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: const BorderSide(color: AppColors.borderLight),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: const BorderSide(color: AppColors.borderLight),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: const BorderSide(color: AppColors.primary, width: 2),
+        ),
+      ),
+      chipTheme: ChipThemeData(
+        backgroundColor: AppColors.backgroundLight,
+        selectedColor: AppColors.primary,
+        side: const BorderSide(color: AppColors.borderLight),
+        labelStyle: const TextStyle(color: AppColors.textPrimaryLight),
+        secondaryLabelStyle: const TextStyle(color: Colors.white),
+      ),
       navigationRailTheme: const NavigationRailThemeData(
         backgroundColor: AppColors.surfaceLight,
         elevation: 0,
@@ -134,6 +164,36 @@ class AppTheme {
       dialogTheme: const DialogThemeData(
         backgroundColor: AppColors.surfaceDark,
         surfaceTintColor: Colors.transparent,
+      ),
+      dividerTheme: const DividerThemeData(
+        color: AppColors.borderDark,
+        thickness: 1,
+        space: 1,
+      ),
+      inputDecorationTheme: InputDecorationTheme(
+        filled: true,
+        fillColor: AppColors.surfaceDark,
+        hintStyle: const TextStyle(color: AppColors.textTertiaryDark),
+        labelStyle: const TextStyle(color: AppColors.textSecondaryDark),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: const BorderSide(color: AppColors.borderDark),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: const BorderSide(color: AppColors.borderDark),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: const BorderSide(color: AppColors.primaryLight, width: 2),
+        ),
+      ),
+      chipTheme: ChipThemeData(
+        backgroundColor: AppColors.surfaceDark,
+        selectedColor: AppColors.primaryLight,
+        side: const BorderSide(color: AppColors.borderDark),
+        labelStyle: const TextStyle(color: AppColors.textPrimaryDark),
+        secondaryLabelStyle: const TextStyle(color: Colors.black),
       ),
       navigationRailTheme: const NavigationRailThemeData(
         backgroundColor: AppColors.surfaceDark,
