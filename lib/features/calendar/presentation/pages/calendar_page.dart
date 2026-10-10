@@ -25,6 +25,22 @@ class CalendarPage extends StatelessWidget {
           appBar: AppBar(
             title: const Text('Agenda do Lar', style: TextStyle(fontWeight: FontWeight.bold)),
             actions: [
+              IconButton(
+                icon: Icon(
+                  state.activeView == CalendarViewType.events
+                      ? Icons.add_alarm_rounded
+                      : Icons.add_task_rounded,
+                  color: AppColors.primary,
+                ),
+                tooltip: state.activeView == CalendarViewType.events ? 'Novo Evento' : 'Nova Tarefa',
+                onPressed: () {
+                  if (state.activeView == CalendarViewType.events) {
+                    AddEventSheet.show(context, state.activeMemberId);
+                  } else {
+                    AddTaskSheet.show(context, state.activeMemberId);
+                  }
+                },
+              ),
               // Seletor rápido de quem está logado para testar RSVP
               Padding(
                 padding: const EdgeInsets.only(right: 8),
@@ -110,26 +126,6 @@ class CalendarPage extends StatelessWidget {
                         : _buildTasksList(context, state, cubit),
               ),
             ],
-          ),
-          floatingActionButton: FloatingActionButton.extended(
-            onPressed: () {
-              if (state.activeView == CalendarViewType.events) {
-                AddEventSheet.show(context, state.activeMemberId);
-              } else {
-                AddTaskSheet.show(context, state.activeMemberId);
-              }
-            },
-            icon: Icon(
-              state.activeView == CalendarViewType.events
-                  ? Icons.add_alarm_rounded
-                  : Icons.add_task_rounded,
-              color: Colors.white,
-            ),
-            label: Text(
-              state.activeView == CalendarViewType.events ? 'Novo Evento' : 'Nova Tarefa',
-              style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
-            ),
-            backgroundColor: AppColors.primary,
           ),
         );
       },
