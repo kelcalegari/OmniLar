@@ -88,7 +88,7 @@ void main() {
       expect(find.byType(MiniCalendarCard), findsNothing);
     });
 
-    testWidgets('Alterna para Visão Lista e renderiza lista corrida de compromissos',
+    testWidgets('Alterna para Visão Lista e renderiza mini calendário e lista corrida de compromissos',
         (tester) async {
       tester.view.physicalSize = const Size(800, 1400);
       tester.view.devicePixelRatio = 1.0;
@@ -101,8 +101,8 @@ void main() {
       await tester.tap(find.text('Lista'));
       await tester.pumpAndSettle();
 
-      // Mini Calendar e grades são ocultadas
-      expect(find.byType(MiniCalendarCard), findsNothing);
+      // Mini Calendar está presente na Visão Lista, enquanto grades de Semana e Mês ficam ocultadas
+      expect(find.byType(MiniCalendarCard), findsOneWidget);
       expect(find.byType(MonthCalendarView), findsNothing);
       expect(find.byType(WeekCalendarView), findsNothing);
       // Exibe cabeçalho de lista
@@ -137,6 +137,7 @@ void main() {
       // Alterna para Visão Lista no Desktop
       await tester.tap(find.text('Visão Lista'));
       await tester.pumpAndSettle();
+      expect(find.byType(MiniCalendarCard), findsOneWidget);
       expect(find.textContaining('Todos os Compromissos ('), findsOneWidget);
     });
 

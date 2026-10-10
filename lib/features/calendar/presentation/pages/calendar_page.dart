@@ -494,7 +494,7 @@ class _CalendarPageState extends State<CalendarPage> {
         );
 
       case CalendarViewMode.list:
-        return _buildListView(context, state, cubit, theme);
+        return _buildListView(context, state, cubit, theme, isDesktop);
     }
   }
 
@@ -646,42 +646,118 @@ class _CalendarPageState extends State<CalendarPage> {
     );
   }
 
-  // --- VISÃO LISTA CORRIDA ---
-  Widget _buildListView(BuildContext context, CalendarState state, CalendarCubit cubit, ThemeData theme) {
-    return ResponsiveContainer(
-      maxWidth: 900,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text(
-                  'Todos os Compromissos (${state.events.length})',
-                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+  // --- VISÃO LISTA CORRIDA COM MINI CALENDÁRIO ---
+  Widget _buildListView(
+    BuildContext context,
+    CalendarState state,
+    CalendarCubit cubit,
+    ThemeData theme,
+    bool isDesktop,
+  ) {
+    if (isDesktop) {
+      return ResponsiveContainer(
+        maxWidth: kMaxContentWidth,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Coluna Esquerda: Mini Calendário
+              SizedBox(
+                width: 320,
+                child: MiniCalendarCard(
+                  selectedDate: _selectedDate,
+                  events: state.events,
+                  onDateSelected: (date) {
+                    setState(() => _selectedDate = date);
+                  },
                 ),
-                FilledButton.tonalIcon(
-                  onPressed: () => AddEventSheet.show(context, state.activeMemberId),
-                  icon: const Icon(Icons.add_rounded, size: 18),
-                  label: const Text('Novo Evento'),
-                  style: FilledButton.styleFrom(visualDensity: VisualDensity.compact),
+              ),
+              const SizedBox(width: 20),
+
+              // Coluna Direita: Todos os Compromissos
+              Expanded(
+                child: Card(
+                  elevation: 0,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(16),
+                    side: BorderSide(color: Colors.grey.withValues(alpha: 0.15)),
+                  ),
+                  child: Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Text(
+                              'Todos os Compromissos (${state.events.length})',
+                              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                            ),
+                            FilledButton.tonalIcon(
+                              onPressed: () => AddEventSheet.show(context, state.activeMemberId),
+                              icon: const Icon(Icons.add_rounded, size: 18),
+                              label: const Text('Novo Evento'),
+                              style: FilledButton.styleFrom(visualDensity: VisualDensity.compact),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 14),
+                        Expanded(
+                          child: _buildEventsList(context, state, cubit),
+                        ),
+                      ],
+                    ),
+                  ),
                 ),
-              ],
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    // Mobile: Mini Calendário no topo + lista corrida de compromissos
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(16, 4, 16, 80),
+      children: [
+        MiniCalendarCard(
+          selectedDate: _selectedDate,
+          events: state.events,
+          onDateSelected: (date) {
+            setState(() => _selectedDate = date);
+          },
+        ),
+        const SizedBox(height: 14),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text(
+              'Todos os Compromissos (${state.events.length})',
+              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
             ),
-          ),
-          Expanded(
-            child: _buildEventsList(context, state, cubit),
-          ),
-        ],
-      ),
+            FilledButton.tonalIcon(
+              onPressed: () => AddEventSheet.show(context, state.activeMemberId),
+              icon: const Icon(Icons.add_rounded, size: 18),
+              label: const Text('Novo Evento'),
+              style: FilledButton.styleFrom(visualDensity: VisualDensity.compact),
+            ),
+          ],
+        ),
+        const SizedBox(height: 10),
+        if (state.events.isEmpty)
+          _buildEmptyEventsWidget(context, state)
+        else
+          ...state.events.map((event) => _buildEventItem(context, event, state, cubit)),
+      ],
     );
   }
 
-  Widget _buildEventsList(BuildContext context, CalendarState state, CalendarCubit cubit) {
-    if (state.events.isEmpty) {
-      return Center(
+  Widget _buildEmptyEventsWidget(BuildContext context, CalendarState state) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 24),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
@@ -704,11 +780,17 @@ class _CalendarPageState extends State<CalendarPage> {
             ),
           ],
         ),
-      );
+      ),
+    );
+  }
+
+  Widget _buildEventsList(BuildContext context, CalendarState state, CalendarCubit cubit) {
+    if (state.events.isEmpty) {
+      return _buildEmptyEventsWidget(context, state);
     }
 
     return ListView.builder(
-      padding: const EdgeInsets.fromLTRB(16, 4, 16, 80),
+      padding: EdgeInsets.zero,
       itemCount: state.events.length,
       itemBuilder: (context, index) {
         return _buildEventItem(context, state.events[index], state, cubit);

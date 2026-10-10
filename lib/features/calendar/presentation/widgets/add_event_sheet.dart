@@ -243,7 +243,7 @@ class _AddEventSheetState extends State<AddEventSheet> {
                 contentPadding: EdgeInsets.zero,
                 title: const Text('Dia Inteiro', style: TextStyle(fontWeight: FontWeight.w600)),
                 value: _isAllDay,
-                activeColor: AppColors.primary,
+                activeThumbColor: AppColors.primary,
                 onChanged: (val) => setState(() => _isAllDay = val),
               ),
               const Divider(),

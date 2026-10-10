@@ -104,7 +104,6 @@ class _AddTaskSheetState extends State<AddTaskSheet> {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
     final dateFormat = DateFormat("dd/MM/yyyy (EEE)", 'pt_BR');
 
     return Padding(
