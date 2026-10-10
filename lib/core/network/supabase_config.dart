@@ -1,18 +1,19 @@
+import 'dart:io' show Platform;
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 class SupabaseConfig {
   SupabaseConfig._();
 
-  // Em produção, esses valores são fornecidos via variáveis de ambiente / flutter build --dart-define
+  // Credenciais padrão da nuvem (podem ser sobrescritas via --dart-define)
   static const String supabaseUrl = String.fromEnvironment(
     'SUPABASE_URL',
-    defaultValue: '',
+    defaultValue: 'https://rygxmpwzofgieodvhpcy.supabase.co',
   );
 
   static const String supabaseAnonKey = String.fromEnvironment(
     'SUPABASE_ANON_KEY',
-    defaultValue: '',
+    defaultValue: 'sb_publishable_GshamuXeZLHEPF1bch5SgQ_eVXv_ckW',
   );
 
   static bool get isConfigured => supabaseUrl.isNotEmpty && supabaseAnonKey.isNotEmpty;
@@ -21,11 +22,14 @@ class SupabaseConfig {
 
   static bool get isInitialized => _isInitialized;
 
+  static bool get isRunningTests =>
+      !kIsWeb && Platform.environment.containsKey('FLUTTER_TEST');
+
   /// Inicializa o Supabase Flutter de forma resiliente:
-  /// Se não estiver configurado ou falhar na conexão remota, a aplicação segue em modo mock local.
+  /// Se for ambiente de testes automatizados ou falhar na conexão remota, a aplicação segue em modo mock local.
   static Future<void> initialize() async {
-    if (!isConfigured) {
-      debugPrint('Supabase não configurado. Rodando com datasources locais (Mock).');
+    if (isRunningTests || !isConfigured) {
+      debugPrint('Ambiente de testes/mock. Rodando com datasources locais.');
       _isInitialized = false;
       return;
     }
