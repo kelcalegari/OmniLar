@@ -52,6 +52,9 @@ import '../../features/projects/presentation/cubit/projects_cubit.dart';
 final sl = GetIt.instance;
 
 Future<void> initServiceLocator() async {
+  // Inicializa o Supabase Flutter se as credenciais estiverem configuradas
+  await SupabaseConfig.initialize();
+
   // Core Infrastructure & Theme
   sl.registerLazySingleton<OfflineQueueManager>(() => OfflineQueueManager());
   sl.registerLazySingleton<ThemeCubit>(() => ThemeCubit());

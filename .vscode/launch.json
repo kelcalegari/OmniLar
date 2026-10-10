@@ -6,8 +6,8 @@
       "request": "launch",
       "type": "dart",
       "toolArgs": [
-        "--dart-define=SUPABASE_URL=https://SEU_PROJETO.supabase.co",
-        "--dart-define=SUPABASE_ANON_KEY=SEU_ANON_KEY_AQUI"
+        "--dart-define=SUPABASE_URL=https://rygxmpwzofgieodvhpcy.supabase.co",
+        "--dart-define=SUPABASE_ANON_KEY=sb_publishable_GshamuXeZLHEPF1bch5SgQ_eVXv_ckW"
       ]
     },
     {
@@ -21,8 +21,8 @@
       "type": "dart",
       "args": ["-d", "chrome"],
       "toolArgs": [
-        "--dart-define=SUPABASE_URL=https://SEU_PROJETO.supabase.co",
-        "--dart-define=SUPABASE_ANON_KEY=SEU_ANON_KEY_AQUI"
+        "--dart-define=SUPABASE_URL=https://rygxmpwzofgieodvhpcy.supabase.co",
+        "--dart-define=SUPABASE_ANON_KEY=sb_publishable_GshamuXeZLHEPF1bch5SgQ_eVXv_ckW"
       ]
     },
     {

@@ -7,21 +7,29 @@ class SupabaseConfig {
   // Em produção, esses valores são fornecidos via variáveis de ambiente / flutter build --dart-define
   static const String supabaseUrl = String.fromEnvironment(
     'SUPABASE_URL',
-    defaultValue: 'https://omnilar-dev.supabase.co',
+    defaultValue: '',
   );
 
   static const String supabaseAnonKey = String.fromEnvironment(
     'SUPABASE_ANON_KEY',
-    defaultValue: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.dummy_anon_key_for_offline_and_mock',
+    defaultValue: '',
   );
+
+  static bool get isConfigured => supabaseUrl.isNotEmpty && supabaseAnonKey.isNotEmpty;
 
   static bool _isInitialized = false;
 
   static bool get isInitialized => _isInitialized;
 
   /// Inicializa o Supabase Flutter de forma resiliente:
-  /// Se falhar por falta de conexão remota, a aplicação segue em modo mock local.
+  /// Se não estiver configurado ou falhar na conexão remota, a aplicação segue em modo mock local.
   static Future<void> initialize() async {
+    if (!isConfigured) {
+      debugPrint('Supabase não configurado. Rodando com datasources locais (Mock).');
+      _isInitialized = false;
+      return;
+    }
+
     try {
       await Supabase.initialize(
         url: supabaseUrl,
