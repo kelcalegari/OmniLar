@@ -465,7 +465,12 @@ class _CalendarPageState extends State<CalendarPage> {
             child: WeekCalendarView(
               selectedDate: _selectedDate,
               events: state.events,
-              onDateSelected: (date) => setState(() => _selectedDate = date),
+              onDateSelected: (date) {
+                setState(() {
+                  _selectedDate = date;
+                  _viewMode = CalendarViewMode.day;
+                });
+              },
               onEventTap: (event) => _showEventDetailsModal(context, event, state, cubit),
               onAddEvent: (date) {
                 setState(() => _selectedDate = date);
@@ -483,7 +488,12 @@ class _CalendarPageState extends State<CalendarPage> {
             child: MonthCalendarView(
               selectedDate: _selectedDate,
               events: state.events,
-              onDateSelected: (date) => setState(() => _selectedDate = date),
+              onDateSelected: (date) {
+                setState(() {
+                  _selectedDate = date;
+                  _viewMode = CalendarViewMode.day;
+                });
+              },
               onEventTap: (event) => _showEventDetailsModal(context, event, state, cubit),
               onAddEvent: (date) {
                 setState(() => _selectedDate = date);
