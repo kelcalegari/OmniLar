@@ -28,24 +28,11 @@ class _HomePageContent extends StatelessWidget {
 
     return Scaffold(
       appBar: AppBar(
-        title: Row(
+        title: const Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Container(
-              padding: const EdgeInsets.all(8),
-              decoration: BoxDecoration(
-                color: AppColors.primary.withValues(alpha: 0.1),
-                borderRadius: BorderRadius.circular(10),
-              ),
-              child: const Icon(Icons.home_rounded, color: AppColors.primary),
-            ),
-            const SizedBox(width: 12),
-            const Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text('Nossa Casa', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
-                Text('Carlos & Marina', style: TextStyle(fontSize: 12, color: Colors.grey)),
-              ],
-            ),
+            Text('Nossa Casa', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+            Text('Carlos & Marina', style: TextStyle(fontSize: 12, color: Colors.grey)),
           ],
         ),
         actions: [
