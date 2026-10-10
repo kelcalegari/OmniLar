@@ -11,6 +11,7 @@ import '../../../finance/domain/entities/category.dart';
 import '../../../finance/domain/entities/payment_method.dart';
 import '../../../finance/presentation/cubit/finance_state.dart';
 import '../../../finance/presentation/pages/add_expense_page.dart';
+import '../../../reconciliation/presentation/widgets/split_invoice_modal.dart';
 import '../../../../core/domain/value_objects/money.dart';
 
 class SettingsPage extends StatelessWidget {
@@ -1388,6 +1389,14 @@ class SettingsPage extends StatelessWidget {
                 subtitle: const Text('Nubank Carlos, Inter Marina, VR Alelo'),
                 trailing: const Icon(Icons.chevron_right_rounded),
                 onTap: () => _showPaymentMethodsModal(context),
+              ),
+              const Divider(),
+              ListTile(
+                leading: const Icon(Icons.call_split_rounded, color: AppColors.accent),
+                title: const Text('Rachar Fatura & Extratos (RN09)'),
+                subtitle: const Text('Conciliação de cartão misto entre Casa, Pessoal e P2P'),
+                trailing: const Icon(Icons.chevron_right_rounded),
+                onTap: () => SplitInvoiceModal.show(context),
               ),
               const Divider(),
               ListTile(
