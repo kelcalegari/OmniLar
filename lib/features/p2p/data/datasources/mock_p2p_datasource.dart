@@ -3,7 +3,9 @@ import '../../domain/entities/p2p_installment.dart';
 import '../../domain/services/p2p_calculator.dart';
 import '../../../../core/domain/value_objects/money.dart';
 
-class MockP2PDataSource {
+import 'p2p_datasource.dart';
+
+class MockP2PDataSource implements P2PDataSource {
   final List<P2PLoan> _loans = [];
 
   MockP2PDataSource() {
@@ -99,10 +101,12 @@ class MockP2PDataSource {
     );
   }
 
+  @override
   Future<List<P2PLoan>> getLoans() async {
     return List.unmodifiable(_loans);
   }
 
+  @override
   Future<void> createLoan(P2PLoan loan) async {
     _loans.insert(0, loan);
   }
@@ -114,6 +118,7 @@ class MockP2PDataSource {
   }) =>
       payInstallment(installmentId, amount);
 
+  @override
   Future<void> payInstallment(String installmentId, Money amount) async {
     for (int i = 0; i < _loans.length; i++) {
       final loan = _loans[i];
@@ -139,6 +144,7 @@ class MockP2PDataSource {
     }
   }
 
+  @override
   Future<void> forgiveLoan(String loanId) async {
     final index = _loans.indexWhere((l) => l.id == loanId);
     if (index != -1) {
@@ -157,6 +163,7 @@ class MockP2PDataSource {
     }
   }
 
+  @override
   Future<void> renegotiateLoan(String loanId, int newInstallmentsCount, DateTime newFirstDueDate) async {
     final index = _loans.indexWhere((l) => l.id == loanId);
     if (index != -1) {

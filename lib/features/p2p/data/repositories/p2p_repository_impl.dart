@@ -1,10 +1,10 @@
 import '../../domain/entities/p2p_loan.dart';
 import '../../domain/repositories/p2p_repository.dart';
-import '../datasources/mock_p2p_datasource.dart';
+import '../datasources/p2p_datasource.dart';
 import '../../../../core/domain/value_objects/money.dart';
 
 class P2PRepositoryImpl implements P2PRepository {
-  final MockP2PDataSource _dataSource;
+  final P2PDataSource _dataSource;
 
   P2PRepositoryImpl(this._dataSource);
 

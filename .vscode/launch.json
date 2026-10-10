@@ -1,0 +1,35 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Omni Lar (Supabase Cloud)",
+      "request": "launch",
+      "type": "dart",
+      "toolArgs": [
+        "--dart-define=SUPABASE_URL=https://SEU_PROJETO.supabase.co",
+        "--dart-define=SUPABASE_ANON_KEY=SEU_ANON_KEY_AQUI"
+      ]
+    },
+    {
+      "name": "Omni Lar (Demo / Modo Offline)",
+      "request": "launch",
+      "type": "dart"
+    },
+    {
+      "name": "Omni Lar (Web Chrome - Supabase)",
+      "request": "launch",
+      "type": "dart",
+      "args": ["-d", "chrome"],
+      "toolArgs": [
+        "--dart-define=SUPABASE_URL=https://SEU_PROJETO.supabase.co",
+        "--dart-define=SUPABASE_ANON_KEY=SEU_ANON_KEY_AQUI"
+      ]
+    },
+    {
+      "name": "Omni Lar (Web Chrome - Demo)",
+      "request": "launch",
+      "type": "dart",
+      "args": ["-d", "chrome"]
+    }
+  ]
+}

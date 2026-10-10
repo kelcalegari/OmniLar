@@ -3,10 +3,10 @@ import '../../domain/entities/calendar_event.dart';
 import '../../domain/entities/event_participant.dart';
 import '../../domain/entities/task_item.dart';
 import '../../domain/repositories/calendar_repository.dart';
-import '../datasources/mock_calendar_datasource.dart';
+import '../datasources/calendar_datasource.dart';
 
 class CalendarRepositoryImpl implements CalendarRepository {
-  final MockCalendarDataSource _dataSource;
+  final CalendarDataSource _dataSource;
 
   CalendarRepositoryImpl(this._dataSource);
 

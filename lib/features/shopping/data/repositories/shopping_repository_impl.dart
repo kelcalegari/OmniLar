@@ -3,10 +3,10 @@ import '../../domain/entities/shopping_item.dart';
 import '../../domain/entities/shopping_list.dart';
 import '../../domain/entities/shopping_trip.dart';
 import '../../domain/repositories/shopping_repository.dart';
-import '../datasources/mock_shopping_datasource.dart';
+import '../datasources/shopping_datasource.dart';
 
 class ShoppingRepositoryImpl implements ShoppingRepository {
-  final MockShoppingDataSource _dataSource;
+  final ShoppingDataSource _dataSource;
 
   ShoppingRepositoryImpl(this._dataSource);
 

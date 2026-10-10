@@ -16,7 +16,9 @@ import '../../features/finance/data/repositories/finance_repository_impl.dart';
 import '../../features/finance/domain/repositories/finance_repository.dart';
 import '../../features/finance/presentation/cubit/finance_cubit.dart';
 
+import '../../features/p2p/data/datasources/p2p_datasource.dart';
 import '../../features/p2p/data/datasources/mock_p2p_datasource.dart';
+import '../../features/p2p/data/datasources/supabase_p2p_datasource.dart';
 import '../../features/p2p/data/repositories/p2p_repository_impl.dart';
 import '../../features/p2p/domain/repositories/p2p_repository.dart';
 import '../../features/p2p/presentation/cubit/p2p_cubit.dart';
@@ -26,12 +28,16 @@ import '../../features/settlement/data/repositories/settlement_repository_impl.d
 import '../../features/settlement/domain/repositories/settlement_repository.dart';
 import '../../features/settlement/presentation/cubit/settlement_cubit.dart';
 
+import '../../features/shopping/data/datasources/shopping_datasource.dart';
 import '../../features/shopping/data/datasources/mock_shopping_datasource.dart';
+import '../../features/shopping/data/datasources/supabase_shopping_datasource.dart';
 import '../../features/shopping/data/repositories/shopping_repository_impl.dart';
 import '../../features/shopping/domain/repositories/shopping_repository.dart';
 import '../../features/shopping/presentation/cubit/shopping_cubit.dart';
 
+import '../../features/calendar/data/datasources/calendar_datasource.dart';
 import '../../features/calendar/data/datasources/mock_calendar_datasource.dart';
+import '../../features/calendar/data/datasources/supabase_calendar_datasource.dart';
 import '../../features/calendar/data/repositories/calendar_repository_impl.dart';
 import '../../features/calendar/domain/repositories/calendar_repository.dart';
 import '../../features/calendar/presentation/cubit/calendar_cubit.dart';
@@ -39,6 +45,7 @@ import '../../features/calendar/presentation/cubit/calendar_cubit.dart';
 import '../../features/assistant/domain/services/assistant_interpreter_service.dart';
 
 import '../../features/projects/data/repositories/mock_projects_repository.dart';
+import '../../features/projects/data/repositories/supabase_projects_repository.dart';
 import '../../features/projects/domain/repositories/projects_repository.dart';
 import '../../features/projects/presentation/cubit/projects_cubit.dart';
 
@@ -75,7 +82,16 @@ Future<void> initServiceLocator() async {
   sl.registerLazySingleton<FinanceCubit>(() => FinanceCubit(sl()));
 
   // P2P Feature
-  sl.registerLazySingleton<MockP2PDataSource>(() => MockP2PDataSource());
+  sl.registerLazySingleton<P2PDataSource>(() {
+    final client = SupabaseConfig.client;
+    if (client != null) {
+      return SupabaseP2PDataSource(
+        client: client,
+        getCurrentHouseId: () => sl<AuthRepository>().currentHouse?.id ?? 'house_nossa_casa',
+      );
+    }
+    return MockP2PDataSource();
+  });
   sl.registerLazySingleton<P2PRepository>(() => P2PRepositoryImpl(sl()));
   sl.registerLazySingleton<P2PCubit>(() => P2PCubit(sl()));
 
@@ -88,15 +104,35 @@ Future<void> initServiceLocator() async {
   sl.registerFactory<SettlementCubit>(() => SettlementCubit(sl()));
 
   // Shopping Feature (Fase 4: Organização do Lar)
-  sl.registerLazySingleton<MockShoppingDataSource>(() => MockShoppingDataSource(
+  sl.registerLazySingleton<ShoppingDataSource>(() {
+    final client = SupabaseConfig.client;
+    if (client != null) {
+      return SupabaseShoppingDataSource(
+        client: client,
+        getCurrentHouseId: () => sl<AuthRepository>().currentHouse?.id ?? 'house_nossa_casa',
         financeRepository: sl(),
         p2pRepository: sl(),
-      ));
+      );
+    }
+    return MockShoppingDataSource(
+      financeRepository: sl(),
+      p2pRepository: sl(),
+    );
+  });
   sl.registerLazySingleton<ShoppingRepository>(() => ShoppingRepositoryImpl(sl()));
   sl.registerLazySingleton<ShoppingCubit>(() => ShoppingCubit(sl()));
 
   // Calendar & Tasks Feature (Fase 4: Agenda do Lar e Tarefas)
-  sl.registerLazySingleton<MockCalendarDataSource>(() => MockCalendarDataSource());
+  sl.registerLazySingleton<CalendarDataSource>(() {
+    final client = SupabaseConfig.client;
+    if (client != null) {
+      return SupabaseCalendarDataSource(
+        client: client,
+        getCurrentHouseId: () => sl<AuthRepository>().currentHouse?.id ?? 'house_nossa_casa',
+      );
+    }
+    return MockCalendarDataSource();
+  });
   sl.registerLazySingleton<CalendarRepository>(() => CalendarRepositoryImpl(sl()));
   sl.registerLazySingleton<CalendarCubit>(() => CalendarCubit(sl()));
 
@@ -108,7 +144,13 @@ Future<void> initServiceLocator() async {
         calendarRepository: sl(),
       ));
   // Projects & Events Feature (Viagens, Compra de Imóveis, Reformas e Investimentos)
-  sl.registerLazySingleton<ProjectsRepository>(() => MockProjectsRepository());
+  sl.registerLazySingleton<ProjectsRepository>(() {
+    final client = SupabaseConfig.client;
+    if (client != null) {
+      return SupabaseProjectsRepository(client);
+    }
+    return MockProjectsRepository();
+  });
   sl.registerFactory<ProjectsCubit>(() => ProjectsCubit(
         projectsRepository: sl(),
         financeRepository: sl(),

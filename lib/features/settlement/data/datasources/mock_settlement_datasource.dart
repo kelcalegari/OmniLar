@@ -1,13 +1,13 @@
 import '../../../../core/domain/value_objects/financial_cycle.dart';
 import '../../../finance/data/datasources/finance_datasource.dart';
-import '../../../p2p/data/datasources/mock_p2p_datasource.dart';
+import '../../../p2p/data/datasources/p2p_datasource.dart';
 import '../../domain/entities/settlement_summary.dart';
 import '../../domain/entities/super_pix_transfer.dart';
 import '../../domain/services/global_clearing_engine.dart';
 
 class MockSettlementDataSource {
   final FinanceDataSource financeDataSource;
-  final MockP2PDataSource p2pDataSource;
+  final P2PDataSource p2pDataSource;
   final GlobalClearingEngine engine;
 
   SettlementSummary? _cachedSettlement;
@@ -62,10 +62,9 @@ class MockSettlementDataSource {
     for (final loan in loans) {
       for (final inst in loan.installments) {
         if (summary.cycle.contains(inst.dueDate) && !inst.isFullyPaid) {
-          await p2pDataSource.registerPayment(
-            loanId: loan.id,
-            installmentId: inst.id,
-            amount: inst.remainingAmount,
+          await p2pDataSource.payInstallment(
+            inst.id,
+            inst.remainingAmount,
           );
         }
       }

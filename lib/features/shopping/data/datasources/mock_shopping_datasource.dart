@@ -8,8 +8,9 @@ import '../../../p2p/domain/services/p2p_calculator.dart';
 import '../../domain/entities/shopping_item.dart';
 import '../../domain/entities/shopping_list.dart';
 import '../../domain/entities/shopping_trip.dart';
+import 'shopping_datasource.dart';
 
-class MockShoppingDataSource {
+class MockShoppingDataSource implements ShoppingDataSource {
   final FinanceRepository financeRepository;
   final P2PRepository p2pRepository;
 
@@ -80,13 +81,16 @@ class MockShoppingDataSource {
     required this.p2pRepository,
   });
 
+  @override
   Future<List<ShoppingList>> getLists() async => List.unmodifiable(_lists);
 
+  @override
   Future<List<ShoppingItem>> getItems(String listId) async {
     return _items.where((i) => i.listId == listId).toList();
   }
 
   // RN03: Se o item já existir como pendente, soma a quantidade
+  @override
   Future<void> addItem(ShoppingItem item) async {
     final existingIndex = _items.indexWhere(
       (i) =>
@@ -105,6 +109,7 @@ class MockShoppingDataSource {
     }
   }
 
+  @override
   Future<void> toggleItemBought(String itemId) async {
     final index = _items.indexWhere((i) => i.id == itemId);
     if (index != -1) {
@@ -117,11 +122,13 @@ class MockShoppingDataSource {
     }
   }
 
+  @override
   Future<void> deleteItem(String itemId) async {
     _items.removeWhere((i) => i.id == itemId);
   }
 
   // RN06: Encerramento com integração ao Caixa da Casa e Empréstimos P2P
+  @override
   Future<ShoppingTrip> completeTrip({
     required String listId,
     required Money totalAmount,

@@ -3,8 +3,9 @@ import '../../../../core/domain/enums/recurrence.dart';
 import '../../domain/entities/calendar_event.dart';
 import '../../domain/entities/event_participant.dart';
 import '../../domain/entities/task_item.dart';
+import 'calendar_datasource.dart';
 
-class MockCalendarDataSource {
+class MockCalendarDataSource implements CalendarDataSource {
   final List<CalendarEvent> _events = [
     CalendarEvent(
       id: 'event_1',
@@ -132,8 +133,10 @@ class MockCalendarDataSource {
     ),
   ];
 
+  @override
   Future<List<CalendarEvent>> getEvents() async => List.unmodifiable(_events);
 
+  @override
   Future<void> addEvent(CalendarEvent event) async {
     if (event.recurrenceFrequency == RecurrenceFrequency.none) {
       _events.insert(0, event);
@@ -217,6 +220,7 @@ class MockCalendarDataSource {
     }
   }
 
+  @override
   Future<void> updateEvent(
     CalendarEvent event, {
     RecurrenceScope scope = RecurrenceScope.thisInstanceOnly,
@@ -299,6 +303,7 @@ class MockCalendarDataSource {
     }
   }
 
+  @override
   Future<void> deleteEvent(
     String eventId, {
     RecurrenceScope scope = RecurrenceScope.thisInstanceOnly,
@@ -333,6 +338,7 @@ class MockCalendarDataSource {
     }
   }
 
+  @override
   Future<void> updateRsvp({
     required String eventId,
     required String memberId,
@@ -355,6 +361,7 @@ class MockCalendarDataSource {
     _events[eventIndex] = event.copyWith(participants: updatedParticipants);
   }
 
+  @override
   Future<void> cancelEvent(String eventId) async {
     final eventIndex = _events.indexWhere((e) => e.id == eventId);
     if (eventIndex != -1) {
@@ -362,12 +369,15 @@ class MockCalendarDataSource {
     }
   }
 
+  @override
   Future<List<TaskItem>> getTasks() async => List.unmodifiable(_tasks);
 
+  @override
   Future<void> addTask(TaskItem task) async {
     _tasks.insert(0, task);
   }
 
+  @override
   Future<void> toggleTaskComplete({
     required String taskId,
     required String completedByMemberId,
@@ -385,6 +395,7 @@ class MockCalendarDataSource {
     );
   }
 
+  @override
   Future<void> deleteTask(String taskId) async {
     _tasks.removeWhere((t) => t.id == taskId);
   }
