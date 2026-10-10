@@ -1,9 +1,13 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 import '../theme/app_colors.dart';
 import '../../features/finance/presentation/pages/add_expense_page.dart';
 import '../../features/finance/presentation/pages/add_contribution_page.dart';
 import '../../features/p2p/presentation/pages/create_loan_page.dart';
+import '../../features/calendar/presentation/cubit/calendar_cubit.dart';
+import '../../features/calendar/presentation/widgets/add_event_sheet.dart';
+import '../../features/calendar/presentation/widgets/add_task_sheet.dart';
 
 class SmartFAB extends StatelessWidget {
   const SmartFAB({super.key});
@@ -150,7 +154,8 @@ class SmartFAB extends StatelessWidget {
                       color: Colors.orange,
                       onTap: () {
                         Navigator.pop(modalContext);
-                        context.go('/agenda');
+                        final activeMemberId = context.read<CalendarCubit>().state.activeMemberId;
+                        AddEventSheet.show(context, activeMemberId);
                       },
                     ),
                     const SizedBox(width: 12),
@@ -161,7 +166,8 @@ class SmartFAB extends StatelessWidget {
                       color: Colors.blue,
                       onTap: () {
                         Navigator.pop(modalContext);
-                        context.go('/agenda');
+                        final activeMemberId = context.read<CalendarCubit>().state.activeMemberId;
+                        AddTaskSheet.show(context, activeMemberId);
                       },
                     ),
                     const SizedBox(width: 12),

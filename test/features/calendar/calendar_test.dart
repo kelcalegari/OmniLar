@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:omni_lar/core/domain/value_objects/money.dart';
 import 'package:omni_lar/features/calendar/data/datasources/mock_calendar_datasource.dart';
 import 'package:omni_lar/features/calendar/data/repositories/calendar_repository_impl.dart';
 import 'package:omni_lar/features/calendar/domain/entities/calendar_event.dart';
@@ -16,8 +17,7 @@ void main() {
     });
 
     test('RN01: Evento é Confirmado quando todos os Necessários aceitam', () {
-      final now = DateTime.now();
-        final event = CalendarEvent(
+      final event = CalendarEvent(
         id: 'ev_test',
         title: 'Almoço de Domingo',
         startTime: DateTime(2026, 10, 18, 12),
@@ -192,6 +192,54 @@ void main() {
 
       final completedPastTask = overdueTask.copyWith(isCompleted: true);
       expect(completedPastTask.isOverdue, isFalse);
+    });
+
+    test('addEvent adiciona novo evento e recupera corretamente na lista', () async {
+      final initialEvents = await repository.getEvents();
+      final newEvent = CalendarEvent(
+        id: 'ev_novo_123',
+        title: 'Manutenção do Ar Condicionado',
+        startTime: DateTime.now().add(const Duration(days: 3)),
+        endTime: DateTime.now().add(const Duration(days: 3, hours: 2)),
+        createdByMemberId: 'member_carlos',
+        participants: const [
+          EventParticipant(
+            id: 'p_novo_1',
+            eventId: 'ev_novo_123',
+            memberId: 'member_carlos',
+            memberName: 'Carlos',
+            role: ParticipantRole.required,
+            rsvpStatus: RsvpStatus.accepted,
+          ),
+        ],
+      );
+
+      await repository.addEvent(newEvent);
+      final updatedEvents = await repository.getEvents();
+
+      expect(updatedEvents.length, equals(initialEvents.length + 1));
+      expect(updatedEvents.any((e) => e.id == 'ev_novo_123'), isTrue);
+    });
+
+    test('addTask adiciona nova tarefa com responsável e custo opcional', () async {
+      final initialTasks = await repository.getTasks();
+      final newTask = TaskItem(
+        id: 'task_nova_123',
+        title: 'Comprar lâmpadas LED',
+        assignedToMemberId: 'member_marina',
+        assignedToMemberName: 'Marina',
+        cost: Money.fromReal(45.0),
+        createdByMemberId: 'member_carlos',
+        createdAt: DateTime.now(),
+      );
+
+      await repository.addTask(newTask);
+      final updatedTasks = await repository.getTasks();
+
+      expect(updatedTasks.length, equals(initialTasks.length + 1));
+      final created = updatedTasks.firstWhere((t) => t.id == 'task_nova_123');
+      expect(created.assignedToMemberName, equals('Marina'));
+      expect(created.cost?.inReais, equals(45.0));
     });
   });
 }

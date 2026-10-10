@@ -8,6 +8,8 @@ import '../../domain/entities/event_participant.dart';
 import '../../domain/entities/task_item.dart';
 import '../cubit/calendar_cubit.dart';
 import '../cubit/calendar_state.dart';
+import '../widgets/add_event_sheet.dart';
+import '../widgets/add_task_sheet.dart';
 
 class CalendarPage extends StatelessWidget {
   const CalendarPage({super.key});
@@ -112,9 +114,9 @@ class CalendarPage extends StatelessWidget {
           floatingActionButton: FloatingActionButton.extended(
             onPressed: () {
               if (state.activeView == CalendarViewType.events) {
-                _showCreateEventDialog(context, cubit, state.activeMemberId);
+                AddEventSheet.show(context, state.activeMemberId);
               } else {
-                _showCreateTaskDialog(context, cubit, state.activeMemberId);
+                AddTaskSheet.show(context, state.activeMemberId);
               }
             },
             icon: Icon(
@@ -593,116 +595,6 @@ class CalendarPage extends StatelessWidget {
           ),
         );
       },
-    );
-  }
-
-  void _showCreateEventDialog(BuildContext context, CalendarCubit cubit, String activeMemberId) {
-    final titleController = TextEditingController();
-    final locationController = TextEditingController();
-
-    showDialog(
-      context: context,
-      builder: (dialogCtx) => AlertDialog(
-        title: const Text('Novo Compromisso'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(
-              controller: titleController,
-              decoration: const InputDecoration(labelText: 'Título do Evento *'),
-              autofocus: true,
-            ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: locationController,
-              decoration: const InputDecoration(labelText: 'Local (opcional)'),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dialogCtx),
-            child: const Text('Cancelar'),
-          ),
-          ElevatedButton(
-            onPressed: () {
-              if (titleController.text.trim().isEmpty) return;
-              final now = DateTime.now();
-              cubit.addEvent(
-                CalendarEvent(
-                  id: 'event_${now.millisecondsSinceEpoch}',
-                  title: titleController.text.trim(),
-                  location: locationController.text.trim().isEmpty ? null : locationController.text.trim(),
-                  startTime: now.add(const Duration(days: 1, hours: 2)),
-                  endTime: now.add(const Duration(days: 1, hours: 4)),
-                  createdByMemberId: activeMemberId,
-                  participants: const [
-                    EventParticipant(
-                      id: 'p_1',
-                      eventId: 'temp',
-                      memberId: 'member_carlos',
-                      memberName: 'Carlos',
-                      role: ParticipantRole.required,
-                      rsvpStatus: RsvpStatus.pending,
-                    ),
-                    EventParticipant(
-                      id: 'p_2',
-                      eventId: 'temp',
-                      memberId: 'member_marina',
-                      memberName: 'Marina',
-                      role: ParticipantRole.required,
-                      rsvpStatus: RsvpStatus.accepted,
-                    ),
-                  ],
-                ),
-              );
-              Navigator.pop(dialogCtx);
-            },
-            child: const Text('Criar'),
-          ),
-        ],
-      ),
-    );
-  }
-
-  void _showCreateTaskDialog(BuildContext context, CalendarCubit cubit, String activeMemberId) {
-    final titleController = TextEditingController();
-
-    showDialog(
-      context: context,
-      builder: (dialogCtx) => AlertDialog(
-        title: const Text('Nova Tarefa'),
-        content: TextField(
-          controller: titleController,
-          decoration: const InputDecoration(labelText: 'O que precisa ser feito? *'),
-          autofocus: true,
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dialogCtx),
-            child: const Text('Cancelar'),
-          ),
-          ElevatedButton(
-            onPressed: () {
-              if (titleController.text.trim().isEmpty) return;
-              final now = DateTime.now();
-              cubit.addTask(
-                TaskItem(
-                  id: 'task_${now.millisecondsSinceEpoch}',
-                  title: titleController.text.trim(),
-                  assignedToMemberId: activeMemberId,
-                  assignedToMemberName: activeMemberId == 'member_marina' ? 'Marina' : 'Carlos',
-                  dueDate: now.add(const Duration(days: 1)),
-                  createdByMemberId: activeMemberId,
-                  createdAt: now,
-                ),
-              );
-              Navigator.pop(dialogCtx);
-            },
-            child: const Text('Criar'),
-          ),
-        ],
-      ),
     );
   }
 }
