@@ -2,7 +2,8 @@ import 'package:flutter/material.dart';
 
 const double kMobileBreakpoint = 768.0;
 const double kDesktopBreakpoint = 1024.0;
-const double kMaxContentWidth = 1140.0;
+const double kUltraWideBreakpoint = 1360.0;
+const double kMaxContentWidth = 1600.0;
 
 extension ResponsiveContext on BuildContext {
   double get screenWidth => MediaQuery.sizeOf(this).width;
@@ -12,6 +13,7 @@ extension ResponsiveContext on BuildContext {
   bool get isWideScreen => screenWidth >= kMobileBreakpoint;
   bool get isTablet => screenWidth >= kMobileBreakpoint && screenWidth < kDesktopBreakpoint;
   bool get isDesktop => screenWidth >= kDesktopBreakpoint;
+  bool get isUltraWide => screenWidth >= kUltraWideBreakpoint;
 }
 
 /// Exibe um modal adaptativo:

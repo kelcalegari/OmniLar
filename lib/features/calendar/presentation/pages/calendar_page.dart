@@ -12,6 +12,7 @@ import '../cubit/calendar_cubit.dart';
 import '../cubit/calendar_state.dart';
 import '../widgets/add_event_sheet.dart';
 import '../widgets/add_task_sheet.dart';
+import '../widgets/mini_calendar_card.dart';
 
 class CalendarPage extends StatelessWidget {
   const CalendarPage({super.key});
@@ -87,9 +88,23 @@ class CalendarPage extends StatelessWidget {
               ? const Center(child: CircularProgressIndicator())
               : context.isDesktop
                   ? ResponsiveContainer(
+                      maxWidth: kMaxContentWidth,
                       child: Row(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
+                          // Coluna 0 (Ultra-Wide): Mini Calendário Mensal
+                          if (context.isUltraWide) ...[
+                            SizedBox(
+                              width: 310,
+                              child: MiniCalendarCard(
+                                selectedDate: DateTime.now(),
+                                onDateSelected: (date) {
+                                  // Filtro / Seleção de data
+                                },
+                              ),
+                            ),
+                            const SizedBox(width: 20),
+                          ],
                           // Coluna 1: Compromissos
                           Expanded(
                             flex: 6,

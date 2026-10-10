@@ -107,6 +107,90 @@ class _HomePageContent extends StatelessWidget {
     dynamic summary,
     FinanceCubit cubit,
   ) {
+    final isUltra = context.isUltraWide;
+
+    if (isUltra) {
+      // Layout 3 Colunas Ultra-Wide
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Coluna 1: Fôlego & Fechamento
+              Expanded(
+                flex: 4,
+                child: Column(
+                  children: [
+                    FolegoGaugeCard(
+                      summary: summary,
+                      cycle: state.currentCycle,
+                      onPreviousCycle: cubit.previousCycle,
+                      onNextCycle: cubit.nextCycle,
+                    ),
+                    const SizedBox(height: 16),
+                    _buildSettlementCard(context),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 20),
+              // Coluna 2: Gastos do Ciclo (Timeline)
+              Expanded(
+                flex: 5,
+                child: Card(
+                  elevation: 0,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(16),
+                    side: BorderSide(color: Colors.grey.withValues(alpha: 0.15)),
+                  ),
+                  child: Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: _buildExpensesSection(theme, state),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 20),
+              // Coluna 3: Visão de Rotina & Compras da Casa
+              Expanded(
+                flex: 3,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Card(
+                      elevation: 0,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(16),
+                        side: BorderSide(color: Colors.grey.withValues(alpha: 0.15)),
+                      ),
+                      child: Padding(
+                        padding: const EdgeInsets.all(16),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Row(
+                              children: [
+                                Icon(Icons.flash_auto_rounded, color: AppColors.accent, size: 20),
+                                SizedBox(width: 8),
+                                Text('Rotina da Casa', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                              ],
+                            ),
+                            const SizedBox(height: 14),
+                            _buildQuickShortcuts(context, theme),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 40),
+        ],
+      );
+    }
+
+    // Layout 2 Colunas Regular Desktop
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
