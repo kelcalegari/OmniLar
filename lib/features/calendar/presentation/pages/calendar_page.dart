@@ -14,8 +14,38 @@ import '../widgets/add_event_sheet.dart';
 import '../widgets/add_task_sheet.dart';
 import '../widgets/mini_calendar_card.dart';
 
-class CalendarPage extends StatelessWidget {
+class CalendarPage extends StatefulWidget {
   const CalendarPage({super.key});
+
+  @override
+  State<CalendarPage> createState() => _CalendarPageState();
+}
+
+class _CalendarPageState extends State<CalendarPage> {
+  DateTime _selectedDate = DateTime.now();
+  bool _isAgendaMode = true; // true = Visão Agenda (Calendário + Timeline do Dia), false = Visão Lista
+
+  bool _isSameDay(DateTime a, DateTime b) {
+    return a.year == b.year && a.month == b.month && a.day == b.day;
+  }
+
+  void _previousDay() {
+    setState(() {
+      _selectedDate = _selectedDate.subtract(const Duration(days: 1));
+    });
+  }
+
+  void _nextDay() {
+    setState(() {
+      _selectedDate = _selectedDate.add(const Duration(days: 1));
+    });
+  }
+
+  void _goToToday() {
+    setState(() {
+      _selectedDate = DateTime.now();
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -28,6 +58,19 @@ class CalendarPage extends StatelessWidget {
           appBar: AppBar(
             title: const Text('Agenda do Lar', style: TextStyle(fontWeight: FontWeight.bold)),
             actions: [
+              // Alternador de Visualização: Agenda vs Lista
+              IconButton(
+                icon: Icon(
+                  _isAgendaMode ? Icons.format_list_bulleted_rounded : Icons.calendar_month_rounded,
+                  color: AppColors.primary,
+                ),
+                tooltip: _isAgendaMode ? 'Alternar para Visão Lista' : 'Alternar para Visão Agenda',
+                onPressed: () {
+                  setState(() {
+                    _isAgendaMode = !_isAgendaMode;
+                  });
+                },
+              ),
               IconButton(
                 icon: Icon(
                   state.activeView == CalendarViewType.events
@@ -92,19 +135,19 @@ class CalendarPage extends StatelessWidget {
                       child: Row(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          // Coluna 0 (Ultra-Wide): Mini Calendário Mensal
-                          if (context.isUltraWide) ...[
-                            SizedBox(
-                              width: 310,
-                              child: MiniCalendarCard(
-                                selectedDate: DateTime.now(),
-                                onDateSelected: (date) {
-                                  // Filtro / Seleção de data
-                                },
-                              ),
+                          // Coluna 0: Mini Calendário Mensal com Dots
+                          SizedBox(
+                            width: 310,
+                            child: MiniCalendarCard(
+                              selectedDate: _selectedDate,
+                              events: state.events,
+                              tasks: state.tasks,
+                              onDateSelected: (date) {
+                                setState(() => _selectedDate = date);
+                              },
                             ),
-                            const SizedBox(width: 20),
-                          ],
+                          ),
+                          const SizedBox(width: 20),
                           // Coluna 1: Compromissos
                           Expanded(
                             flex: 6,
@@ -181,9 +224,9 @@ class CalendarPage extends StatelessWidget {
                     )
                   : Column(
                       children: [
-                        // Seletor de visualização Mobile (Compromissos vs Tarefas)
+                        // Seletor de Modo no Mobile: Visão Agenda vs Visão Lista
                         Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                          padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
                           child: Container(
                             decoration: BoxDecoration(
                               color: theme.cardColor,
@@ -193,21 +236,19 @@ class CalendarPage extends StatelessWidget {
                             child: Row(
                               children: [
                                 Expanded(
-                                  child: _buildTabButton(
-                                    context,
-                                    label: 'Compromissos (${state.events.length})',
-                                    icon: Icons.calendar_today_rounded,
-                                    isSelected: state.activeView == CalendarViewType.events,
-                                    onTap: () => cubit.switchView(CalendarViewType.events),
+                                  child: _buildModeTabButton(
+                                    label: 'Visão Agenda',
+                                    icon: Icons.calendar_month_rounded,
+                                    isSelected: _isAgendaMode,
+                                    onTap: () => setState(() => _isAgendaMode = true),
                                   ),
                                 ),
                                 Expanded(
-                                  child: _buildTabButton(
-                                    context,
-                                    label: 'Tarefas (${state.tasks.where((t) => !t.isCompleted).length})',
-                                    icon: Icons.checklist_rounded,
-                                    isSelected: state.activeView == CalendarViewType.tasks,
-                                    onTap: () => cubit.switchView(CalendarViewType.tasks),
+                                  child: _buildModeTabButton(
+                                    label: 'Visão Lista',
+                                    icon: Icons.format_list_bulleted_rounded,
+                                    isSelected: !_isAgendaMode,
+                                    onTap: () => setState(() => _isAgendaMode = false),
                                   ),
                                 ),
                               ],
@@ -215,16 +256,240 @@ class CalendarPage extends StatelessWidget {
                           ),
                         ),
 
-                        // Conteúdo Dinâmico Mobile
+                        // Conteúdo Principal
                         Expanded(
-                          child: state.activeView == CalendarViewType.events
-                              ? _buildEventsList(context, state, cubit)
-                              : _buildTasksList(context, state, cubit),
+                          child: _isAgendaMode
+                              ? _buildAgendaView(context, state, cubit, theme)
+                              : _buildListView(context, state, cubit, theme),
                         ),
                       ],
                     ),
         );
       },
+    );
+  }
+
+  Widget _buildModeTabButton({
+    required String label,
+    required IconData icon,
+    required bool isSelected,
+    required VoidCallback onTap,
+  }) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(12),
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 10),
+        decoration: BoxDecoration(
+          color: isSelected ? AppColors.primary.withValues(alpha: 0.15) : Colors.transparent,
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              icon,
+              size: 16,
+              color: isSelected ? AppColors.primary : Colors.grey,
+            ),
+            const SizedBox(width: 6),
+            Text(
+              label,
+              style: TextStyle(
+                fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                color: isSelected ? AppColors.primary : Colors.grey,
+                fontSize: 13,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // --- NOVA VISÃO AGENDA (Mini Calendário com Sinalização + Timeline do Dia) ---
+  Widget _buildAgendaView(BuildContext context, CalendarState state, CalendarCubit cubit, ThemeData theme) {
+    final dayEvents = state.events.where((e) => _isSameDay(e.startTime, _selectedDate)).toList();
+    final dayTasks = state.tasks.where((t) => t.dueDate != null && _isSameDay(t.dueDate!, _selectedDate)).toList();
+
+    String formattedDay;
+    try {
+      formattedDay = DateFormat("EEEE, d 'de' MMMM", 'pt_BR').format(_selectedDate);
+      formattedDay = formattedDay[0].toUpperCase() + formattedDay.substring(1);
+    } catch (_) {
+      formattedDay = DateFormat("EEE, d MMM").format(_selectedDate);
+    }
+
+    final isToday = _isSameDay(_selectedDate, DateTime.now());
+
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(16, 4, 16, 80),
+      children: [
+        // Mini Calendário Compacto com Dots
+        MiniCalendarCard(
+          selectedDate: _selectedDate,
+          events: state.events,
+          tasks: state.tasks,
+          onDateSelected: (date) {
+            setState(() => _selectedDate = date);
+          },
+        ),
+        const SizedBox(height: 12),
+
+        // Barra de Navegação do Dia Selecionado
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          decoration: BoxDecoration(
+            color: theme.cardColor,
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: Colors.grey.withValues(alpha: 0.15)),
+          ),
+          child: Row(
+            children: [
+              IconButton(
+                icon: const Icon(Icons.chevron_left_rounded, size: 22),
+                tooltip: 'Dia Anterior',
+                visualDensity: VisualDensity.compact,
+                onPressed: _previousDay,
+              ),
+              Expanded(
+                child: Column(
+                  children: [
+                    Text(
+                      formattedDay,
+                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                      textAlign: TextAlign.center,
+                    ),
+                    if (isToday)
+                      const Text(
+                        'Hoje',
+                        style: TextStyle(fontSize: 11, color: AppColors.primary, fontWeight: FontWeight.bold),
+                      ),
+                  ],
+                ),
+              ),
+              if (!isToday) ...[
+                TextButton(
+                  onPressed: _goToToday,
+                  style: TextButton.styleFrom(
+                    visualDensity: VisualDensity.compact,
+                    padding: const EdgeInsets.symmetric(horizontal: 8),
+                  ),
+                  child: const Text('Hoje', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                ),
+              ],
+              IconButton(
+                icon: const Icon(Icons.chevron_right_rounded, size: 22),
+                tooltip: 'Próximo Dia',
+                visualDensity: VisualDensity.compact,
+                onPressed: _nextDay,
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 14),
+
+        // Lista de Compromissos do Dia Selecionado
+        if (dayEvents.isEmpty && dayTasks.isEmpty) ...[
+          Container(
+            padding: const EdgeInsets.all(24),
+            decoration: BoxDecoration(
+              color: theme.cardColor,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: Colors.grey.withValues(alpha: 0.15)),
+            ),
+            child: Column(
+              children: [
+                Icon(Icons.event_available_outlined, size: 42, color: Colors.grey.withValues(alpha: 0.4)),
+                const SizedBox(height: 10),
+                const Text(
+                  'Nenhum compromisso para este dia',
+                  style: TextStyle(fontWeight: FontWeight.bold, color: Colors.grey, fontSize: 14),
+                ),
+                const SizedBox(height: 4),
+                const Text(
+                  'Aproveite o tempo livre ou adicione um novo evento para a casa.',
+                  style: TextStyle(fontSize: 12, color: Colors.grey),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 14),
+                FilledButton.tonalIcon(
+                  onPressed: () => AddEventSheet.show(context, state.activeMemberId),
+                  icon: const Icon(Icons.add_rounded, size: 18),
+                  label: const Text('Adicionar Compromisso'),
+                ),
+              ],
+            ),
+          ),
+        ] else ...[
+          if (dayEvents.isNotEmpty) ...[
+            Padding(
+              padding: const EdgeInsets.only(left: 4, bottom: 8),
+              child: Text(
+                'Compromissos (${dayEvents.length})',
+                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: AppColors.primary),
+              ),
+            ),
+            ...dayEvents.map((event) => _buildEventItem(context, event, state, cubit)),
+          ],
+          if (dayTasks.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            Padding(
+              padding: const EdgeInsets.only(left: 4, bottom: 8),
+              child: Text(
+                'Tarefas do Dia (${dayTasks.length})',
+                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: AppColors.accent),
+              ),
+            ),
+            ...dayTasks.map((task) => _buildTaskItem(context, task, cubit)),
+          ],
+        ],
+      ],
+    );
+  }
+
+  // --- VISÃO LISTA TRADICIONAL (Abas Compromissos vs Tarefas) ---
+  Widget _buildListView(BuildContext context, CalendarState state, CalendarCubit cubit, ThemeData theme) {
+    return Column(
+      children: [
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+          child: Container(
+            decoration: BoxDecoration(
+              color: theme.cardColor,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: Colors.grey.withValues(alpha: 0.15)),
+            ),
+            child: Row(
+              children: [
+                Expanded(
+                  child: _buildTabButton(
+                    context,
+                    label: 'Compromissos (${state.events.length})',
+                    icon: Icons.calendar_today_rounded,
+                    isSelected: state.activeView == CalendarViewType.events,
+                    onTap: () => cubit.switchView(CalendarViewType.events),
+                  ),
+                ),
+                Expanded(
+                  child: _buildTabButton(
+                    context,
+                    label: 'Tarefas (${state.tasks.where((t) => !t.isCompleted).length})',
+                    icon: Icons.checklist_rounded,
+                    isSelected: state.activeView == CalendarViewType.tasks,
+                    onTap: () => cubit.switchView(CalendarViewType.tasks),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+        Expanded(
+          child: state.activeView == CalendarViewType.events
+              ? _buildEventsList(context, state, cubit)
+              : _buildTasksList(context, state, cubit),
+        ),
+      ],
     );
   }
 
@@ -272,6 +537,22 @@ class CalendarPage extends StatelessWidget {
       return const Center(child: Text('Nenhum compromisso agendado'));
     }
 
+    return ListView.builder(
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 80),
+      itemCount: state.events.length,
+      itemBuilder: (context, index) {
+        return _buildEventItem(context, state.events[index], state, cubit);
+      },
+    );
+  }
+
+  Widget _buildEventItem(BuildContext context, CalendarEvent event, CalendarState state, CalendarCubit cubit) {
+    final derivedStatus = event.derivedStatus;
+    final myParticipant = event.participants.firstWhere(
+      (p) => p.memberId == state.activeMemberId,
+      orElse: () => const EventParticipant(id: '', eventId: '', memberId: '', memberName: ''),
+    );
+
     DateFormat dateFormat;
     try {
       dateFormat = DateFormat('EEE, d MMM - HH:mm', 'pt_BR');
@@ -279,20 +560,9 @@ class CalendarPage extends StatelessWidget {
       dateFormat = DateFormat('EEE, d MMM - HH:mm');
     }
 
-    return ListView.builder(
-      padding: const EdgeInsets.fromLTRB(16, 8, 16, 80),
-      itemCount: state.events.length,
-      itemBuilder: (context, index) {
-        final event = state.events[index];
-        final derivedStatus = event.derivedStatus;
-        final myParticipant = event.participants.firstWhere(
-          (p) => p.memberId == state.activeMemberId,
-          orElse: () => const EventParticipant(id: '', eventId: '', memberId: '', memberName: ''),
-        );
-
-        Color statusColor;
-        String statusLabel;
-        IconData statusIcon;
+    Color statusColor;
+    String statusLabel;
+    IconData statusIcon;
 
         switch (derivedStatus) {
           case EventDerivedStatus.confirmed:
@@ -522,8 +792,6 @@ class CalendarPage extends StatelessWidget {
             ),
           ),
         );
-      },
-    );
   }
 
   Widget _buildRsvpActionButton({
@@ -571,9 +839,13 @@ class CalendarPage extends StatelessWidget {
       padding: const EdgeInsets.fromLTRB(16, 8, 16, 80),
       itemCount: state.tasks.length,
       itemBuilder: (context, index) {
-        final task = state.tasks[index];
+        return _buildTaskItem(context, state.tasks[index], cubit);
+      },
+    );
+  }
 
-        Color priorityColor;
+  Widget _buildTaskItem(BuildContext context, TaskItem task, CalendarCubit cubit) {
+    Color priorityColor;
         String priorityLabel;
         switch (task.priority) {
           case TaskPriority.high:
@@ -686,7 +958,5 @@ class CalendarPage extends StatelessWidget {
             ),
           ),
         );
-      },
-    );
   }
 }

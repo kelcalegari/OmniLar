@@ -1,14 +1,20 @@
 import 'package:flutter/material.dart';
 import '../../../../core/theme/app_colors.dart';
+import '../../domain/entities/calendar_event.dart';
+import '../../domain/entities/task_item.dart';
 
 class MiniCalendarCard extends StatefulWidget {
   final DateTime selectedDate;
   final ValueChanged<DateTime> onDateSelected;
+  final List<CalendarEvent> events;
+  final List<TaskItem> tasks;
 
   const MiniCalendarCard({
     super.key,
     required this.selectedDate,
     required this.onDateSelected,
+    this.events = const [],
+    this.tasks = const [],
   });
 
   @override
@@ -127,6 +133,17 @@ class _MiniCalendarCardState extends State<MiniCalendarCard> {
                     currentDate.month == DateTime.now().month &&
                     currentDate.day == DateTime.now().day;
 
+                final hasEvents = widget.events.any((e) =>
+                    e.startTime.year == currentDate.year &&
+                    e.startTime.month == currentDate.month &&
+                    e.startTime.day == currentDate.day);
+
+                final hasTasks = widget.tasks.any((t) =>
+                    t.dueDate != null &&
+                    t.dueDate!.year == currentDate.year &&
+                    t.dueDate!.month == currentDate.month &&
+                    t.dueDate!.day == currentDate.day);
+
                 return InkWell(
                   onTap: () => widget.onDateSelected(currentDate),
                   borderRadius: BorderRadius.circular(8),
@@ -138,30 +155,77 @@ class _MiniCalendarCardState extends State<MiniCalendarCard> {
                       borderRadius: BorderRadius.circular(8),
                     ),
                     alignment: Alignment.center,
-                    child: Text(
-                      '$dayNumber',
-                      style: TextStyle(
-                        fontSize: 12,
-                        fontWeight: isSelected || isToday ? FontWeight.bold : FontWeight.normal,
-                        color: isSelected
-                            ? Colors.white
-                            : (isToday ? AppColors.primary : theme.textTheme.bodyMedium?.color),
-                      ),
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Text(
+                          '$dayNumber',
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: isSelected || isToday ? FontWeight.bold : FontWeight.normal,
+                            color: isSelected
+                                ? Colors.white
+                                : (isToday ? AppColors.primary : theme.textTheme.bodyMedium?.color),
+                          ),
+                        ),
+                        if (hasEvents || hasTasks) ...[
+                          const SizedBox(height: 2),
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              if (hasEvents)
+                                Container(
+                                  width: 4,
+                                  height: 4,
+                                  decoration: BoxDecoration(
+                                    shape: BoxShape.circle,
+                                    color: isSelected ? Colors.white : AppColors.primary,
+                                  ),
+                                ),
+                              if (hasEvents && hasTasks) const SizedBox(width: 2),
+                              if (hasTasks)
+                                Container(
+                                  width: 4,
+                                  height: 4,
+                                  decoration: BoxDecoration(
+                                    shape: BoxShape.circle,
+                                    color: isSelected ? Colors.amberAccent : AppColors.accent,
+                                  ),
+                                ),
+                            ],
+                          ),
+                        ],
+                      ],
                     ),
                   ),
                 );
               },
             ),
-            const Divider(height: 24),
+            const Divider(height: 20),
             Row(
+              mainAxisAlignment: MainAxisAlignment.spaceAround,
               children: [
-                const Icon(Icons.info_outline_rounded, size: 16, color: Colors.grey),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    'Selecione um dia para filtrar a visão da casa.',
-                    style: theme.textTheme.bodySmall?.copyWith(fontSize: 11),
-                  ),
+                Row(
+                  children: [
+                    Container(
+                      width: 6,
+                      height: 6,
+                      decoration: const BoxDecoration(shape: BoxShape.circle, color: AppColors.primary),
+                    ),
+                    const SizedBox(width: 4),
+                    const Text('Compromissos', style: TextStyle(fontSize: 11, color: Colors.grey)),
+                  ],
+                ),
+                Row(
+                  children: [
+                    Container(
+                      width: 6,
+                      height: 6,
+                      decoration: const BoxDecoration(shape: BoxShape.circle, color: AppColors.accent),
+                    ),
+                    const SizedBox(width: 4),
+                    const Text('Tarefas', style: TextStyle(fontSize: 11, color: Colors.grey)),
+                  ],
                 ),
               ],
             ),
