@@ -54,7 +54,10 @@ class ScaffoldWithNavBar extends StatelessWidget {
                     ],
                   ),
                   const SizedBox(height: 20),
-                  const SmartFAB(isExtended: true),
+                  SmartFAB(
+                    isExtended: true,
+                    currentTab: navigationShell.currentIndex,
+                  ),
                   const SizedBox(height: 12),
                 ],
               ),
@@ -143,7 +146,9 @@ class ScaffoldWithNavBar extends StatelessWidget {
           ),
         ],
       ),
-      floatingActionButton: const SmartFAB(),
+      floatingActionButton: SmartFAB(
+        currentTab: navigationShell.currentIndex,
+      ),
     );
   }
 }
