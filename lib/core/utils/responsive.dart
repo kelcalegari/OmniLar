@@ -49,11 +49,9 @@ Future<T?> showAdaptiveModal<T>({
           child: ConstrainedBox(
             constraints: BoxConstraints(
               maxWidth: maxWidth,
-              maxHeight: MediaQuery.sizeOf(context).height * 0.88,
+              maxHeight: MediaQuery.sizeOf(dialogCtx).height * 0.88,
             ),
-            child: SingleChildScrollView(
-              child: child,
-            ),
+            child: child,
           ),
         );
       },

@@ -28,8 +28,9 @@ class SettingsPage extends StatelessWidget {
       child: SafeArea(
         child: Padding(
           padding: const EdgeInsets.all(20),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
               mainAxisAlignment: MainAxisAlignment.start,
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
@@ -155,8 +156,9 @@ class SettingsPage extends StatelessWidget {
             ),
           ),
         ),
-      );
-    }
+      ),
+    );
+  }
 
   void _showAssistantPreferencesModal(BuildContext context) {
     showAdaptiveModal(
@@ -165,10 +167,11 @@ class SettingsPage extends StatelessWidget {
       child: SafeArea(
         child: Padding(
           padding: const EdgeInsets.all(20),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
               Center(
                 child: Container(
                   width: 40,
@@ -253,8 +256,9 @@ class SettingsPage extends StatelessWidget {
           ),
         ),
       ),
-    );
-  }
+    ),
+  );
+}
 
   void _showCategoriesModal(BuildContext context) {
     final financeCubit = context.read<FinanceCubit>();
@@ -270,52 +274,53 @@ class SettingsPage extends StatelessWidget {
           return SafeArea(
             child: Padding(
               padding: const EdgeInsets.all(20),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Center(
-                    child: Container(
-                      width: 40,
-                      height: 4,
-                      decoration: BoxDecoration(
-                        color: Colors.grey.withValues(alpha: 0.3),
-                        borderRadius: BorderRadius.circular(2),
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Center(
+                      child: Container(
+                        width: 40,
+                        height: 4,
+                        decoration: BoxDecoration(
+                          color: Colors.grey.withValues(alpha: 0.3),
+                          borderRadius: BorderRadius.circular(2),
+                        ),
                       ),
                     ),
-                  ),
-                  const SizedBox(height: 16),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      const Row(
-                        children: [
-                          Icon(Icons.category_outlined, color: AppColors.primary, size: 24),
-                          SizedBox(width: 8),
-                          Text(
-                            'Categorias da Casa',
-                            style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-                          ),
-                        ],
-                      ),
-                      IconButton(
-                        icon: const Icon(Icons.add_circle_outline_rounded, color: AppColors.primary),
-                        tooltip: 'Nova Categoria',
-                        onPressed: () {
-                          _showAddCategoryDialog(context, financeCubit, members);
-                        },
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 8),
-                  const Text(
-                    'Categorias com dono direcionam 100% da responsabilidade para o membro escolhido.',
-                    style: TextStyle(color: Colors.grey, fontSize: 13),
-                  ),
-                  const SizedBox(height: 16),
-                  ConstrainedBox(
-                    constraints: const BoxConstraints(maxHeight: 360),
-                    child: ListView.separated(
+                    const SizedBox(height: 16),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        const Row(
+                          children: [
+                            Icon(Icons.category_outlined, color: AppColors.primary, size: 24),
+                            SizedBox(width: 8),
+                            Text(
+                              'Categorias da Casa',
+                              style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                            ),
+                          ],
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.add_circle_outline_rounded, color: AppColors.primary),
+                          tooltip: 'Nova Categoria',
+                          onPressed: () {
+                            _showAddCategoryDialog(context, financeCubit, members);
+                          },
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    const Text(
+                      'Categorias com dono direcionam 100% da responsabilidade para o membro escolhido.',
+                      style: TextStyle(color: Colors.grey, fontSize: 13),
+                    ),
+                    const SizedBox(height: 16),
+                    ConstrainedBox(
+                      constraints: const BoxConstraints(maxHeight: 260),
+                      child: ListView.separated(
                       shrinkWrap: true,
                       itemCount: categories.length,
                       separatorBuilder: (_, __) => const Divider(height: 1),
@@ -371,11 +376,12 @@ class SettingsPage extends StatelessWidget {
                 ],
               ),
             ),
-          );
-        },
-      ),
-    );
-  }
+          ),
+        );
+      },
+    ),
+  );
+}
 
   void _showAddCategoryDialog(BuildContext context, FinanceCubit financeCubit, List<dynamic> members) {
     final nameController = TextEditingController();
@@ -483,10 +489,11 @@ class SettingsPage extends StatelessWidget {
           return SafeArea(
             child: Padding(
               padding: const EdgeInsets.all(20),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
                   Center(
                     child: Container(
                       width: 40,
@@ -706,11 +713,12 @@ class SettingsPage extends StatelessWidget {
                 ],
               ),
             ),
-          );
-        },
-      ),
-    );
-  }
+          ),
+        );
+      },
+    ),
+  );
+}
 
   void _showPaymentMethodsModal(BuildContext context) {
     final financeCubit = context.read<FinanceCubit>();
@@ -726,56 +734,57 @@ class SettingsPage extends StatelessWidget {
           return SafeArea(
             child: Padding(
               padding: const EdgeInsets.all(20),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Center(
-                    child: Container(
-                      width: 40,
-                      height: 4,
-                      decoration: BoxDecoration(
-                        color: Colors.grey.withValues(alpha: 0.3),
-                        borderRadius: BorderRadius.circular(2),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      const Expanded(
-                        child: Row(
-                          children: [
-                            Icon(Icons.credit_card_rounded, color: Colors.orange, size: 24),
-                            SizedBox(width: 8),
-                            Flexible(
-                              child: Text(
-                                'Formas de Pagamento',
-                                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ),
-                          ],
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Center(
+                      child: Container(
+                        width: 40,
+                        height: 4,
+                        decoration: BoxDecoration(
+                          color: Colors.grey.withValues(alpha: 0.3),
+                          borderRadius: BorderRadius.circular(2),
                         ),
                       ),
-                      IconButton(
-                        icon: const Icon(Icons.add_circle_outline_rounded, color: AppColors.primary),
-                        tooltip: 'Adicionar Cartão/Método',
-                        onPressed: () {
-                          _showAddPaymentMethodDialog(context, financeCubit, members);
-                        },
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 8),
-                  const Text(
-                    'Cadastre cartões de crédito e vales da casa para vincular faturas e vencimentos.',
-                    style: TextStyle(color: Colors.grey, fontSize: 13),
-                  ),
-                  const SizedBox(height: 16),
-                  ConstrainedBox(
-                    constraints: const BoxConstraints(maxHeight: 360),
+                    ),
+                    const SizedBox(height: 16),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        const Expanded(
+                          child: Row(
+                            children: [
+                              Icon(Icons.credit_card_rounded, color: Colors.orange, size: 24),
+                              SizedBox(width: 8),
+                              Flexible(
+                                child: Text(
+                                  'Formas de Pagamento',
+                                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.add_circle_outline_rounded, color: AppColors.primary),
+                          tooltip: 'Adicionar Cartão/Método',
+                          onPressed: () {
+                            _showAddPaymentMethodDialog(context, financeCubit, members);
+                          },
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    const Text(
+                      'Cadastre cartões de crédito e vales da casa para vincular faturas e vencimentos.',
+                      style: TextStyle(color: Colors.grey, fontSize: 13),
+                    ),
+                    const SizedBox(height: 16),
+                    ConstrainedBox(
+                      constraints: const BoxConstraints(maxHeight: 260),
                     child: ListView.separated(
                       shrinkWrap: true,
                       itemCount: methods.length,
@@ -853,11 +862,12 @@ class SettingsPage extends StatelessWidget {
                 ],
               ),
             ),
-          );
-        },
-      ),
-    );
-  }
+          ),
+        );
+      },
+    ),
+  );
+}
 
   void _showAddPaymentMethodDialog(BuildContext context, FinanceCubit financeCubit, List<dynamic> members) {
     final nameController = TextEditingController();
@@ -1025,10 +1035,11 @@ class SettingsPage extends StatelessWidget {
 
             return Padding(
               padding: const EdgeInsets.all(20),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
                   Center(
                     child: Container(
                       width: 40,
@@ -1109,7 +1120,7 @@ class SettingsPage extends StatelessWidget {
                     )
                   else
                     ConstrainedBox(
-                      constraints: const BoxConstraints(maxHeight: 280),
+                      constraints: const BoxConstraints(maxHeight: 220),
                       child: ListView.separated(
                         shrinkWrap: true,
                         itemCount: recurring.length,
@@ -1212,11 +1223,12 @@ class SettingsPage extends StatelessWidget {
                   ),
                 ],
               ),
-            );
-          },
-        ),
+            ),
+          );
+        },
       ),
-    );
+    ),
+  );
   }
 
   void _showCycleDayDialog(BuildContext context, int currentDay) {
