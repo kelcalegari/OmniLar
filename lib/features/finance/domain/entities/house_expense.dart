@@ -27,6 +27,7 @@ class HouseExpense extends Equatable {
   final String? notes;
   final List<HouseExpenseItem> items;
   final String? recurringSeriesId; // Vincula esta despesa à série/assinatura recorrente matriz
+  final String? projectId; // Vincula esta despesa a um projeto compartilhado (ex: viagem, reforma, meta)
 
   const HouseExpense({
     required this.id,
@@ -47,10 +48,16 @@ class HouseExpense extends Equatable {
     this.notes,
     this.items = const [],
     this.recurringSeriesId,
+    this.projectId,
   });
 
   bool get isPaid => status == ExpenseStatus.paid;
   bool get isPending => status == ExpenseStatus.pending;
+
+  /// Despesa vinculada a um Projeto Compartilhado (viagem, reforma, evento...).
+  /// Regra: despesas de projeto NÃO entram no Caixa da Casa, no Fôlego nem no
+  /// fechamento do ciclo; são rateadas apenas entre os participantes do projeto.
+  bool get isProjectExpense => projectId != null;
 
   /// Data efetiva de vencimento ou de referência
   DateTime get effectiveDueDate => dueDate ?? date;
@@ -101,6 +108,7 @@ class HouseExpense extends Equatable {
     String? notes,
     List<HouseExpenseItem>? items,
     String? recurringSeriesId,
+    String? projectId,
   }) {
     return HouseExpense(
       id: id ?? this.id,
@@ -121,6 +129,7 @@ class HouseExpense extends Equatable {
       notes: notes ?? this.notes,
       items: items ?? this.items,
       recurringSeriesId: recurringSeriesId ?? this.recurringSeriesId,
+      projectId: projectId ?? this.projectId,
     );
   }
 
@@ -144,5 +153,6 @@ class HouseExpense extends Equatable {
         notes,
         items,
         recurringSeriesId,
+        projectId,
       ];
 }

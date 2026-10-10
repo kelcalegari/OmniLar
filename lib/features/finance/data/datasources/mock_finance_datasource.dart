@@ -244,6 +244,43 @@ class MockFinanceDataSource {
           ),
         ],
       ),
+      // Despesas de Projetos Compartilhados (NÃO entram no Caixa da Casa nem no fechamento do ciclo)
+      HouseExpense(
+        id: 'exp_proj_1',
+        title: 'Casa de Praia (Airbnb)',
+        amount: const Money(180000), // R$ 1.800,00
+        date: now.subtract(const Duration(days: 40)), // Pago em ciclo anterior (reserva antecipada)
+        categoryId: 'cat_lazer',
+        paidByMemberId: 'member_carlos',
+        paymentMethodId: 'pm_card_carlos',
+        splitRule: const SplitRule.percentage(null), // Rateio padrão do projeto
+        status: ExpenseStatus.paid,
+        projectId: 'proj_trip_praia',
+      ),
+      HouseExpense(
+        id: 'exp_proj_2',
+        title: 'Combustível Ida e Volta',
+        amount: const Money(42000), // R$ 420,00
+        date: now,
+        categoryId: 'cat_lazer',
+        paidByMemberId: 'member_marina',
+        paymentMethodId: 'pm_card_marina',
+        splitRule: const SplitRule.percentage(null),
+        status: ExpenseStatus.paid,
+        projectId: 'proj_trip_praia',
+      ),
+      HouseExpense(
+        id: 'exp_proj_3',
+        title: 'Bancada de Granito',
+        amount: const Money(320000), // R$ 3.200,00
+        date: now.subtract(const Duration(days: 10)),
+        categoryId: 'cat_moradia',
+        paidByMemberId: 'member_marina',
+        paymentMethodId: 'pm_card_marina',
+        splitRule: const SplitRule.percentage(null),
+        status: ExpenseStatus.paid,
+        projectId: 'proj_reforma_cozinha',
+      ),
     ]);
   }
 
@@ -253,11 +290,19 @@ class MockFinanceDataSource {
 
   Future<List<HouseExpense>> getExpensesForCycle(FinancialCycle cycle) async {
     return _expenses.where((e) {
+      // Despesas de projeto vivem apenas no projeto (não pesam no Caixa/Fôlego/fechamento)
+      if (e.isProjectExpense) return false;
       final belongsToCycle = cycle.contains(e.date) || (e.dueDate != null && cycle.contains(e.dueDate!));
       // Passivos atrasados: se a conta ainda não foi paga e seu vencimento é anterior ao fim deste ciclo, deve constar como compromisso pendente
       final isOverdueLiability = e.isPending && (e.dueDate ?? e.date).isBefore(cycle.endDate);
       return belongsToCycle || isOverdueLiability;
     }).toList()
+      ..sort((a, b) => b.date.compareTo(a.date));
+  }
+
+  /// Todas as despesas do projeto, de qualquer ciclo (viagens e obras atravessam meses).
+  Future<List<HouseExpense>> getExpensesForProject(String projectId) async {
+    return _expenses.where((e) => e.projectId == projectId).toList()
       ..sort((a, b) => b.date.compareTo(a.date));
   }
 

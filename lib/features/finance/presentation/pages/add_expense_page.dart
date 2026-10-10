@@ -1,9 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:intl/intl.dart';
+import '../../../../core/di/service_locator.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/domain/value_objects/money.dart';
 import '../../../../core/widgets/money_input_field.dart';
+import '../../../projects/domain/entities/shared_project.dart';
+import '../../../projects/domain/repositories/projects_repository.dart';
 import '../../domain/entities/house_expense.dart';
 import '../../domain/entities/house_expense_item.dart';
 import '../../domain/entities/split_rule.dart';
@@ -47,6 +50,8 @@ class _AddExpensePageState extends State<AddExpensePage> {
   String? _selectedCategoryId;
   String? _selectedPaidByMemberId;
   String? _selectedPaymentMethodId;
+  String? _selectedProjectId;
+  List<SharedProject> _availableProjects = [];
   final SplitType _selectedSplitType = SplitType.percentage;
   DateTime _selectedDate = DateTime.now();
 
@@ -67,6 +72,20 @@ class _AddExpensePageState extends State<AddExpensePage> {
     if (_isRecurring) {
       _expenseStatus = ExpenseStatus.pending;
     }
+    _loadAvailableProjects();
+  }
+
+  Future<void> _loadAvailableProjects() async {
+    try {
+      if (sl.isRegistered<ProjectsRepository>()) {
+        final projects = await sl<ProjectsRepository>().getProjects(houseId: 'house_demo');
+        if (mounted) {
+          setState(() {
+            _availableProjects = projects;
+          });
+        }
+      }
+    } catch (_) {}
   }
 
   @override
@@ -216,6 +235,7 @@ class _AddExpensePageState extends State<AddExpensePage> {
       isVariable: _isVariable,
       dueDay: _isRecurring ? _dueDay : null,
       items: items,
+      projectId: _selectedProjectId,
     );
 
     context.read<FinanceCubit>().addExpense(expense);
@@ -619,6 +639,44 @@ class _AddExpensePageState extends State<AddExpensePage> {
                     ),
                   );
                 }).toList(),
+              ),
+              const SizedBox(height: 20),
+
+              // Vincular a Projeto / Viagem (Opcional)
+              Text('Vincular a Projeto / Viagem (Opcional)', style: theme.textTheme.titleSmall),
+              const SizedBox(height: 8),
+              DropdownButtonFormField<String?>(
+                key: const Key('add_expense_project_dropdown'),
+                initialValue: _selectedProjectId,
+                isExpanded: true,
+                decoration: InputDecoration(
+                  hintText: 'Nenhum projeto (Gasto Geral da Casa)',
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                  prefixIcon: const Icon(Icons.flight_takeoff_rounded),
+                ),
+                items: [
+                  const DropdownMenuItem<String?>(
+                    value: null,
+                    child: Text('Nenhum projeto (Gasto Geral da Casa)', overflow: TextOverflow.ellipsis),
+                  ),
+                  if (_selectedProjectId != null && !_availableProjects.any((p) => p.id == _selectedProjectId))
+                    DropdownMenuItem<String?>(
+                      value: _selectedProjectId,
+                      child: Text('Projeto Selecionado ($_selectedProjectId)', overflow: TextOverflow.ellipsis),
+                    ),
+                  ..._availableProjects.map((p) {
+                    final tag = p.type == ProjectType.trip ? '🏖️ (Viagem)' : '🛠️ (Projeto)';
+                    return DropdownMenuItem<String?>(
+                      value: p.id,
+                      child: Text('${p.title} $tag', overflow: TextOverflow.ellipsis),
+                    );
+                  }),
+                ],
+                onChanged: (val) {
+                  setState(() {
+                    _selectedProjectId = val;
+                  });
+                },
               ),
               const SizedBox(height: 20),
 

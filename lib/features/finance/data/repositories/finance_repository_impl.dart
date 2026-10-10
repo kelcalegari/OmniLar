@@ -30,6 +30,10 @@ class FinanceRepositoryImpl implements FinanceRepository {
       _dataSource.getExpensesForCycle(cycle);
 
   @override
+  Future<List<HouseExpense>> getExpensesForProject(String projectId) =>
+      _dataSource.getExpensesForProject(projectId);
+
+  @override
   Future<List<Contribution>> getContributionsForCycle(FinancialCycle cycle) =>
       _dataSource.getContributionsForCycle(cycle);
 

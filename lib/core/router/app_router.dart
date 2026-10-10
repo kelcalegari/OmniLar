@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 
 import '../di/service_locator.dart';
@@ -16,6 +17,8 @@ import '../../features/settings/presentation/pages/settings_page.dart';
 import '../../features/settlement/presentation/pages/settlement_hub_page.dart';
 import '../../features/shopping/presentation/pages/shopping_list_page.dart';
 import '../../features/finance/presentation/pages/savings_vaults_page.dart';
+import '../../features/projects/presentation/cubit/projects_cubit.dart';
+import '../../features/projects/presentation/pages/projects_hub_page.dart';
 import '../../features/routine/presentation/pages/tasks_and_shopping_page.dart';
 
 class GoRouterRefreshStream extends ChangeNotifier {
@@ -109,9 +112,17 @@ class AppRouter {
                     name: 'savings_vaults',
                     builder: (context, state) => const SavingsVaultsPage(),
                   ),
+                  GoRoute(
+                    path: 'projetos',
+                    name: 'projects_hub',
+                    builder: (context, state) => BlocProvider(
+                      create: (_) => sl<ProjectsCubit>(),
+                      child: const ProjectsHubPage(),
+                    ),
+                  ),
                 ],
               ),
-              // Aliases para compatibilidade retroativa com context.push('/fechamento'), context.push('/compras') e context.push('/caixinhas')
+              // Aliases para compatibilidade retroativa
               GoRoute(
                 path: '/fechamento',
                 redirect: (context, state) => '/casa/fechamento',
@@ -119,6 +130,10 @@ class AppRouter {
               GoRoute(
                 path: '/caixinhas',
                 redirect: (context, state) => '/casa/caixinhas',
+              ),
+              GoRoute(
+                path: '/projetos',
+                redirect: (context, state) => '/casa/projetos',
               ),
             ],
           ),

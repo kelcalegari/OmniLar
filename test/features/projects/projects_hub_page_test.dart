@@ -1,0 +1,84 @@
+import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:omni_lar/features/projects/data/repositories/mock_projects_repository.dart';
+import 'package:omni_lar/features/projects/presentation/cubit/projects_cubit.dart';
+import 'package:omni_lar/features/projects/presentation/pages/projects_hub_page.dart';
+import 'package:omni_lar/features/finance/domain/repositories/finance_repository.dart';
+import 'package:omni_lar/features/finance/domain/entities/financial_cycle_summary.dart';
+import 'package:omni_lar/features/finance/domain/entities/house_expense.dart';
+import 'package:omni_lar/core/domain/enums/recurrence.dart';
+import 'package:omni_lar/core/domain/value_objects/financial_cycle.dart';
+import 'package:omni_lar/core/domain/value_objects/money.dart';
+import 'package:omni_lar/features/finance/domain/entities/contribution.dart';
+import 'package:omni_lar/features/finance/domain/entities/category.dart';
+import 'package:omni_lar/features/finance/domain/entities/payment_method.dart';
+import 'package:omni_lar/features/finance/domain/entities/house_member.dart';
+import 'package:omni_lar/features/finance/domain/entities/savings_vault.dart';
+
+class _FakeFinanceRepository implements FinanceRepository {
+  @override
+  Future<List<HouseExpense>> getExpensesForCycle(FinancialCycle cycle) async => [];
+  @override
+  Future<List<HouseExpense>> getExpensesForProject(String projectId) async => [];
+  @override
+  Future<List<Contribution>> getContributionsForCycle(FinancialCycle cycle) async => [];
+  @override
+  Future<FinancialCycleSummary> getCycleSummary(FinancialCycle cycle) async => throw UnimplementedError();
+  @override
+  Future<List<ExpenseCategory>> getCategories() async => [];
+  @override
+  Future<List<PaymentMethod>> getPaymentMethods() async => [];
+  @override
+  Future<List<HouseMember>> getMembers() async => [];
+  @override
+  Future<List<HouseExpense>> getRecurringExpenses() async => [];
+  @override
+  Future<void> addExpense(HouseExpense expense) async {}
+  @override
+  Future<void> updateExpense(HouseExpense expense, {RecurrenceScope scope = RecurrenceScope.thisInstanceOnly}) async {}
+  @override
+  Future<void> deleteExpense(String expenseId, {RecurrenceScope scope = RecurrenceScope.thisInstanceOnly}) async {}
+  @override
+  Future<void> addContribution(Contribution contribution) async {}
+  @override
+  Future<void> addCategory(ExpenseCategory category) async {}
+  @override
+  Future<void> addPaymentMethod(PaymentMethod paymentMethod) async {}
+  @override
+  Future<List<SavingsVault>> getSavingsVaults() async => [];
+  @override
+  Future<void> createSavingsVault(SavingsVault vault) async {}
+  @override
+  Future<void> depositToVault({required String vaultId, required String memberId, required Money amount, required String description}) async {}
+  @override
+  Future<void> withdrawFromVault({required String vaultId, required String memberId, required Money amount, required String description}) async {}
+}
+
+void main() {
+  testWidgets('ProjectsHubPage renderiza lista inicial de projetos e botão de novo projeto', (tester) async {
+    final mockRepo = MockProjectsRepository();
+    final fakeFinance = _FakeFinanceRepository();
+    final cubit = ProjectsCubit(
+      projectsRepository: mockRepo,
+      financeRepository: fakeFinance,
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: BlocProvider<ProjectsCubit>.value(
+          value: cubit,
+          child: const ProjectsHubPage(),
+        ),
+      ),
+    );
+
+    await tester.pumpAndSettle();
+
+    expect(find.text('Projetos & Viagens'), findsOneWidget);
+    expect(find.text('Rateios Delimitados'), findsOneWidget);
+    expect(find.text('Férias em Floripa 🏖️'), findsOneWidget);
+    expect(find.text('Reforma da Cozinha & Bancada 🛠️'), findsOneWidget);
+    expect(find.byIcon(Icons.add_rounded), findsOneWidget);
+  });
+}

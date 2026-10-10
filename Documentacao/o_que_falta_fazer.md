@@ -23,9 +23,10 @@ Este documento consolida o estado atual do desenvolvimento e mapeia com clareza 
 | **Despesas Compostas & Boletos Segmentados** (Condomínio com Água, Gás e Obras) | Concluído ✅ | 100% |
 | **Despesas Retroativas & Contas Atrasadas** (Vencidas, Carry-forward de Passivos, Alertas) | Concluído ✅ | 100% |
 | **Eventos & Despesas Recorrentes** (3 Escopos de Edição/Exclusão RFC 5545) | Concluído ✅ | 100% |
-| **Backend & Infra SQL** (Migrações 0001 a 0004 com RLS, Fila Offline) | Concluído ✅ | 100% |
+| **Projetos & Viagens Compartilhadas** (Isolamento da Casa, Rateio Próprio, Super Pix) | Concluído ✅ | 100% |
+| **Backend & Infra SQL** (Migrações 0001 a 0005, RLS e Saneamento) | Em Refinamento 🔄 | Pendente Saneamento |
 
-> **Métrica de Confiabilidade:** **101 testes automatizados (unitários e widgets) passando (100% verde)** e cobertura contínua de regressão.
+> **Métrica de Confiabilidade:** **118 testes automatizados (unitários e widgets) passando (100% verde)** e cobertura contínua de regressão.
 
 ---
 

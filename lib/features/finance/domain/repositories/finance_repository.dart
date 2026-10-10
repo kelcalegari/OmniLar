@@ -14,7 +14,12 @@ abstract class FinanceRepository {
   Future<List<ExpenseCategory>> getCategories();
   Future<List<PaymentMethod>> getPaymentMethods();
 
+  /// Despesas da Casa no ciclo. NÃO inclui despesas vinculadas a projetos
+  /// compartilhados (essas vivem apenas no projeto).
   Future<List<HouseExpense>> getExpensesForCycle(FinancialCycle cycle);
+
+  /// Todas as despesas de um projeto compartilhado, independente do ciclo.
+  Future<List<HouseExpense>> getExpensesForProject(String projectId);
   Future<List<Contribution>> getContributionsForCycle(FinancialCycle cycle);
   Future<FinancialCycleSummary> getCycleSummary(FinancialCycle cycle);
 

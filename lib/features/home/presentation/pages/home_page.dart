@@ -376,6 +376,33 @@ class _HomePageContent extends StatelessWidget {
             ),
           ),
         ),
+        const SizedBox(width: 8),
+        Expanded(
+          child: InkWell(
+            onTap: () => context.push('/projetos'),
+            borderRadius: BorderRadius.circular(12),
+            child: Card(
+              child: Padding(
+                padding: const EdgeInsets.all(12),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Icon(Icons.flight_takeoff_rounded, color: AppColors.accent, size: 20),
+                        Icon(Icons.chevron_right_rounded, size: 16, color: Colors.grey),
+                      ],
+                    ),
+                    const SizedBox(height: 6),
+                    const Text('Viagens', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                    Text('e Projetos', style: theme.textTheme.bodySmall?.copyWith(fontSize: 11)),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
       ],
     );
   }

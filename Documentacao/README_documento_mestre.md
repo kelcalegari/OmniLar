@@ -20,6 +20,7 @@ Um **Motor de Compensação Global** cruza as duas e entrega um único fechament
 |---|---|---|---|
 | Financeiro | Despesas da Casa | [modulo_despesas_de_casa.md](modulo_despesas_de_casa.md) | Caixa da Casa, ciclo financeiro, 3 modelos de rateio, provisionamento, VR/VA, cartões |
 | Financeiro | Empréstimos P2P | [modulo_emprestimo.md](modulo_emprestimo.md) | Dívidas entre membros: parcelas, pagamento parcial, perdão, renegociação, anexos |
+| Financeiro | Projetos & Viagens | [modulo_projetos_compartilhados.md](modulo_projetos_compartilhados.md) | Viagens, reformas, compra de imóvel e eventos com rateio e Super Pix isolados da Casa |
 | Financeiro | Integração Global | [integracao_modulo_financeiro.md](integracao_modulo_financeiro.md) | Motor de Compensação, Super Pix, Hub de Liquidação, navegação, Smart FAB |
 | Financeiro | Importação e Conciliação | [modulo_importacao_conciliacao.md](modulo_importacao_conciliacao.md) | Fatura de cartão e extrato, "Rachar a Fatura", regras aprendidas |
 | Organização | Calendário | [modulo_calendario.md](modulo_calendario.md) | Eventos, participantes necessários, RSVP, recorrência, tarefas com data |

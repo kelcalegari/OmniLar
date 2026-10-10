@@ -34,6 +34,10 @@ import '../../features/calendar/presentation/cubit/calendar_cubit.dart';
 import '../../features/assistant/domain/services/assistant_interpreter_service.dart';
 import '../../features/assistant/presentation/cubit/assistant_cubit.dart';
 
+import '../../features/projects/data/repositories/mock_projects_repository.dart';
+import '../../features/projects/domain/repositories/projects_repository.dart';
+import '../../features/projects/presentation/cubit/projects_cubit.dart';
+
 final sl = GetIt.instance;
 
 Future<void> initServiceLocator() async {
@@ -84,7 +88,10 @@ Future<void> initServiceLocator() async {
         shoppingRepository: sl(),
         calendarRepository: sl(),
       ));
-  sl.registerFactory<AssistantCubit>(() => AssistantCubit(
-        interpreterService: sl(),
+  // Projects & Events Feature (Viagens, Compra de Imóveis, Reformas e Investimentos)
+  sl.registerLazySingleton<ProjectsRepository>(() => MockProjectsRepository());
+  sl.registerFactory<ProjectsCubit>(() => ProjectsCubit(
+        projectsRepository: sl(),
+        financeRepository: sl(),
       ));
 }
