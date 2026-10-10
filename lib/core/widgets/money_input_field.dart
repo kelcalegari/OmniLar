@@ -126,7 +126,7 @@ class MoneyInputFormatter extends TextInputFormatter {
 
 /// Controller especializado que força a seleção/cursor sempre para o final do texto
 class _MoneyTextEditingController extends TextEditingController {
-  _MoneyTextEditingController({super.text});
+  _MoneyTextEditingController();
 
   @override
   set value(TextEditingValue newValue) {

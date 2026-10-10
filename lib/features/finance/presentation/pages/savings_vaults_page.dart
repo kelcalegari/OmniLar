@@ -164,7 +164,7 @@ class SavingsVaultsPage extends StatelessWidget {
                   const Text('Quem está guardando?', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.grey)),
                   const SizedBox(height: 6),
                   DropdownButtonFormField<String>(
-                    value: selectedMemberId,
+                    initialValue: selectedMemberId,
                     decoration: InputDecoration(
                       border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
                       contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
@@ -250,7 +250,7 @@ class SavingsVaultsPage extends StatelessWidget {
                   const Text('Quem está resgatando?', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.grey)),
                   const SizedBox(height: 6),
                   DropdownButtonFormField<String>(
-                    value: selectedMemberId,
+                    initialValue: selectedMemberId,
                     decoration: InputDecoration(
                       border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
                       contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
@@ -321,8 +321,6 @@ class SavingsVaultsPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-
     return Scaffold(
       appBar: AppBar(
         title: const Text('Caixinhas & Metas da Casa', style: TextStyle(fontWeight: FontWeight.bold)),

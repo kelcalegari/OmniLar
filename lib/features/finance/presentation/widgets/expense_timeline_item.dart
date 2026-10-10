@@ -283,9 +283,11 @@ class ExpenseTimelineItem extends StatelessWidget {
                       if (modalContext.mounted) Navigator.pop(modalContext);
                       if (context.mounted) {
                         await context.read<FinanceCubit>().deleteExpense(expense.id, scope: scope);
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(content: Text('Despesa "${expense.title}" excluída.')),
-                        );
+                        if (context.mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(content: Text('Despesa "${expense.title}" excluída.')),
+                          );
+                        }
                       }
                     },
                   ),

@@ -10,8 +10,8 @@ import '../../domain/entities/shopping_list.dart';
 import '../../domain/entities/shopping_trip.dart';
 
 class MockShoppingDataSource {
-  final FinanceRepository _financeRepository;
-  final P2PRepository _p2pRepository;
+  final FinanceRepository financeRepository;
+  final P2PRepository p2pRepository;
 
   final List<ShoppingList> _lists = [
     const ShoppingList(
@@ -76,10 +76,9 @@ class MockShoppingDataSource {
   final List<ShoppingTrip> _trips = [];
 
   MockShoppingDataSource({
-    required FinanceRepository financeRepository,
-    required P2PRepository p2pRepository,
-  })  : _financeRepository = financeRepository,
-        _p2pRepository = p2pRepository;
+    required this.financeRepository,
+    required this.p2pRepository,
+  });
 
   Future<List<ShoppingList>> getLists() async => List.unmodifiable(_lists);
 
@@ -141,12 +140,12 @@ class MockShoppingDataSource {
     String? createdExpenseId;
     if (houseExpenseAmount.cents > 0) {
       createdExpenseId = 'exp_shop_${now.millisecondsSinceEpoch}';
-      final members = await _financeRepository.getMembers();
+      final members = await financeRepository.getMembers();
       final splitPercentages = {
-        for (final m in members) m.id: m.defaultSplitPercent ?? (100.0 / members.length),
+        for (final m in members) m.id: m.defaultSplitPercent > 0 ? m.defaultSplitPercent : (100.0 / members.length),
       };
 
-      await _financeRepository.addExpense(
+      await financeRepository.addExpense(
         HouseExpense(
           id: createdExpenseId,
           title: 'Compras de Mercado',
@@ -174,7 +173,7 @@ class MockShoppingDataSource {
         firstDueDate: now.add(const Duration(days: 30)),
       );
 
-      await _p2pRepository.createLoan(
+      await p2pRepository.createLoan(
         P2PLoan(
           id: createdLoanId,
           title: 'Item Pessoal na Compra de Mercado',

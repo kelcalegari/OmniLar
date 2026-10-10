@@ -2,10 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../../../core/domain/value_objects/money.dart';
 import '../../../../core/theme/app_colors.dart';
-import '../../../finance/domain/entities/payment_method.dart';
 import '../../../finance/presentation/cubit/finance_cubit.dart';
 import '../../domain/entities/shopping_item.dart';
-import '../../domain/entities/shopping_list.dart';
 import '../cubit/shopping_cubit.dart';
 import '../cubit/shopping_state.dart';
 
@@ -118,7 +116,7 @@ class _ShoppingListPageState extends State<ShoppingListPage> {
 
                   // Forma de Pagamento
                   DropdownButtonFormField<String>(
-                    value: selectedPmId,
+                    initialValue: selectedPmId,
                     decoration: InputDecoration(
                       labelText: 'Forma de Pagamento',
                       border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
@@ -137,7 +135,7 @@ class _ShoppingListPageState extends State<ShoppingListPage> {
 
                   // Quem Pagou
                   DropdownButtonFormField<String>(
-                    value: selectedPayerId,
+                    initialValue: selectedPayerId,
                     decoration: InputDecoration(
                       labelText: 'Quem Pagou no Caixa',
                       border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
@@ -249,8 +247,6 @@ class _ShoppingListPageState extends State<ShoppingListPage> {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-
     return Scaffold(
       appBar: AppBar(
         leading: Navigator.of(context).canPop()

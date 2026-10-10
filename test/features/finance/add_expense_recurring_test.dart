@@ -3,7 +3,6 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:omni_lar/core/di/service_locator.dart';
 import 'package:omni_lar/core/domain/value_objects/money.dart';
-import 'package:omni_lar/features/finance/domain/entities/house_expense.dart';
 import 'package:omni_lar/features/finance/presentation/cubit/finance_cubit.dart';
 import 'package:omni_lar/features/finance/presentation/pages/add_expense_page.dart';
 

@@ -4,7 +4,6 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../../../core/di/service_locator.dart';
 import '../../../../core/domain/value_objects/financial_cycle.dart';
 import '../../../../core/theme/app_colors.dart';
-import '../../../../core/utils/responsive.dart';
 import '../../../../core/widgets/responsive_container.dart';
 import '../../../../core/widgets/privacy_toggle.dart';
 import '../../domain/entities/settlement_summary.dart';
@@ -37,8 +36,6 @@ class _SettlementHubContent extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-
     return Scaffold(
       appBar: AppBar(
         leading: Navigator.of(context).canPop()

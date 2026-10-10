@@ -13,7 +13,6 @@ import '../../../finance/presentation/cubit/finance_state.dart';
 import '../../../finance/presentation/pages/add_expense_page.dart';
 import '../../../reconciliation/presentation/widgets/split_invoice_modal.dart';
 import '../../../../core/domain/value_objects/money.dart';
-import '../../../../core/domain/enums/recurrence.dart';
 import '../../../../core/widgets/recurrence_scope_dialog.dart';
 import '../../../../core/theme/theme_cubit.dart';
 import '../../../../core/widgets/theme_toggle_button.dart';
@@ -323,7 +322,7 @@ class SettingsPage extends StatelessWidget {
                       child: ListView.separated(
                       shrinkWrap: true,
                       itemCount: categories.length,
-                      separatorBuilder: (_, __) => const Divider(height: 1),
+                      separatorBuilder: (_, _) => const Divider(height: 1),
                       itemBuilder: (context, index) {
                         final cat = categories[index];
                         final owner = members.where((m) => m.id == cat.ownerMemberId).firstOrNull;
@@ -410,7 +409,7 @@ class SettingsPage extends StatelessWidget {
                 const Text('Dono Responsável (Opcional):', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.grey)),
                 const SizedBox(height: 6),
                 DropdownButtonFormField<String?>(
-                  value: selectedOwnerId,
+                  initialValue: selectedOwnerId,
                   decoration: InputDecoration(
                     border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
                     contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
@@ -616,15 +615,15 @@ class SettingsPage extends StatelessWidget {
                           const Text('Quem paga o valor fixo estipulado?', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.grey)),
                           const SizedBox(height: 6),
                           DropdownButtonFormField<String>(
-                            value: fixedMemberId,
+                            initialValue: fixedMemberId,
                             decoration: InputDecoration(
                               border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
                               contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                             ),
                             items: members
                                 .map((m) => DropdownMenuItem(
-                                      value: m.id as String,
-                                      child: Text(m.name as String),
+                                      value: m.id,
+                                      child: Text(m.name),
                                     ))
                                 .toList(),
                             onChanged: (val) {
@@ -788,7 +787,7 @@ class SettingsPage extends StatelessWidget {
                     child: ListView.separated(
                       shrinkWrap: true,
                       itemCount: methods.length,
-                      separatorBuilder: (_, __) => const Divider(height: 1),
+                      separatorBuilder: (_, _) => const Divider(height: 1),
                       itemBuilder: (context, index) {
                         final pm = methods[index];
                         final owner = members.where((m) => m.id == pm.ownerMemberId).firstOrNull;
@@ -900,7 +899,7 @@ class SettingsPage extends StatelessWidget {
                   const Text('Tipo:', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.grey)),
                   const SizedBox(height: 6),
                   DropdownButtonFormField<PaymentMethodType>(
-                    value: selectedType,
+                    initialValue: selectedType,
                     decoration: InputDecoration(
                       border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
                       contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
@@ -920,7 +919,7 @@ class SettingsPage extends StatelessWidget {
                   const Text('Titular do Cartão:', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.grey)),
                   const SizedBox(height: 6),
                   DropdownButtonFormField<String?>(
-                    value: selectedOwnerId,
+                    initialValue: selectedOwnerId,
                     decoration: InputDecoration(
                       border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
                       contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
@@ -948,7 +947,7 @@ class SettingsPage extends StatelessWidget {
                               const Text('Fechamento:', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.grey)),
                               const SizedBox(height: 6),
                               DropdownButtonFormField<int>(
-                                value: closingDay,
+                                initialValue: closingDay,
                                 decoration: InputDecoration(
                                   border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
                                   contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
@@ -969,7 +968,7 @@ class SettingsPage extends StatelessWidget {
                               const Text('Vencimento:', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.grey)),
                               const SizedBox(height: 6),
                               DropdownButtonFormField<int>(
-                                value: dueDay,
+                                initialValue: dueDay,
                                 decoration: InputDecoration(
                                   border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
                                   contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
@@ -1124,7 +1123,7 @@ class SettingsPage extends StatelessWidget {
                       child: ListView.separated(
                         shrinkWrap: true,
                         itemCount: recurring.length,
-                        separatorBuilder: (_, __) => const SizedBox(height: 8),
+                        separatorBuilder: (_, _) => const SizedBox(height: 8),
                         itemBuilder: (context, index) {
                           final item = recurring[index];
                           return Container(
@@ -1174,6 +1173,7 @@ class SettingsPage extends StatelessWidget {
                                           isExpense: true,
                                         );
                                         if (scope != null) {
+                                          if (!context.mounted) return;
                                           await context.read<FinanceCubit>().deleteExpense(item.id, scope: scope);
                                           if (context.mounted) {
                                             ScaffoldMessenger.of(context).showSnackBar(
@@ -1264,7 +1264,7 @@ class SettingsPage extends StatelessWidget {
                 ),
                 const SizedBox(height: 16),
                 DropdownButtonFormField<int>(
-                  value: selectedDay,
+                  initialValue: selectedDay,
                   decoration: InputDecoration(
                     labelText: 'Selecione o Dia',
                     border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),

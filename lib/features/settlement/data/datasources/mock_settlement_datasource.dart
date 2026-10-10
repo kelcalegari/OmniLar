@@ -6,19 +6,17 @@ import '../../domain/entities/super_pix_transfer.dart';
 import '../../domain/services/global_clearing_engine.dart';
 
 class MockSettlementDataSource {
-  final MockFinanceDataSource _financeDataSource;
-  final MockP2PDataSource _p2pDataSource;
-  final GlobalClearingEngine _engine;
+  final MockFinanceDataSource financeDataSource;
+  final MockP2PDataSource p2pDataSource;
+  final GlobalClearingEngine engine;
 
   SettlementSummary? _cachedSettlement;
 
   MockSettlementDataSource({
-    required MockFinanceDataSource financeDataSource,
-    required MockP2PDataSource p2pDataSource,
-    GlobalClearingEngine engine = const GlobalClearingEngine(),
-  })  : _financeDataSource = financeDataSource,
-        _p2pDataSource = p2pDataSource,
-        _engine = engine;
+    required this.financeDataSource,
+    required this.p2pDataSource,
+    this.engine = const GlobalClearingEngine(),
+  });
 
   Future<SettlementSummary> getSettlementSummary(FinancialCycle cycle) async {
     // Se já estiver liquidado em memória, devolve o estado atual
@@ -26,12 +24,12 @@ class MockSettlementDataSource {
       return _cachedSettlement!;
     }
 
-    final members = await _financeDataSource.getMembers();
-    final expenses = await _financeDataSource.getExpensesForCycle(cycle);
-    final contributions = await _financeDataSource.getContributionsForCycle(cycle);
-    final loans = await _p2pDataSource.getLoans();
+    final members = await financeDataSource.getMembers();
+    final expenses = await financeDataSource.getExpensesForCycle(cycle);
+    final contributions = await financeDataSource.getContributionsForCycle(cycle);
+    final loans = await p2pDataSource.getLoans();
 
-    final summary = _engine.computeSettlement(
+    final summary = engine.computeSettlement(
       cycle: cycle,
       members: members,
       expenses: expenses,
@@ -60,11 +58,11 @@ class MockSettlementDataSource {
     );
 
     // 3. Quita as parcelas P2P que venciam neste ciclo
-    final loans = await _p2pDataSource.getLoans();
+    final loans = await p2pDataSource.getLoans();
     for (final loan in loans) {
       for (final inst in loan.installments) {
         if (summary.cycle.contains(inst.dueDate) && !inst.isFullyPaid) {
-          await _p2pDataSource.registerPayment(
+          await p2pDataSource.registerPayment(
             loanId: loan.id,
             installmentId: inst.id,
             amount: inst.remainingAmount,

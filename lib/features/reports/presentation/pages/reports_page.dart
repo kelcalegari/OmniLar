@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
-import '../../../../core/di/service_locator.dart';
 import '../../../../core/domain/value_objects/money.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/widgets/responsive_container.dart';
@@ -369,9 +368,9 @@ class _ReportsPageContent extends StatelessWidget {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(member.name, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
-                          if (member.defaultSplitPercent != null)
+                          if (member.defaultSplitPercent > 0)
                             Text(
-                              'Meta de rateio: ${member.defaultSplitPercent!.toStringAsFixed(0)}%',
+                              'Meta de rateio: ${member.defaultSplitPercent.toStringAsFixed(0)}%',
                               style: const TextStyle(color: Colors.grey, fontSize: 11),
                             ),
                         ],

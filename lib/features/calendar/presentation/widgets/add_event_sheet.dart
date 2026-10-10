@@ -161,9 +161,9 @@ class _AddEventSheetState extends State<AddEventSheet> {
       _selectedRoles.forEach((memberId, role) {
         if (role != null) {
           final isCreator = memberId == widget.activeMemberId;
-          final existing = existingParticipants != null
-              ? existingParticipants.where((p) => p.memberId == memberId).firstOrNull
-              : null;
+          final existing = existingParticipants
+              ?.where((p) => p.memberId == memberId)
+              .firstOrNull;
 
           if (existing != null) {
             participants.add(existing.copyWith(role: role));
