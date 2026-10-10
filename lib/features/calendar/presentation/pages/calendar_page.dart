@@ -181,62 +181,6 @@ class _CalendarPageState extends State<CalendarPage> {
           appBar: AppBar(
             title: const Text('Agenda do Lar', style: TextStyle(fontWeight: FontWeight.bold)),
             actions: [
-              // Botão de Adicionar Novo Evento
-              IconButton(
-                icon: const Icon(Icons.add_alarm_rounded, color: AppColors.primary),
-                tooltip: 'Novo Compromisso',
-                onPressed: () => AddEventSheet.show(context, state.activeMemberId),
-              ),
-              // Menu para alternar visualização diretamente
-              PopupMenuButton<CalendarViewMode>(
-                icon: const Icon(Icons.tune_rounded, color: AppColors.primary),
-                tooltip: 'Modo de Visualização',
-                onSelected: (mode) => setState(() => _viewMode = mode),
-                itemBuilder: (_) => [
-                  if (isDesktop) ...const [
-                    PopupMenuItem(
-                      value: CalendarViewMode.day,
-                      child: Row(
-                        children: [
-                          Icon(Icons.view_day_rounded, size: 18),
-                          SizedBox(width: 8),
-                          Text('Visão Dia'),
-                        ],
-                      ),
-                    ),
-                    PopupMenuItem(
-                      value: CalendarViewMode.week,
-                      child: Row(
-                        children: [
-                          Icon(Icons.view_week_rounded, size: 18),
-                          SizedBox(width: 8),
-                          Text('Visão Semana'),
-                        ],
-                      ),
-                    ),
-                  ],
-                  PopupMenuItem(
-                    value: CalendarViewMode.month,
-                    child: Row(
-                      children: [
-                        const Icon(Icons.calendar_view_month_rounded, size: 18),
-                        const SizedBox(width: 8),
-                        Text(isDesktop ? 'Visão Mês' : 'Mês'),
-                      ],
-                    ),
-                  ),
-                  PopupMenuItem(
-                    value: CalendarViewMode.list,
-                    child: Row(
-                      children: [
-                        const Icon(Icons.format_list_bulleted_rounded, size: 18),
-                        const SizedBox(width: 8),
-                        Text(isDesktop ? 'Visão Lista' : 'Lista'),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
               // Seletor rápido de quem está logado para testar RSVP
               Padding(
                 padding: const EdgeInsets.only(right: 8),
@@ -579,16 +523,32 @@ class _CalendarPageState extends State<CalendarPage> {
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Expanded(
-                  child: Text(
-                    capitalizedDay,
-                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: AppColors.primary),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        capitalizedDay,
+                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: AppColors.primary),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      Text(
+                        'Compromissos (${dayEvents.length})',
+                        style: TextStyle(fontSize: 12, color: Colors.grey[600], fontWeight: FontWeight.bold),
+                      ),
+                    ],
                   ),
                 ),
-                Text(
-                  'Compromissos (${dayEvents.length})',
-                  style: TextStyle(fontSize: 12, color: Colors.grey[600], fontWeight: FontWeight.bold),
+                FilledButton.tonalIcon(
+                  onPressed: () {
+                    AddEventSheet.show(context, state.activeMemberId);
+                  },
+                  icon: const Icon(Icons.add_rounded, size: 16),
+                  label: const Text('Novo', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                  style: FilledButton.styleFrom(
+                    visualDensity: VisualDensity.compact,
+                    padding: const EdgeInsets.symmetric(horizontal: 10),
+                  ),
                 ),
               ],
             ),
