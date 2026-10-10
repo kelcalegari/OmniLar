@@ -397,19 +397,33 @@ class _SettlementHubContent extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Container(
-                  padding: const EdgeInsets.all(6),
-                  decoration: const BoxDecoration(
-                    color: AppColors.primary,
-                    shape: BoxShape.circle,
-                  ),
-                  child: const Text('3', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white)),
+                Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(6),
+                      decoration: const BoxDecoration(
+                        color: AppColors.primary,
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Text('3', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white)),
+                    ),
+                    const SizedBox(width: 8),
+                    const Text(
+                      'O Veredito: O "Super Pix"',
+                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: AppColors.primary),
+                    ),
+                  ],
                 ),
-                const SizedBox(width: 8),
-                const Text(
-                  'O Veredito: O "Super Pix"',
-                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: AppColors.primary),
+                TextButton.icon(
+                  onPressed: () => _shareSettlementSummary(context, summary),
+                  icon: const Icon(Icons.share_rounded, size: 16),
+                  label: const Text('Compartilhar', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                  style: TextButton.styleFrom(
+                    visualDensity: VisualDensity.compact,
+                    foregroundColor: AppColors.primary,
+                  ),
                 ),
               ],
             ),
@@ -519,24 +533,83 @@ class _SettlementHubContent extends StatelessWidget {
                   style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
                 ),
               ),
-              if (transfer.pixKey != null)
-                TextButton.icon(
-                  onPressed: () {
-                    Clipboard.setData(ClipboardData(text: transfer.pixKey!));
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(content: Text('Chave Pix copiada: ${transfer.pixKey}')),
-                    );
-                  },
-                  icon: const Icon(Icons.copy_rounded, size: 14),
-                  label: const Text('Copiar Pix', style: TextStyle(fontSize: 12)),
-                  style: TextButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                    visualDensity: VisualDensity.compact,
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (transfer.pixKey != null) ...[
+                    TextButton.icon(
+                      onPressed: () {
+                        Clipboard.setData(ClipboardData(text: transfer.pixKey!));
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(content: Text('Chave Pix copiada: ${transfer.pixKey}')),
+                        );
+                      },
+                      icon: const Icon(Icons.copy_rounded, size: 14),
+                      label: const Text('Chave Pix', style: TextStyle(fontSize: 12)),
+                      style: TextButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+                        visualDensity: VisualDensity.compact,
+                      ),
+                    ),
+                    const SizedBox(width: 4),
+                  ],
+                  TextButton.icon(
+                    onPressed: () => _shareSingleTransfer(context, transfer),
+                    icon: const Icon(Icons.chat_bubble_outline_rounded, size: 14),
+                    label: const Text('Cobrança', style: TextStyle(fontSize: 12)),
+                    style: TextButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+                      visualDensity: VisualDensity.compact,
+                    ),
                   ),
-                ),
+                ],
+              ),
             ],
           ),
         ],
+      ),
+    );
+  }
+
+  void _shareSettlementSummary(BuildContext context, SettlementSummary summary) {
+    final buffer = StringBuffer();
+    buffer.writeln('🏡 Fechamento do Lar • Omni Lar');
+    buffer.writeln('📅 Ciclo: ${summary.cycle.formattedPeriod}');
+    buffer.writeln('');
+    buffer.writeln('✨ Veredito Super Pix:');
+    if (summary.transfers.isEmpty) {
+      buffer.writeln('• Todas as contas estão zeradas! Nenhuma transferência necessária.');
+    } else {
+      for (final t in summary.transfers) {
+        buffer.writeln('• ${t.fromMemberName} transfere ${t.amount.formatted} para ${t.toMemberName}');
+        if (t.pixKey != null) {
+          buffer.writeln('  Chave Pix: ${t.pixKey}');
+        }
+      }
+    }
+    if (summary.houseTreasuryBalance.cents > 0) {
+      buffer.writeln('');
+      buffer.writeln('💰 Sobra no Caixa da Casa: ${summary.houseTreasuryBalance.formatted}');
+    }
+    buffer.writeln('');
+    buffer.writeln('Todas as contas da casa e empréstimos pessoais foram compensados e quitados.');
+
+    Clipboard.setData(ClipboardData(text: buffer.toString()));
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Veredito do Super Pix copiado! Pronto para colar no WhatsApp.'),
+      ),
+    );
+  }
+
+  void _shareSingleTransfer(BuildContext context, SuperPixTransfer transfer) {
+    final pixInfo = transfer.pixKey != null ? ' (Chave Pix: ${transfer.pixKey})' : '';
+    final msg =
+        'Oi ${transfer.fromMemberName}! Pelo fechamento do Omni Lar, ficou acertado você enviar ${transfer.amount.formatted} para ${transfer.toMemberName}$pixInfo para quitar o ciclo.';
+    Clipboard.setData(ClipboardData(text: msg));
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Mensagem de cobrança copiada! Pronto para colar no WhatsApp.'),
       ),
     );
   }

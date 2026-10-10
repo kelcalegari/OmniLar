@@ -1,9 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/widgets/omni_logo.dart';
 import '../../domain/entities/project_participant.dart';
+import '../../domain/entities/project_settlement_summary.dart';
 import '../../domain/entities/shared_project.dart';
+import '../../../settlement/domain/entities/super_pix_transfer.dart';
 import '../cubit/projects_cubit.dart';
 import '../cubit/projects_state.dart';
 
@@ -282,9 +285,24 @@ class _ProjectsHubPageState extends State<ProjectsHubPage> {
           const SizedBox(height: 16),
           const Divider(),
           const SizedBox(height: 8),
-          Text(
-            'Transferências Mínimas Calculadas (Super Pix):',
-            style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.bold),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                'Transferências Mínimas (Super Pix):',
+                style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.bold),
+              ),
+              if (summary.transfers.isNotEmpty)
+                TextButton.icon(
+                  onPressed: () => _copyProjectSettlement(context, proj, summary),
+                  icon: const Icon(Icons.share_rounded, size: 16),
+                  label: const Text('Compartilhar', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                  style: TextButton.styleFrom(
+                    visualDensity: VisualDensity.compact,
+                    foregroundColor: AppColors.primary,
+                  ),
+                ),
+            ],
           ),
           const SizedBox(height: 8),
           if (summary.transfers.isEmpty)
@@ -297,14 +315,57 @@ class _ProjectsHubPageState extends State<ProjectsHubPage> {
                   leading: const Icon(Icons.send_rounded, color: AppColors.primary),
                   title: Text('${t.fromMemberName} ➔ ${t.toMemberName}'),
                   subtitle: Text(t.description),
-                  trailing: Text(
-                    t.amount.formatted,
-                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                  trailing: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        t.amount.formatted,
+                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                      ),
+                      const SizedBox(width: 4),
+                      IconButton(
+                        icon: const Icon(Icons.chat_bubble_outline_rounded, size: 18),
+                        tooltip: 'Copiar mensagem para o WhatsApp',
+                        onPressed: () => _copySingleProjectTransfer(context, proj, t),
+                      ),
+                    ],
                   ),
                 ),
               );
             }),
         ],
+      ),
+    );
+  }
+
+  void _copyProjectSettlement(BuildContext context, SharedProject project, ProjectSettlementSummary summary) {
+    final buffer = StringBuffer();
+    buffer.writeln('✈️ Projeto Coletivo: ${project.title} • Omni Lar');
+    buffer.writeln('💰 Total Gasto: ${summary.totalExpenses.formatted}');
+    buffer.writeln('');
+    buffer.writeln('✨ Super Pix do Projeto:');
+    if (summary.transfers.isEmpty) {
+      buffer.writeln('• Todas as contas estão 100% quitadas entre os participantes.');
+    } else {
+      for (final t in summary.transfers) {
+        buffer.writeln('• ${t.fromMemberName} transfere ${t.amount.formatted} para ${t.toMemberName} (${t.description})');
+      }
+    }
+    Clipboard.setData(ClipboardData(text: buffer.toString()));
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Resumo do rateio copiado! Pronto para compartilhar com os participantes.'),
+      ),
+    );
+  }
+
+  void _copySingleProjectTransfer(BuildContext context, SharedProject project, SuperPixTransfer t) {
+    final msg =
+        'Oi ${t.fromMemberName}! No fechamento do projeto "${project.title}" no Omni Lar, ficou acertado você transferir ${t.amount.formatted} para ${t.toMemberName} para quitar a sua parte (${t.description}).';
+    Clipboard.setData(ClipboardData(text: msg));
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Mensagem de cobrança copiada para o WhatsApp!'),
       ),
     );
   }

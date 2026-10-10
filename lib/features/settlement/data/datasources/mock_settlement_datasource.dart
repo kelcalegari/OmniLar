@@ -1,12 +1,12 @@
 import '../../../../core/domain/value_objects/financial_cycle.dart';
-import '../../../finance/data/datasources/mock_finance_datasource.dart';
+import '../../../finance/data/datasources/finance_datasource.dart';
 import '../../../p2p/data/datasources/mock_p2p_datasource.dart';
 import '../../domain/entities/settlement_summary.dart';
 import '../../domain/entities/super_pix_transfer.dart';
 import '../../domain/services/global_clearing_engine.dart';
 
 class MockSettlementDataSource {
-  final MockFinanceDataSource financeDataSource;
+  final FinanceDataSource financeDataSource;
   final MockP2PDataSource p2pDataSource;
   final GlobalClearingEngine engine;
 

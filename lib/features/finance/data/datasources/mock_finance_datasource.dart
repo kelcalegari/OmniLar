@@ -10,8 +10,9 @@ import '../../domain/entities/savings_vault.dart';
 import '../../../../core/domain/enums/recurrence.dart';
 import '../../../../core/domain/value_objects/money.dart';
 import '../../../../core/domain/value_objects/financial_cycle.dart';
+import 'finance_datasource.dart';
 
-class MockFinanceDataSource {
+class MockFinanceDataSource implements FinanceDataSource {
   final List<HouseMember> _members = [
     const HouseMember(
       id: 'member_carlos',

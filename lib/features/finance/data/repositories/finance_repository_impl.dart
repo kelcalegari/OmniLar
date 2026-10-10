@@ -5,14 +5,14 @@ import '../../domain/entities/house_expense.dart';
 import '../../domain/entities/contribution.dart';
 import '../../domain/entities/financial_cycle_summary.dart';
 import '../../domain/repositories/finance_repository.dart';
-import '../datasources/mock_finance_datasource.dart';
+import '../datasources/finance_datasource.dart';
 import '../../domain/entities/savings_vault.dart';
 import '../../../../core/domain/enums/recurrence.dart';
 import '../../../../core/domain/value_objects/money.dart';
 import '../../../../core/domain/value_objects/financial_cycle.dart';
 
 class FinanceRepositoryImpl implements FinanceRepository {
-  final MockFinanceDataSource _dataSource;
+  final FinanceDataSource _dataSource;
 
   FinanceRepositoryImpl(this._dataSource);
 

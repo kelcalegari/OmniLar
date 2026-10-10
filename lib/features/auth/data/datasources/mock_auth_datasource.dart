@@ -3,8 +3,9 @@ import '../../domain/entities/user_profile.dart';
 import '../../domain/entities/house.dart';
 import '../../domain/entities/house_member_info.dart';
 import '../../../../core/errors/failures.dart';
+import 'auth_datasource.dart';
 
-class MockAuthDataSource {
+class MockAuthDataSource implements AuthDataSource {
   final _authStateController = StreamController<UserProfile?>.broadcast();
   final _houseStateController = StreamController<House?>.broadcast();
 

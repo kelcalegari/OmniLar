@@ -1,12 +1,17 @@
 import 'package:get_it/get_it.dart';
 import '../network/offline_queue.dart';
+import '../network/supabase_config.dart';
 import '../theme/theme_cubit.dart';
+import '../../features/auth/data/datasources/auth_datasource.dart';
 import '../../features/auth/data/datasources/mock_auth_datasource.dart';
+import '../../features/auth/data/datasources/supabase_auth_datasource.dart';
 import '../../features/auth/data/repositories/auth_repository_impl.dart';
 import '../../features/auth/domain/repositories/auth_repository.dart';
 import '../../features/auth/presentation/cubit/auth_cubit.dart';
 
+import '../../features/finance/data/datasources/finance_datasource.dart';
 import '../../features/finance/data/datasources/mock_finance_datasource.dart';
+import '../../features/finance/data/datasources/supabase_finance_datasource.dart';
 import '../../features/finance/data/repositories/finance_repository_impl.dart';
 import '../../features/finance/domain/repositories/finance_repository.dart';
 import '../../features/finance/presentation/cubit/finance_cubit.dart';
@@ -45,12 +50,27 @@ Future<void> initServiceLocator() async {
   sl.registerLazySingleton<ThemeCubit>(() => ThemeCubit());
 
   // Auth & House Feature (Fase 0: Fundação)
-  sl.registerLazySingleton<MockAuthDataSource>(() => MockAuthDataSource());
+  sl.registerLazySingleton<AuthDataSource>(() {
+    final client = SupabaseConfig.client;
+    if (client != null) {
+      return SupabaseAuthDataSource(client);
+    }
+    return MockAuthDataSource();
+  });
   sl.registerLazySingleton<AuthRepository>(() => AuthRepositoryImpl(sl()));
   sl.registerLazySingleton<AuthCubit>(() => AuthCubit(sl()));
 
   // Finance Feature
-  sl.registerLazySingleton<MockFinanceDataSource>(() => MockFinanceDataSource());
+  sl.registerLazySingleton<FinanceDataSource>(() {
+    final client = SupabaseConfig.client;
+    if (client != null) {
+      return SupabaseFinanceDataSource(
+        client: client,
+        getCurrentHouseId: () => sl<AuthRepository>().currentHouse?.id ?? 'house_nossa_casa',
+      );
+    }
+    return MockFinanceDataSource();
+  });
   sl.registerLazySingleton<FinanceRepository>(() => FinanceRepositoryImpl(sl()));
   sl.registerLazySingleton<FinanceCubit>(() => FinanceCubit(sl()));
 

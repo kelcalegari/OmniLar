@@ -2,10 +2,10 @@ import '../../domain/entities/user_profile.dart';
 import '../../domain/entities/house.dart';
 import '../../domain/entities/house_member_info.dart';
 import '../../domain/repositories/auth_repository.dart';
-import '../datasources/mock_auth_datasource.dart';
+import '../datasources/auth_datasource.dart';
 
 class AuthRepositoryImpl implements AuthRepository {
-  final MockAuthDataSource _dataSource;
+  final AuthDataSource _dataSource;
 
   AuthRepositoryImpl(this._dataSource);
 
