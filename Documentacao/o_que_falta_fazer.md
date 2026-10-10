@@ -24,9 +24,12 @@ Este documento consolida o estado atual do desenvolvimento e mapeia com clareza 
 | **Despesas Retroativas & Contas Atrasadas** (Vencidas, Carry-forward de Passivos, Alertas) | Concluído ✅ | 100% |
 | **Eventos & Despesas Recorrentes** (3 Escopos de Edição/Exclusão RFC 5545) | Concluído ✅ | 100% |
 | **Projetos & Viagens Compartilhadas** (Isolamento da Casa, Rateio Próprio, Super Pix) | Concluído ✅ | 100% |
-| **Backend & Infra SQL** (Migrações 0001 a 0005, RLS e Saneamento) | Em Refinamento 🔄 | Pendente Saneamento |
+| **Backend & Infra SQL** (Migrações 0001 a 0006, RLS, Views Seguras e RPCs) | Concluído ✅ | 100% |
+| **Integração Real Supabase** (AuthDataSource e FinanceDataSource) | Concluído ✅ | 100% |
+| **Compartilhamento WhatsApp / Super Pix** (Copiar Pix, Veredito e Cobrança Amigável) | Concluído ✅ | 100% |
+| **CI / CD Quality Gate** (GitHub Actions, dart analyze 0 warnings, flutter test) | Concluído ✅ | 100% |
 
-> **Métrica de Confiabilidade:** **118 testes automatizados (unitários e widgets) passando (100% verde)** e cobertura contínua de regressão.
+> **Métrica de Confiabilidade:** **118 testes automatizados (unitários e widgets) passando (100% verde)**, `dart analyze` sem nenhum aviso ou erro (exit code 0) e pipeline de CI integrado.
 
 ---
 
@@ -116,12 +119,13 @@ flowchart TD
 ### Frente 4: Conexão Real com o Backend (Supabase & Edge Functions)
 Atualmente, o app utiliza **DataSources Mockados** altamente consistentes em memória para permitir desenvolvimento e testes ágeis sem dependência de rede.
 
-- [ ] **DataSources Reais de Banco:**
-  - Substituir os `Mock*DataSource` por implementações que chamam `supabase.from('...')`:
-    - `SupabaseFinanceDataSource` (`house_expenses`, `house_expense_items`, `contributions`, `categories`).
-    - `SupabaseP2PDataSource` (`loans`, `installments`, `payments`).
-    - `SupabaseShoppingDataSource` (`shopping_lists`, `shopping_items`, `shopping_trips`).
-    - `SupabaseCalendarDataSource` (`events`, `tasks`).
+- [x] **DataSources Reais de Banco (Fundação & Financeiro):**
+  - Implementados através de interfaces desacopladas e injeção resiliente:
+    - `AuthDataSource` & `SupabaseAuthDataSource` (Autenticação real, criação de casa, convites).
+    - `FinanceDataSource` & `SupabaseFinanceDataSource` (`house_expenses`, `house_expense_items`, `contributions`, `savings_vaults`, `savings_transactions`).
+  - [ ] `SupabaseP2PDataSource` (`loans`, `installments`, `payments`).
+  - [ ] `SupabaseShoppingDataSource` (`shopping_lists`, `shopping_items`, `shopping_trips`).
+  - [ ] `SupabaseCalendarDataSource` (`events`, `tasks`).
 - [ ] **Supabase Realtime:**
   - Plugar streams de Realtime nas listas de compras e tarefas para que alterações feitas por um parceiro reflitam instantaneamente no dispositivo do outro sem recarregar.
 - [ ] **Edge Functions (Deno / TypeScript):**
@@ -145,9 +149,11 @@ A especificação do projeto prevê que ações de alto impacto financeiro não 
 ### Frente 4: Compartilhamento e Notificações Push
 O objetivo do Omni Lar é "viver junto sem atrito". Para isso, a comunicação entre os moradores precisa ser fluida.
 
-- [ ] **Compartilhamento do Super Pix (Comprovante / Veredito):**
-  - Implementar botão de compartilhamento no `SettlementHubPage` gerando texto pré-formatado e educado:
-    > *"Fechamento do ciclo concluído! Segundo o Omni Lar, Carlos precisa transferir R$ 180,00 via Pix para Marina para quitar todos os gastos da casa e empréstimos pessoais."*
+- [x] **Compartilhamento do Super Pix (Comprovante, Veredito e Cobrança Amigável):**
+  - Implementado no `SettlementHubPage` e `ProjectsHubPage`:
+    - Botão "Compartilhar" no Veredito com texto elegante de prestação de contas do ciclo.
+    - Botão "Cobrança" em cada transferência gerando mensagem amigável e educada pronta para enviar no WhatsApp.
+    - Botão "Copiar Pix" para transferência imediata.
 - [ ] **Notificações Push (FCM / APNs):**
   - Configurar Firebase Cloud Messaging para Android e APNs para iOS.
   - Enviar pushes para: novo empréstimo solicitado, tarefa atribuída e proximidade do fechamento do ciclo.
