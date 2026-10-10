@@ -5,6 +5,7 @@ import '../../../../core/di/service_locator.dart';
 import '../../../../core/domain/value_objects/money.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/widgets/responsive_container.dart';
+import '../../../../core/widgets/privacy_toggle.dart';
 import '../../../finance/domain/entities/category.dart';
 import '../../../finance/domain/entities/financial_cycle_summary.dart';
 import '../../../finance/presentation/cubit/finance_cubit.dart';
@@ -28,6 +29,7 @@ class _ReportsPageContent extends StatelessWidget {
       appBar: AppBar(
         title: const Text('Relatórios e Analytics', style: TextStyle(fontWeight: FontWeight.bold)),
         actions: [
+          const PrivacyToggleButton(),
           IconButton(
             icon: const Icon(Icons.flash_on_rounded, color: AppColors.primary),
             tooltip: 'Hub de Liquidação',
@@ -181,7 +183,7 @@ class _ReportsPageContent extends StatelessWidget {
           const SizedBox(height: 4),
           FittedBox(
             fit: BoxFit.scaleDown,
-            child: Text(
+            child: PrivacySensitiveText(
               amount.formatted,
               style: TextStyle(
                 fontWeight: FontWeight.bold,
@@ -300,7 +302,7 @@ class _ReportsPageContent extends StatelessWidget {
                         style: const TextStyle(color: Colors.grey, fontSize: 12),
                       ),
                       const SizedBox(width: 12),
-                      Text(
+                      PrivacySensitiveText(
                         Money(cents).formatted,
                         style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
                       ),
@@ -375,7 +377,7 @@ class _ReportsPageContent extends StatelessWidget {
                         ],
                       ),
                     ),
-                    Text(
+                    PrivacySensitiveText(
                       Money(paidCents).formatted,
                       style: const TextStyle(
                         fontWeight: FontWeight.bold,
