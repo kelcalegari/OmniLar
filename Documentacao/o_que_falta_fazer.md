@@ -17,10 +17,11 @@ Este documento consolida o estado atual do desenvolvimento e mapeia com clareza 
 | **Fase 6 — Conciliação** (Extratos CSV, "Rachar a Fatura" RN09) | Concluído ✅ | 100% |
 | **Fase 7 — Assistente de IA** (Chat, Motor Determinístico, Confirmação) | Concluído ✅ | 100% |
 | **Ajustes & Configurações** (Categorias com Dono, Cartões/VR, Rateio, Ciclo) | Concluído ✅ | 100% |
+| **Caixinhas & Metas da Casa** (Reserva Blindada, Metas com Progresso, Aportes/Resgates) | Concluído ✅ | 100% |
 | **Humanização & UX** (Input ATM centavos, Modo Privacidade, 3 Colunas) | Concluído ✅ | 100% |
 | **Backend & Infra SQL** (Migrações 0001 a 0004 com RLS, Fila Offline) | Concluído ✅ | 100% |
 
-> **Métrica de Confiabilidade:** **56 testes automatizados (unitários e widgets) passando (100% verde)** e `flutter analyze` sem nenhum erro ou aviso.
+> **Métrica de Confiabilidade:** **60 testes automatizados (unitários e widgets) passando (100% verde)** e `flutter analyze` sem nenhum erro ou aviso.
 
 ---
 
