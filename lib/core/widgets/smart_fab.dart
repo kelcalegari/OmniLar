@@ -9,6 +9,7 @@ import '../../features/p2p/presentation/pages/create_loan_page.dart';
 import '../../features/calendar/presentation/cubit/calendar_cubit.dart';
 import '../../features/calendar/presentation/widgets/add_event_sheet.dart';
 import '../../features/calendar/presentation/widgets/add_task_sheet.dart';
+import '../../features/capture/presentation/pages/smart_scanner_page.dart';
 
 class SmartFAB extends StatelessWidget {
   final bool isExtended;
@@ -114,9 +115,7 @@ class _SmartFABContent extends StatelessWidget {
                 color: AppColors.primary,
                 onTap: () {
                   Navigator.pop(context);
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Captura Inteligente em breve (Fase 5)')),
-                  );
+                  SmartScannerPage.show(context);
                 },
               ),
               const SizedBox(width: 12),
