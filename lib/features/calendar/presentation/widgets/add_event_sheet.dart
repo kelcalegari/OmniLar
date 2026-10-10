@@ -143,113 +143,133 @@ class _AddEventSheetState extends State<AddEventSheet> {
   Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
 
-    final startDateTime = _isAllDay
-        ? DateTime(_startDate.year, _startDate.month, _startDate.day, 0, 0)
-        : DateTime(_startDate.year, _startDate.month, _startDate.day, _startTime.hour, _startTime.minute);
+    try {
+      final startDateTime = _isAllDay
+          ? DateTime(_startDate.year, _startDate.month, _startDate.day, 0, 0)
+          : DateTime(_startDate.year, _startDate.month, _startDate.day, _startTime.hour, _startTime.minute);
 
-    final endDateTime = _isAllDay
-        ? DateTime(_endDate.year, _endDate.month, _endDate.day, 23, 59)
-        : DateTime(_endDate.year, _endDate.month, _endDate.day, _endTime.hour, _endTime.minute);
+      final endDateTime = _isAllDay
+          ? DateTime(_endDate.year, _endDate.month, _endDate.day, 23, 59)
+          : DateTime(_endDate.year, _endDate.month, _endDate.day, _endTime.hour, _endTime.minute);
 
-    final eventId = widget.initialEvent?.id ?? 'event_${DateTime.now().millisecondsSinceEpoch}';
+      final eventId = widget.initialEvent?.id ?? 'event_${DateTime.now().millisecondsSinceEpoch}';
 
-    // Monta a lista de participantes
-    final participants = <EventParticipant>[];
-    _selectedRoles.forEach((memberId, role) {
-      if (role != null) {
-        final isCreator = memberId == widget.activeMemberId;
-        final existingParticipant = widget.initialEvent?.participants.firstWhere(
-          (p) => p.memberId == memberId,
-          orElse: () => EventParticipant(
-            id: 'part_${eventId}_$memberId',
-            eventId: eventId,
-            memberId: memberId,
-            memberName: _memberNames[memberId] ?? 'Membro',
-            role: role,
-            rsvpStatus: isCreator ? RsvpStatus.accepted : RsvpStatus.pending,
-            respondedAt: isCreator ? DateTime.now() : null,
-          ),
+      // Monta a lista de participantes
+      final participants = <EventParticipant>[];
+      final existingParticipants = widget.initialEvent?.participants;
+
+      _selectedRoles.forEach((memberId, role) {
+        if (role != null) {
+          final isCreator = memberId == widget.activeMemberId;
+          final existing = existingParticipants != null
+              ? existingParticipants.where((p) => p.memberId == memberId).firstOrNull
+              : null;
+
+          if (existing != null) {
+            participants.add(existing.copyWith(role: role));
+          } else {
+            participants.add(
+              EventParticipant(
+                id: 'part_${eventId}_$memberId',
+                eventId: eventId,
+                memberId: memberId,
+                memberName: _memberNames[memberId] ?? 'Membro',
+                role: role,
+                rsvpStatus: isCreator ? RsvpStatus.accepted : RsvpStatus.pending,
+                respondedAt: isCreator ? DateTime.now() : null,
+              ),
+            );
+          }
+        }
+      });
+
+      final cubit = context.read<CalendarCubit>();
+      final messenger = ScaffoldMessenger.of(context);
+
+      if (widget.initialEvent != null) {
+        final updatedEvent = widget.initialEvent!.copyWith(
+          title: _titleController.text.trim(),
+          description: _descriptionController.text.trim().isEmpty ? null : _descriptionController.text.trim(),
+          location: _locationController.text.trim().isEmpty ? null : _locationController.text.trim(),
+          startTime: startDateTime,
+          endTime: endDateTime,
+          isAllDay: _isAllDay,
+          visibility: _visibility,
+          participants: participants,
+          recurrenceFrequency: _recurrenceFrequency,
         );
 
-        participants.add(
-          existingParticipant!.copyWith(
-            role: role,
+        RecurrenceScope scope = RecurrenceScope.thisInstanceOnly;
+        if (widget.initialEvent!.isRecurring) {
+          final chosenScope = await showRecurrenceScopeDialog(
+            context: context,
+            itemTitle: updatedEvent.title,
+            isDelete: false,
+          );
+          if (chosenScope == null) return; // cancelou
+          scope = chosenScope;
+        }
+
+        await cubit.updateEvent(updatedEvent, scope: scope);
+        if (mounted) Navigator.pop(context);
+
+        messenger.showSnackBar(
+          SnackBar(
+            content: Text('Compromisso "${updatedEvent.title}" atualizado! 🎉'),
+            backgroundColor: AppColors.primary,
+          ),
+        );
+      } else {
+        final newEvent = CalendarEvent(
+          id: eventId,
+          title: _titleController.text.trim(),
+          description: _descriptionController.text.trim().isEmpty ? null : _descriptionController.text.trim(),
+          location: _locationController.text.trim().isEmpty ? null : _locationController.text.trim(),
+          startTime: startDateTime,
+          endTime: endDateTime,
+          isAllDay: _isAllDay,
+          createdByMemberId: widget.activeMemberId,
+          visibility: _visibility,
+          participants: participants,
+          recurrenceFrequency: _recurrenceFrequency,
+        );
+
+        await cubit.addEvent(newEvent);
+        if (mounted) Navigator.pop(context);
+
+        messenger.showSnackBar(
+          SnackBar(
+            content: Text(
+              newEvent.isRecurring
+                  ? 'Série de eventos "${newEvent.title}" programada com sucesso! 🔁'
+                  : 'Evento "${newEvent.title}" criado com sucesso! 🎉',
+            ),
+            backgroundColor: AppColors.primary,
           ),
         );
       }
-    });
-
-    final cubit = context.read<CalendarCubit>();
-    final messenger = ScaffoldMessenger.of(context);
-
-    if (widget.initialEvent != null) {
-      final updatedEvent = widget.initialEvent!.copyWith(
-        title: _titleController.text.trim(),
-        description: _descriptionController.text.trim().isEmpty ? null : _descriptionController.text.trim(),
-        location: _locationController.text.trim().isEmpty ? null : _locationController.text.trim(),
-        startTime: startDateTime,
-        endTime: endDateTime,
-        isAllDay: _isAllDay,
-        visibility: _visibility,
-        participants: participants,
-        recurrenceFrequency: _recurrenceFrequency,
-      );
-
-      RecurrenceScope scope = RecurrenceScope.thisInstanceOnly;
-      if (widget.initialEvent!.isRecurring) {
-        final chosenScope = await showRecurrenceScopeDialog(
-          context: context,
-          itemTitle: updatedEvent.title,
-          isDelete: false,
-        );
-        if (chosenScope == null) return; // cancelou
-        scope = chosenScope;
-      }
-
-      await cubit.updateEvent(updatedEvent, scope: scope);
-      if (mounted) Navigator.pop(context);
-
-      messenger.showSnackBar(
-        SnackBar(
-          content: Text('Compromisso "${updatedEvent.title}" atualizado! 🎉'),
-          backgroundColor: AppColors.primary,
-        ),
-      );
-    } else {
-      final newEvent = CalendarEvent(
-        id: eventId,
-        title: _titleController.text.trim(),
-        description: _descriptionController.text.trim().isEmpty ? null : _descriptionController.text.trim(),
-        location: _locationController.text.trim().isEmpty ? null : _locationController.text.trim(),
-        startTime: startDateTime,
-        endTime: endDateTime,
-        isAllDay: _isAllDay,
-        createdByMemberId: widget.activeMemberId,
-        visibility: _visibility,
-        participants: participants,
-        recurrenceFrequency: _recurrenceFrequency,
-      );
-
-      await cubit.addEvent(newEvent);
-      if (mounted) Navigator.pop(context);
-
-      messenger.showSnackBar(
-        SnackBar(
-          content: Text(
-            newEvent.isRecurring
-                ? 'Série de eventos "${newEvent.title}" programada com sucesso! 🔁'
-                : 'Evento "${newEvent.title}" criado com sucesso! 🎉',
+    } catch (e, stack) {
+      debugPrint('Erro ao salvar evento: $e\n$stack');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Erro ao salvar compromisso: $e'),
+            backgroundColor: AppColors.debtRed,
           ),
-          backgroundColor: AppColors.primary,
-        ),
-      );
+        );
+      }
     }
   }
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final dateFormat = DateFormat("dd/MM/yyyy (EEE)", 'pt_BR');
+    DateFormat dateFormat;
+    try {
+      dateFormat = DateFormat("dd/MM/yyyy (EEE)", 'pt_BR');
+    } catch (_) {
+      dateFormat = DateFormat("dd/MM/yyyy");
+    }
 
     return Padding(
       padding: EdgeInsets.only(
