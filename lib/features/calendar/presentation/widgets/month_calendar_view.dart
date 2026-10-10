@@ -62,7 +62,7 @@ class MonthCalendarView extends StatelessWidget {
         gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
           crossAxisCount: 7,
           childAspectRatio: isCompact
-              ? 1.25
+              ? 1.05
               : (isDesktop ? 1.35 : 0.85),
         ),
         itemCount: totalCells,
@@ -101,7 +101,9 @@ class MonthCalendarView extends StatelessWidget {
                     ? AppColors.primary.withValues(alpha: 0.08)
                     : (isCurrentMonth ? null : Colors.grey.withValues(alpha: 0.03)),
               ),
-              padding: const EdgeInsets.all(4),
+              padding: isCompact
+                  ? const EdgeInsets.symmetric(vertical: 2, horizontal: 1)
+                  : const EdgeInsets.all(4),
               child: isCompact
                   ? Column(
                       mainAxisAlignment: MainAxisAlignment.center,

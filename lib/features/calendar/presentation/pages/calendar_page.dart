@@ -628,7 +628,7 @@ class _CalendarPageState extends State<CalendarPage> {
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Coluna Esquerda: Mini Calendário
+            // Coluna Esquerda: Mini Calendário (estilo moderno unificado)
             SizedBox(
               width: 320,
               child: MiniCalendarCard(
@@ -636,6 +636,11 @@ class _CalendarPageState extends State<CalendarPage> {
                 events: state.events,
                 onDateSelected: (date) {
                   setState(() => _selectedDate = date);
+                },
+                onEventTap: (event) => _showEventDetailsModal(context, event, state, cubit),
+                onAddEvent: (date) {
+                  setState(() => _selectedDate = date);
+                  AddEventSheet.show(context, state.activeMemberId);
                 },
               ),
             ),
@@ -740,7 +745,7 @@ class _CalendarPageState extends State<CalendarPage> {
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Coluna Esquerda: Mini Calendário
+              // Coluna Esquerda: Mini Calendário (estilo moderno unificado)
               SizedBox(
                 width: 320,
                 child: MiniCalendarCard(
@@ -748,6 +753,11 @@ class _CalendarPageState extends State<CalendarPage> {
                   events: state.events,
                   onDateSelected: (date) {
                     setState(() => _selectedDate = date);
+                  },
+                  onEventTap: (event) => _showEventDetailsModal(context, event, state, cubit),
+                  onAddEvent: (date) {
+                    setState(() => _selectedDate = date);
+                    AddEventSheet.show(context, state.activeMemberId);
                   },
                 ),
               ),
