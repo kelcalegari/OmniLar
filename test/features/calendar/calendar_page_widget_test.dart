@@ -6,6 +6,8 @@ import 'package:omni_lar/features/auth/presentation/cubit/auth_cubit.dart';
 import 'package:omni_lar/features/calendar/presentation/cubit/calendar_cubit.dart';
 import 'package:omni_lar/features/calendar/presentation/pages/calendar_page.dart';
 import 'package:omni_lar/features/calendar/presentation/widgets/mini_calendar_card.dart';
+import 'package:omni_lar/features/calendar/presentation/widgets/month_calendar_view.dart';
+import 'package:omni_lar/features/calendar/presentation/widgets/week_calendar_view.dart';
 
 void main() {
   setUpAll(() async {
@@ -26,8 +28,8 @@ void main() {
     );
   }
 
-  group('CalendarPage - Agenda do Lar (100% Eventos & Compromissos)', () {
-    testWidgets('Inicia na Visão Agenda com Mini Calendário e não contém Tarefas',
+  group('CalendarPage - Visões de Dia, Semana, Mês e Lista', () {
+    testWidgets('Inicia na Visão Dia com Mini Calendário e sem Tarefas',
         (tester) async {
       tester.view.physicalSize = const Size(800, 1400);
       tester.view.devicePixelRatio = 1.0;
@@ -37,8 +39,10 @@ void main() {
       await tester.pumpAndSettle();
 
       // Botões de alternância de modo
-      expect(find.text('Visão Agenda'), findsOneWidget);
-      expect(find.text('Visão Lista'), findsOneWidget);
+      expect(find.text('Dia'), findsOneWidget);
+      expect(find.text('Semana'), findsOneWidget);
+      expect(find.text('Mês'), findsOneWidget);
+      expect(find.text('Lista'), findsOneWidget);
 
       // Mini Calendário presente
       expect(find.byType(MiniCalendarCard), findsOneWidget);
@@ -48,7 +52,7 @@ void main() {
       expect(find.text('Tarefas'), findsNothing);
     });
 
-    testWidgets('Alterna para Visão Lista e oculta Mini Calendário exibindo lista corrida',
+    testWidgets('Alterna para Visão Semana e renderiza WeekCalendarView',
         (tester) async {
       tester.view.physicalSize = const Size(800, 1400);
       tester.view.devicePixelRatio = 1.0;
@@ -57,17 +61,55 @@ void main() {
       await tester.pumpWidget(buildCalendarPage());
       await tester.pumpAndSettle();
 
-      // Alterna para Visão Lista
-      await tester.tap(find.text('Visão Lista'));
+      // Alterna para Semana
+      await tester.tap(find.text('Semana'));
       await tester.pumpAndSettle();
 
-      // Mini Calendário é ocultado
+      // WeekCalendarView deve estar visível
+      expect(find.byType(WeekCalendarView), findsOneWidget);
       expect(find.byType(MiniCalendarCard), findsNothing);
-      // Exibe cabeçalho de lista de compromissos
+    });
+
+    testWidgets('Alterna para Visão Mês e renderiza grade MonthCalendarView',
+        (tester) async {
+      tester.view.physicalSize = const Size(800, 1400);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.resetPhysicalSize);
+
+      await tester.pumpWidget(buildCalendarPage());
+      await tester.pumpAndSettle();
+
+      // Alterna para Mês
+      await tester.tap(find.text('Mês'));
+      await tester.pumpAndSettle();
+
+      // MonthCalendarView deve estar visível
+      expect(find.byType(MonthCalendarView), findsOneWidget);
+      expect(find.byType(MiniCalendarCard), findsNothing);
+    });
+
+    testWidgets('Alterna para Visão Lista e renderiza lista corrida de compromissos',
+        (tester) async {
+      tester.view.physicalSize = const Size(800, 1400);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.resetPhysicalSize);
+
+      await tester.pumpWidget(buildCalendarPage());
+      await tester.pumpAndSettle();
+
+      // Alterna para Lista
+      await tester.tap(find.text('Lista'));
+      await tester.pumpAndSettle();
+
+      // Mini Calendar e grades são ocultadas
+      expect(find.byType(MiniCalendarCard), findsNothing);
+      expect(find.byType(MonthCalendarView), findsNothing);
+      expect(find.byType(WeekCalendarView), findsNothing);
+      // Exibe cabeçalho de lista
       expect(find.textContaining('Todos os Compromissos ('), findsOneWidget);
     });
 
-    testWidgets('Alternância de visão funciona também em resolução Desktop',
+    testWidgets('Em Desktop (1280x800), permite alternar entre Dia, Semana, Mês e Lista',
         (tester) async {
       tester.view.physicalSize = const Size(1280, 800);
       tester.view.devicePixelRatio = 1.0;
@@ -76,19 +118,29 @@ void main() {
       await tester.pumpWidget(buildCalendarPage());
       await tester.pumpAndSettle();
 
-      // No Desktop, Visão Agenda mostra MiniCalendarCard e timeline lateral
-      expect(find.byType(MiniCalendarCard), findsOneWidget);
+      // No Desktop, botões têm labels "Visão Dia", "Visão Semana", etc.
+      expect(find.text('Visão Dia'), findsOneWidget);
+      expect(find.text('Visão Semana'), findsOneWidget);
+      expect(find.text('Visão Mês'), findsOneWidget);
+      expect(find.text('Visão Lista'), findsOneWidget);
 
-      // Alterna para Visão Lista via botão no topo
+      // Alterna para Visão Mês no Desktop
+      await tester.tap(find.text('Visão Mês'));
+      await tester.pumpAndSettle();
+      expect(find.byType(MonthCalendarView), findsOneWidget);
+
+      // Alterna para Visão Semana no Desktop
+      await tester.tap(find.text('Visão Semana'));
+      await tester.pumpAndSettle();
+      expect(find.byType(WeekCalendarView), findsOneWidget);
+
+      // Alterna para Visão Lista no Desktop
       await tester.tap(find.text('Visão Lista'));
       await tester.pumpAndSettle();
-
-      // MiniCalendarCard sai de cena e entra lista ampla
-      expect(find.byType(MiniCalendarCard), findsNothing);
       expect(find.textContaining('Todos os Compromissos ('), findsOneWidget);
     });
 
-    testWidgets('MiniCalendarCard navega pelos dias via botões de chevron e hoje',
+    testWidgets('Navegação de períodos via chevrons e botão Hoje',
         (tester) async {
       tester.view.physicalSize = const Size(800, 1400);
       tester.view.devicePixelRatio = 1.0;
@@ -97,8 +149,8 @@ void main() {
       await tester.pumpWidget(buildCalendarPage());
       await tester.pumpAndSettle();
 
-      // Navegar para dia anterior
-      final prevBtn = find.byTooltip('Dia Anterior');
+      // Navegar para período anterior
+      final prevBtn = find.byTooltip('Anterior');
       expect(prevBtn, findsOneWidget);
       await tester.tap(prevBtn);
       await tester.pumpAndSettle();
