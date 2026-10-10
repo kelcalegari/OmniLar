@@ -6,6 +6,7 @@ import '../../../../core/domain/value_objects/financial_cycle.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/utils/responsive.dart';
 import '../../../../core/widgets/responsive_container.dart';
+import '../../../../core/widgets/privacy_toggle.dart';
 import '../../domain/entities/settlement_summary.dart';
 import '../../domain/entities/super_pix_transfer.dart';
 import '../cubit/settlement_cubit.dart';
@@ -49,6 +50,7 @@ class _SettlementHubContent extends StatelessWidget {
             : null,
         title: const Text('Fechamento do Ciclo', style: TextStyle(fontWeight: FontWeight.bold)),
         actions: [
+          const PrivacyToggleButton(),
           IconButton(
             icon: const Icon(Icons.help_outline_rounded),
             tooltip: 'Entenda como funciona a compensação',
@@ -269,7 +271,7 @@ class _SettlementHubContent extends StatelessWidget {
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 const Text('Aportes Realizados:', style: TextStyle(color: Colors.grey)),
-                Text(
+                PrivacySensitiveText(
                   summary.totalContributions.formatted,
                   style: const TextStyle(fontWeight: FontWeight.bold, color: AppColors.creditGreen),
                 ),
@@ -280,7 +282,7 @@ class _SettlementHubContent extends StatelessWidget {
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 const Text('Despesas da Casa no Ciclo:', style: TextStyle(color: Colors.grey)),
-                Text(
+                PrivacySensitiveText(
                   summary.totalHouseExpenses.formatted,
                   style: const TextStyle(fontWeight: FontWeight.bold, color: AppColors.debtRed),
                 ),
@@ -294,7 +296,7 @@ class _SettlementHubContent extends StatelessWidget {
                   isSurplus ? 'Saldo Livre (Sobra no Fundo):' : 'Déficit do Caixa:',
                   style: const TextStyle(fontWeight: FontWeight.w600),
                 ),
-                Text(
+                PrivacySensitiveText(
                   summary.houseTreasuryBalance.formatted,
                   style: TextStyle(
                     fontWeight: FontWeight.bold,
@@ -344,7 +346,7 @@ class _SettlementHubContent extends StatelessWidget {
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 const Text('Parcelas Interpessoais do Mês:', style: TextStyle(color: Colors.grey)),
-                Text(
+                PrivacySensitiveText(
                   summary.totalP2PCleared.formatted,
                   style: const TextStyle(fontWeight: FontWeight.bold),
                 ),
@@ -358,7 +360,7 @@ class _SettlementHubContent extends StatelessWidget {
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     Text('${m.memberName}:', style: const TextStyle(fontSize: 13)),
-                    Text(
+                    PrivacySensitiveText(
                       m.isCreditor
                           ? '+${m.netBalance.formatted} (a receber)'
                           : m.isDebtor
@@ -504,7 +506,7 @@ class _SettlementHubContent extends StatelessWidget {
                   ),
                 ],
               ),
-              Text(
+              PrivacySensitiveText(
                 transfer.amount.formatted,
                 style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: AppColors.primary),
               ),
