@@ -119,7 +119,29 @@ class ExpenseTimelineItem extends StatelessWidget {
                   ],
                 ),
                 const SizedBox(height: 16),
-
+                if (expense.isOverdue) ...[
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                    margin: const EdgeInsets.only(bottom: 12),
+                    decoration: BoxDecoration(
+                      color: AppColors.debtRed.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: AppColors.debtRed.withValues(alpha: 0.3)),
+                    ),
+                    child: Row(
+                      children: [
+                        const Icon(Icons.warning_amber_rounded, size: 18, color: AppColors.debtRed),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            'Conta vencida há ${expense.daysOverdue} dia${expense.daysOverdue == 1 ? "" : "s"}. Ao pagar, seu Fôlego Financeiro será atualizado.',
+                            style: const TextStyle(fontSize: 12, color: AppColors.debtRed, fontWeight: FontWeight.w500),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
                 if (expense.isVariable) ...[
                   const Text(
                     'Esta é uma conta com valor variável. Confirme ou ajuste o valor real da fatura:',
@@ -229,6 +251,7 @@ class ExpenseTimelineItem extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final isPending = expense.isPending;
+    final isOverdue = expense.isOverdue;
     final catColor = _parseColor(category?.colorHex);
     final dateFormatted = DateFormat('dd/MM').format(expense.dueDate ?? expense.date);
 
@@ -242,10 +265,12 @@ class ExpenseTimelineItem extends StatelessWidget {
           color: theme.cardTheme.color,
           borderRadius: BorderRadius.circular(16),
           border: Border.all(
-            color: isPending
-                ? AppColors.folegoWarning.withValues(alpha: 0.4)
-                : (theme.brightness == Brightness.dark ? AppColors.borderDark : AppColors.borderLight),
-            width: isPending ? 1.5 : 1,
+            color: isOverdue
+                ? AppColors.debtRed.withValues(alpha: 0.6)
+                : (isPending
+                    ? AppColors.folegoWarning.withValues(alpha: 0.4)
+                    : (theme.brightness == Brightness.dark ? AppColors.borderDark : AppColors.borderLight)),
+            width: (isOverdue || isPending) ? 1.5 : 1,
           ),
         ),
         child: Column(
@@ -343,16 +368,27 @@ class ExpenseTimelineItem extends StatelessWidget {
                             Container(
                               padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                               decoration: BoxDecoration(
-                                color: AppColors.folegoWarning.withValues(alpha: 0.15),
+                                color: isOverdue
+                                    ? AppColors.debtRed.withValues(alpha: 0.15)
+                                    : AppColors.folegoWarning.withValues(alpha: 0.15),
                                 borderRadius: BorderRadius.circular(4),
                               ),
-                              child: const Text(
-                                'A vencer',
-                                style: TextStyle(
-                                  fontSize: 10,
-                                  fontWeight: FontWeight.bold,
-                                  color: AppColors.folegoWarning,
-                                ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  if (isOverdue) ...[
+                                    const Icon(Icons.warning_amber_rounded, size: 10, color: AppColors.debtRed),
+                                    const SizedBox(width: 2),
+                                  ],
+                                  Text(
+                                    isOverdue ? 'Atrasada (${expense.daysOverdue}d)' : 'A vencer',
+                                    style: TextStyle(
+                                      fontSize: 10,
+                                      fontWeight: FontWeight.bold,
+                                      color: isOverdue ? AppColors.debtRed : AppColors.folegoWarning,
+                                    ),
+                                  ),
+                                ],
                               ),
                             ),
                           ],
@@ -385,7 +421,9 @@ class ExpenseTimelineItem extends StatelessWidget {
                       style: TextStyle(
                         fontSize: 15,
                         fontWeight: FontWeight.bold,
-                        color: isPending ? AppColors.folegoWarning : null,
+                        color: isOverdue
+                            ? AppColors.debtRed
+                            : (isPending ? AppColors.folegoWarning : null),
                       ),
                     ),
                     const SizedBox(height: 4),

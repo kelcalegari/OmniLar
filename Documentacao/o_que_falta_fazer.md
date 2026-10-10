@@ -21,9 +21,10 @@ Este documento consolida o estado atual do desenvolvimento e mapeia com clareza 
 | **Caixinhas & Metas da Casa** (Reserva Blindada, Metas com Progresso, Aportes/Resgates) | Concluído ✅ | 100% |
 | **Humanização & UX** (Input ATM centavos nativo, Modo Privacidade, 3 Colunas) | Concluído ✅ | 100% |
 | **Despesas Compostas & Boletos Segmentados** (Condomínio com Água, Gás e Obras) | Concluído ✅ | 100% |
+| **Despesas Retroativas & Contas Atrasadas** (Vencidas, Carry-forward de Passivos, Alertas) | Concluído ✅ | 100% |
 | **Backend & Infra SQL** (Migrações 0001 a 0004 com RLS, Fila Offline) | Concluído ✅ | 100% |
 
-> **Métrica de Confiabilidade:** **82 testes automatizados (unitários e widgets) passando (100% verde)** e cobertura contínua de regressão.
+> **Métrica de Confiabilidade:** **91 testes automatizados (unitários e widgets) passando (100% verde)** e cobertura contínua de regressão.
 
 ---
 
@@ -76,7 +77,23 @@ flowchart TD
 
 ---
 
-### Frente 2: Conexão Real com o Backend (Supabase & Edge Functions)
+### Frente 2: Despesas Retroativas e Contas Atrasadas (Vencidas, Passadas e Arrasto de Passivos)
+*Essencial para casas que iniciam o app com histórico acumulado ou boletos vencidos em aberto.*
+
+- [x] **Seletor de Data & Competência no Cadastro (`AddExpensePage`):**
+  - Permitir selecionar qualquer data retroativa (passada ou futura) via DatePicker amigável.
+  - Detecção automática de vencimento no passado: se a data de vencimento for anterior a hoje e a conta for pendente, exibir chip visual `⚠️ Conta Vencida / Em Atraso (venceu há X dias)`.
+- [x] **Identificação de "Conta em Atraso" no Domínio (`HouseExpense`):**
+  - Getters `isOverdue` e `daysOverdue`.
+  - Tratamento visual na Timeline (`ExpenseTimelineItem`): badge de alerta `⚠️ Em atraso (Xd)` e borda destacada em vez de mero "A vencer".
+- [x] **Arrasto de Passivos Não Pagos (`FinanceRepository` / `MockFinanceDataSource`):**
+  - Contas atrasadas de ciclos anteriores não pagas continuam pesando no ciclo atual e no Termômetro de Fôlego até receberem baixa.
+- [x] **Navegador de Ciclos na Tela Inicial (`HomePage`):**
+  - Controles de avanço/retrocesso de ciclo financeiro (`< | >`) na tela principal para consulta de meses anteriores.
+
+---
+
+### Frente 3: Conexão Real com o Backend (Supabase & Edge Functions)
 Atualmente, o app utiliza **DataSources Mockados** altamente consistentes em memória para permitir desenvolvimento e testes ágeis sem dependência de rede.
 
 - [ ] **DataSources Reais de Banco:**

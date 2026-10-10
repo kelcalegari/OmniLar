@@ -50,6 +50,27 @@ class HouseExpense extends Equatable {
   bool get isPaid => status == ExpenseStatus.paid;
   bool get isPending => status == ExpenseStatus.pending;
 
+  /// Data efetiva de vencimento ou de referência
+  DateTime get effectiveDueDate => dueDate ?? date;
+
+  /// Verifica se a despesa está vencida/em atraso (pendente e com data anterior a hoje)
+  bool get isOverdue {
+    if (!isPending) return false;
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final due = DateTime(effectiveDueDate.year, effectiveDueDate.month, effectiveDueDate.day);
+    return due.isBefore(today);
+  }
+
+  /// Quantidade de dias corridos em atraso
+  int get daysOverdue {
+    if (!isOverdue) return 0;
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final due = DateTime(effectiveDueDate.year, effectiveDueDate.month, effectiveDueDate.day);
+    return today.difference(due).inDays;
+  }
+
   /// Se a despesa possui sub-itens desmembrados (ex: condomínio com água, gás, obras)
   bool get isItemized => items.isNotEmpty;
 

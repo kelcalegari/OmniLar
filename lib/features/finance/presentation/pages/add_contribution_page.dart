@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/domain/value_objects/money.dart';
+import '../../../../core/widgets/money_input_field.dart';
 import '../../domain/entities/contribution.dart';
 import '../cubit/finance_cubit.dart';
 import '../cubit/finance_state.dart';
@@ -16,12 +17,6 @@ class AddContributionPage extends StatefulWidget {
 class _AddContributionPageState extends State<AddContributionPage> {
   String? _selectedMemberId;
   int _cents = 0;
-
-  void _onAmountChanged(String value) {
-    setState(() {
-      _cents = Money.parse(value).cents;
-    });
-  }
 
   void _submit() {
     if (_cents <= 0) {
@@ -66,36 +61,18 @@ class _AddContributionPageState extends State<AddContributionPage> {
           body: ListView(
             padding: const EdgeInsets.all(20),
             children: [
-              Center(
-                child: Column(
-                  children: [
-                    Text('Abastecer o Caixa da Casa', style: theme.textTheme.bodySmall),
-                    const SizedBox(height: 4),
-                    Text(
-                      Money(_cents).format(),
-                      style: TextStyle(
-                        fontSize: 38,
-                        fontWeight: FontWeight.bold,
-                        color: _cents > 0 ? AppColors.creditGreen : theme.textTheme.bodySmall?.color,
-                        letterSpacing: -0.5,
-                      ),
-                    ),
-                  ],
-                ),
+              MoneyInputField(
+                label: 'Abastecer o Caixa da Casa',
+                primaryColor: AppColors.creditGreen,
+                initialValue: Money(_cents),
+                quickAddCents: const [2000, 5000, 10000, 20000],
+                onChanged: (val) {
+                  setState(() {
+                    _cents = val.cents;
+                  });
+                },
               ),
-              const SizedBox(height: 20),
-
-              TextField(
-                keyboardType: TextInputType.number,
-                decoration: InputDecoration(
-                  labelText: 'Valor do Aporte (R\$)',
-                  hintText: '0,00',
-                  prefixIcon: const Icon(Icons.move_to_inbox_rounded, color: AppColors.creditGreen),
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                ),
-                onChanged: _onAmountChanged,
-              ),
-              const SizedBox(height: 20),
+              const SizedBox(height: 24),
 
               Text('Quem está aportando?', style: theme.textTheme.titleSmall),
               const SizedBox(height: 8),

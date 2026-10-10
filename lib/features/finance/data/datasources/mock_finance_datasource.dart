@@ -251,7 +251,12 @@ class MockFinanceDataSource {
   Future<List<PaymentMethod>> getPaymentMethods() async => List.unmodifiable(_paymentMethods);
 
   Future<List<HouseExpense>> getExpensesForCycle(FinancialCycle cycle) async {
-    return _expenses.where((e) => cycle.contains(e.date) || (e.dueDate != null && cycle.contains(e.dueDate!))).toList()
+    return _expenses.where((e) {
+      final belongsToCycle = cycle.contains(e.date) || (e.dueDate != null && cycle.contains(e.dueDate!));
+      // Passivos atrasados: se a conta ainda não foi paga e seu vencimento é anterior ao fim deste ciclo, deve constar como compromisso pendente
+      final isOverdueLiability = e.isPending && (e.dueDate ?? e.date).isBefore(cycle.endDate);
+      return belongsToCycle || isOverdueLiability;
+    }).toList()
       ..sort((a, b) => b.date.compareTo(a.date));
   }
 

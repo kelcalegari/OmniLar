@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:intl/intl.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/domain/value_objects/money.dart';
 import '../../../../core/widgets/money_input_field.dart';
@@ -47,7 +48,7 @@ class _AddExpensePageState extends State<AddExpensePage> {
   String? _selectedPaidByMemberId;
   String? _selectedPaymentMethodId;
   final SplitType _selectedSplitType = SplitType.percentage;
-  final DateTime _selectedDate = DateTime.now();
+  DateTime _selectedDate = DateTime.now();
 
   late bool _isRecurring;
   bool _isVariable = false;
@@ -172,6 +173,10 @@ class _AddExpensePageState extends State<AddExpensePage> {
       final safeDay = _dueDay.clamp(1, daysInMonth);
       dueDate = DateTime(now.year, now.month, safeDay);
       expenseDate = _expenseStatus == ExpenseStatus.paid ? now : dueDate;
+    } else {
+      if (_expenseStatus == ExpenseStatus.pending) {
+        dueDate = _selectedDate;
+      }
     }
 
     final expenseId = 'exp_${DateTime.now().millisecondsSinceEpoch}';
@@ -289,6 +294,10 @@ class _AddExpensePageState extends State<AddExpensePage> {
               ),
               const SizedBox(height: 20),
 
+              // Data e Situação da Despesa (Retroativa, Atual ou Em Atraso)
+              _buildDateAndStatusCard(theme),
+              const SizedBox(height: 20),
+
               // Seção de Recorrência (Assinaturas / Contas Fixas / Variáveis)
               Material(
                 color: _isRecurring
@@ -401,41 +410,6 @@ class _AddExpensePageState extends State<AddExpensePage> {
                                     }).toList(),
                                     onChanged: (val) {
                                       if (val != null) setState(() => _dueDay = val);
-                                    },
-                                  ),
-                                ),
-                              ],
-                            ),
-                            const SizedBox(height: 14),
-
-                            // Situação no Ciclo Atual
-                            const Text(
-                              'Situação no Ciclo Atual',
-                              style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
-                            ),
-                            const SizedBox(height: 8),
-                            Row(
-                              children: [
-                                Expanded(
-                                  child: ChoiceChip(
-                                    avatar: const Icon(Icons.check_circle_outline, size: 16),
-                                    label: const Center(child: Text('Já Paga')),
-                                    selected: _expenseStatus == ExpenseStatus.paid,
-                                    selectedColor: AppColors.creditGreen.withValues(alpha: 0.15),
-                                    onSelected: (selected) {
-                                      if (selected) setState(() => _expenseStatus = ExpenseStatus.paid);
-                                    },
-                                  ),
-                                ),
-                                const SizedBox(width: 8),
-                                Expanded(
-                                  child: ChoiceChip(
-                                    avatar: const Icon(Icons.schedule_rounded, size: 16),
-                                    label: const Center(child: Text('A Vencer')),
-                                    selected: _expenseStatus == ExpenseStatus.pending,
-                                    selectedColor: AppColors.folegoWarning.withValues(alpha: 0.2),
-                                    onSelected: (selected) {
-                                      if (selected) setState(() => _expenseStatus = ExpenseStatus.pending);
                                     },
                                   ),
                                 ),
@@ -912,6 +886,165 @@ class _AddExpensePageState extends State<AddExpensePage> {
               ),
             ],
           ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDateAndStatusCard(ThemeData theme) {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final selectedDay = DateTime(_selectedDate.year, _selectedDate.month, _selectedDate.day);
+    final isPast = selectedDay.isBefore(today);
+    final isRetroactivePending = isPast && _expenseStatus == ExpenseStatus.pending;
+    final daysDiff = today.difference(selectedDay).inDays;
+
+    String dateContextText;
+    if (selectedDay == today) {
+      dateContextText = 'Hoje';
+    } else if (isPast) {
+      dateContextText = daysDiff == 1 ? 'Ontem' : 'Há $daysDiff dias';
+    } else {
+      final futureDays = selectedDay.difference(today).inDays;
+      dateContextText = futureDays == 1 ? 'Amanhã' : 'Em $futureDays dias';
+    }
+
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: isRetroactivePending
+            ? AppColors.debtRed.withValues(alpha: 0.05)
+            : theme.cardColor,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: isRetroactivePending
+              ? AppColors.debtRed.withValues(alpha: 0.4)
+              : theme.dividerColor,
+          width: isRetroactivePending ? 1.5 : 1,
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Row(
+                children: [
+                  Icon(
+                    Icons.calendar_month_rounded,
+                    size: 18,
+                    color: isRetroactivePending ? AppColors.debtRed : AppColors.primary,
+                  ),
+                  const SizedBox(width: 8),
+                  Text(
+                    _expenseStatus == ExpenseStatus.pending
+                        ? 'Data de Vencimento'
+                        : 'Data do Pagamento',
+                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                  ),
+                ],
+              ),
+              InkWell(
+                borderRadius: BorderRadius.circular(10),
+                onTap: () async {
+                  final picked = await showDatePicker(
+                    context: context,
+                    initialDate: _selectedDate,
+                    firstDate: DateTime(2020),
+                    lastDate: DateTime(2035),
+                  );
+                  if (picked != null) {
+                    setState(() => _selectedDate = picked);
+                  }
+                },
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: AppColors.primary.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Row(
+                    children: [
+                      Text(
+                        '${DateFormat('dd/MM/yyyy').format(_selectedDate)} ($dateContextText)',
+                        style: const TextStyle(
+                          fontWeight: FontWeight.bold,
+                          color: AppColors.primary,
+                          fontSize: 12,
+                        ),
+                      ),
+                      const SizedBox(width: 4),
+                      const Icon(Icons.edit_calendar_rounded, size: 14, color: AppColors.primary),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+
+          // Situação no Ciclo Atual
+          const Text(
+            'Situação no Ciclo Atual',
+            style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
+          ),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              Expanded(
+                child: ChoiceChip(
+                  avatar: const Icon(Icons.check_circle_outline, size: 16),
+                  label: const Center(child: Text('Já Paga')),
+                  selected: _expenseStatus == ExpenseStatus.paid,
+                  selectedColor: AppColors.creditGreen.withValues(alpha: 0.15),
+                  onSelected: (selected) {
+                    if (selected) setState(() => _expenseStatus = ExpenseStatus.paid);
+                  },
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: ChoiceChip(
+                  avatar: const Icon(Icons.schedule_rounded, size: 16),
+                  label: const Center(child: Text('A Vencer')),
+                  selected: _expenseStatus == ExpenseStatus.pending,
+                  selectedColor: AppColors.folegoWarning.withValues(alpha: 0.2),
+                  onSelected: (selected) {
+                    if (selected) setState(() => _expenseStatus = ExpenseStatus.pending);
+                  },
+                ),
+              ),
+            ],
+          ),
+
+          if (isRetroactivePending) ...[
+            const SizedBox(height: 10),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+              decoration: BoxDecoration(
+                color: AppColors.debtRed.withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: AppColors.debtRed.withValues(alpha: 0.3)),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.warning_amber_rounded, size: 18, color: AppColors.debtRed),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      '⚠️ Conta Vencida / Em Atraso (venceu há $daysDiff dias). Ficará como compromisso pendente no Fôlego da casa até ser paga.',
+                      style: const TextStyle(
+                        color: AppColors.debtRed,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 11,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
         ],
       ),
     );

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../../../core/domain/value_objects/money.dart';
 import '../../../../core/theme/app_colors.dart';
+import '../../../../core/widgets/money_input_field.dart';
 import '../../domain/entities/p2p_installment.dart';
 
 class PartialPaymentDialog extends StatefulWidget {
@@ -32,7 +33,6 @@ class PartialPaymentDialog extends StatefulWidget {
 }
 
 class _PartialPaymentDialogState extends State<PartialPaymentDialog> {
-  final _amountController = TextEditingController();
   int _centsToPay = 0;
   bool _isFullPayment = true;
 
@@ -40,18 +40,11 @@ class _PartialPaymentDialogState extends State<PartialPaymentDialog> {
   void initState() {
     super.initState();
     _centsToPay = widget.installment.remainingAmount.cents;
-    _amountController.text = (widget.installment.remainingAmount.cents / 100).toStringAsFixed(2).replaceAll('.', ',');
   }
 
-  @override
-  void dispose() {
-    _amountController.dispose();
-    super.dispose();
-  }
-
-  void _onAmountChanged(String val) {
+  void _onAmountChanged(Money amount) {
     setState(() {
-      _centsToPay = Money.parse(val).cents;
+      _centsToPay = amount.cents;
       _isFullPayment = _centsToPay == widget.installment.remainingAmount.cents;
     });
   }
@@ -60,7 +53,6 @@ class _PartialPaymentDialogState extends State<PartialPaymentDialog> {
     setState(() {
       _centsToPay = widget.installment.remainingAmount.cents;
       _isFullPayment = true;
-      _amountController.text = (widget.installment.remainingAmount.cents / 100).toStringAsFixed(2).replaceAll('.', ',');
     });
   }
 
@@ -136,25 +128,9 @@ class _PartialPaymentDialogState extends State<PartialPaymentDialog> {
               ),
             ),
             const SizedBox(height: 16),
-            const Text(
-              'Quanto deseja pagar agora?',
-              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
-            ),
-            const SizedBox(height: 8),
-            TextField(
-              controller: _amountController,
-              keyboardType: const TextInputType.numberWithOptions(decimal: true),
-              decoration: InputDecoration(
-                prefixText: 'R\$ ',
-                hintText: '0,00',
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                suffixIcon: !_isFullPayment
-                    ? TextButton(
-                        onPressed: _setFullPayment,
-                        child: const Text('Total', style: TextStyle(fontWeight: FontWeight.bold)),
-                      )
-                    : null,
-              ),
+            MoneyInputField(
+              label: 'Quanto deseja pagar agora?',
+              initialValue: Money(_centsToPay),
               onChanged: _onAmountChanged,
             ),
             const SizedBox(height: 12),
@@ -174,7 +150,6 @@ class _PartialPaymentDialogState extends State<PartialPaymentDialog> {
                       setState(() {
                         _centsToPay = half;
                         _isFullPayment = false;
-                        _amountController.text = (half / 100).toStringAsFixed(2).replaceAll('.', ',');
                       });
                     },
                   ),

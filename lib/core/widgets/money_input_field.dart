@@ -4,6 +4,138 @@ import '../domain/value_objects/money.dart';
 import '../theme/app_colors.dart';
 import '../utils/app_haptics.dart';
 
+/// Formatter para entrada monetária contínua no estilo ATM/Fintech (Nubank/Revolut).
+/// O usuário digita apenas dígitos e o valor é deslocado da direita para a esquerda:
+/// 1 -> R$ 0,01
+/// 11 -> R$ 0,11
+/// 110 -> R$ 1,10
+/// 1100 -> R$ 11,00
+///
+/// Trata digitação tecla a tecla, colagem de valores, backspace e
+/// garante que cliques acidentais no meio do texto não quebrem o buffer de centavos.
+class MoneyInputFormatter extends TextInputFormatter {
+  final int maxCents;
+
+  const MoneyInputFormatter({this.maxCents = 100000000});
+
+  @override
+  TextEditingValue formatEditUpdate(
+    TextEditingValue oldValue,
+    TextEditingValue newValue,
+  ) {
+    // 1. Campo limpo
+    if (newValue.text.isEmpty) {
+      final formatted = const Money.zero().format();
+      return TextEditingValue(
+        text: formatted,
+        selection: TextSelection.collapsed(offset: formatted.length),
+      );
+    }
+
+    // 2. Se o texto não mudou, apenas assegura cursor no fim
+    if (oldValue.text == newValue.text) {
+      return newValue.copyWith(
+        selection: TextSelection.collapsed(offset: newValue.text.length),
+      );
+    }
+
+    // 3. Se for entrada direta / colagem sem a máscara (ex: '1250' ou teste com enterText)
+    final hasMaskPrefix = newValue.text.contains('R\$');
+    if (!hasMaskPrefix) {
+      final digits = newValue.text.replaceAll(RegExp(r'[^0-9]'), '');
+      var newCents = int.tryParse(digits) ?? 0;
+      if (newCents > maxCents) newCents = maxCents;
+      final formatted = Money(newCents).format();
+      return TextEditingValue(
+        text: formatted,
+        selection: TextSelection.collapsed(offset: formatted.length),
+      );
+    }
+
+    // 4. Usuário apagou caractere(s) com Backspace mantendo a máscara
+    if (newValue.text.length < oldValue.text.length) {
+      final oldDigits = oldValue.text.replaceAll(RegExp(r'[^0-9]'), '');
+      final oldCents = int.tryParse(oldDigits) ?? 0;
+      final newCents = oldCents ~/ 10;
+      final formatted = Money(newCents).format();
+      return TextEditingValue(
+        text: formatted,
+        selection: TextSelection.collapsed(offset: formatted.length),
+      );
+    }
+
+    // 5. Usuário inseriu dígitos sobre a máscara
+    final oldDigits = oldValue.text.replaceAll(RegExp(r'[^0-9]'), '');
+    final newDigits = newValue.text.replaceAll(RegExp(r'[^0-9]'), '');
+
+    int finalCents;
+    if (newDigits.length > oldDigits.length) {
+      final oldCents = int.tryParse(oldDigits) ?? 0;
+      final addedCount = newDigits.length - oldDigits.length;
+
+      if (addedCount > 2) {
+        // Colagem de valor formatado extenso (ex: "R$ 1.250,00")
+        finalCents = int.tryParse(newDigits) ?? 0;
+      } else {
+        // Digitação tecla a tecla (mesmo se o cursor estivesse em posição arbitrária)
+        final insertedStr = _extractInsertedText(oldValue.text, newValue.text);
+        final insertedDigits = insertedStr.replaceAll(RegExp(r'[^0-9]'), '');
+        var cents = oldCents;
+        for (int i = 0; i < insertedDigits.length; i++) {
+          final digit = int.tryParse(insertedDigits[i]);
+          if (digit != null) {
+            if (cents * 10 + digit <= maxCents) {
+              cents = (cents * 10) + digit;
+            }
+          }
+        }
+        finalCents = cents;
+      }
+    } else {
+      finalCents = int.tryParse(newDigits) ?? 0;
+    }
+
+    if (finalCents > maxCents) {
+      finalCents = maxCents;
+    }
+
+    final formatted = Money(finalCents).format();
+    return TextEditingValue(
+      text: formatted,
+      selection: TextSelection.collapsed(offset: formatted.length),
+    );
+  }
+
+  static String _extractInsertedText(String oldText, String newText) {
+    int start = 0;
+    while (start < oldText.length && start < newText.length && oldText[start] == newText[start]) {
+      start++;
+    }
+    int endOld = oldText.length - 1;
+    int endNew = newText.length - 1;
+    while (endOld >= start && endNew >= start && oldText[endOld] == newText[endNew]) {
+      endOld--;
+      endNew--;
+    }
+    if (start <= endNew + 1) {
+      return newText.substring(start, endNew + 1);
+    }
+    return '';
+  }
+}
+
+/// Controller especializado que força a seleção/cursor sempre para o final do texto
+class _MoneyTextEditingController extends TextEditingController {
+  _MoneyTextEditingController({super.text});
+
+  @override
+  set value(TextEditingValue newValue) {
+    super.value = newValue.copyWith(
+      selection: TextSelection.collapsed(offset: newValue.text.length),
+    );
+  }
+}
+
 /// Campo de entrada de valor monetário contínuo no estilo ATM/Fintech (Nubank/Revolut).
 /// O usuário digita apenas dígitos pelo teclado nativo (do celular ou físico no PC)
 /// e o valor se preenche naturalmente em centavos da direita para a esquerda:
@@ -44,9 +176,15 @@ class _MoneyInputFieldState extends State<MoneyInputField> {
   void initState() {
     super.initState();
     _cents = widget.initialValue.cents;
-    _controller = TextEditingController();
+    _controller = _MoneyTextEditingController();
     _focusNode = FocusNode();
     _syncController();
+
+    _focusNode.addListener(() {
+      if (_focusNode.hasFocus) {
+        _controller.selection = TextSelection.collapsed(offset: _controller.text.length);
+      }
+    });
   }
 
   @override
@@ -79,12 +217,13 @@ class _MoneyInputFieldState extends State<MoneyInputField> {
     final newCents = int.tryParse(digits) ?? 0;
     if (newCents > 100000000) return; // Limite de R$ 1 milhão
 
-    setState(() {
-      _cents = newCents;
-      _syncController();
-    });
-    AppHaptics.selection();
-    widget.onChanged(Money(_cents));
+    if (_cents != newCents) {
+      setState(() {
+        _cents = newCents;
+      });
+      AppHaptics.selection();
+      widget.onChanged(Money(_cents));
+    }
   }
 
   void _onDigit(int digit) {
@@ -155,9 +294,15 @@ class _MoneyInputFieldState extends State<MoneyInputField> {
                         focusNode: _focusNode,
                         autofocus: widget.autoFocus,
                         keyboardType: TextInputType.number,
-                        inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                        inputFormatters: const [
+                          MoneyInputFormatter(),
+                        ],
                         textAlign: TextAlign.center,
                         textInputAction: TextInputAction.next,
+                        enableInteractiveSelection: false,
+                        onTap: () {
+                          _controller.selection = TextSelection.collapsed(offset: _controller.text.length);
+                        },
                         style: TextStyle(
                           fontSize: 38,
                           fontWeight: FontWeight.bold,
