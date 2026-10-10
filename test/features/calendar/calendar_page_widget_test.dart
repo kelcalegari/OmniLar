@@ -26,8 +26,8 @@ void main() {
     );
   }
 
-  group('CalendarPage - Visão Agenda & Visão Lista Toggle Widget Tests', () {
-    testWidgets('Exibe seletor de visão (Visão Agenda e Visão Lista) e inicia na Visão Agenda com Mini Calendário',
+  group('CalendarPage - Agenda do Lar (100% Eventos & Compromissos)', () {
+    testWidgets('Inicia na Visão Agenda com Mini Calendário e não contém Tarefas',
         (tester) async {
       tester.view.physicalSize = const Size(800, 1400);
       tester.view.devicePixelRatio = 1.0;
@@ -36,17 +36,19 @@ void main() {
       await tester.pumpWidget(buildCalendarPage());
       await tester.pumpAndSettle();
 
-      // Verifica botões de toggle
+      // Botões de alternância de modo
       expect(find.text('Visão Agenda'), findsOneWidget);
       expect(find.text('Visão Lista'), findsOneWidget);
 
-      // Na Visão Agenda, o MiniCalendarCard e a legenda de dots devem estar visíveis
+      // Mini Calendário presente
       expect(find.byType(MiniCalendarCard), findsOneWidget);
-      expect(find.text('Compromissos'), findsWidgets);
-      expect(find.text('Tarefas'), findsWidgets);
+
+      // Apenas compromissos na agenda, sem tarefas
+      expect(find.text('Compromissos agendados'), findsOneWidget);
+      expect(find.text('Tarefas'), findsNothing);
     });
 
-    testWidgets('Alterna para Visão Lista e exibe as abas tradicionais de compromissos e tarefas',
+    testWidgets('Alterna para Visão Lista e oculta Mini Calendário exibindo lista corrida',
         (tester) async {
       tester.view.physicalSize = const Size(800, 1400);
       tester.view.devicePixelRatio = 1.0;
@@ -55,18 +57,38 @@ void main() {
       await tester.pumpWidget(buildCalendarPage());
       await tester.pumpAndSettle();
 
-      // Clica em Visão Lista
+      // Alterna para Visão Lista
       await tester.tap(find.text('Visão Lista'));
       await tester.pumpAndSettle();
 
-      // Na Visão Lista, o MiniCalendarCard não é exibido
+      // Mini Calendário é ocultado
       expect(find.byType(MiniCalendarCard), findsNothing);
-      // Deve exibir os botões de aba com contadores
-      expect(find.textContaining('Compromissos ('), findsOneWidget);
-      expect(find.textContaining('Tarefas ('), findsOneWidget);
+      // Exibe cabeçalho de lista de compromissos
+      expect(find.textContaining('Todos os Compromissos ('), findsOneWidget);
     });
 
-    testWidgets('MiniCalendarCard permite selecionar dia e navegar pelos dias na timeline',
+    testWidgets('Alternância de visão funciona também em resolução Desktop',
+        (tester) async {
+      tester.view.physicalSize = const Size(1280, 800);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.resetPhysicalSize);
+
+      await tester.pumpWidget(buildCalendarPage());
+      await tester.pumpAndSettle();
+
+      // No Desktop, Visão Agenda mostra MiniCalendarCard e timeline lateral
+      expect(find.byType(MiniCalendarCard), findsOneWidget);
+
+      // Alterna para Visão Lista via botão no topo
+      await tester.tap(find.text('Visão Lista'));
+      await tester.pumpAndSettle();
+
+      // MiniCalendarCard sai de cena e entra lista ampla
+      expect(find.byType(MiniCalendarCard), findsNothing);
+      expect(find.textContaining('Todos os Compromissos ('), findsOneWidget);
+    });
+
+    testWidgets('MiniCalendarCard navega pelos dias via botões de chevron e hoje',
         (tester) async {
       tester.view.physicalSize = const Size(800, 1400);
       tester.view.devicePixelRatio = 1.0;
@@ -75,20 +97,14 @@ void main() {
       await tester.pumpWidget(buildCalendarPage());
       await tester.pumpAndSettle();
 
-      // MiniCalendarCard deve estar presente com seus dias
-      expect(find.byType(MiniCalendarCard), findsOneWidget);
-      expect(find.text('Hoje'), findsWidgets);
-
-      // Clicar no chevron para dia anterior
-      final prevDayBtn = find.byTooltip('Dia Anterior');
-      expect(prevDayBtn, findsOneWidget);
-      await tester.tap(prevDayBtn);
+      // Navegar para dia anterior
+      final prevBtn = find.byTooltip('Dia Anterior');
+      expect(prevBtn, findsOneWidget);
+      await tester.tap(prevBtn);
       await tester.pumpAndSettle();
 
-      // Agora que não é mais hoje, o botão de voltar para Hoje aparece na barra
+      // Botão de retornar para Hoje fica disponível
       expect(find.widgetWithText(TextButton, 'Hoje'), findsOneWidget);
-
-      // Clica em Hoje para retornar
       await tester.tap(find.widgetWithText(TextButton, 'Hoje'));
       await tester.pumpAndSettle();
     });

@@ -2,16 +2,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:intl/intl.dart';
 import '../../../../core/theme/app_colors.dart';
-import '../../../../core/domain/value_objects/money.dart';
 import '../../../../core/utils/responsive.dart';
 import '../../../../core/widgets/responsive_container.dart';
 import '../../domain/entities/calendar_event.dart';
 import '../../domain/entities/event_participant.dart';
-import '../../domain/entities/task_item.dart';
 import '../cubit/calendar_cubit.dart';
 import '../cubit/calendar_state.dart';
 import '../widgets/add_event_sheet.dart';
-import '../widgets/add_task_sheet.dart';
 import '../widgets/mini_calendar_card.dart';
 
 class CalendarPage extends StatefulWidget {
@@ -23,7 +20,7 @@ class CalendarPage extends StatefulWidget {
 
 class _CalendarPageState extends State<CalendarPage> {
   DateTime _selectedDate = DateTime.now();
-  bool _isAgendaMode = true; // true = Visão Agenda (Calendário + Timeline do Dia), false = Visão Lista
+  bool _isAgendaMode = true; // true = Visão Agenda (Calendário com Dots + Timeline do Dia), false = Visão Lista Corrida
 
   bool _isSameDay(DateTime a, DateTime b) {
     return a.year == b.year && a.month == b.month && a.day == b.day;
@@ -53,12 +50,13 @@ class _CalendarPageState extends State<CalendarPage> {
       builder: (context, state) {
         final cubit = context.read<CalendarCubit>();
         final theme = Theme.of(context);
+        final isDesktop = context.isDesktop;
 
         return Scaffold(
           appBar: AppBar(
             title: const Text('Agenda do Lar', style: TextStyle(fontWeight: FontWeight.bold)),
             actions: [
-              // Alternador de Visualização: Agenda vs Lista
+              // Alternador rápido na AppBar
               IconButton(
                 icon: Icon(
                   _isAgendaMode ? Icons.format_list_bulleted_rounded : Icons.calendar_month_rounded,
@@ -71,21 +69,11 @@ class _CalendarPageState extends State<CalendarPage> {
                   });
                 },
               ),
+              // Adicionar Novo Evento
               IconButton(
-                icon: Icon(
-                  state.activeView == CalendarViewType.events
-                      ? Icons.add_alarm_rounded
-                      : Icons.add_task_rounded,
-                  color: AppColors.primary,
-                ),
-                tooltip: state.activeView == CalendarViewType.events ? 'Novo Evento' : 'Nova Tarefa',
-                onPressed: () {
-                  if (state.activeView == CalendarViewType.events) {
-                    AddEventSheet.show(context, state.activeMemberId);
-                  } else {
-                    AddTaskSheet.show(context, state.activeMemberId);
-                  }
-                },
+                icon: const Icon(Icons.add_alarm_rounded, color: AppColors.primary),
+                tooltip: 'Novo Compromisso',
+                onPressed: () => AddEventSheet.show(context, state.activeMemberId),
               ),
               // Seletor rápido de quem está logado para testar RSVP
               Padding(
@@ -129,141 +117,53 @@ class _CalendarPageState extends State<CalendarPage> {
           ),
           body: state.status == CalendarCubitStatus.loading && state.events.isEmpty
               ? const Center(child: CircularProgressIndicator())
-              : context.isDesktop
-                  ? ResponsiveContainer(
-                      maxWidth: kMaxContentWidth,
-                      child: Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          // Coluna 0: Mini Calendário Mensal com Dots
-                          SizedBox(
-                            width: 310,
-                            child: MiniCalendarCard(
-                              selectedDate: _selectedDate,
-                              events: state.events,
-                              tasks: state.tasks,
-                              onDateSelected: (date) {
-                                setState(() => _selectedDate = date);
-                              },
-                            ),
+              : Column(
+                  children: [
+                    // Seletor de Modo Universal (Agenda vs Lista)
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+                      child: ResponsiveContainer(
+                        maxWidth: kMaxContentWidth,
+                        child: Container(
+                          decoration: BoxDecoration(
+                            color: theme.cardColor,
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(color: Colors.grey.withValues(alpha: 0.15)),
                           ),
-                          const SizedBox(width: 20),
-                          // Coluna 1: Compromissos
-                          Expanded(
-                            flex: 6,
-                            child: Card(
-                              elevation: 0,
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(16),
-                                side: BorderSide(color: Colors.grey.withValues(alpha: 0.15)),
-                              ),
-                              child: Padding(
-                                padding: const EdgeInsets.all(16),
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Row(
-                                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                      children: [
-                                        Text(
-                                          'Compromissos (${state.events.length})',
-                                          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-                                        ),
-                                        FilledButton.tonalIcon(
-                                          onPressed: () => AddEventSheet.show(context, state.activeMemberId),
-                                          icon: const Icon(Icons.add_rounded, size: 18),
-                                          label: const Text('Novo Evento'),
-                                        ),
-                                      ],
-                                    ),
-                                    const SizedBox(height: 12),
-                                    Expanded(child: _buildEventsList(context, state, cubit)),
-                                  ],
+                          child: Row(
+                            children: [
+                              Expanded(
+                                child: _buildModeTabButton(
+                                  label: 'Visão Agenda',
+                                  icon: Icons.calendar_month_rounded,
+                                  isSelected: _isAgendaMode,
+                                  onTap: () => setState(() => _isAgendaMode = true),
                                 ),
                               ),
-                            ),
-                          ),
-                          const SizedBox(width: 20),
-                          // Coluna 2: Tarefas
-                          Expanded(
-                            flex: 5,
-                            child: Card(
-                              elevation: 0,
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(16),
-                                side: BorderSide(color: Colors.grey.withValues(alpha: 0.15)),
-                              ),
-                              child: Padding(
-                                padding: const EdgeInsets.all(16),
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Row(
-                                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                      children: [
-                                        Text(
-                                          'Tarefas (${state.tasks.where((t) => !t.isCompleted).length})',
-                                          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-                                        ),
-                                        FilledButton.tonalIcon(
-                                          onPressed: () => AddTaskSheet.show(context, state.activeMemberId),
-                                          icon: const Icon(Icons.add_rounded, size: 18),
-                                          label: const Text('Nova Tarefa'),
-                                        ),
-                                      ],
-                                    ),
-                                    const SizedBox(height: 12),
-                                    Expanded(child: _buildTasksList(context, state, cubit)),
-                                  ],
+                              Expanded(
+                                child: _buildModeTabButton(
+                                  label: 'Visão Lista',
+                                  icon: Icons.format_list_bulleted_rounded,
+                                  isSelected: !_isAgendaMode,
+                                  onTap: () => setState(() => _isAgendaMode = false),
                                 ),
                               ),
-                            ),
+                            ],
                           ),
-                        ],
+                        ),
                       ),
-                    )
-                  : Column(
-                      children: [
-                        // Seletor de Modo no Mobile: Visão Agenda vs Visão Lista
-                        Padding(
-                          padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
-                          child: Container(
-                            decoration: BoxDecoration(
-                              color: theme.cardColor,
-                              borderRadius: BorderRadius.circular(12),
-                              border: Border.all(color: Colors.grey.withValues(alpha: 0.15)),
-                            ),
-                            child: Row(
-                              children: [
-                                Expanded(
-                                  child: _buildModeTabButton(
-                                    label: 'Visão Agenda',
-                                    icon: Icons.calendar_month_rounded,
-                                    isSelected: _isAgendaMode,
-                                    onTap: () => setState(() => _isAgendaMode = true),
-                                  ),
-                                ),
-                                Expanded(
-                                  child: _buildModeTabButton(
-                                    label: 'Visão Lista',
-                                    icon: Icons.format_list_bulleted_rounded,
-                                    isSelected: !_isAgendaMode,
-                                    onTap: () => setState(() => _isAgendaMode = false),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
-
-                        // Conteúdo Principal
-                        Expanded(
-                          child: _isAgendaMode
-                              ? _buildAgendaView(context, state, cubit, theme)
-                              : _buildListView(context, state, cubit, theme),
-                        ),
-                      ],
                     ),
+
+                    // Conteúdo Baseado no Modo Ativo
+                    Expanded(
+                      child: _isAgendaMode
+                          ? (isDesktop
+                              ? _buildDesktopAgendaLayout(context, state, cubit, theme)
+                              : _buildMobileAgendaLayout(context, state, cubit, theme))
+                          : _buildListView(context, state, cubit, theme),
+                    ),
+                  ],
+                ),
         );
       },
     );
@@ -280,231 +180,6 @@ class _CalendarPageState extends State<CalendarPage> {
       borderRadius: BorderRadius.circular(12),
       child: Container(
         padding: const EdgeInsets.symmetric(vertical: 10),
-        decoration: BoxDecoration(
-          color: isSelected ? AppColors.primary.withValues(alpha: 0.15) : Colors.transparent,
-          borderRadius: BorderRadius.circular(12),
-        ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(
-              icon,
-              size: 16,
-              color: isSelected ? AppColors.primary : Colors.grey,
-            ),
-            const SizedBox(width: 6),
-            Text(
-              label,
-              style: TextStyle(
-                fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-                color: isSelected ? AppColors.primary : Colors.grey,
-                fontSize: 13,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  // --- NOVA VISÃO AGENDA (Mini Calendário com Sinalização + Timeline do Dia) ---
-  Widget _buildAgendaView(BuildContext context, CalendarState state, CalendarCubit cubit, ThemeData theme) {
-    final dayEvents = state.events.where((e) => _isSameDay(e.startTime, _selectedDate)).toList();
-    final dayTasks = state.tasks.where((t) => t.dueDate != null && _isSameDay(t.dueDate!, _selectedDate)).toList();
-
-    String formattedDay;
-    try {
-      formattedDay = DateFormat("EEEE, d 'de' MMMM", 'pt_BR').format(_selectedDate);
-      formattedDay = formattedDay[0].toUpperCase() + formattedDay.substring(1);
-    } catch (_) {
-      formattedDay = DateFormat("EEE, d MMM").format(_selectedDate);
-    }
-
-    final isToday = _isSameDay(_selectedDate, DateTime.now());
-
-    return ListView(
-      padding: const EdgeInsets.fromLTRB(16, 4, 16, 80),
-      children: [
-        // Mini Calendário Compacto com Dots
-        MiniCalendarCard(
-          selectedDate: _selectedDate,
-          events: state.events,
-          tasks: state.tasks,
-          onDateSelected: (date) {
-            setState(() => _selectedDate = date);
-          },
-        ),
-        const SizedBox(height: 12),
-
-        // Barra de Navegação do Dia Selecionado
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-          decoration: BoxDecoration(
-            color: theme.cardColor,
-            borderRadius: BorderRadius.circular(14),
-            border: Border.all(color: Colors.grey.withValues(alpha: 0.15)),
-          ),
-          child: Row(
-            children: [
-              IconButton(
-                icon: const Icon(Icons.chevron_left_rounded, size: 22),
-                tooltip: 'Dia Anterior',
-                visualDensity: VisualDensity.compact,
-                onPressed: _previousDay,
-              ),
-              Expanded(
-                child: Column(
-                  children: [
-                    Text(
-                      formattedDay,
-                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
-                      textAlign: TextAlign.center,
-                    ),
-                    if (isToday)
-                      const Text(
-                        'Hoje',
-                        style: TextStyle(fontSize: 11, color: AppColors.primary, fontWeight: FontWeight.bold),
-                      ),
-                  ],
-                ),
-              ),
-              if (!isToday) ...[
-                TextButton(
-                  onPressed: _goToToday,
-                  style: TextButton.styleFrom(
-                    visualDensity: VisualDensity.compact,
-                    padding: const EdgeInsets.symmetric(horizontal: 8),
-                  ),
-                  child: const Text('Hoje', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
-                ),
-              ],
-              IconButton(
-                icon: const Icon(Icons.chevron_right_rounded, size: 22),
-                tooltip: 'Próximo Dia',
-                visualDensity: VisualDensity.compact,
-                onPressed: _nextDay,
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(height: 14),
-
-        // Lista de Compromissos do Dia Selecionado
-        if (dayEvents.isEmpty && dayTasks.isEmpty) ...[
-          Container(
-            padding: const EdgeInsets.all(24),
-            decoration: BoxDecoration(
-              color: theme.cardColor,
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: Colors.grey.withValues(alpha: 0.15)),
-            ),
-            child: Column(
-              children: [
-                Icon(Icons.event_available_outlined, size: 42, color: Colors.grey.withValues(alpha: 0.4)),
-                const SizedBox(height: 10),
-                const Text(
-                  'Nenhum compromisso para este dia',
-                  style: TextStyle(fontWeight: FontWeight.bold, color: Colors.grey, fontSize: 14),
-                ),
-                const SizedBox(height: 4),
-                const Text(
-                  'Aproveite o tempo livre ou adicione um novo evento para a casa.',
-                  style: TextStyle(fontSize: 12, color: Colors.grey),
-                  textAlign: TextAlign.center,
-                ),
-                const SizedBox(height: 14),
-                FilledButton.tonalIcon(
-                  onPressed: () => AddEventSheet.show(context, state.activeMemberId),
-                  icon: const Icon(Icons.add_rounded, size: 18),
-                  label: const Text('Adicionar Compromisso'),
-                ),
-              ],
-            ),
-          ),
-        ] else ...[
-          if (dayEvents.isNotEmpty) ...[
-            Padding(
-              padding: const EdgeInsets.only(left: 4, bottom: 8),
-              child: Text(
-                'Compromissos (${dayEvents.length})',
-                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: AppColors.primary),
-              ),
-            ),
-            ...dayEvents.map((event) => _buildEventItem(context, event, state, cubit)),
-          ],
-          if (dayTasks.isNotEmpty) ...[
-            const SizedBox(height: 8),
-            Padding(
-              padding: const EdgeInsets.only(left: 4, bottom: 8),
-              child: Text(
-                'Tarefas do Dia (${dayTasks.length})',
-                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: AppColors.accent),
-              ),
-            ),
-            ...dayTasks.map((task) => _buildTaskItem(context, task, cubit)),
-          ],
-        ],
-      ],
-    );
-  }
-
-  // --- VISÃO LISTA TRADICIONAL (Abas Compromissos vs Tarefas) ---
-  Widget _buildListView(BuildContext context, CalendarState state, CalendarCubit cubit, ThemeData theme) {
-    return Column(
-      children: [
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-          child: Container(
-            decoration: BoxDecoration(
-              color: theme.cardColor,
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: Colors.grey.withValues(alpha: 0.15)),
-            ),
-            child: Row(
-              children: [
-                Expanded(
-                  child: _buildTabButton(
-                    context,
-                    label: 'Compromissos (${state.events.length})',
-                    icon: Icons.calendar_today_rounded,
-                    isSelected: state.activeView == CalendarViewType.events,
-                    onTap: () => cubit.switchView(CalendarViewType.events),
-                  ),
-                ),
-                Expanded(
-                  child: _buildTabButton(
-                    context,
-                    label: 'Tarefas (${state.tasks.where((t) => !t.isCompleted).length})',
-                    icon: Icons.checklist_rounded,
-                    isSelected: state.activeView == CalendarViewType.tasks,
-                    onTap: () => cubit.switchView(CalendarViewType.tasks),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-        Expanded(
-          child: state.activeView == CalendarViewType.events
-              ? _buildEventsList(context, state, cubit)
-              : _buildTasksList(context, state, cubit),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildTabButton(
-    BuildContext context, {
-    required String label,
-    required IconData icon,
-    required bool isSelected,
-    required VoidCallback onTap,
-  }) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(12),
-      child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 12),
         decoration: BoxDecoration(
           color: isSelected ? AppColors.primary.withValues(alpha: 0.15) : Colors.transparent,
           borderRadius: BorderRadius.circular(12),
@@ -532,13 +207,276 @@ class _CalendarPageState extends State<CalendarPage> {
     );
   }
 
+  // --- VISÃO AGENDA (MOBILE) ---
+  Widget _buildMobileAgendaLayout(
+    BuildContext context,
+    CalendarState state,
+    CalendarCubit cubit,
+    ThemeData theme,
+  ) {
+    final dayEvents = state.events.where((e) => _isSameDay(e.startTime, _selectedDate)).toList();
+
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(16, 4, 16, 80),
+      children: [
+        MiniCalendarCard(
+          selectedDate: _selectedDate,
+          events: state.events,
+          onDateSelected: (date) {
+            setState(() => _selectedDate = date);
+          },
+        ),
+        const SizedBox(height: 12),
+        _buildDayNavigationHeader(theme),
+        const SizedBox(height: 14),
+        if (dayEvents.isEmpty)
+          _buildEmptyDayState(context, state, theme)
+        else ...[
+          Padding(
+            padding: const EdgeInsets.only(left: 4, bottom: 8),
+            child: Text(
+              'Compromissos (${dayEvents.length})',
+              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: AppColors.primary),
+            ),
+          ),
+          ...dayEvents.map((event) => _buildEventItem(context, event, state, cubit)),
+        ],
+      ],
+    );
+  }
+
+  // --- VISÃO AGENDA (DESKTOP) ---
+  Widget _buildDesktopAgendaLayout(
+    BuildContext context,
+    CalendarState state,
+    CalendarCubit cubit,
+    ThemeData theme,
+  ) {
+    final dayEvents = state.events.where((e) => _isSameDay(e.startTime, _selectedDate)).toList();
+
+    return ResponsiveContainer(
+      maxWidth: kMaxContentWidth,
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Coluna Esquerda: Mini Calendário
+          SizedBox(
+            width: 320,
+            child: MiniCalendarCard(
+              selectedDate: _selectedDate,
+              events: state.events,
+              onDateSelected: (date) {
+                setState(() => _selectedDate = date);
+              },
+            ),
+          ),
+          const SizedBox(width: 20),
+
+          // Coluna Direita: Timeline do Dia Selecionado
+          Expanded(
+            child: Card(
+              elevation: 0,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+                side: BorderSide(color: Colors.grey.withValues(alpha: 0.15)),
+              ),
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Row(
+                      children: [
+                        Expanded(child: _buildDayNavigationHeader(theme)),
+                        const SizedBox(width: 12),
+                        FilledButton.tonalIcon(
+                          onPressed: () => AddEventSheet.show(context, state.activeMemberId),
+                          icon: const Icon(Icons.add_rounded, size: 18),
+                          label: const Text('Novo Evento'),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 16),
+                    Expanded(
+                      child: dayEvents.isEmpty
+                          ? _buildEmptyDayState(context, state, theme)
+                          : ListView.builder(
+                              itemCount: dayEvents.length,
+                              itemBuilder: (context, index) {
+                                return _buildEventItem(context, dayEvents[index], state, cubit);
+                              },
+                            ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDayNavigationHeader(ThemeData theme) {
+    String formattedDay;
+    try {
+      formattedDay = DateFormat("EEEE, d 'de' MMMM", 'pt_BR').format(_selectedDate);
+      formattedDay = formattedDay[0].toUpperCase() + formattedDay.substring(1);
+    } catch (_) {
+      formattedDay = DateFormat("EEE, d MMM").format(_selectedDate);
+    }
+
+    final isToday = _isSameDay(_selectedDate, DateTime.now());
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(
+        color: theme.cardColor,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: Colors.grey.withValues(alpha: 0.15)),
+      ),
+      child: Row(
+        children: [
+          IconButton(
+            icon: const Icon(Icons.chevron_left_rounded, size: 22),
+            tooltip: 'Dia Anterior',
+            visualDensity: VisualDensity.compact,
+            onPressed: _previousDay,
+          ),
+          Expanded(
+            child: Column(
+              children: [
+                Text(
+                  formattedDay,
+                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                  textAlign: TextAlign.center,
+                ),
+                if (isToday)
+                  const Text(
+                    'Hoje',
+                    style: TextStyle(fontSize: 11, color: AppColors.primary, fontWeight: FontWeight.bold),
+                  ),
+              ],
+            ),
+          ),
+          if (!isToday) ...[
+            TextButton(
+              onPressed: _goToToday,
+              style: TextButton.styleFrom(
+                visualDensity: VisualDensity.compact,
+                padding: const EdgeInsets.symmetric(horizontal: 8),
+              ),
+              child: const Text('Hoje', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+            ),
+          ],
+          IconButton(
+            icon: const Icon(Icons.chevron_right_rounded, size: 22),
+            tooltip: 'Próximo Dia',
+            visualDensity: VisualDensity.compact,
+            onPressed: _nextDay,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildEmptyDayState(BuildContext context, CalendarState state, ThemeData theme) {
+    return Container(
+      padding: const EdgeInsets.all(24),
+      decoration: BoxDecoration(
+        color: theme.cardColor,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.grey.withValues(alpha: 0.15)),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(Icons.event_available_outlined, size: 42, color: Colors.grey.withValues(alpha: 0.4)),
+          const SizedBox(height: 10),
+          const Text(
+            'Nenhum compromisso para este dia',
+            style: TextStyle(fontWeight: FontWeight.bold, color: Colors.grey, fontSize: 14),
+          ),
+          const SizedBox(height: 4),
+          const Text(
+            'Aproveite o tempo livre ou adicione um novo evento para a casa.',
+            style: TextStyle(fontSize: 12, color: Colors.grey),
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: 14),
+          FilledButton.tonalIcon(
+            onPressed: () => AddEventSheet.show(context, state.activeMemberId),
+            icon: const Icon(Icons.add_rounded, size: 18),
+            label: const Text('Adicionar Compromisso'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // --- VISÃO LISTA CORRIDA (TODOS OS COMPROMISSOS DA CASA) ---
+  Widget _buildListView(BuildContext context, CalendarState state, CalendarCubit cubit, ThemeData theme) {
+    return ResponsiveContainer(
+      maxWidth: 900,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  'Todos os Compromissos (${state.events.length})',
+                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+                ),
+                FilledButton.tonalIcon(
+                  onPressed: () => AddEventSheet.show(context, state.activeMemberId),
+                  icon: const Icon(Icons.add_rounded, size: 18),
+                  label: const Text('Novo Evento'),
+                  style: FilledButton.styleFrom(visualDensity: VisualDensity.compact),
+                ),
+              ],
+            ),
+          ),
+          Expanded(
+            child: _buildEventsList(context, state, cubit),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildEventsList(BuildContext context, CalendarState state, CalendarCubit cubit) {
     if (state.events.isEmpty) {
-      return const Center(child: Text('Nenhum compromisso agendado'));
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.event_note_outlined, size: 56, color: Colors.grey.withValues(alpha: 0.4)),
+            const SizedBox(height: 12),
+            const Text(
+              'Nenhum compromisso agendado no lar',
+              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: Colors.grey),
+            ),
+            const SizedBox(height: 6),
+            const Text(
+              'Organize jantares, faxinas conjuntas, visitas e reuniões.',
+              style: TextStyle(fontSize: 12, color: Colors.grey),
+            ),
+            const SizedBox(height: 16),
+            FilledButton.tonalIcon(
+              onPressed: () => AddEventSheet.show(context, state.activeMemberId),
+              icon: const Icon(Icons.add_rounded),
+              label: const Text('Criar Primeiro Evento'),
+            ),
+          ],
+        ),
+      );
     }
 
     return ListView.builder(
-      padding: const EdgeInsets.fromLTRB(16, 8, 16, 80),
+      padding: const EdgeInsets.fromLTRB(16, 4, 16, 80),
       itemCount: state.events.length,
       itemBuilder: (context, index) {
         return _buildEventItem(context, state.events[index], state, cubit);
@@ -564,234 +502,218 @@ class _CalendarPageState extends State<CalendarPage> {
     String statusLabel;
     IconData statusIcon;
 
-        switch (derivedStatus) {
-          case EventDerivedStatus.confirmed:
-            statusColor = AppColors.creditGreen;
-            statusLabel = 'Confirmado';
-            statusIcon = Icons.check_circle_rounded;
-            break;
-          case EventDerivedStatus.atRisk:
-            statusColor = AppColors.debtRed;
-            statusLabel = 'Em Risco';
-            statusIcon = Icons.warning_amber_rounded;
-            break;
-          case EventDerivedStatus.waiting:
-            statusColor = Colors.orange;
-            statusLabel = 'Aguardando';
-            statusIcon = Icons.hourglass_top_rounded;
-            break;
-          case EventDerivedStatus.cancelled:
-            statusColor = Colors.grey;
-            statusLabel = 'Cancelado';
-            statusIcon = Icons.cancel_outlined;
-            break;
-          case EventDerivedStatus.noEssential:
-            statusColor = Colors.blue;
-            statusLabel = 'Informativo';
-            statusIcon = Icons.info_outline;
-            break;
-        }
+    switch (derivedStatus) {
+      case EventDerivedStatus.confirmed:
+        statusColor = AppColors.creditGreen;
+        statusLabel = 'Confirmado';
+        statusIcon = Icons.check_circle_rounded;
+        break;
+      case EventDerivedStatus.atRisk:
+        statusColor = AppColors.debtRed;
+        statusLabel = 'Em Risco';
+        statusIcon = Icons.warning_amber_rounded;
+        break;
+      case EventDerivedStatus.waiting:
+        statusColor = Colors.orange;
+        statusLabel = 'Aguardando';
+        statusIcon = Icons.hourglass_top_rounded;
+        break;
+      case EventDerivedStatus.cancelled:
+        statusColor = Colors.grey;
+        statusLabel = 'Cancelado';
+        statusIcon = Icons.cancel_outlined;
+        break;
+      case EventDerivedStatus.noEssential:
+        statusColor = Colors.blue;
+        statusLabel = 'Informativo';
+        statusIcon = Icons.info_outline;
+        break;
+    }
 
-        return Container(
-          margin: const EdgeInsets.only(bottom: 14),
-          decoration: BoxDecoration(
-            color: Theme.of(context).cardColor,
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: Colors.grey.withValues(alpha: 0.15)),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withValues(alpha: 0.03),
-                blurRadius: 8,
-                offset: const Offset(0, 3),
-              ),
-            ],
-          ),
-          child: Padding(
-            padding: const EdgeInsets.all(16),
-            child: Column(
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      decoration: BoxDecoration(
+        color: Theme.of(context).cardColor,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.grey.withValues(alpha: 0.15)),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Topo com Título e Status Derivado
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Expanded(
-                      child: Text(
-                        event.title,
-                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-                      ),
-                    ),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                      decoration: BoxDecoration(
-                        color: statusColor.withValues(alpha: 0.12),
-                        borderRadius: BorderRadius.circular(20),
-                        border: Border.all(color: statusColor.withValues(alpha: 0.3)),
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(statusIcon, size: 14, color: statusColor),
-                          const SizedBox(width: 4),
-                          Text(
-                            statusLabel,
-                            style: TextStyle(
-                              fontSize: 11,
-                              fontWeight: FontWeight.bold,
-                              color: statusColor,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
+                Expanded(
+                  child: Text(
+                    event.title,
+                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                  ),
                 ),
-                const SizedBox(height: 6),
-
-                // Data e Horário
-                Row(
-                  children: [
-                    Icon(Icons.access_time_rounded, size: 14, color: Colors.grey[500]),
-                    const SizedBox(width: 6),
-                    Text(
-                      '${dateFormat.format(event.startTime)} às ${DateFormat('HH:mm').format(event.endTime)}',
-                      style: TextStyle(fontSize: 13, color: Colors.grey[400]),
-                    ),
-                    if (event.location != null) ...[
-                      const SizedBox(width: 12),
-                      Icon(Icons.location_on_outlined, size: 14, color: Colors.grey[500]),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: statusColor.withValues(alpha: 0.12),
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(color: statusColor.withValues(alpha: 0.3)),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(statusIcon, size: 14, color: statusColor),
                       const SizedBox(width: 4),
-                      Expanded(
-                        child: Text(
-                          event.location!,
-                          style: TextStyle(fontSize: 13, color: Colors.grey[400]),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
+                      Text(
+                        statusLabel,
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.bold,
+                          color: statusColor,
                         ),
                       ),
                     ],
-                  ],
-                ),
-
-                if (event.description != null) ...[
-                  const SizedBox(height: 8),
-                  Text(
-                    event.description!,
-                    style: TextStyle(fontSize: 13, color: Colors.grey[300]),
                   ),
-                ],
-
-                const Divider(height: 24),
-
-                // Participantes e RSVP
-                Row(
-                  children: [
-                    const Text(
-                      'Participantes:',
-                      style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Wrap(
-                        spacing: 8,
-                        runSpacing: 4,
-                        children: event.participants.map((p) {
-                          Color rsvpColor;
-                          IconData rsvpIcon;
-
-                          switch (p.rsvpStatus) {
-                            case RsvpStatus.accepted:
-                              rsvpColor = AppColors.creditGreen;
-                              rsvpIcon = Icons.check_circle_rounded;
-                              break;
-                            case RsvpStatus.declined:
-                              rsvpColor = AppColors.debtRed;
-                              rsvpIcon = Icons.cancel_rounded;
-                              break;
-                            case RsvpStatus.tentative:
-                              rsvpColor = Colors.orange;
-                              rsvpIcon = Icons.help_rounded;
-                              break;
-                            case RsvpStatus.pending:
-                              rsvpColor = Colors.grey;
-                              rsvpIcon = Icons.schedule_rounded;
-                              break;
-                          }
-
-                          return Chip(
-                            visualDensity: VisualDensity.compact,
-                            padding: const EdgeInsets.symmetric(horizontal: 4),
-                            avatar: Icon(rsvpIcon, size: 14, color: rsvpColor),
-                            label: Text(
-                              '${p.memberName} ${p.isEssential ? '(Necessário)' : ''}',
-                              style: TextStyle(
-                                fontSize: 11,
-                                fontWeight: p.isEssential ? FontWeight.bold : FontWeight.normal,
-                              ),
-                            ),
-                          );
-                        }).toList(),
-                      ),
-                    ),
-                  ],
                 ),
-
-                // Barra de Resposta Rápida para o usuário ativo (se participante)
-                if (myParticipant.id.isNotEmpty && !event.isCancelled) ...[
-                  const SizedBox(height: 12),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                    decoration: BoxDecoration(
-                      color: AppColors.primary.withValues(alpha: 0.05),
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    child: Row(
-                      children: [
-                        const Text(
-                          'Sua Presença:',
-                          style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
-                        ),
-                        const Spacer(),
-                        _buildRsvpActionButton(
-                          label: 'Sim',
-                          icon: Icons.check,
-                          color: AppColors.creditGreen,
-                          isSelected: myParticipant.rsvpStatus == RsvpStatus.accepted,
-                          onTap: () => cubit.answerRsvp(
-                            eventId: event.id,
-                            status: RsvpStatus.accepted,
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        _buildRsvpActionButton(
-                          label: 'Talvez',
-                          icon: Icons.question_mark,
-                          color: Colors.orange,
-                          isSelected: myParticipant.rsvpStatus == RsvpStatus.tentative,
-                          onTap: () => cubit.answerRsvp(
-                            eventId: event.id,
-                            status: RsvpStatus.tentative,
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        _buildRsvpActionButton(
-                          label: 'Não',
-                          icon: Icons.close,
-                          color: AppColors.debtRed,
-                          isSelected: myParticipant.rsvpStatus == RsvpStatus.declined,
-                          onTap: () => cubit.answerRsvp(
-                            eventId: event.id,
-                            status: RsvpStatus.declined,
-                          ),
-                        ),
-                      ],
+              ],
+            ),
+            const SizedBox(height: 6),
+            Row(
+              children: [
+                Icon(Icons.access_time_rounded, size: 14, color: Colors.grey[500]),
+                const SizedBox(width: 6),
+                Text(
+                  '${dateFormat.format(event.startTime)} às ${DateFormat('HH:mm').format(event.endTime)}',
+                  style: TextStyle(fontSize: 13, color: Colors.grey[400]),
+                ),
+                if (event.location != null) ...[
+                  const SizedBox(width: 12),
+                  Icon(Icons.location_on_outlined, size: 14, color: Colors.grey[500]),
+                  const SizedBox(width: 4),
+                  Expanded(
+                    child: Text(
+                      event.location!,
+                      style: TextStyle(fontSize: 13, color: Colors.grey[400]),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                     ),
                   ),
                 ],
               ],
             ),
-          ),
-        );
+            if (event.description != null && event.description!.isNotEmpty) ...[
+              const SizedBox(height: 8),
+              Text(
+                event.description!,
+                style: TextStyle(fontSize: 13, color: Colors.grey[300]),
+              ),
+            ],
+            const Divider(height: 20),
+            Row(
+              children: [
+                const Text(
+                  'Participantes:',
+                  style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Wrap(
+                    spacing: 8,
+                    runSpacing: 4,
+                    children: event.participants.map((p) {
+                      Color rsvpColor;
+                      IconData rsvpIcon;
+
+                      switch (p.rsvpStatus) {
+                        case RsvpStatus.accepted:
+                          rsvpColor = AppColors.creditGreen;
+                          rsvpIcon = Icons.check_circle_rounded;
+                          break;
+                        case RsvpStatus.declined:
+                          rsvpColor = AppColors.debtRed;
+                          rsvpIcon = Icons.cancel_rounded;
+                          break;
+                        case RsvpStatus.tentative:
+                          rsvpColor = Colors.orange;
+                          rsvpIcon = Icons.help_rounded;
+                          break;
+                        case RsvpStatus.pending:
+                          rsvpColor = Colors.grey;
+                          rsvpIcon = Icons.schedule_rounded;
+                          break;
+                      }
+
+                      return Chip(
+                        visualDensity: VisualDensity.compact,
+                        padding: const EdgeInsets.symmetric(horizontal: 4),
+                        avatar: Icon(rsvpIcon, size: 14, color: rsvpColor),
+                        label: Text(
+                          '${p.memberName} ${p.isEssential ? '(Necessário)' : ''}',
+                          style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: p.isEssential ? FontWeight.bold : FontWeight.normal,
+                          ),
+                        ),
+                      );
+                    }).toList(),
+                  ),
+                ),
+              ],
+            ),
+            if (myParticipant.id.isNotEmpty && !event.isCancelled) ...[
+              const SizedBox(height: 12),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                decoration: BoxDecoration(
+                  color: AppColors.primary.withValues(alpha: 0.05),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Row(
+                  children: [
+                    const Text(
+                      'Sua Presença:',
+                      style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
+                    ),
+                    const Spacer(),
+                    _buildRsvpActionButton(
+                      label: 'Sim',
+                      icon: Icons.check,
+                      color: AppColors.creditGreen,
+                      isSelected: myParticipant.rsvpStatus == RsvpStatus.accepted,
+                      onTap: () => cubit.answerRsvp(
+                        eventId: event.id,
+                        status: RsvpStatus.accepted,
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    _buildRsvpActionButton(
+                      label: 'Talvez',
+                      icon: Icons.question_mark,
+                      color: Colors.orange,
+                      isSelected: myParticipant.rsvpStatus == RsvpStatus.tentative,
+                      onTap: () => cubit.answerRsvp(
+                        eventId: event.id,
+                        status: RsvpStatus.tentative,
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    _buildRsvpActionButton(
+                      label: 'Não',
+                      icon: Icons.close,
+                      color: AppColors.debtRed,
+                      isSelected: myParticipant.rsvpStatus == RsvpStatus.declined,
+                      onTap: () => cubit.answerRsvp(
+                        eventId: event.id,
+                        status: RsvpStatus.declined,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
   }
 
   Widget _buildRsvpActionButton({
@@ -828,135 +750,5 @@ class _CalendarPageState extends State<CalendarPage> {
         ),
       ),
     );
-  }
-
-  Widget _buildTasksList(BuildContext context, CalendarState state, CalendarCubit cubit) {
-    if (state.tasks.isEmpty) {
-      return const Center(child: Text('Nenhuma tarefa cadastrada'));
-    }
-
-    return ListView.builder(
-      padding: const EdgeInsets.fromLTRB(16, 8, 16, 80),
-      itemCount: state.tasks.length,
-      itemBuilder: (context, index) {
-        return _buildTaskItem(context, state.tasks[index], cubit);
-      },
-    );
-  }
-
-  Widget _buildTaskItem(BuildContext context, TaskItem task, CalendarCubit cubit) {
-    Color priorityColor;
-        String priorityLabel;
-        switch (task.priority) {
-          case TaskPriority.high:
-            priorityColor = AppColors.debtRed;
-            priorityLabel = 'Alta';
-            break;
-          case TaskPriority.medium:
-            priorityColor = Colors.orange;
-            priorityLabel = 'Média';
-            break;
-          case TaskPriority.low:
-            priorityColor = Colors.blue;
-            priorityLabel = 'Baixa';
-            break;
-        }
-
-        return Container(
-          margin: const EdgeInsets.only(bottom: 12),
-          decoration: BoxDecoration(
-            color: Theme.of(context).cardColor,
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: Colors.grey.withValues(alpha: 0.15)),
-          ),
-          child: ListTile(
-            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            leading: Checkbox(
-              value: task.isCompleted,
-              activeColor: AppColors.primary,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
-              onChanged: (_) => cubit.toggleTask(task.id),
-            ),
-            title: Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    task.title,
-                    style: TextStyle(
-                      fontWeight: FontWeight.bold,
-                      fontSize: 15,
-                      decoration: task.isCompleted ? TextDecoration.lineThrough : null,
-                      color: task.isCompleted ? Colors.grey : null,
-                    ),
-                  ),
-                ),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                  decoration: BoxDecoration(
-                    color: priorityColor.withValues(alpha: 0.12),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Text(
-                    priorityLabel,
-                    style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: priorityColor),
-                  ),
-                ),
-              ],
-            ),
-            subtitle: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                if (task.description != null) ...[
-                  const SizedBox(height: 4),
-                  Text(task.description!, style: const TextStyle(fontSize: 12, color: Colors.grey)),
-                ],
-                const SizedBox(height: 6),
-                Row(
-                  children: [
-                    if (task.assignedToMemberName != null) ...[
-                      const Icon(Icons.person_outline, size: 14, color: Colors.grey),
-                      const SizedBox(width: 4),
-                      Text(
-                        task.assignedToMemberName!,
-                        style: const TextStyle(fontSize: 12, color: Colors.grey),
-                      ),
-                      const SizedBox(width: 12),
-                    ],
-                    if (task.dueDate != null) ...[
-                      Icon(
-                        Icons.calendar_today_outlined,
-                        size: 14,
-                        color: task.isOverdue ? AppColors.debtRed : Colors.grey,
-                      ),
-                      const SizedBox(width: 4),
-                      Text(
-                        DateFormat('dd/MM').format(task.dueDate!),
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: task.isOverdue ? AppColors.debtRed : Colors.grey,
-                          fontWeight: task.isOverdue ? FontWeight.bold : FontWeight.normal,
-                        ),
-                      ),
-                      if (task.isOverdue) ...[
-                        const SizedBox(width: 4),
-                        const Text(
-                          '(Atrasada)',
-                          style: TextStyle(fontSize: 11, color: AppColors.debtRed, fontWeight: FontWeight.bold),
-                        ),
-                      ],
-                    ],
-                    if (task.cost != null) ...[
-                      const Spacer(),
-                      Text(
-                        task.cost!.formatted,
-                        style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: AppColors.primary),
-                      ),
-                    ],
-                  ],
-                ),
-              ],
-            ),
-          ),
-        );
   }
 }

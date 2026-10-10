@@ -21,7 +21,6 @@ class ScaffoldWithNavBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
     final isWide = context.isWideScreen;
 
     if (isWide) {
@@ -66,14 +65,19 @@ class ScaffoldWithNavBar extends StatelessWidget {
                   label: Text('A Casa'),
                 ),
                 NavigationRailDestination(
-                  icon: Icon(Icons.handshake_outlined),
-                  selectedIcon: Icon(Icons.handshake_rounded),
-                  label: Text('Pessoal'),
+                  icon: Icon(Icons.checklist_rtl_outlined),
+                  selectedIcon: Icon(Icons.checklist_rtl_rounded),
+                  label: Text('Tarefas & Compras'),
                 ),
                 NavigationRailDestination(
                   icon: Icon(Icons.calendar_today_outlined),
                   selectedIcon: Icon(Icons.calendar_today_rounded),
                   label: Text('Agenda'),
+                ),
+                NavigationRailDestination(
+                  icon: Icon(Icons.handshake_outlined),
+                  selectedIcon: Icon(Icons.handshake_rounded),
+                  label: Text('Pessoal'),
                 ),
                 NavigationRailDestination(
                   icon: Icon(Icons.analytics_outlined),
@@ -113,14 +117,19 @@ class ScaffoldWithNavBar extends StatelessWidget {
             label: 'A Casa',
           ),
           NavigationDestination(
-            icon: Icon(Icons.handshake_outlined),
-            selectedIcon: Icon(Icons.handshake_rounded),
-            label: 'Pessoal',
+            icon: Icon(Icons.checklist_rtl_outlined),
+            selectedIcon: Icon(Icons.checklist_rtl_rounded),
+            label: 'Tarefas & Compras',
           ),
           NavigationDestination(
             icon: Icon(Icons.calendar_today_outlined),
             selectedIcon: Icon(Icons.calendar_today_rounded),
             label: 'Agenda',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.handshake_outlined),
+            selectedIcon: Icon(Icons.handshake_rounded),
+            label: 'Pessoal',
           ),
           NavigationDestination(
             icon: Icon(Icons.analytics_outlined),

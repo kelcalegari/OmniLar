@@ -1,20 +1,17 @@
 import 'package:flutter/material.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../domain/entities/calendar_event.dart';
-import '../../domain/entities/task_item.dart';
 
 class MiniCalendarCard extends StatefulWidget {
   final DateTime selectedDate;
   final ValueChanged<DateTime> onDateSelected;
   final List<CalendarEvent> events;
-  final List<TaskItem> tasks;
 
   const MiniCalendarCard({
     super.key,
     required this.selectedDate,
     required this.onDateSelected,
     this.events = const [],
-    this.tasks = const [],
   });
 
   @override
@@ -28,6 +25,15 @@ class _MiniCalendarCardState extends State<MiniCalendarCard> {
   void initState() {
     super.initState();
     _displayedMonth = DateTime(widget.selectedDate.year, widget.selectedDate.month, 1);
+  }
+
+  @override
+  void didUpdateWidget(covariant MiniCalendarCard oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.selectedDate.year != widget.selectedDate.year ||
+        oldWidget.selectedDate.month != widget.selectedDate.month) {
+      _displayedMonth = DateTime(widget.selectedDate.year, widget.selectedDate.month, 1);
+    }
   }
 
   void _prevMonth() {
@@ -80,11 +86,13 @@ class _MiniCalendarCardState extends State<MiniCalendarCard> {
                     IconButton(
                       icon: const Icon(Icons.chevron_left_rounded, size: 20),
                       visualDensity: VisualDensity.compact,
+                      tooltip: 'Mês anterior',
                       onPressed: _prevMonth,
                     ),
                     IconButton(
                       icon: const Icon(Icons.chevron_right_rounded, size: 20),
                       visualDensity: VisualDensity.compact,
+                      tooltip: 'Próximo mês',
                       onPressed: _nextMonth,
                     ),
                   ],
@@ -138,12 +146,6 @@ class _MiniCalendarCardState extends State<MiniCalendarCard> {
                     e.startTime.month == currentDate.month &&
                     e.startTime.day == currentDate.day);
 
-                final hasTasks = widget.tasks.any((t) =>
-                    t.dueDate != null &&
-                    t.dueDate!.year == currentDate.year &&
-                    t.dueDate!.month == currentDate.month &&
-                    t.dueDate!.day == currentDate.day);
-
                 return InkWell(
                   onTap: () => widget.onDateSelected(currentDate),
                   borderRadius: BorderRadius.circular(8),
@@ -168,31 +170,15 @@ class _MiniCalendarCardState extends State<MiniCalendarCard> {
                                 : (isToday ? AppColors.primary : theme.textTheme.bodyMedium?.color),
                           ),
                         ),
-                        if (hasEvents || hasTasks) ...[
+                        if (hasEvents) ...[
                           const SizedBox(height: 2),
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              if (hasEvents)
-                                Container(
-                                  width: 4,
-                                  height: 4,
-                                  decoration: BoxDecoration(
-                                    shape: BoxShape.circle,
-                                    color: isSelected ? Colors.white : AppColors.primary,
-                                  ),
-                                ),
-                              if (hasEvents && hasTasks) const SizedBox(width: 2),
-                              if (hasTasks)
-                                Container(
-                                  width: 4,
-                                  height: 4,
-                                  decoration: BoxDecoration(
-                                    shape: BoxShape.circle,
-                                    color: isSelected ? Colors.amberAccent : AppColors.accent,
-                                  ),
-                                ),
-                            ],
+                          Container(
+                            width: 5,
+                            height: 5,
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              color: isSelected ? Colors.white : AppColors.primary,
+                            ),
                           ),
                         ],
                       ],
@@ -201,32 +187,17 @@ class _MiniCalendarCardState extends State<MiniCalendarCard> {
                 );
               },
             ),
-            const Divider(height: 20),
+            const Divider(height: 18),
             Row(
-              mainAxisAlignment: MainAxisAlignment.spaceAround,
+              mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Row(
-                  children: [
-                    Container(
-                      width: 6,
-                      height: 6,
-                      decoration: const BoxDecoration(shape: BoxShape.circle, color: AppColors.primary),
-                    ),
-                    const SizedBox(width: 4),
-                    const Text('Compromissos', style: TextStyle(fontSize: 11, color: Colors.grey)),
-                  ],
+                Container(
+                  width: 6,
+                  height: 6,
+                  decoration: const BoxDecoration(shape: BoxShape.circle, color: AppColors.primary),
                 ),
-                Row(
-                  children: [
-                    Container(
-                      width: 6,
-                      height: 6,
-                      decoration: const BoxDecoration(shape: BoxShape.circle, color: AppColors.accent),
-                    ),
-                    const SizedBox(width: 4),
-                    const Text('Tarefas', style: TextStyle(fontSize: 11, color: Colors.grey)),
-                  ],
-                ),
+                const SizedBox(width: 6),
+                const Text('Compromissos agendados', style: TextStyle(fontSize: 11, color: Colors.grey)),
               ],
             ),
           ],

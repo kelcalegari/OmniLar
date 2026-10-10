@@ -350,7 +350,7 @@ class _HomePageContent extends StatelessWidget {
         const SizedBox(width: 8),
         Expanded(
           child: InkWell(
-            onTap: () => context.go('/agenda'),
+            onTap: () => context.push('/tarefas'),
             borderRadius: BorderRadius.circular(12),
             child: Card(
               child: Padding(

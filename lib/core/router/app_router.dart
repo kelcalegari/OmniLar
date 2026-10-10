@@ -16,6 +16,7 @@ import '../../features/settings/presentation/pages/settings_page.dart';
 import '../../features/settlement/presentation/pages/settlement_hub_page.dart';
 import '../../features/shopping/presentation/pages/shopping_list_page.dart';
 import '../../features/finance/presentation/pages/savings_vaults_page.dart';
+import '../../features/routine/presentation/pages/tasks_and_shopping_page.dart';
 
 class GoRouterRefreshStream extends ChangeNotifier {
   late final StreamSubscription<dynamic> _subscription;
@@ -32,10 +33,8 @@ class GoRouterRefreshStream extends ChangeNotifier {
   }
 }
 
-final GlobalKey<NavigatorState> _rootNavigatorKey = GlobalKey<NavigatorState>(debugLabel: 'root');
-
 class AppRouter {
-  AppRouter._();
+  static final GlobalKey<NavigatorState> _rootNavigatorKey = GlobalKey<NavigatorState>(debugLabel: 'root');
 
   static final GoRouter router = GoRouter(
     navigatorKey: _rootNavigatorKey,
@@ -67,21 +66,19 @@ class AppRouter {
       return null;
     },
     routes: [
-      // Rota de Autenticação (Fase 0)
       GoRoute(
         path: '/login',
         name: 'login',
         parentNavigatorKey: _rootNavigatorKey,
         builder: (context, state) => const LoginPage(),
       ),
-      // Rota de Onboarding da Casa (Fase 0)
       GoRoute(
         path: '/onboarding/house',
         name: 'house_onboarding',
         parentNavigatorKey: _rootNavigatorKey,
         builder: (context, state) => const HouseOnboardingPage(),
       ),
-      // Shell com as 5 Abas Principais
+      // Shell com as 6 Abas Principais
       StatefulShellRoute.indexedStack(
         builder: (context, state, navigationShell) {
           return ScaffoldWithNavBar(navigationShell: navigationShell);
@@ -120,28 +117,36 @@ class AppRouter {
                 redirect: (context, state) => '/casa/fechamento',
               ),
               GoRoute(
-                path: '/compras',
-                redirect: (context, state) => '/casa/compras',
-              ),
-              GoRoute(
                 path: '/caixinhas',
                 redirect: (context, state) => '/casa/caixinhas',
               ),
             ],
           ),
-          // Aba 2: Pessoal (P2P)
+          // Aba 2: Tarefas & Compras da Casa
           StatefulShellBranch(
             routes: [
               GoRoute(
-                path: '/pessoal',
-                name: 'p2p',
-                pageBuilder: (context, state) => const NoTransitionPage(
-                  child: P2PPage(),
-                ),
+                path: '/tarefas-compras',
+                name: 'tasks_and_shopping',
+                pageBuilder: (context, state) {
+                  final tabStr = state.uri.queryParameters['tab'];
+                  final initialTab = tabStr == 'compras' ? 1 : 0;
+                  return NoTransitionPage(
+                    child: TasksAndShoppingPage(initialTabIndex: initialTab),
+                  );
+                },
+              ),
+              GoRoute(
+                path: '/tarefas',
+                redirect: (context, state) => '/tarefas-compras?tab=tarefas',
+              ),
+              GoRoute(
+                path: '/compras',
+                redirect: (context, state) => '/tarefas-compras?tab=compras',
               ),
             ],
           ),
-          // Aba 3: Agenda
+          // Aba 3: Agenda (Compromissos)
           StatefulShellBranch(
             routes: [
               GoRoute(
@@ -153,7 +158,19 @@ class AppRouter {
               ),
             ],
           ),
-          // Aba 4: Relatórios
+          // Aba 4: Pessoal (P2P)
+          StatefulShellBranch(
+            routes: [
+              GoRoute(
+                path: '/pessoal',
+                name: 'p2p',
+                pageBuilder: (context, state) => const NoTransitionPage(
+                  child: P2PPage(),
+                ),
+              ),
+            ],
+          ),
+          // Aba 5: Relatórios
           StatefulShellBranch(
             routes: [
               GoRoute(
@@ -165,7 +182,7 @@ class AppRouter {
               ),
             ],
           ),
-          // Aba 5: Ajustes
+          // Aba 6: Ajustes
           StatefulShellBranch(
             routes: [
               GoRoute(
