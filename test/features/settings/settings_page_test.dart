@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:omni_lar/core/di/service_locator.dart';
+import 'package:omni_lar/core/domain/value_objects/money.dart';
 import 'package:omni_lar/features/auth/presentation/cubit/auth_cubit.dart';
 import 'package:omni_lar/features/finance/presentation/cubit/finance_cubit.dart';
 import 'package:omni_lar/features/settings/presentation/pages/settings_page.dart';
@@ -76,7 +77,7 @@ void main() {
     expect(find.text('Cadastrar Cartão ou VR'), findsOneWidget);
   });
 
-  testWidgets('Can open Modelos de Rateio and see options', (tester) async {
+  testWidgets('Can open Modelos de Rateio and see options including Valor Fixo Estipulado', (tester) async {
     await sl<FinanceCubit>().loadCycleData();
 
     await tester.pumpWidget(buildTestableWidget());
@@ -86,8 +87,17 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Porcentagem Personalizada'), findsOneWidget);
+    expect(find.text('Valor Fixo Estipulado'), findsOneWidget);
     expect(find.text('Por Categoria de Gasto'), findsOneWidget);
     expect(find.text('Salvar Modelo de Rateio'), findsOneWidget);
+
+    // Clica na opção Valor Fixo Estipulado
+    await tester.tap(find.text('Valor Fixo Estipulado'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Quem paga o valor fixo estipulado?'), findsOneWidget);
+    expect(find.text('Valor Fixo Mensal:'), findsOneWidget);
+    expect(find.text(const Money(150000).format()), findsWidgets);
   });
 
   testWidgets('Can open Ciclo Financeiro dialog', (tester) async {

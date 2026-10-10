@@ -9,6 +9,7 @@ import '../../../auth/presentation/cubit/auth_state.dart';
 import '../../../finance/presentation/cubit/finance_cubit.dart';
 import '../../../finance/domain/entities/category.dart';
 import '../../../finance/domain/entities/payment_method.dart';
+import '../../../../core/domain/value_objects/money.dart';
 
 class SettingsPage extends StatelessWidget {
   const SettingsPage({super.key});
@@ -459,13 +460,19 @@ class SettingsPage extends StatelessWidget {
 
     double carlosPercent = members.isNotEmpty ? members[0].defaultSplitPercent : 50.0;
     double marinaPercent = members.length > 1 ? members[1].defaultSplitPercent : (100.0 - carlosPercent);
-    String selectedModel = 'percentage'; // 'percentage', 'equal', 'category'
+    String selectedModel = 'percentage'; // 'percentage', 'fixed', 'category'
+    String fixedMemberId = members.isNotEmpty ? members[0].id : 'member_carlos';
+    int fixedAmountCents = 150000; // R$ 1.500,00 padrão
 
     showAdaptiveModal(
       context: context,
       maxWidth: 500,
       child: StatefulBuilder(
         builder: (context, setModalState) {
+          final fixedMember = members.where((m) => m.id == fixedMemberId).firstOrNull ?? (members.isNotEmpty ? members[0] : null);
+          final otherMembers = members.where((m) => m.id != fixedMemberId).toList();
+          final otherName = otherMembers.isNotEmpty ? otherMembers.first.name : 'os demais membros';
+
           return SafeArea(
             child: Padding(
               padding: const EdgeInsets.all(20),
@@ -501,7 +508,7 @@ class SettingsPage extends StatelessWidget {
                   ),
                   const SizedBox(height: 16),
 
-                  // Opções de Modelo
+                  // 1. Porcentagem Personalizada
                   RadioListTile<String>(
                     title: const Text('Porcentagem Personalizada', style: TextStyle(fontWeight: FontWeight.w600)),
                     subtitle: Text('${carlosPercent.round()}% Carlos / ${marinaPercent.round()}% Marina'),
@@ -576,6 +583,87 @@ class SettingsPage extends StatelessWidget {
                   ],
 
                   const Divider(),
+
+                  // 2. Valor Fixo Estipulado
+                  RadioListTile<String>(
+                    title: const Text('Valor Fixo Estipulado', style: TextStyle(fontWeight: FontWeight.w600)),
+                    subtitle: const Text('Um membro paga um valor fixo em reais; o outro cobre o restante das contas.'),
+                    value: 'fixed',
+                    groupValue: selectedModel,
+                    onChanged: (val) => setModalState(() => selectedModel = val!),
+                    contentPadding: EdgeInsets.zero,
+                  ),
+                  if (selectedModel == 'fixed') ...[
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          const Text('Quem paga o valor fixo estipulado?', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.grey)),
+                          const SizedBox(height: 6),
+                          DropdownButtonFormField<String>(
+                            value: fixedMemberId,
+                            decoration: InputDecoration(
+                              border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                              contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                            ),
+                            items: members
+                                .map((m) => DropdownMenuItem(
+                                      value: m.id as String,
+                                      child: Text(m.name as String),
+                                    ))
+                                .toList(),
+                            onChanged: (val) {
+                              if (val != null) setModalState(() => fixedMemberId = val);
+                            },
+                          ),
+                          const SizedBox(height: 12),
+                          const Text('Valor Fixo Mensal:', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.grey)),
+                          const SizedBox(height: 6),
+                          Wrap(
+                            spacing: 8,
+                            runSpacing: 6,
+                            children: [80000, 100000, 150000, 200000, 250000].map((cents) {
+                              final isSelected = fixedAmountCents == cents;
+                              return ChoiceChip(
+                                label: Text(Money(cents).format()),
+                                selected: isSelected,
+                                selectedColor: AppColors.primary.withValues(alpha: 0.2),
+                                onSelected: (sel) {
+                                  if (sel) setModalState(() => fixedAmountCents = cents);
+                                },
+                              );
+                            }).toList(),
+                          ),
+                          const SizedBox(height: 12),
+                          Container(
+                            padding: const EdgeInsets.all(12),
+                            decoration: BoxDecoration(
+                              color: AppColors.accent.withValues(alpha: 0.08),
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(color: AppColors.accent.withValues(alpha: 0.3)),
+                            ),
+                            child: Row(
+                              children: [
+                                const Icon(Icons.info_outline, color: AppColors.accent, size: 20),
+                                const SizedBox(width: 10),
+                                Expanded(
+                                  child: Text(
+                                    '${fixedMember?.name ?? "Membro"} contribuirá com o valor fixo de ${Money(fixedAmountCents).format()} a cada ciclo. $otherName cobrirá o excedente das contas da casa.',
+                                    style: const TextStyle(fontSize: 12, color: AppColors.accent, fontWeight: FontWeight.w500),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+
+                  const Divider(),
+
+                  // 3. Por Categoria com Dono
                   RadioListTile<String>(
                     title: const Text('Por Categoria de Gasto', style: TextStyle(fontWeight: FontWeight.w600)),
                     subtitle: const Text('Despesas com dono (ex: Carro) vão 100% para ele; o resto divide igualmente.'),
@@ -589,14 +677,17 @@ class SettingsPage extends StatelessWidget {
                   FilledButton(
                     onPressed: () {
                       Navigator.pop(context);
+                      String feedback;
+                      if (selectedModel == 'percentage') {
+                        feedback = 'Rateio atualizado: ${carlosPercent.round()}% Carlos e ${marinaPercent.round()}% Marina.';
+                      } else if (selectedModel == 'fixed') {
+                        feedback = 'Rateio atualizado: ${fixedMember?.name ?? "Membro"} com valor fixo de ${Money(fixedAmountCents).format()} e $otherName com o restante.';
+                      } else {
+                        feedback = 'Rateio atualizado para: Por Categoria de Gasto.';
+                      }
+
                       ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                          content: Text(
-                            selectedModel == 'percentage'
-                                ? 'Rateio atualizado: ${carlosPercent.round()}% Carlos e ${marinaPercent.round()}% Marina.'
-                                : 'Rateio atualizado para: Por Categoria de Gasto.',
-                          ),
-                        ),
+                        SnackBar(content: Text(feedback)),
                       );
                     },
                     style: FilledButton.styleFrom(
