@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../theme/app_colors.dart';
 import '../utils/responsive.dart';
+import 'omni_logo.dart';
 import 'smart_fab.dart';
 
 class ScaffoldWithNavBar extends StatelessWidget {
@@ -38,14 +39,7 @@ class ScaffoldWithNavBar extends StatelessWidget {
                   Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Container(
-                        padding: const EdgeInsets.all(8),
-                        decoration: BoxDecoration(
-                          color: AppColors.primary,
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                        child: const Icon(Icons.home_work_rounded, color: Colors.white, size: 20),
-                      ),
+                      const OmniLogo.icon(width: 32, height: 32),
                       const SizedBox(width: 8),
                       const Text(
                         'Omni Lar',

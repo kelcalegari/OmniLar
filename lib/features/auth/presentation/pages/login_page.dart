@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../../../core/theme/app_colors.dart';
+import '../../../../core/widgets/omni_logo.dart';
 import '../cubit/auth_cubit.dart';
 import '../cubit/auth_state.dart';
 
@@ -79,27 +80,19 @@ class _LoginPageState extends State<LoginPage> {
                         // Logo e Apresentação
                         Center(
                           child: Container(
-                            width: 72,
-                            height: 72,
                             decoration: BoxDecoration(
-                              gradient: const LinearGradient(
-                                colors: [AppColors.primary, AppColors.accent],
-                                begin: Alignment.topLeft,
-                                end: Alignment.bottomRight,
-                              ),
                               borderRadius: BorderRadius.circular(20),
                               boxShadow: [
                                 BoxShadow(
-                                  color: AppColors.primary.withValues(alpha: 0.3),
-                                  blurRadius: 16,
-                                  offset: const Offset(0, 6),
+                                  color: AppColors.primary.withValues(alpha: 0.25),
+                                  blurRadius: 18,
+                                  offset: const Offset(0, 8),
                                 ),
                               ],
                             ),
-                            child: const Icon(
-                              Icons.home_work_rounded,
-                              size: 40,
-                              color: Colors.white,
+                            child: const OmniLogo.icon(
+                              width: 80,
+                              height: 80,
                             ),
                           ),
                         ),
