@@ -5,8 +5,8 @@ import '../theme/app_colors.dart';
 import '../utils/app_haptics.dart';
 
 /// Campo de entrada de valor monetário contínuo no estilo ATM/Fintech (Nubank/Revolut).
-/// O usuário digita apenas dígitos e o valor se preenche naturalmente em centavos
-/// da direita para a esquerda:
+/// O usuário digita apenas dígitos pelo teclado nativo (do celular ou físico no PC)
+/// e o valor se preenche naturalmente em centavos da direita para a esquerda:
 /// 1 -> R$ 0,01
 /// 10 -> R$ 0,10
 /// 100 -> R$ 1,00
@@ -18,7 +18,7 @@ class MoneyInputField extends StatefulWidget {
   final bool autoFocus;
   final bool showKeypad;
   final Color? primaryColor;
-  final List<int>? quickAddCents; // Ex: [1000, 5000, 10000] para +R$10, +R$50, +R$100
+  final List<int>? quickAddCents; // Ex: [1000, 2000, 5000, 10000] para +R$10, +R$20, +R$50, +R$100
 
   const MoneyInputField({
     super.key,
@@ -26,7 +26,7 @@ class MoneyInputField extends StatefulWidget {
     required this.onChanged,
     this.label = 'Valor',
     this.autoFocus = false,
-    this.showKeypad = true,
+    this.showKeypad = false, // Desativado por padrão: utiliza o teclado nativo do dispositivo
     this.primaryColor,
     this.quickAddCents,
   });
@@ -37,17 +37,61 @@ class MoneyInputField extends StatefulWidget {
 
 class _MoneyInputFieldState extends State<MoneyInputField> {
   late int _cents;
+  late TextEditingController _controller;
+  late FocusNode _focusNode;
 
   @override
   void initState() {
     super.initState();
     _cents = widget.initialValue.cents;
+    _controller = TextEditingController();
+    _focusNode = FocusNode();
+    _syncController();
+  }
+
+  @override
+  void didUpdateWidget(covariant MoneyInputField oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.initialValue.cents != widget.initialValue.cents &&
+        widget.initialValue.cents != _cents) {
+      _cents = widget.initialValue.cents;
+      _syncController();
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    _focusNode.dispose();
+    super.dispose();
+  }
+
+  void _syncController() {
+    final formatted = Money(_cents).format();
+    _controller.value = TextEditingValue(
+      text: formatted,
+      selection: TextSelection.collapsed(offset: formatted.length),
+    );
+  }
+
+  void _onInputChanged(String text) {
+    final digits = text.replaceAll(RegExp(r'[^0-9]'), '');
+    final newCents = int.tryParse(digits) ?? 0;
+    if (newCents > 100000000) return; // Limite de R$ 1 milhão
+
+    setState(() {
+      _cents = newCents;
+      _syncController();
+    });
+    AppHaptics.selection();
+    widget.onChanged(Money(_cents));
   }
 
   void _onDigit(int digit) {
-    if (_cents >= 100000000) return; // Limite de 1 milhão de reais
+    if (_cents >= 100000000) return;
     setState(() {
       _cents = (_cents * 10) + digit;
+      _syncController();
     });
     AppHaptics.selection();
     widget.onChanged(Money(_cents));
@@ -56,6 +100,7 @@ class _MoneyInputFieldState extends State<MoneyInputField> {
   void _onBackspace() {
     setState(() {
       _cents = _cents ~/ 10;
+      _syncController();
     });
     AppHaptics.light();
     widget.onChanged(Money(_cents));
@@ -64,14 +109,17 @@ class _MoneyInputFieldState extends State<MoneyInputField> {
   void _onClear() {
     setState(() {
       _cents = 0;
+      _syncController();
     });
     AppHaptics.light();
     widget.onChanged(const Money.zero());
   }
 
   void _addQuick(int addCents) {
+    if (_cents + addCents > 100000000) return;
     setState(() {
       _cents += addCents;
+      _syncController();
     });
     AppHaptics.light();
     widget.onChanged(Money(_cents));
@@ -80,8 +128,6 @@ class _MoneyInputFieldState extends State<MoneyInputField> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final money = Money(_cents);
-    final formatted = money.format();
     final accentColor = widget.primaryColor ?? theme.colorScheme.primary;
 
     return Column(
@@ -94,27 +140,62 @@ class _MoneyInputFieldState extends State<MoneyInputField> {
                 widget.label,
                 style: theme.textTheme.bodySmall?.copyWith(fontWeight: FontWeight.w600),
               ),
-              const SizedBox(height: 6),
-              GestureDetector(
-                onLongPress: _onClear,
-                child: Text(
-                  formatted,
-                  style: TextStyle(
-                    fontSize: 40,
-                    fontWeight: FontWeight.bold,
-                    letterSpacing: -0.5,
-                    color: _cents > 0 ? accentColor : theme.textTheme.bodySmall?.color,
-                  ),
+              const SizedBox(height: 4),
+
+              // Campo de entrada nativo centralizado e estilizado
+              IntrinsicWidth(
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    Flexible(
+                      child: TextField(
+                        controller: _controller,
+                        focusNode: _focusNode,
+                        autofocus: widget.autoFocus,
+                        keyboardType: TextInputType.number,
+                        inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                        textAlign: TextAlign.center,
+                        textInputAction: TextInputAction.next,
+                        style: TextStyle(
+                          fontSize: 38,
+                          fontWeight: FontWeight.bold,
+                          letterSpacing: -0.5,
+                          color: _cents > 0 ? accentColor : theme.textTheme.bodySmall?.color,
+                        ),
+                        decoration: const InputDecoration(
+                          border: InputBorder.none,
+                          contentPadding: EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                          isDense: true,
+                        ),
+                        onChanged: _onInputChanged,
+                      ),
+                    ),
+                    if (_cents > 0)
+                      Padding(
+                        padding: const EdgeInsets.only(left: 4),
+                        child: IconButton(
+                          icon: const Icon(Icons.backspace_outlined, size: 20),
+                          visualDensity: VisualDensity.compact,
+                          tooltip: 'Apagar dígito',
+                          onPressed: _onBackspace,
+                        ),
+                      ),
+                  ],
                 ),
               ),
             ],
           ),
         ),
+
+        // Atalhos rápidos de valores (+R$10, +R$20, +R$50, +R$100)
         if (widget.quickAddCents != null && widget.quickAddCents!.isNotEmpty) ...[
-          const SizedBox(height: 12),
+          const SizedBox(height: 10),
           Wrap(
             alignment: WrapAlignment.center,
             spacing: 8,
+            runSpacing: 6,
             children: widget.quickAddCents!.map((add) {
               return ActionChip(
                 visualDensity: VisualDensity.compact,
@@ -124,8 +205,10 @@ class _MoneyInputFieldState extends State<MoneyInputField> {
             }).toList(),
           ),
         ],
+
+        // Teclado virtual sob demanda (apenas se explicitamente habilitado)
         if (widget.showKeypad) ...[
-          const SizedBox(height: 20),
+          const SizedBox(height: 16),
           _buildNumericKeypad(theme),
         ],
       ],
