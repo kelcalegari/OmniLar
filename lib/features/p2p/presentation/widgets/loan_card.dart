@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../../../core/theme/app_colors.dart';
+import '../../../../core/utils/responsive.dart';
 import '../../domain/entities/p2p_loan.dart';
 import 'loan_details_sheet.dart';
 
@@ -14,14 +15,10 @@ class LoanCard extends StatelessWidget {
   });
 
   void _showDetails(BuildContext context) {
-    showModalBottomSheet(
+    showAdaptiveModal(
       context: context,
-      isScrollControlled: true,
-      useSafeArea: true,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-      ),
-      builder: (_) => LoanDetailsSheet(loan: loan, isDebtor: isDebtor),
+      maxWidth: 580,
+      child: LoanDetailsSheet(loan: loan, isDebtor: isDebtor),
     );
   }
 
