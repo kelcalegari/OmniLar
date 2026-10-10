@@ -1,5 +1,6 @@
 import 'package:equatable/equatable.dart';
 import '../../../../core/domain/value_objects/money.dart';
+import 'house_expense_item.dart';
 import 'split_rule.dart';
 
 enum ExpenseStatus {
@@ -24,6 +25,7 @@ class HouseExpense extends Equatable {
   final bool isActive; // Se a assinatura/recorrência está ativa
   final bool paidOutOfPocket;
   final String? notes;
+  final List<HouseExpenseItem> items;
 
   const HouseExpense({
     required this.id,
@@ -42,10 +44,20 @@ class HouseExpense extends Equatable {
     this.isActive = true,
     this.paidOutOfPocket = false,
     this.notes,
+    this.items = const [],
   });
 
   bool get isPaid => status == ExpenseStatus.paid;
   bool get isPending => status == ExpenseStatus.pending;
+
+  /// Se a despesa possui sub-itens desmembrados (ex: condomínio com água, gás, obras)
+  bool get isItemized => items.isNotEmpty;
+
+  /// Soma dos valores de todos os sub-itens em centavos
+  int get itemsTotalCents => items.fold<int>(0, (acc, item) => acc + item.amount.cents);
+
+  /// Verifica se os sub-itens somam exatamente o total do boleto
+  bool get isItemsBalanced => !isItemized || itemsTotalCents == amount.cents;
 
   HouseExpense copyWith({
     String? id,
@@ -64,6 +76,7 @@ class HouseExpense extends Equatable {
     bool? isActive,
     bool? paidOutOfPocket,
     String? notes,
+    List<HouseExpenseItem>? items,
   }) {
     return HouseExpense(
       id: id ?? this.id,
@@ -82,6 +95,7 @@ class HouseExpense extends Equatable {
       isActive: isActive ?? this.isActive,
       paidOutOfPocket: paidOutOfPocket ?? this.paidOutOfPocket,
       notes: notes ?? this.notes,
+      items: items ?? this.items,
     );
   }
 
@@ -103,5 +117,6 @@ class HouseExpense extends Equatable {
         isActive,
         paidOutOfPocket,
         notes,
+        items,
       ];
 }

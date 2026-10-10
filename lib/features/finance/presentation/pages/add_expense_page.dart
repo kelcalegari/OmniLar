@@ -4,10 +4,29 @@ import '../../../../core/theme/app_colors.dart';
 import '../../../../core/domain/value_objects/money.dart';
 import '../../../../core/widgets/money_input_field.dart';
 import '../../domain/entities/house_expense.dart';
+import '../../domain/entities/house_expense_item.dart';
 import '../../domain/entities/split_rule.dart';
 import '../../domain/entities/category.dart';
 import '../cubit/finance_cubit.dart';
 import '../cubit/finance_state.dart';
+
+class _DraftExpenseItem {
+  final TextEditingController titleController;
+  int cents;
+  String? categoryId;
+  String? responsibleMemberId;
+
+  _DraftExpenseItem({
+    required String title,
+    required this.cents,
+    this.categoryId,
+    this.responsibleMemberId,
+  }) : titleController = TextEditingController(text: title);
+
+  void dispose() {
+    titleController.dispose();
+  }
+}
 
 class AddExpensePage extends StatefulWidget {
   final bool isRecurringDefault;
@@ -37,6 +56,9 @@ class _AddExpensePageState extends State<AddExpensePage> {
 
   int _cents = 0;
 
+  bool _isItemized = false;
+  final List<_DraftExpenseItem> _draftItems = [];
+
   @override
   void initState() {
     super.initState();
@@ -49,7 +71,46 @@ class _AddExpensePageState extends State<AddExpensePage> {
   @override
   void dispose() {
     _titleController.dispose();
+    for (final item in _draftItems) {
+      item.dispose();
+    }
     super.dispose();
+  }
+
+  void _applyCondoPreset(FinanceState state) {
+    for (final item in _draftItems) {
+      item.dispose();
+    }
+    _draftItems.clear();
+
+    final moradiaCatId = state.categories.firstWhere((c) => c.name.toLowerCase().contains('moradia'), orElse: () => state.categories.first).id;
+    final contasCatId = state.categories.firstWhere((c) => c.name.toLowerCase().contains('conta'), orElse: () => state.categories.first).id;
+    final firstMemberId = state.members.isNotEmpty ? state.members.first.id : null;
+
+    if (_cents == 85000) {
+      _draftItems.addAll([
+        _DraftExpenseItem(title: 'Taxa Condomínio Ordinária', cents: 50000, categoryId: moradiaCatId),
+        _DraftExpenseItem(title: 'Consumo de Água', cents: 12000, categoryId: contasCatId),
+        _DraftExpenseItem(title: 'Gás Encanado', cents: 8000, categoryId: contasCatId),
+        _DraftExpenseItem(title: 'Fundo de Obras / Reserva', cents: 15000, categoryId: moradiaCatId, responsibleMemberId: firstMemberId),
+      ]);
+    } else if (_cents > 0) {
+      final part = _cents ~/ 4;
+      final rest = _cents - (part * 4);
+      _draftItems.addAll([
+        _DraftExpenseItem(title: 'Taxa Condomínio Ordinária', cents: part + rest, categoryId: moradiaCatId),
+        _DraftExpenseItem(title: 'Consumo de Água', cents: part, categoryId: contasCatId),
+        _DraftExpenseItem(title: 'Gás Encanado', cents: part, categoryId: contasCatId),
+        _DraftExpenseItem(title: 'Fundo de Obras / Reserva', cents: part, categoryId: moradiaCatId, responsibleMemberId: firstMemberId),
+      ]);
+    } else {
+      _draftItems.addAll([
+        _DraftExpenseItem(title: 'Taxa Condomínio Ordinária', cents: 0, categoryId: moradiaCatId),
+        _DraftExpenseItem(title: 'Consumo de Água', cents: 0, categoryId: contasCatId),
+        _DraftExpenseItem(title: 'Gás Encanado', cents: 0, categoryId: contasCatId),
+        _DraftExpenseItem(title: 'Fundo de Obras / Reserva', cents: 0, categoryId: moradiaCatId, responsibleMemberId: firstMemberId),
+      ]);
+    }
   }
 
   void _submit() {
@@ -65,6 +126,27 @@ class _AddExpensePageState extends State<AddExpensePage> {
         const SnackBar(content: Text('O valor deve ser maior que zero')),
       );
       return;
+    }
+
+    if (_isItemized) {
+      if (_draftItems.isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Adicione pelo menos um sub-item ou desative o boleto composto.')),
+        );
+        return;
+      }
+      final itemsSumCents = _draftItems.fold<int>(0, (acc, item) => acc + item.cents);
+      if (itemsSumCents != _cents) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            backgroundColor: Colors.red.shade700,
+            content: Text(
+              'A soma dos sub-itens (${Money(itemsSumCents).format()}) deve ser igual ao valor total do boleto (${Money(_cents).format()}).',
+            ),
+          ),
+        );
+        return;
+      }
     }
 
     final state = context.read<FinanceCubit>().state;
@@ -92,8 +174,30 @@ class _AddExpensePageState extends State<AddExpensePage> {
       expenseDate = _expenseStatus == ExpenseStatus.paid ? now : dueDate;
     }
 
+    final expenseId = 'exp_${DateTime.now().millisecondsSinceEpoch}';
+    final List<HouseExpenseItem> items = _isItemized
+        ? _draftItems.asMap().entries.map((entry) {
+            final idx = entry.key;
+            final draft = entry.value;
+            final itemTitle = draft.titleController.text.trim().isEmpty
+                ? 'Sub-item #${idx + 1}'
+                : draft.titleController.text.trim();
+            return HouseExpenseItem(
+              id: 'item_${expenseId}_$idx',
+              expenseId: expenseId,
+              title: itemTitle,
+              amount: Money(draft.cents),
+              categoryId: draft.categoryId ?? catId,
+              responsibleMemberId: draft.responsibleMemberId,
+              splitRule: draft.responsibleMemberId != null
+                  ? SplitRule.singleResponsible(draft.responsibleMemberId!)
+                  : null,
+            );
+          }).toList()
+        : const [];
+
     final expense = HouseExpense(
-      id: 'exp_${DateTime.now().millisecondsSinceEpoch}',
+      id: expenseId,
       title: _titleController.text.trim(),
       amount: Money(_cents),
       date: expenseDate,
@@ -106,6 +210,7 @@ class _AddExpensePageState extends State<AddExpensePage> {
       isRecurring: _isRecurring,
       isVariable: _isVariable,
       dueDay: _isRecurring ? _dueDay : null,
+      items: items,
     );
 
     context.read<FinanceCubit>().addExpense(expense);
@@ -114,7 +219,9 @@ class _AddExpensePageState extends State<AddExpensePage> {
       SnackBar(
         content: Text(_isRecurring
             ? 'Despesa recorrente cadastrada com sucesso! 🔁'
-            : 'Gasto da casa lançado com sucesso! 🎉'),
+            : (_isItemized
+                ? 'Boleto composto lançado com ${items.length} sub-itens! 🏢'
+                : 'Gasto da casa lançado com sucesso! 🎉')),
       ),
     );
   }
@@ -343,6 +450,111 @@ class _AddExpensePageState extends State<AddExpensePage> {
               ),
               const SizedBox(height: 20),
 
+              // Seção de Segmentação / Boleto Composto
+              Material(
+                color: _isItemized
+                    ? AppColors.primary.withValues(alpha: 0.04)
+                    : theme.cardColor,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(16),
+                  side: BorderSide(
+                    color: _isItemized
+                        ? AppColors.primary.withValues(alpha: 0.4)
+                        : theme.dividerColor,
+                    width: _isItemized ? 1.5 : 1,
+                  ),
+                ),
+                child: Column(
+                  children: [
+                    SwitchListTile(
+                      secondary: Icon(
+                        Icons.account_tree_outlined,
+                        color: _isItemized ? AppColors.primary : Colors.grey,
+                      ),
+                      title: const Text(
+                        'Desmembrar Sub-itens (Boleto Composto)',
+                        style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+                      ),
+                      subtitle: Text(
+                        _isItemized
+                            ? 'Segmentado em água, condomínio, gás, obras...'
+                            : 'Ative para discriminar condomínio com água, gás, obras ou donos diferentes',
+                        style: const TextStyle(fontSize: 12),
+                      ),
+                      value: _isItemized,
+                      onChanged: (val) {
+                        setState(() {
+                          _isItemized = val;
+                          if (_isItemized && _draftItems.isEmpty) {
+                            _applyCondoPreset(state);
+                          }
+                        });
+                      },
+                    ),
+                    if (_isItemized) ...[
+                      const Divider(height: 1),
+                      Padding(
+                        padding: const EdgeInsets.all(16),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            _buildItemizedBalanceBanner(theme),
+                            const SizedBox(height: 14),
+                            ..._draftItems.asMap().entries.map((entry) {
+                              final index = entry.key;
+                              final item = entry.value;
+                              return _buildDraftItemCard(theme, state, index, item);
+                            }),
+                            const SizedBox(height: 8),
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: OutlinedButton.icon(
+                                    style: OutlinedButton.styleFrom(
+                                      shape: RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.circular(12),
+                                      ),
+                                    ),
+                                    icon: const Icon(Icons.add_rounded, size: 18),
+                                    label: const Text('Adicionar Sub-item'),
+                                    onPressed: () {
+                                      setState(() {
+                                        final sum = _draftItems.fold<int>(0, (acc, i) => acc + i.cents);
+                                        final remaining = _cents > sum ? _cents - sum : 0;
+                                        _draftItems.add(_DraftExpenseItem(
+                                          title: '',
+                                          cents: remaining,
+                                          categoryId: _selectedCategoryId,
+                                        ));
+                                      });
+                                    },
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                OutlinedButton(
+                                  style: OutlinedButton.styleFrom(
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(12),
+                                    ),
+                                  ),
+                                  onPressed: () {
+                                    setState(() {
+                                      _applyCondoPreset(state);
+                                    });
+                                  },
+                                  child: const Text('Preset Condomínio'),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+              const SizedBox(height: 20),
+
               // Seletor de Categoria
               Text('Categoria', style: theme.textTheme.titleSmall),
               const SizedBox(height: 8),
@@ -480,6 +692,228 @@ class _AddExpensePageState extends State<AddExpensePage> {
           ),
         );
       },
+    );
+  }
+
+  Widget _buildItemizedBalanceBanner(ThemeData theme) {
+    final itemsSumCents = _draftItems.fold<int>(0, (acc, i) => acc + i.cents);
+    final diffCents = _cents - itemsSumCents;
+
+    if (diffCents == 0 && itemsSumCents > 0) {
+      return Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        decoration: BoxDecoration(
+          color: AppColors.creditGreen.withValues(alpha: 0.12),
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: AppColors.creditGreen.withValues(alpha: 0.3)),
+        ),
+        child: Row(
+          children: [
+            const Icon(Icons.check_circle_rounded, color: AppColors.creditGreen, size: 20),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                'Total conferido: ${Money(itemsSumCents).format()} de ${Money(_cents).format()} (100% batendo ✅)',
+                style: const TextStyle(
+                  color: AppColors.creditGreen,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 12,
+                ),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    if (diffCents > 0) {
+      return Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        decoration: BoxDecoration(
+          color: AppColors.folegoWarning.withValues(alpha: 0.12),
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: AppColors.folegoWarning.withValues(alpha: 0.3)),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                const Icon(Icons.info_outline_rounded, color: AppColors.folegoWarning, size: 20),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    'Soma: ${Money(itemsSumCents).format()} • Faltam ${Money(diffCents).format()} para fechar os ${Money(_cents).format()}',
+                    style: const TextStyle(
+                      color: AppColors.folegoWarning,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 12,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            if (_draftItems.isNotEmpty) ...[
+              const SizedBox(height: 6),
+              InkWell(
+                onTap: () {
+                  setState(() {
+                    _draftItems.last.cents += diffCents;
+                  });
+                },
+                child: Text(
+                  '+ Ajustar restante (${Money(diffCents).format()}) no último sub-item',
+                  style: const TextStyle(
+                    color: AppColors.primary,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 11,
+                    decoration: TextDecoration.underline,
+                  ),
+                ),
+              ),
+            ],
+          ],
+        ),
+      );
+    }
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: Colors.red.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: Colors.red.withValues(alpha: 0.3)),
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.error_outline_rounded, color: Colors.red, size: 20),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              'Soma: ${Money(itemsSumCents).format()} • Ultrapassou em ${Money(-diffCents).format()} o boleto (${Money(_cents).format()})',
+              style: const TextStyle(
+                color: Colors.red,
+                fontWeight: FontWeight.bold,
+                fontSize: 12,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDraftItemCard(
+    ThemeData theme,
+    FinanceState state,
+    int index,
+    _DraftExpenseItem item,
+  ) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: theme.cardColor,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: theme.dividerColor.withValues(alpha: 0.6)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Text(
+                'Sub-item #${index + 1}',
+                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+              ),
+              const Spacer(),
+              IconButton(
+                icon: const Icon(Icons.delete_outline_rounded, size: 18, color: Colors.red),
+                onPressed: () {
+                  setState(() {
+                    item.dispose();
+                    _draftItems.removeAt(index);
+                  });
+                },
+                visualDensity: VisualDensity.compact,
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              Expanded(
+                flex: 3,
+                child: TextField(
+                  controller: item.titleController,
+                  decoration: InputDecoration(
+                    labelText: 'Nome do sub-item',
+                    hintText: 'Ex: Água, Gás, Taxa',
+                    isDense: true,
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                flex: 2,
+                child: MoneyInputField(
+                  label: 'Valor',
+                  initialValue: Money(item.cents),
+                  primaryColor: AppColors.primary,
+                  onChanged: (money) {
+                    setState(() {
+                      item.cents = money.cents;
+                    });
+                  },
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              const Text('Responsável: ', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w500)),
+              const SizedBox(width: 6),
+              Expanded(
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8),
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: theme.dividerColor),
+                  ),
+                  child: DropdownButton<String?>(
+                    value: item.responsibleMemberId,
+                    isDense: true,
+                    isExpanded: true,
+                    underline: const SizedBox(),
+                    items: [
+                      const DropdownMenuItem<String?>(
+                        value: null,
+                        child: Text('Rateio Geral da Casa', style: TextStyle(fontSize: 12)),
+                      ),
+                      ...state.members.map((m) {
+                        return DropdownMenuItem<String?>(
+                          value: m.id,
+                          child: Text('100% ${m.name}', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
+                        );
+                      }),
+                    ],
+                    onChanged: (val) {
+                      setState(() {
+                        item.responsibleMemberId = val;
+                      });
+                    },
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
     );
   }
 }

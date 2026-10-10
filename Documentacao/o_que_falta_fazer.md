@@ -20,9 +20,10 @@ Este documento consolida o estado atual do desenvolvimento e mapeia com clareza 
 | **Ajustes & Configurações** (Categorias com Dono, Cartões/VR, Rateio Fixo/Proporcional, Ciclo) | Concluído ✅ | 100% |
 | **Caixinhas & Metas da Casa** (Reserva Blindada, Metas com Progresso, Aportes/Resgates) | Concluído ✅ | 100% |
 | **Humanização & UX** (Input ATM centavos nativo, Modo Privacidade, 3 Colunas) | Concluído ✅ | 100% |
+| **Despesas Compostas & Boletos Segmentados** (Condomínio com Água, Gás e Obras) | Concluído ✅ | 100% |
 | **Backend & Infra SQL** (Migrações 0001 a 0004 com RLS, Fila Offline) | Concluído ✅ | 100% |
 
-> **Métrica de Confiabilidade:** **77 testes automatizados (unitários e widgets) passando (100% verde)** e cobertura contínua de regressão.
+> **Métrica de Confiabilidade:** **82 testes automatizados (unitários e widgets) passando (100% verde)** e cobertura contínua de regressão.
 
 ---
 
@@ -32,20 +33,19 @@ Abaixo estão divididos por prioridade técnica os blocos de trabalho que restam
 
 ```mermaid
 flowchart TD
-    subgraph P1["Prioridade 1: Integração de Dados Reais & Despesas Compostas"]
+    subgraph P1["Prioridade 1: Integração de Dados Reais"]
         A[Datasources Reais Supabase] --> B[Edge Functions & Gemini API]
         B --> C[Realtime Sync Compras/Tarefas]
-        C --> D[Segmentação de Boletos / Despesas Compostas]
     end
 
     subgraph P2["Prioridade 2: Segurança & Experiência"]
-        E[Biometria local_auth RN07] --> F[Compartilhamento WhatsApp / Super Pix]
-        F --> G[Fila Offline com Armazenamento Seguro]
+        D[Biometria local_auth RN07] --> E[Compartilhamento WhatsApp / Super Pix]
+        E --> F[Fila Offline com Armazenamento Seguro]
     end
 
     subgraph P3["Prioridade 3: Lojas & Publicação"]
-        H[Splash Screen & Ícones de App] --> I[Assinatura Android / Bundle iOS]
-        I --> J[Deploy Supabase & Ambientes]
+        G[Splash Screen & Ícones de App] --> H[Assinatura Android / Bundle iOS]
+        H --> I[Deploy Supabase & Ambientes]
     end
 
     P1 --> P2
@@ -59,17 +59,18 @@ flowchart TD
 ### Frente 1: Segmentação de Boletos / Despesas Compostas (Condomínio com Água, Gás e Obras)
 *Necessidade identificada para resolver boletos bancários unificados que misturam naturezas e regras de rateio diferentes.*
 
-- [ ] **Modelo de Dados (Sub-itens):**
-  - Criar entidade `HouseExpenseItem` vinculada a `HouseExpense`:
-    - `id`, `expenseId`, `title` (ex: "Taxa Condomínio", "Consumo Água", "Gás Encanado", "Fundo de Reserva/Obras").
-    - `amount` em centavos (com validação estrita: soma dos itens == total do boleto).
-    - `categoryId` independente por item (permite que a água vá para a categoria de Água e a taxa para Moradia).
-    - `splitRule` ou `responsibleMemberId` independente (ex: obras e benfeitorias estruturais atribuídas 100% ao proprietário do imóvel, enquanto a taxa ordinária é dividida 60/40 ou 50/50).
-- [ ] **Interface de Cadastro (`AddExpensePage`):**
-  - Adicionar botão expansível `+ Desmembrar em Sub-itens (Boleto Composto)`.
-  - Contador visual de conferência em tempo real: *"Distribuído: R$ 850,00 de R$ 850,00 (100% batendo)"*.
-- [ ] **Visualização e Timeline (`ExpenseTimelineItem`):**
-  - Exibir accordion/chips discriminando as fatias daquele boleto.
+- [x] **Modelo de Dados (Sub-itens):**
+  - Entidade `HouseExpenseItem` vinculada a `HouseExpense` (`id`, `expenseId`, `title`, `amount`, `categoryId`, `responsibleMemberId`, `splitRule`).
+  - Validação estrita: `isItemized`, `itemsTotalCents` e `isItemsBalanced` (soma dos sub-itens == total do boleto).
+- [x] **Motor Financeiro & Compensação (`GlobalClearingEngine`):**
+  - Suporte completo no cálculo do `computeSettlement`: cada sub-item é apurado com sua regra própria ou responsável exclusivo (ex: obras estruturais 100% ao proprietário, água/gás divididos no rateio geral).
+- [x] **Interface de Cadastro (`AddExpensePage`):**
+  - Switch interativo de `Desmembrar Sub-itens (Boleto Composto)`.
+  - Barra de conferência em tempo real com validação de soma total batendo 100% e atalho inteligente para alocar diferença restante.
+  - Preset rápido inteligente para condomínio (Taxa, Água, Gás, Obras).
+- [x] **Visualização e Timeline (`ExpenseTimelineItem`):**
+  - Badge `N itens` e exibição dos sub-itens discriminados com valor e indicação de responsável individual.
+  - Discriminação visual dos sub-itens dentro do modal de confirmação de pagamento.
 - [ ] **Integração com Captura Inteligente (OCR / Gemini):**
   - Enriquecer o prompt da Edge Function `capture-read` para ler a tabela do demonstrativo de condomínio e sugerir os sub-itens desmembrados automaticamente.
 

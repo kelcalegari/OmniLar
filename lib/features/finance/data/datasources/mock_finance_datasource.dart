@@ -2,6 +2,7 @@ import '../../domain/entities/house_member.dart';
 import '../../domain/entities/category.dart';
 import '../../domain/entities/payment_method.dart';
 import '../../domain/entities/house_expense.dart';
+import '../../domain/entities/house_expense_item.dart';
 import '../../domain/entities/contribution.dart';
 import '../../domain/entities/split_rule.dart';
 import '../../domain/entities/financial_cycle_summary.dart';
@@ -194,6 +195,53 @@ class MockFinanceDataSource {
         isRecurring: true,
         isVariable: false,
         dueDay: 10,
+      ),
+      HouseExpense(
+        id: 'exp_7',
+        title: 'Condomínio Edifício Solar',
+        amount: const Money(85000), // R$ 850,00 total
+        date: DateTime(now.year, now.month, 10),
+        dueDate: DateTime(now.year, now.month, 10),
+        categoryId: 'cat_moradia',
+        paidByMemberId: 'member_carlos',
+        paymentMethodId: 'pm_caixa',
+        splitRule: const SplitRule.percentage({'member_carlos': 60.0, 'member_marina': 40.0}),
+        status: ExpenseStatus.paid,
+        isRecurring: true,
+        isVariable: true,
+        dueDay: 10,
+        items: const [
+          HouseExpenseItem(
+            id: 'item_1',
+            expenseId: 'exp_7',
+            title: 'Taxa Condomínio Ordinária',
+            amount: Money(50000), // R$ 500,00
+            categoryId: 'cat_moradia',
+          ),
+          HouseExpenseItem(
+            id: 'item_2',
+            expenseId: 'exp_7',
+            title: 'Consumo de Água',
+            amount: Money(12000), // R$ 120,00
+            categoryId: 'cat_contas',
+          ),
+          HouseExpenseItem(
+            id: 'item_3',
+            expenseId: 'exp_7',
+            title: 'Gás Encanado',
+            amount: Money(8000), // R$ 80,00
+            categoryId: 'cat_contas',
+          ),
+          HouseExpenseItem(
+            id: 'item_4',
+            expenseId: 'exp_7',
+            title: 'Fundo de Reserva & Obras',
+            amount: Money(15000), // R$ 150,00
+            categoryId: 'cat_moradia',
+            responsibleMemberId: 'member_carlos', // 100% Carlos (Proprietário)
+            splitRule: SplitRule.singleResponsible('member_carlos'),
+          ),
+        ],
       ),
     ]);
   }

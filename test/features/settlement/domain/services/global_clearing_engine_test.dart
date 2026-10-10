@@ -3,6 +3,7 @@ import 'package:omni_lar/core/domain/value_objects/financial_cycle.dart';
 import 'package:omni_lar/core/domain/value_objects/money.dart';
 import 'package:omni_lar/features/finance/domain/entities/contribution.dart';
 import 'package:omni_lar/features/finance/domain/entities/house_expense.dart';
+import 'package:omni_lar/features/finance/domain/entities/house_expense_item.dart';
 import 'package:omni_lar/features/finance/domain/entities/house_member.dart';
 import 'package:omni_lar/features/finance/domain/entities/split_rule.dart';
 import 'package:omni_lar/features/p2p/domain/entities/p2p_installment.dart';
@@ -163,6 +164,88 @@ void main() {
       expect(summary.transfers[0].fromMemberId, equals('m2'));
       expect(summary.transfers[0].toMemberId, equals('m1'));
       expect(summary.transfers[0].amount.cents, equals(7500));
+    });
+
+    test('Segmentação de Boleto Composto: Condomínio de R\$ 850 com taxa, água, gás e obras exclusivas', () {
+      final members = [
+        const HouseMember(id: 'member_carlos', name: 'Carlos', defaultSplitPercent: 60), // Proprietário
+        const HouseMember(id: 'member_marina', name: 'Marina', defaultSplitPercent: 40),
+      ];
+
+      // Boleto de R$ 850,00 pago por Carlos do próprio bolso:
+      // - Taxa Ordinária: 500 (60% Carlos = 300, 40% Marina = 200)
+      // - Água: 120 (60% Carlos = 72, 40% Marina = 48)
+      // - Gás: 80 (60% Carlos = 48, 40% Marina = 32)
+      // - Obras: 150 (100% Carlos = 150, 0% Marina = 0)
+      // Total devido Carlos: 300 + 72 + 48 + 150 = 570 (57000 centavos)
+      // Total devido Marina: 200 + 48 + 32 = 280 (28000 centavos)
+      // Carlos pagou 850 do bolso -> saldo líquido Carlos = 850 - 570 = +280
+      // Marina pagou 0 do bolso -> saldo líquido Marina = 0 - 280 = -280
+      // Super Pix: Marina transfere R$ 280,00 para Carlos!
+      final compoundExpense = HouseExpense(
+        id: 'exp_condominio',
+        title: 'Condomínio Solar',
+        amount: const Money(85000), // R$ 850,00
+        date: DateTime(2026, 10, 10),
+        paidByMemberId: 'member_carlos',
+        paidOutOfPocket: true,
+        categoryId: 'cat_moradia',
+        paymentMethodId: 'pm_card_carlos',
+        splitRule: const SplitRule.percentage({'member_carlos': 60, 'member_marina': 40}),
+        items: const [
+          HouseExpenseItem(
+            id: 'it_taxa',
+            expenseId: 'exp_condominio',
+            title: 'Taxa Ordinária',
+            amount: Money(50000),
+          ),
+          HouseExpenseItem(
+            id: 'it_agua',
+            expenseId: 'exp_condominio',
+            title: 'Água',
+            amount: Money(12000),
+          ),
+          HouseExpenseItem(
+            id: 'it_gas',
+            expenseId: 'exp_condominio',
+            title: 'Gás',
+            amount: Money(8000),
+          ),
+          HouseExpenseItem(
+            id: 'it_obras',
+            expenseId: 'exp_condominio',
+            title: 'Fundo de Obras',
+            amount: Money(15000),
+            responsibleMemberId: 'member_carlos', // 100% proprietário
+            splitRule: SplitRule.singleResponsible('member_carlos'),
+          ),
+        ],
+      );
+
+      final summary = engine.computeSettlement(
+        cycle: cycle,
+        members: members,
+        expenses: [compoundExpense],
+        contributions: [],
+        loans: [],
+      );
+
+      final carlosBalance = summary.memberBalances.firstWhere((m) => m.memberId == 'member_carlos');
+      final marinaBalance = summary.memberBalances.firstWhere((m) => m.memberId == 'member_marina');
+
+      expect(carlosBalance.contributionDue.cents, equals(57000)); // R$ 570,00
+      expect(carlosBalance.outOfPocketExpenses.cents, equals(85000)); // R$ 850,00
+      expect(carlosBalance.netBalance.cents, equals(28000)); // + R$ 280,00
+
+      expect(marinaBalance.contributionDue.cents, equals(28000)); // R$ 280,00
+      expect(marinaBalance.outOfPocketExpenses.cents, equals(0));
+      expect(marinaBalance.netBalance.cents, equals(-28000)); // - R$ 280,00
+
+      expect(summary.isNetZeroSum, isTrue);
+      expect(summary.transfers.length, equals(1));
+      expect(summary.transfers[0].fromMemberId, equals('member_marina'));
+      expect(summary.transfers[0].toMemberId, equals('member_carlos'));
+      expect(summary.transfers[0].amount.cents, equals(28000));
     });
   });
 }

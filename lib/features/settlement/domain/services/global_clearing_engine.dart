@@ -3,6 +3,7 @@ import '../../../../core/domain/value_objects/money.dart';
 import '../../../finance/domain/entities/contribution.dart';
 import '../../../finance/domain/entities/house_expense.dart';
 import '../../../finance/domain/entities/house_member.dart';
+import '../../../finance/domain/entities/split_rule.dart';
 import '../../../p2p/domain/entities/p2p_loan.dart';
 import '../entities/member_net_balance.dart';
 import '../entities/settlement_summary.dart';
@@ -41,15 +42,60 @@ class GlobalClearingEngine {
     final totalContributions = Money(totalContributionsCents);
 
     // 3. Calcular meta de aporte por membro:
-    // Se não for fornecida meta customizada, reparte as despesas da casa pelos percentuais padrão
+    // Se não for fornecida meta customizada, reparte as despesas da casa considerando
+    // as regras de rateio de cada despesa e seus sub-itens (se for despesa composta).
     final Map<String, Money> contributionTargets = {};
     if (customContributionTargets != null) {
       contributionTargets.addAll(customContributionTargets);
     } else {
-      for (final member in members) {
-        final percent = member.defaultSplitPercent ?? (100.0 / members.length);
-        final targetCents = (totalExpensesCents * (percent / 100.0)).round();
-        contributionTargets[member.id] = Money(targetCents);
+      final memberIds = members.map((m) => m.id).toList();
+      final defaultPercentages = <String, double>{
+        for (final m in members) m.id: m.defaultSplitPercent,
+      };
+
+      final Map<String, int> targetCentsMap = {
+        for (final m in members) m.id: 0,
+      };
+
+      for (final expense in expenses) {
+        if (expense.isItemized) {
+          // Despesa composta: reparte cada sub-item individualmente
+          for (final item in expense.items) {
+            final SplitRule itemRule = item.splitRule ??
+                (item.responsibleMemberId != null
+                    ? SplitRule.singleResponsible(item.responsibleMemberId!)
+                    : (expense.splitRule.type == SplitType.percentage &&
+                            (expense.splitRule.percentages == null || expense.splitRule.percentages!.isEmpty)
+                        ? SplitRule.percentage(defaultPercentages)
+                        : expense.splitRule));
+
+            final allocations = itemRule.calculateAllocations(
+              totalAmount: item.amount,
+              memberIds: memberIds,
+            );
+            for (final entry in allocations.entries) {
+              targetCentsMap[entry.key] = (targetCentsMap[entry.key] ?? 0) + entry.value.cents;
+            }
+          }
+        } else {
+          // Despesa simples: usa a regra da despesa ou os percentuais padrão dos membros
+          final SplitRule effectiveRule = (expense.splitRule.type == SplitType.percentage &&
+                  (expense.splitRule.percentages == null || expense.splitRule.percentages!.isEmpty))
+              ? SplitRule.percentage(defaultPercentages)
+              : expense.splitRule;
+
+          final allocations = effectiveRule.calculateAllocations(
+            totalAmount: expense.amount,
+            memberIds: memberIds,
+          );
+          for (final entry in allocations.entries) {
+            targetCentsMap[entry.key] = (targetCentsMap[entry.key] ?? 0) + entry.value.cents;
+          }
+        }
+      }
+
+      for (final entry in targetCentsMap.entries) {
+        contributionTargets[entry.key] = Money(entry.value);
       }
     }
 
