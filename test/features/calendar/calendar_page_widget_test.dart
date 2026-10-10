@@ -28,8 +28,8 @@ void main() {
     );
   }
 
-  group('CalendarPage - Visões de Dia, Semana, Mês e Lista', () {
-    testWidgets('Inicia na Visão Dia com Mini Calendário e sem Tarefas',
+  group('CalendarPage - Visões de Mês e Lista no Mobile, e 4 Modos no Desktop', () {
+    testWidgets('No Mobile (800x1400), inicia na Visão Mês com calendário e compromissos do dia',
         (tester) async {
       tester.view.physicalSize = const Size(800, 1400);
       tester.view.devicePixelRatio = 1.0;
@@ -38,21 +38,21 @@ void main() {
       await tester.pumpWidget(buildCalendarPage());
       await tester.pumpAndSettle();
 
-      // Botões de alternância de modo
-      expect(find.text('Dia'), findsOneWidget);
-      expect(find.text('Semana'), findsOneWidget);
+      // No mobile, apenas Mês e Lista estão disponíveis (Dia e Semana removidos)
       expect(find.text('Mês'), findsOneWidget);
       expect(find.text('Lista'), findsOneWidget);
+      expect(find.text('Dia'), findsNothing);
+      expect(find.text('Semana'), findsNothing);
 
-      // Mini Calendário presente
-      expect(find.byType(MiniCalendarCard), findsOneWidget);
+      // Grade mensal elegante presente
+      expect(find.byType(MonthCalendarView), findsOneWidget);
 
-      // Apenas compromissos na agenda, sem tarefas
-      expect(find.text('Compromissos agendados'), findsOneWidget);
+      // Compromissos do dia selecionado exibidos logo abaixo do calendário
+      expect(find.textContaining('Compromissos ('), findsOneWidget);
       expect(find.text('Tarefas'), findsNothing);
     });
 
-    testWidgets('Alterna para Visão Semana e renderiza WeekCalendarView',
+    testWidgets('No Mobile, ao tocar em um dia da grade, atualiza a agenda do dia mantendo o calendário',
         (tester) async {
       tester.view.physicalSize = const Size(800, 1400);
       tester.view.devicePixelRatio = 1.0;
@@ -61,45 +61,6 @@ void main() {
       await tester.pumpWidget(buildCalendarPage());
       await tester.pumpAndSettle();
 
-      // Alterna para Semana
-      await tester.tap(find.text('Semana'));
-      await tester.pumpAndSettle();
-
-      // WeekCalendarView deve estar visível
-      expect(find.byType(WeekCalendarView), findsOneWidget);
-      expect(find.byType(MiniCalendarCard), findsNothing);
-    });
-
-    testWidgets('Alterna para Visão Mês e renderiza grade MonthCalendarView',
-        (tester) async {
-      tester.view.physicalSize = const Size(800, 1400);
-      tester.view.devicePixelRatio = 1.0;
-      addTearDown(tester.view.resetPhysicalSize);
-
-      await tester.pumpWidget(buildCalendarPage());
-      await tester.pumpAndSettle();
-
-      // Alterna para Mês
-      await tester.tap(find.text('Mês'));
-      await tester.pumpAndSettle();
-
-      // MonthCalendarView deve estar visível
-      expect(find.byType(MonthCalendarView), findsOneWidget);
-      expect(find.byType(MiniCalendarCard), findsNothing);
-    });
-
-    testWidgets('Na Visão Mês, ao tocar em um dia, navega para a Visão Dia (agenda do dia)',
-        (tester) async {
-      tester.view.physicalSize = const Size(800, 1400);
-      tester.view.devicePixelRatio = 1.0;
-      addTearDown(tester.view.resetPhysicalSize);
-
-      await tester.pumpWidget(buildCalendarPage());
-      await tester.pumpAndSettle();
-
-      // Alterna para Visão Mês
-      await tester.tap(find.text('Mês'));
-      await tester.pumpAndSettle();
       expect(find.byType(MonthCalendarView), findsOneWidget);
 
       // Clica em um dia da grade do mês (ex: dia 15)
@@ -111,13 +72,12 @@ void main() {
       await tester.tap(dayCell.first);
       await tester.pumpAndSettle();
 
-      // Deve ter acessado a Visão Dia com a agenda e mini calendário
-      expect(find.byType(MonthCalendarView), findsNothing);
-      expect(find.byType(MiniCalendarCard), findsOneWidget);
-      expect(find.text('Compromissos agendados'), findsOneWidget);
+      // Permanece na visão com calendário e atualiza a lista de compromissos do dia
+      expect(find.byType(MonthCalendarView), findsOneWidget);
+      expect(find.textContaining('Compromissos ('), findsOneWidget);
     });
 
-    testWidgets('Alterna para Visão Lista e renderiza mini calendário e lista corrida de compromissos',
+    testWidgets('No Mobile, alterna para Visão Lista e renderiza calendário e lista de todos os compromissos',
         (tester) async {
       tester.view.physicalSize = const Size(800, 1400);
       tester.view.devicePixelRatio = 1.0;
@@ -130,11 +90,8 @@ void main() {
       await tester.tap(find.text('Lista'));
       await tester.pumpAndSettle();
 
-      // Mini Calendar está presente na Visão Lista, enquanto grades de Semana e Mês ficam ocultadas
-      expect(find.byType(MiniCalendarCard), findsOneWidget);
-      expect(find.byType(MonthCalendarView), findsNothing);
-      expect(find.byType(WeekCalendarView), findsNothing);
-      // Exibe cabeçalho de lista
+      // Calendário e lista corrida de compromissos
+      expect(find.byType(MonthCalendarView), findsOneWidget);
       expect(find.textContaining('Todos os Compromissos ('), findsOneWidget);
     });
 

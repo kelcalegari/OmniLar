@@ -29,7 +29,7 @@ class CalendarPage extends StatefulWidget {
 
 class _CalendarPageState extends State<CalendarPage> {
   DateTime _selectedDate = DateTime.now();
-  CalendarViewMode _viewMode = CalendarViewMode.day;
+  CalendarViewMode _viewMode = CalendarViewMode.month;
 
   bool _isSameDay(DateTime a, DateTime b) {
     return a.year == b.year && a.month == b.month && a.day == b.day;
@@ -192,34 +192,36 @@ class _CalendarPageState extends State<CalendarPage> {
                 icon: const Icon(Icons.tune_rounded, color: AppColors.primary),
                 tooltip: 'Modo de Visualização',
                 onSelected: (mode) => setState(() => _viewMode = mode),
-                itemBuilder: (_) => const [
-                  PopupMenuItem(
-                    value: CalendarViewMode.day,
-                    child: Row(
-                      children: [
-                        Icon(Icons.view_day_rounded, size: 18),
-                        SizedBox(width: 8),
-                        Text('Visão Dia'),
-                      ],
+                itemBuilder: (_) => [
+                  if (isDesktop) ...const [
+                    PopupMenuItem(
+                      value: CalendarViewMode.day,
+                      child: Row(
+                        children: [
+                          Icon(Icons.view_day_rounded, size: 18),
+                          SizedBox(width: 8),
+                          Text('Visão Dia'),
+                        ],
+                      ),
                     ),
-                  ),
-                  PopupMenuItem(
-                    value: CalendarViewMode.week,
-                    child: Row(
-                      children: [
-                        Icon(Icons.view_week_rounded, size: 18),
-                        SizedBox(width: 8),
-                        Text('Visão Semana'),
-                      ],
+                    PopupMenuItem(
+                      value: CalendarViewMode.week,
+                      child: Row(
+                        children: [
+                          Icon(Icons.view_week_rounded, size: 18),
+                          SizedBox(width: 8),
+                          Text('Visão Semana'),
+                        ],
+                      ),
                     ),
-                  ),
+                  ],
                   PopupMenuItem(
                     value: CalendarViewMode.month,
                     child: Row(
                       children: [
-                        Icon(Icons.calendar_view_month_rounded, size: 18),
-                        SizedBox(width: 8),
-                        Text('Visão Mês'),
+                        const Icon(Icons.calendar_view_month_rounded, size: 18),
+                        const SizedBox(width: 8),
+                        Text(isDesktop ? 'Visão Mês' : 'Mês'),
                       ],
                     ),
                   ),
@@ -227,9 +229,9 @@ class _CalendarPageState extends State<CalendarPage> {
                     value: CalendarViewMode.list,
                     child: Row(
                       children: [
-                        Icon(Icons.format_list_bulleted_rounded, size: 18),
-                        SizedBox(width: 8),
-                        Text('Visão Lista'),
+                        const Icon(Icons.format_list_bulleted_rounded, size: 18),
+                        const SizedBox(width: 8),
+                        Text(isDesktop ? 'Visão Lista' : 'Lista'),
                       ],
                     ),
                   ),
@@ -291,40 +293,59 @@ class _CalendarPageState extends State<CalendarPage> {
                             border: Border.all(color: Colors.grey.withValues(alpha: 0.15)),
                           ),
                           child: Row(
-                            children: [
-                              Expanded(
-                                child: _buildModeTabButton(
-                                  label: isDesktop ? 'Visão Dia' : 'Dia',
-                                  icon: Icons.view_day_rounded,
-                                  isSelected: _viewMode == CalendarViewMode.day,
-                                  onTap: () => setState(() => _viewMode = CalendarViewMode.day),
-                                ),
-                              ),
-                              Expanded(
-                                child: _buildModeTabButton(
-                                  label: isDesktop ? 'Visão Semana' : 'Semana',
-                                  icon: Icons.view_week_rounded,
-                                  isSelected: _viewMode == CalendarViewMode.week,
-                                  onTap: () => setState(() => _viewMode = CalendarViewMode.week),
-                                ),
-                              ),
-                              Expanded(
-                                child: _buildModeTabButton(
-                                  label: isDesktop ? 'Visão Mês' : 'Mês',
-                                  icon: Icons.calendar_view_month_rounded,
-                                  isSelected: _viewMode == CalendarViewMode.month,
-                                  onTap: () => setState(() => _viewMode = CalendarViewMode.month),
-                                ),
-                              ),
-                              Expanded(
-                                child: _buildModeTabButton(
-                                  label: isDesktop ? 'Visão Lista' : 'Lista',
-                                  icon: Icons.format_list_bulleted_rounded,
-                                  isSelected: _viewMode == CalendarViewMode.list,
-                                  onTap: () => setState(() => _viewMode = CalendarViewMode.list),
-                                ),
-                              ),
-                            ],
+                            children: isDesktop
+                                ? [
+                                    Expanded(
+                                      child: _buildModeTabButton(
+                                        label: 'Visão Dia',
+                                        icon: Icons.view_day_rounded,
+                                        isSelected: _viewMode == CalendarViewMode.day,
+                                        onTap: () => setState(() => _viewMode = CalendarViewMode.day),
+                                      ),
+                                    ),
+                                    Expanded(
+                                      child: _buildModeTabButton(
+                                        label: 'Visão Semana',
+                                        icon: Icons.view_week_rounded,
+                                        isSelected: _viewMode == CalendarViewMode.week,
+                                        onTap: () => setState(() => _viewMode = CalendarViewMode.week),
+                                      ),
+                                    ),
+                                    Expanded(
+                                      child: _buildModeTabButton(
+                                        label: 'Visão Mês',
+                                        icon: Icons.calendar_view_month_rounded,
+                                        isSelected: _viewMode == CalendarViewMode.month,
+                                        onTap: () => setState(() => _viewMode = CalendarViewMode.month),
+                                      ),
+                                    ),
+                                    Expanded(
+                                      child: _buildModeTabButton(
+                                        label: 'Visão Lista',
+                                        icon: Icons.format_list_bulleted_rounded,
+                                        isSelected: _viewMode == CalendarViewMode.list,
+                                        onTap: () => setState(() => _viewMode = CalendarViewMode.list),
+                                      ),
+                                    ),
+                                  ]
+                                : [
+                                    Expanded(
+                                      child: _buildModeTabButton(
+                                        label: 'Mês',
+                                        icon: Icons.calendar_view_month_rounded,
+                                        isSelected: _viewMode == CalendarViewMode.month,
+                                        onTap: () => setState(() => _viewMode = CalendarViewMode.month),
+                                      ),
+                                    ),
+                                    Expanded(
+                                      child: _buildModeTabButton(
+                                        label: 'Lista',
+                                        icon: Icons.format_list_bulleted_rounded,
+                                        isSelected: _viewMode == CalendarViewMode.list,
+                                        onTap: () => setState(() => _viewMode = CalendarViewMode.list),
+                                      ),
+                                    ),
+                                  ],
                           ),
                         ),
                       ),
@@ -455,92 +476,139 @@ class _CalendarPageState extends State<CalendarPage> {
       case CalendarViewMode.day:
         return isDesktop
             ? _buildDesktopDayLayout(context, state, cubit, theme)
-            : _buildMobileDayLayout(context, state, cubit, theme);
+            : _buildMobileMonthLayout(context, state, cubit, theme);
 
       case CalendarViewMode.week:
-        return Padding(
-          padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-          child: ResponsiveContainer(
-            maxWidth: kMaxContentWidth,
-            child: WeekCalendarView(
-              selectedDate: _selectedDate,
-              events: state.events,
-              onDateSelected: (date) {
-                setState(() {
-                  _selectedDate = date;
-                  _viewMode = CalendarViewMode.day;
-                });
-              },
-              onEventTap: (event) => _showEventDetailsModal(context, event, state, cubit),
-              onAddEvent: (date) {
-                setState(() => _selectedDate = date);
-                AddEventSheet.show(context, state.activeMemberId);
-              },
-            ),
-          ),
-        );
+        return isDesktop
+            ? Padding(
+                padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                child: ResponsiveContainer(
+                  maxWidth: kMaxContentWidth,
+                  child: WeekCalendarView(
+                    selectedDate: _selectedDate,
+                    events: state.events,
+                    onDateSelected: (date) {
+                      setState(() {
+                        _selectedDate = date;
+                        _viewMode = CalendarViewMode.day;
+                      });
+                    },
+                    onEventTap: (event) => _showEventDetailsModal(context, event, state, cubit),
+                    onAddEvent: (date) {
+                      setState(() => _selectedDate = date);
+                      AddEventSheet.show(context, state.activeMemberId);
+                    },
+                  ),
+                ),
+              )
+            : _buildMobileMonthLayout(context, state, cubit, theme);
 
       case CalendarViewMode.month:
-        return Padding(
-          padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-          child: ResponsiveContainer(
-            maxWidth: kMaxContentWidth,
-            child: MonthCalendarView(
-              selectedDate: _selectedDate,
-              events: state.events,
-              onDateSelected: (date) {
-                setState(() {
-                  _selectedDate = date;
-                  _viewMode = CalendarViewMode.day;
-                });
-              },
-              onEventTap: (event) => _showEventDetailsModal(context, event, state, cubit),
-              onAddEvent: (date) {
-                setState(() => _selectedDate = date);
-                AddEventSheet.show(context, state.activeMemberId);
-              },
-            ),
-          ),
-        );
+        return isDesktop
+            ? Padding(
+                padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                child: ResponsiveContainer(
+                  maxWidth: kMaxContentWidth,
+                  child: MonthCalendarView(
+                    selectedDate: _selectedDate,
+                    events: state.events,
+                    onDateSelected: (date) {
+                      setState(() {
+                        _selectedDate = date;
+                        _viewMode = CalendarViewMode.day;
+                      });
+                    },
+                    onEventTap: (event) => _showEventDetailsModal(context, event, state, cubit),
+                    onAddEvent: (date) {
+                      setState(() => _selectedDate = date);
+                      AddEventSheet.show(context, state.activeMemberId);
+                    },
+                  ),
+                ),
+              )
+            : _buildMobileMonthLayout(context, state, cubit, theme);
 
       case CalendarViewMode.list:
         return _buildListView(context, state, cubit, theme, isDesktop);
     }
   }
 
-  // --- VISÃO DIA (MOBILE) ---
-  Widget _buildMobileDayLayout(
+  // --- VISÃO MÊS UNIFICADA COM AGENDA DO DIA (MOBILE) ---
+  Widget _buildMobileMonthLayout(
     BuildContext context,
     CalendarState state,
     CalendarCubit cubit,
     ThemeData theme,
   ) {
     final dayEvents = state.events.where((e) => _isSameDay(e.startTime, _selectedDate)).toList();
+    String formattedSelectedDay;
+    try {
+      formattedSelectedDay = DateFormat("EEEE, d 'de' MMMM", 'pt_BR').format(_selectedDate);
+    } catch (_) {
+      formattedSelectedDay = DateFormat('dd/MM/yyyy').format(_selectedDate);
+    }
+    final capitalizedDay = formattedSelectedDay.isNotEmpty
+        ? formattedSelectedDay[0].toUpperCase() + formattedSelectedDay.substring(1)
+        : '';
 
-    return ListView(
-      padding: const EdgeInsets.fromLTRB(16, 4, 16, 80),
-      children: [
-        MiniCalendarCard(
-          selectedDate: _selectedDate,
-          events: state.events,
-          onDateSelected: (date) {
-            setState(() => _selectedDate = date);
-          },
-        ),
-        const SizedBox(height: 14),
-        if (dayEvents.isEmpty)
-          _buildEmptyDayState(context, state, theme)
-        else ...[
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          // Grade do Mês com visual elegante e compacto
+          MonthCalendarView(
+            isCompact: true,
+            selectedDate: _selectedDate,
+            events: state.events,
+            onDateSelected: (date) {
+              setState(() => _selectedDate = date);
+            },
+            onEventTap: (event) => _showEventDetailsModal(context, event, state, cubit),
+            onAddEvent: (date) {
+              setState(() => _selectedDate = date);
+              AddEventSheet.show(context, state.activeMemberId);
+            },
+          ),
+          const SizedBox(height: 12),
+
+          // Cabeçalho dos compromissos da data selecionada
           Padding(
-            padding: const EdgeInsets.only(left: 4, bottom: 8),
-            child: Text(
-              'Compromissos (${dayEvents.length})',
-              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: AppColors.primary),
+            padding: const EdgeInsets.symmetric(horizontal: 4),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Expanded(
+                  child: Text(
+                    capitalizedDay,
+                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: AppColors.primary),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+                Text(
+                  'Compromissos (${dayEvents.length})',
+                  style: TextStyle(fontSize: 12, color: Colors.grey[600], fontWeight: FontWeight.bold),
+                ),
+              ],
             ),
           ),
-          ...dayEvents.map((event) => _buildEventItem(context, event, state, cubit)),
+          const SizedBox(height: 8),
+
+          // Lista de compromissos do dia selecionado
+          Expanded(
+            child: dayEvents.isEmpty
+                ? SingleChildScrollView(child: _buildEmptyDayState(context, state, theme))
+                : ListView.builder(
+                    padding: const EdgeInsets.only(bottom: 16),
+                    itemCount: dayEvents.length,
+                    itemBuilder: (context, index) {
+                      return _buildEventItem(context, dayEvents[index], state, cubit);
+                    },
+                  ),
+          ),
         ],
-      ],
+      ),
     );
   }
 
@@ -728,15 +796,21 @@ class _CalendarPageState extends State<CalendarPage> {
       );
     }
 
-    // Mobile: Mini Calendário no topo + lista corrida de compromissos
+    // Mobile: Calendário compacto no topo + lista corrida de compromissos
     return ListView(
       padding: const EdgeInsets.fromLTRB(16, 4, 16, 80),
       children: [
-        MiniCalendarCard(
+        MonthCalendarView(
+          isCompact: true,
           selectedDate: _selectedDate,
           events: state.events,
           onDateSelected: (date) {
             setState(() => _selectedDate = date);
+          },
+          onEventTap: (event) => _showEventDetailsModal(context, event, state, cubit),
+          onAddEvent: (date) {
+            setState(() => _selectedDate = date);
+            AddEventSheet.show(context, state.activeMemberId);
           },
         ),
         const SizedBox(height: 14),

@@ -9,6 +9,7 @@ class MonthCalendarView extends StatelessWidget {
   final ValueChanged<DateTime> onDateSelected;
   final ValueChanged<CalendarEvent> onEventTap;
   final ValueChanged<DateTime>? onAddEvent;
+  final bool isCompact;
 
   const MonthCalendarView({
     super.key,
@@ -17,6 +18,7 @@ class MonthCalendarView extends StatelessWidget {
     required this.onDateSelected,
     required this.onEventTap,
     this.onAddEvent,
+    this.isCompact = false,
   });
 
   bool _isSameDay(DateTime a, DateTime b) {
@@ -41,94 +43,107 @@ class MonthCalendarView extends StatelessWidget {
 
     final now = DateTime.now();
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        // Cabeçalho dos dias da semana
-        Container(
-          padding: const EdgeInsets.symmetric(vertical: 8),
-          decoration: BoxDecoration(
-            color: theme.cardColor,
-            borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
-            border: Border.all(color: Colors.grey.withValues(alpha: 0.15)),
-          ),
-          child: Row(
-            children: List.generate(7, (index) {
-              final label = isDesktop ? weekHeaders[index] : shortWeekHeaders[index];
-              final isWeekend = index == 0 || index == 6;
-              return Expanded(
-                child: Center(
-                  child: Text(
-                    label,
-                    style: TextStyle(
-                      fontWeight: FontWeight.bold,
-                      fontSize: isDesktop ? 13 : 11,
-                      color: isWeekend ? Colors.grey : theme.textTheme.bodyMedium?.color,
-                    ),
-                  ),
-                ),
-              );
-            }),
-          ),
+    final gridContent = Container(
+      decoration: BoxDecoration(
+        color: theme.cardColor,
+        borderRadius: const BorderRadius.vertical(bottom: Radius.circular(16)),
+        border: Border(
+          left: BorderSide(color: Colors.grey.withValues(alpha: 0.15)),
+          right: BorderSide(color: Colors.grey.withValues(alpha: 0.15)),
+          bottom: BorderSide(color: Colors.grey.withValues(alpha: 0.15)),
         ),
+      ),
+      child: GridView.builder(
+        padding: EdgeInsets.zero,
+        shrinkWrap: isCompact,
+        physics: isCompact
+            ? const NeverScrollableScrollPhysics()
+            : const AlwaysScrollableScrollPhysics(),
+        gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+          crossAxisCount: 7,
+          childAspectRatio: isCompact
+              ? 1.25
+              : (isDesktop ? 1.35 : 0.85),
+        ),
+        itemCount: totalCells,
+        itemBuilder: (context, index) {
+          DateTime cellDate;
+          bool isCurrentMonth = true;
 
-        // Grade do mês
-        Expanded(
-          child: Container(
-            decoration: BoxDecoration(
-              color: theme.cardColor,
-              borderRadius: const BorderRadius.vertical(bottom: Radius.circular(16)),
-              border: Border(
-                left: BorderSide(color: Colors.grey.withValues(alpha: 0.15)),
-                right: BorderSide(color: Colors.grey.withValues(alpha: 0.15)),
-                bottom: BorderSide(color: Colors.grey.withValues(alpha: 0.15)),
+          if (index < firstWeekday) {
+            // Dias do mês anterior
+            final day = prevMonthLastDay - (firstWeekday - index - 1);
+            cellDate = DateTime(selectedDate.year, selectedDate.month - 1, day);
+            isCurrentMonth = false;
+          } else if (index >= firstWeekday + daysInMonth) {
+            // Dias do próximo mês
+            final day = index - (firstWeekday + daysInMonth) + 1;
+            cellDate = DateTime(selectedDate.year, selectedDate.month + 1, day);
+            isCurrentMonth = false;
+          } else {
+            // Dias do mês corrente
+            final day = index - firstWeekday + 1;
+            cellDate = DateTime(selectedDate.year, selectedDate.month, day);
+          }
+
+          final isToday = _isSameDay(cellDate, now);
+          final isSelected = _isSameDay(cellDate, selectedDate);
+
+          // Eventos deste dia
+          final dayEvents = events.where((e) => _isSameDay(e.startTime, cellDate)).toList();
+
+          return InkWell(
+            onTap: () => onDateSelected(cellDate),
+            child: Container(
+              decoration: BoxDecoration(
+                border: Border.all(color: Colors.grey.withValues(alpha: 0.1)),
+                color: isSelected
+                    ? AppColors.primary.withValues(alpha: 0.08)
+                    : (isCurrentMonth ? null : Colors.grey.withValues(alpha: 0.03)),
               ),
-            ),
-            child: GridView.builder(
-              padding: EdgeInsets.zero,
-              physics: const AlwaysScrollableScrollPhysics(),
-              gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: 7,
-                childAspectRatio: isDesktop ? 1.35 : 0.85,
-              ),
-              itemCount: totalCells,
-              itemBuilder: (context, index) {
-                DateTime cellDate;
-                bool isCurrentMonth = true;
-
-                if (index < firstWeekday) {
-                  // Dias do mês anterior
-                  final day = prevMonthLastDay - (firstWeekday - index - 1);
-                  cellDate = DateTime(selectedDate.year, selectedDate.month - 1, day);
-                  isCurrentMonth = false;
-                } else if (index >= firstWeekday + daysInMonth) {
-                  // Dias do próximo mês
-                  final day = index - (firstWeekday + daysInMonth) + 1;
-                  cellDate = DateTime(selectedDate.year, selectedDate.month + 1, day);
-                  isCurrentMonth = false;
-                } else {
-                  // Dias do mês corrente
-                  final day = index - firstWeekday + 1;
-                  cellDate = DateTime(selectedDate.year, selectedDate.month, day);
-                }
-
-                final isToday = _isSameDay(cellDate, now);
-                final isSelected = _isSameDay(cellDate, selectedDate);
-
-                // Eventos deste dia
-                final dayEvents = events.where((e) => _isSameDay(e.startTime, cellDate)).toList();
-
-                return InkWell(
-                  onTap: () => onDateSelected(cellDate),
-                  child: Container(
-                    decoration: BoxDecoration(
-                      border: Border.all(color: Colors.grey.withValues(alpha: 0.1)),
-                      color: isSelected
-                          ? AppColors.primary.withValues(alpha: 0.08)
-                          : (isCurrentMonth ? null : Colors.grey.withValues(alpha: 0.03)),
-                    ),
-                    padding: const EdgeInsets.all(4),
-                    child: Column(
+              padding: const EdgeInsets.all(4),
+              child: isCompact
+                  ? Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Container(
+                          width: 24,
+                          height: 24,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            color: isToday
+                                ? AppColors.primary
+                                : (isSelected ? AppColors.primary.withValues(alpha: 0.2) : Colors.transparent),
+                          ),
+                          alignment: Alignment.center,
+                          child: Text(
+                            '${cellDate.day}',
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: isToday || isSelected ? FontWeight.bold : FontWeight.w500,
+                              color: isToday
+                                  ? Colors.white
+                                  : (isCurrentMonth
+                                      ? (isSelected ? AppColors.primary : theme.textTheme.bodyMedium?.color)
+                                      : Colors.grey.withValues(alpha: 0.4)),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        if (dayEvents.isNotEmpty)
+                          Container(
+                            width: 5,
+                            height: 5,
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              color: isSelected ? AppColors.primary : AppColors.primary.withValues(alpha: 0.85),
+                            ),
+                          )
+                        else
+                          const SizedBox(height: 5),
+                      ],
+                    )
+                  : Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         // Cabeçalho da Célula (Número do dia)
@@ -263,7 +278,7 @@ class MonthCalendarView extends StatelessWidget {
                             ),
                           ),
                         ] else ...[
-                          // Em mobile: mostra indicadores compactos ou títulos curtos
+                          // Em mobile (não-compacto): mostra indicadores compactos ou títulos curtos
                           if (dayEvents.isNotEmpty)
                             Padding(
                               padding: const EdgeInsets.only(top: 2),
@@ -276,12 +291,46 @@ class MonthCalendarView extends StatelessWidget {
                         ],
                       ],
                     ),
-                  ),
-                );
-              },
             ),
+          );
+        },
+      ),
+    );
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      mainAxisSize: isCompact ? MainAxisSize.min : MainAxisSize.max,
+      children: [
+        // Cabeçalho dos dias da semana
+        Container(
+          padding: const EdgeInsets.symmetric(vertical: 8),
+          decoration: BoxDecoration(
+            color: theme.cardColor,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
+            border: Border.all(color: Colors.grey.withValues(alpha: 0.15)),
+          ),
+          child: Row(
+            children: List.generate(7, (index) {
+              final label = isDesktop ? weekHeaders[index] : shortWeekHeaders[index];
+              final isWeekend = index == 0 || index == 6;
+              return Expanded(
+                child: Center(
+                  child: Text(
+                    label,
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: isDesktop ? 13 : 11,
+                      color: isWeekend ? Colors.grey : theme.textTheme.bodyMedium?.color,
+                    ),
+                  ),
+                ),
+              );
+            }),
           ),
         ),
+
+        // Grade do mês
+        if (isCompact) gridContent else Expanded(child: gridContent),
       ],
     );
   }
