@@ -28,8 +28,9 @@ Este documento consolida o estado atual do desenvolvimento e mapeia com clareza 
 | **Integração Real Supabase** (AuthDataSource e FinanceDataSource) | Concluído ✅ | 100% |
 | **Compartilhamento WhatsApp / Super Pix** (Copiar Pix, Veredito e Cobrança Amigável) | Concluído ✅ | 100% |
 | **CI / CD Quality Gate** (GitHub Actions, dart analyze 0 warnings, flutter test) | Concluído ✅ | 100% |
+| **Auditoria & Resolução de Casos de Borda** (Clearing Engine, FEBRABAN rollover, serialização offline, IA dinâmica) | Concluído ✅ | 100% |
 
-> **Métrica de Confiabilidade:** **118 testes automatizados (unitários e widgets) passando (100% verde)**, `dart analyze` sem nenhum aviso ou erro (exit code 0) e pipeline de CI integrado.
+> **Métrica de Confiabilidade:** **126 testes automatizados (unitários e widgets) passando (100% verde)**, `dart analyze` com zero erros e pipeline de CI integrado.
 
 ---
 
