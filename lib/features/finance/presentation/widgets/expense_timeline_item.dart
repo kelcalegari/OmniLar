@@ -3,6 +3,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:intl/intl.dart';
 import '../../../../core/domain/value_objects/money.dart';
 import '../../../../core/theme/app_colors.dart';
+import '../../../../core/utils/responsive.dart';
 import '../../../../core/widgets/money_input_field.dart';
 import '../../domain/entities/house_expense.dart';
 import '../../domain/entities/category.dart';
@@ -64,132 +65,122 @@ class ExpenseTimelineItem extends StatelessWidget {
   void _showConfirmPaymentModal(BuildContext context) {
     Money confirmedAmount = expense.amount;
 
-    showModalBottomSheet(
+    showAdaptiveModal(
       context: context,
-      isScrollControlled: true,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-      ),
-      builder: (bottomSheetContext) {
-        return StatefulBuilder(
-          builder: (ctx, setModalState) {
-            return Padding(
-              padding: EdgeInsets.only(
-                left: 20,
-                right: 20,
-                top: 20,
-                bottom: MediaQuery.of(bottomSheetContext).viewInsets.bottom + 20,
-              ),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Center(
-                    child: Container(
-                      width: 40,
-                      height: 4,
-                      decoration: BoxDecoration(
-                        color: Colors.grey.withValues(alpha: 0.3),
-                        borderRadius: BorderRadius.circular(2),
-                      ),
+      maxWidth: 500,
+      child: StatefulBuilder(
+        builder: (modalContext, setModalState) {
+          return Padding(
+            padding: const EdgeInsets.all(20),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Center(
+                  child: Container(
+                    width: 40,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: Colors.grey.withValues(alpha: 0.3),
+                      borderRadius: BorderRadius.circular(2),
                     ),
                   ),
-                  const SizedBox(height: 16),
-                  Row(
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.all(8),
-                        decoration: BoxDecoration(
-                          color: AppColors.creditGreen.withValues(alpha: 0.12),
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                        child: const Icon(Icons.check_circle_outline, color: AppColors.creditGreen),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              'Confirmar Pagamento',
-                              style: Theme.of(ctx).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
-                            ),
-                            Text(
-                              expense.title,
-                              style: const TextStyle(color: Colors.grey, fontSize: 13),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 16),
-
-                  if (expense.isVariable) ...[
-                    const Text(
-                      'Esta é uma conta com valor variável. Confirme ou ajuste o valor real da fatura:',
-                      style: TextStyle(fontSize: 13),
-                    ),
-                    const SizedBox(height: 12),
-                    MoneyInputField(
-                      label: 'Valor Real Pago',
-                      initialValue: confirmedAmount,
-                      primaryColor: AppColors.primary,
-                      onChanged: (money) {
-                        setModalState(() {
-                          confirmedAmount = money;
-                        });
-                      },
-                    ),
-                  ] else ...[
+                ),
+                const SizedBox(height: 16),
+                Row(
+                  children: [
                     Container(
-                      padding: const EdgeInsets.all(14),
+                      padding: const EdgeInsets.all(8),
                       decoration: BoxDecoration(
-                        color: Theme.of(ctx).cardColor,
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: Colors.grey.withValues(alpha: 0.2)),
+                        color: AppColors.creditGreen.withValues(alpha: 0.12),
+                        borderRadius: BorderRadius.circular(10),
                       ),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      child: const Icon(Icons.check_circle_outline, color: AppColors.creditGreen),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          const Text('Valor da Conta:', style: TextStyle(fontWeight: FontWeight.w600)),
                           Text(
-                            expense.amount.format(),
-                            style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                            'Confirmar Pagamento',
+                            style: Theme.of(modalContext).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
+                          ),
+                          Text(
+                            expense.title,
+                            style: const TextStyle(color: Colors.grey, fontSize: 13),
                           ),
                         ],
                       ),
                     ),
                   ],
+                ),
+                const SizedBox(height: 16),
 
-                  const SizedBox(height: 20),
-                  SizedBox(
-                    height: 48,
-                    child: ElevatedButton(
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: AppColors.creditGreen,
-                        foregroundColor: Colors.white,
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                      ),
-                      onPressed: () {
-                        context.read<FinanceCubit>().markExpenseAsPaid(
-                              expense.id,
-                              actualAmount: confirmedAmount,
-                            );
-                        Navigator.pop(bottomSheetContext);
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(content: Text('Pagamento de "${expense.title}" confirmado! 🎉')),
-                        );
-                      },
-                      child: const Text('Confirmar Pagamento', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+                if (expense.isVariable) ...[
+                  const Text(
+                    'Esta é uma conta com valor variável. Confirme ou ajuste o valor real da fatura:',
+                    style: TextStyle(fontSize: 13),
+                  ),
+                  const SizedBox(height: 12),
+                  MoneyInputField(
+                    label: 'Valor Real Pago',
+                    initialValue: confirmedAmount,
+                    primaryColor: AppColors.primary,
+                    onChanged: (money) {
+                      setModalState(() {
+                        confirmedAmount = money;
+                      });
+                    },
+                  ),
+                ] else ...[
+                  Container(
+                    padding: const EdgeInsets.all(14),
+                    decoration: BoxDecoration(
+                      color: Theme.of(modalContext).cardColor,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: Colors.grey.withValues(alpha: 0.2)),
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        const Text('Valor da Conta:', style: TextStyle(fontWeight: FontWeight.w600)),
+                        Text(
+                          expense.amount.format(),
+                          style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                        ),
+                      ],
                     ),
                   ),
                 ],
-              ),
-            );
-          },
-        );
-      },
+
+                const SizedBox(height: 20),
+                SizedBox(
+                  height: 48,
+                  child: ElevatedButton(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppColors.creditGreen,
+                      foregroundColor: Colors.white,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    ),
+                    onPressed: () {
+                      context.read<FinanceCubit>().markExpenseAsPaid(
+                            expense.id,
+                            actualAmount: confirmedAmount,
+                          );
+                      Navigator.pop(modalContext);
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(content: Text('Pagamento de "${expense.title}" confirmado! 🎉')),
+                      );
+                    },
+                    child: const Text('Confirmar Pagamento', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+                  ),
+                ),
+              ],
+            ),
+          );
+        },
+      ),
     );
   }
 
