@@ -6,6 +6,8 @@ enum OmniLogoVariant {
   fullVertical,
 }
 
+/// Widget unificado do Logo OmniLar com suporte a fundo transparente,
+/// variações horizontais, verticais e ícone puro, e modos claro/escuro.
 class OmniLogo extends StatelessWidget {
   final double? width;
   final double? height;
@@ -49,35 +51,33 @@ class OmniLogo extends StatelessWidget {
     switch (variant) {
       case OmniLogoVariant.horizontal:
         assetPath = effectiveIsDark
-            ? 'assets/images/logos/logo_horizontal_dark.jpg'
-            : 'assets/images/logos/logo_horizontal_light.jpg';
+            ? 'assets/images/logos/logo_horizontal_dark.png'
+            : 'assets/images/logos/logo_horizontal_light.png';
         break;
       case OmniLogoVariant.iconOnly:
         assetPath = effectiveIsDark
-            ? 'assets/images/logos/app_icon_dark.jpg'
-            : 'assets/images/logos/app_icon_light.jpg';
+            ? 'assets/images/logos/icon_dark.png'
+            : 'assets/images/logos/icon_light.png';
         break;
       case OmniLogoVariant.fullVertical:
-        assetPath = 'assets/images/logos/logo_clean.jpg';
+        assetPath = effectiveIsDark
+            ? 'assets/images/logos/logo_vertical_dark.png'
+            : 'assets/images/logos/logo_vertical_light.png';
         break;
     }
 
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(variant == OmniLogoVariant.iconOnly ? 10 : 0),
-      child: Image.asset(
-        assetPath,
-        width: width,
-        height: height,
-        fit: BoxFit.contain,
-        errorBuilder: (context, error, stackTrace) {
-          // Fallback gracioso caso a imagem não carregue
-          return Icon(
-            Icons.home_work_rounded,
-            size: height ?? 32,
-            color: Theme.of(context).colorScheme.primary,
-          );
-        },
-      ),
+    return Image.asset(
+      assetPath,
+      width: width,
+      height: height,
+      fit: BoxFit.contain,
+      errorBuilder: (context, error, stackTrace) {
+        return Icon(
+          Icons.home_work_rounded,
+          size: height ?? 32,
+          color: Theme.of(context).colorScheme.primary,
+        );
+      },
     );
   }
 }
