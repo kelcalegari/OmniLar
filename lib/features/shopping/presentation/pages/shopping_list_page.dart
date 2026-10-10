@@ -253,6 +253,13 @@ class _ShoppingListPageState extends State<ShoppingListPage> {
 
     return Scaffold(
       appBar: AppBar(
+        leading: Navigator.of(context).canPop()
+            ? IconButton(
+                icon: const Icon(Icons.arrow_back_rounded),
+                tooltip: 'Voltar ao painel',
+                onPressed: () => Navigator.of(context).pop(),
+              )
+            : null,
         title: const Text('Lista de Compras', style: TextStyle(fontWeight: FontWeight.bold)),
         actions: [
           BlocBuilder<ShoppingCubit, ShoppingState>(

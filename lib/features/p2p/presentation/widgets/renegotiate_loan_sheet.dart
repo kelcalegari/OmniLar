@@ -61,7 +61,7 @@ class _RenegotiateLoanSheetState extends State<RenegotiateLoanSheet> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       const Text(
-                        'Renegociar Empréstimo (RN04)',
+                        'Propor Novo Parcelamento',
                         style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                       ),
                       Text(
@@ -190,7 +190,7 @@ class _RenegotiateLoanSheetState extends State<RenegotiateLoanSheet> {
             ),
             const SizedBox(height: 12),
             Text(
-              '📌 Regra RN04: As parcelas anteriores não pagas serão canceladas no histórico e substituídas por este novo plano acordado.',
+              'As parcelas anteriores não pagas serão substituídas por este novo cronograma acordado.',
               style: theme.textTheme.bodySmall?.copyWith(color: Colors.grey),
             ),
             const SizedBox(height: 24),

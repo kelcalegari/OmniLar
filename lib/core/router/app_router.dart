@@ -95,6 +95,27 @@ class AppRouter {
                 pageBuilder: (context, state) => const NoTransitionPage(
                   child: HomePage(),
                 ),
+                routes: [
+                  GoRoute(
+                    path: 'fechamento',
+                    name: 'settlement',
+                    builder: (context, state) => const SettlementHubPage(),
+                  ),
+                  GoRoute(
+                    path: 'compras',
+                    name: 'shopping',
+                    builder: (context, state) => const ShoppingListPage(),
+                  ),
+                ],
+              ),
+              // Aliases para compatibilidade retroativa com context.push('/fechamento') e context.push('/compras')
+              GoRoute(
+                path: '/fechamento',
+                redirect: (context, state) => '/casa/fechamento',
+              ),
+              GoRoute(
+                path: '/compras',
+                redirect: (context, state) => '/casa/compras',
               ),
             ],
           ),
@@ -147,18 +168,6 @@ class AppRouter {
             ],
           ),
         ],
-      ),
-      GoRoute(
-        path: '/fechamento',
-        name: 'settlement',
-        parentNavigatorKey: _rootNavigatorKey,
-        builder: (context, state) => const SettlementHubPage(),
-      ),
-      GoRoute(
-        path: '/compras',
-        name: 'shopping',
-        parentNavigatorKey: _rootNavigatorKey,
-        builder: (context, state) => const ShoppingListPage(),
       ),
     ],
   );

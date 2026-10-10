@@ -4,6 +4,8 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../../../core/di/service_locator.dart';
 import '../../../../core/domain/value_objects/financial_cycle.dart';
 import '../../../../core/theme/app_colors.dart';
+import '../../../../core/utils/responsive.dart';
+import '../../../../core/widgets/responsive_container.dart';
 import '../../domain/entities/settlement_summary.dart';
 import '../../domain/entities/super_pix_transfer.dart';
 import '../cubit/settlement_cubit.dart';
@@ -38,11 +40,18 @@ class _SettlementHubContent extends StatelessWidget {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Hub de Liquidação', style: TextStyle(fontWeight: FontWeight.bold)),
+        leading: Navigator.of(context).canPop()
+            ? IconButton(
+                icon: const Icon(Icons.arrow_back_rounded),
+                tooltip: 'Voltar ao painel',
+                onPressed: () => Navigator.of(context).pop(),
+              )
+            : null,
+        title: const Text('Fechamento do Ciclo', style: TextStyle(fontWeight: FontWeight.bold)),
         actions: [
           IconButton(
             icon: const Icon(Icons.help_outline_rounded),
-            tooltip: 'Entenda o Super Pix',
+            tooltip: 'Entenda como funciona a compensação',
             onPressed: () => _showExplanationDialog(context),
           ),
         ],
@@ -88,10 +97,11 @@ class _SettlementHubContent extends StatelessWidget {
 
           final isSettled = summary.status == SettlementStatus.settled;
 
-          return ListView(
-            padding: const EdgeInsets.all(16),
-            children: [
-              // Cabeçalho do Ciclo
+          return ResponsiveContainer(
+            child: ListView(
+              padding: const EdgeInsets.all(16),
+              children: [
+                // Cabeçalho do Ciclo
               _buildCycleHeader(context, summary),
               const SizedBox(height: 16),
 
@@ -158,8 +168,9 @@ class _SettlementHubContent extends StatelessWidget {
                 ),
               const SizedBox(height: 32),
             ],
-          );
-        },
+          ),
+        );
+      },
       ),
     );
   }

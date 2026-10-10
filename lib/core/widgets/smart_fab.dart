@@ -188,7 +188,7 @@ class _SmartFABContent extends StatelessWidget {
               _buildActionButton(
                 context,
                 icon: Icons.flash_on_rounded,
-                label: 'Super Pix',
+                label: 'Fechamento',
                 color: AppColors.primary,
                 onTap: () {
                   Navigator.pop(context);

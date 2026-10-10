@@ -201,11 +201,11 @@ class _HomePageContent extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    'Hub de Liquidação',
+                    'Fechamento do Ciclo',
                     style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
                   ),
                   Text(
-                    'Cruzar dívidas e gerar o Super Pix de fechamento',
+                    'Compensar gastos da casa e empréstimos em um só Pix',
                     style: TextStyle(fontSize: 12, color: Colors.grey),
                   ),
                 ],

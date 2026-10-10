@@ -23,9 +23,9 @@ class LoanDetailsSheet extends StatelessWidget {
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Perdoar Dívida? (RN03)'),
+        title: const Text('Perdoar Restante da Dívida?'),
         content: Text(
-          'Deseja perdoar o saldo restante de ${loan.remainingAmount.format()} de "${loan.title}"?\n\nEssa ação é definitiva e isenta o devedor de futuros pagamentos. O histórico permanece registrado com status "Perdoado".',
+          'Deseja perdoar o saldo restante de ${loan.remainingAmount.format()} de "${loan.title}"?\n\nEsta ação isenta a outra pessoa de novos pagamentos deste empréstimo e mantém o histórico preservado.',
         ),
         actions: [
           TextButton(
@@ -214,7 +214,7 @@ class LoanDetailsSheet extends StatelessWidget {
                     foregroundColor: AppColors.accent,
                   ),
                   icon: const Icon(Icons.handshake_rounded, size: 16),
-                  label: const Text('Renegociar (RN04)', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                  label: const Text('Novo parcelamento', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
                   onPressed: () => _openRenegotiateSheet(context),
                 ),
             ],
@@ -290,7 +290,7 @@ class LoanDetailsSheet extends StatelessWidget {
                           ),
                           if (isInstPartial)
                             Text(
-                              'Parcial (RN02)',
+                              'Parcial',
                               style: TextStyle(fontSize: 10, color: Colors.orange.shade800, fontWeight: FontWeight.bold),
                             ),
                         ],
@@ -311,7 +311,7 @@ class LoanDetailsSheet extends StatelessWidget {
           ),
           const SizedBox(height: 16),
 
-          // Ações do Credor (Perdoar Dívida - RN03)
+          // Ações do Credor (Perdoar Dívida)
           if (!isDebtor && !isForgiven && !isPaid && loan.remainingAmount.cents > 0)
             SizedBox(
               width: double.infinity,
@@ -323,7 +323,7 @@ class LoanDetailsSheet extends StatelessWidget {
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                 ),
                 icon: const Icon(Icons.volunteer_activism_rounded),
-                label: const Text('Perdoar Dívida Restante (RN03)', style: TextStyle(fontWeight: FontWeight.bold)),
+                label: const Text('Perdoar restante da dívida', style: TextStyle(fontWeight: FontWeight.bold)),
                 onPressed: () => _confirmForgive(context),
               ),
             ),

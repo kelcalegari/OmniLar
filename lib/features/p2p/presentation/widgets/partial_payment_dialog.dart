@@ -183,8 +183,8 @@ class _PartialPaymentDialogState extends State<PartialPaymentDialog> {
             const SizedBox(height: 8),
             Text(
               _centsToPay < remaining.cents
-                  ? '💡 Pagamento Parcial (RN02): A parcela continuará ativa com saldo restante de ${Money(remaining.cents - _centsToPay).format()}.'
-                  : '✅ Esta parcela será 100% quitada.',
+                  ? 'O valor restante de ${Money(remaining.cents - _centsToPay).format()} continuará em aberto nesta parcela.'
+                  : 'Esta parcela será totalmente quitada com esta confirmação.',
               style: theme.textTheme.bodySmall?.copyWith(
                 color: _centsToPay < remaining.cents ? Colors.orange.shade800 : AppColors.creditGreen,
               ),
