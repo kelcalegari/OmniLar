@@ -232,4 +232,12 @@ class MockFinanceDataSource {
   Future<void> addContribution(Contribution contribution) async {
     _contributions.insert(0, contribution);
   }
+
+  Future<void> addCategory(ExpenseCategory category) async {
+    _categories.add(category);
+  }
+
+  Future<void> addPaymentMethod(PaymentMethod paymentMethod) async {
+    _paymentMethods.add(paymentMethod);
+  }
 }

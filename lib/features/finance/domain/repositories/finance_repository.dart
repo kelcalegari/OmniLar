@@ -17,4 +17,6 @@ abstract class FinanceRepository {
 
   Future<void> addExpense(HouseExpense expense);
   Future<void> addContribution(Contribution contribution);
+  Future<void> addCategory(ExpenseCategory category);
+  Future<void> addPaymentMethod(PaymentMethod paymentMethod);
 }

@@ -40,4 +40,12 @@ class FinanceRepositoryImpl implements FinanceRepository {
   @override
   Future<void> addContribution(Contribution contribution) =>
       _dataSource.addContribution(contribution);
+
+  @override
+  Future<void> addCategory(ExpenseCategory category) =>
+      _dataSource.addCategory(category);
+
+  @override
+  Future<void> addPaymentMethod(PaymentMethod paymentMethod) =>
+      _dataSource.addPaymentMethod(paymentMethod);
 }

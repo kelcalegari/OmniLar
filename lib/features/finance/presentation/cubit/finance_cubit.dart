@@ -2,6 +2,8 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../domain/repositories/finance_repository.dart';
 import '../../domain/entities/house_expense.dart';
 import '../../domain/entities/contribution.dart';
+import '../../domain/entities/category.dart';
+import '../../domain/entities/payment_method.dart';
 import '../../../../core/domain/value_objects/financial_cycle.dart';
 import 'finance_state.dart';
 
@@ -79,6 +81,30 @@ class FinanceCubit extends Cubit<FinanceState> {
       emit(state.copyWith(
         status: FinanceStatus.failure,
         errorMessage: 'Erro ao registrar aporte: $e',
+      ));
+    }
+  }
+
+  Future<void> addCategory(ExpenseCategory category) async {
+    try {
+      await _repository.addCategory(category);
+      await loadCycleData(cycle: state.currentCycle);
+    } catch (e) {
+      emit(state.copyWith(
+        status: FinanceStatus.failure,
+        errorMessage: 'Erro ao cadastrar categoria: $e',
+      ));
+    }
+  }
+
+  Future<void> addPaymentMethod(PaymentMethod paymentMethod) async {
+    try {
+      await _repository.addPaymentMethod(paymentMethod);
+      await loadCycleData(cycle: state.currentCycle);
+    } catch (e) {
+      emit(state.copyWith(
+        status: FinanceStatus.failure,
+        errorMessage: 'Erro ao cadastrar forma de pagamento: $e',
       ));
     }
   }
