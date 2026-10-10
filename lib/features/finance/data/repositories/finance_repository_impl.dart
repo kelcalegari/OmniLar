@@ -1,0 +1,43 @@
+import '../../domain/entities/house_member.dart';
+import '../../domain/entities/category.dart';
+import '../../domain/entities/payment_method.dart';
+import '../../domain/entities/house_expense.dart';
+import '../../domain/entities/contribution.dart';
+import '../../domain/entities/financial_cycle_summary.dart';
+import '../../domain/repositories/finance_repository.dart';
+import '../datasources/mock_finance_datasource.dart';
+import '../../../../core/domain/value_objects/financial_cycle.dart';
+
+class FinanceRepositoryImpl implements FinanceRepository {
+  final MockFinanceDataSource _dataSource;
+
+  FinanceRepositoryImpl(this._dataSource);
+
+  @override
+  Future<List<HouseMember>> getMembers() => _dataSource.getMembers();
+
+  @override
+  Future<List<ExpenseCategory>> getCategories() => _dataSource.getCategories();
+
+  @override
+  Future<List<PaymentMethod>> getPaymentMethods() => _dataSource.getPaymentMethods();
+
+  @override
+  Future<List<HouseExpense>> getExpensesForCycle(FinancialCycle cycle) =>
+      _dataSource.getExpensesForCycle(cycle);
+
+  @override
+  Future<List<Contribution>> getContributionsForCycle(FinancialCycle cycle) =>
+      _dataSource.getContributionsForCycle(cycle);
+
+  @override
+  Future<FinancialCycleSummary> getCycleSummary(FinancialCycle cycle) =>
+      _dataSource.getCycleSummary(cycle);
+
+  @override
+  Future<void> addExpense(HouseExpense expense) => _dataSource.addExpense(expense);
+
+  @override
+  Future<void> addContribution(Contribution contribution) =>
+      _dataSource.addContribution(contribution);
+}

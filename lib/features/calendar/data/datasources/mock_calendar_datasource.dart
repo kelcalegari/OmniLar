@@ -1,0 +1,195 @@
+import '../../../../core/domain/value_objects/money.dart';
+import '../../domain/entities/calendar_event.dart';
+import '../../domain/entities/event_participant.dart';
+import '../../domain/entities/task_item.dart';
+
+class MockCalendarDataSource {
+  final List<CalendarEvent> _events = [
+    CalendarEvent(
+      id: 'event_1',
+      title: 'Jantar de Aniversário de Carlos',
+      description: 'Restaurante italiano no centro da cidade',
+      location: 'Cantina do Gigi',
+      startTime: DateTime.now().add(const Duration(days: 2, hours: 4)),
+      endTime: DateTime.now().add(const Duration(days: 2, hours: 7)),
+      createdByMemberId: 'member_carlos',
+      participants: const [
+        EventParticipant(
+          id: 'part_1_1',
+          eventId: 'event_1',
+          memberId: 'member_carlos',
+          memberName: 'Carlos',
+          role: ParticipantRole.required,
+          rsvpStatus: RsvpStatus.accepted,
+        ),
+        EventParticipant(
+          id: 'part_1_2',
+          eventId: 'event_1',
+          memberId: 'member_marina',
+          memberName: 'Marina',
+          role: ParticipantRole.required,
+          rsvpStatus: RsvpStatus.accepted,
+        ),
+      ],
+    ),
+    CalendarEvent(
+      id: 'event_2',
+      title: 'Dedetização do Apartamento',
+      description: 'Precisa esvaziar armários e sair por 4 horas',
+      location: 'Em Casa',
+      startTime: DateTime.now().add(const Duration(days: 4, hours: 2)),
+      endTime: DateTime.now().add(const Duration(days: 4, hours: 6)),
+      createdByMemberId: 'member_marina',
+      participants: const [
+        EventParticipant(
+          id: 'part_2_1',
+          eventId: 'event_2',
+          memberId: 'member_marina',
+          memberName: 'Marina',
+          role: ParticipantRole.required,
+          rsvpStatus: RsvpStatus.accepted,
+        ),
+        EventParticipant(
+          id: 'part_2_2',
+          eventId: 'event_2',
+          memberId: 'member_carlos',
+          memberName: 'Carlos',
+          role: ParticipantRole.required,
+          rsvpStatus: RsvpStatus.pending, // Aguardando resposta do Carlos
+        ),
+      ],
+    ),
+    CalendarEvent(
+      id: 'event_3',
+      title: 'Visita do Técnico da Internet',
+      description: 'Troca de modem de fibra óptica',
+      location: 'Em Casa',
+      startTime: DateTime.now().add(const Duration(days: 6, hours: 1)),
+      endTime: DateTime.now().add(const Duration(days: 6, hours: 3)),
+      createdByMemberId: 'member_marina',
+      participants: const [
+        EventParticipant(
+          id: 'part_3_1',
+          eventId: 'event_3',
+          memberId: 'member_marina',
+          memberName: 'Marina',
+          role: ParticipantRole.required,
+          rsvpStatus: RsvpStatus.accepted,
+        ),
+        EventParticipant(
+          id: 'part_3_2',
+          eventId: 'event_3',
+          memberId: 'member_carlos',
+          memberName: 'Carlos',
+          role: ParticipantRole.required,
+          rsvpStatus: RsvpStatus.declined, // Carlos recusou devido a plantão
+        ),
+      ],
+    ),
+  ];
+
+  final List<TaskItem> _tasks = [
+    TaskItem(
+      id: 'task_1',
+      title: 'Comprar botijão de gás',
+      description: 'Pedir pelo app com entrega até as 18h',
+      dueDate: DateTime.now(),
+      assignedToMemberId: 'member_marina',
+      assignedToMemberName: 'Marina',
+      isCompleted: false,
+      priority: TaskPriority.high,
+      cost: const Money(12000), // R$ 120,00
+      createdByMemberId: 'member_marina',
+      createdAt: DateTime.now().subtract(const Duration(days: 1)),
+    ),
+    TaskItem(
+      id: 'task_2',
+      title: 'Lavar tapetes da sala',
+      description: 'Levar na lavanderia express ou lavar no quintal',
+      dueDate: DateTime.now().add(const Duration(days: 2)),
+      assignedToMemberId: 'member_carlos',
+      assignedToMemberName: 'Carlos',
+      isCompleted: false,
+      priority: TaskPriority.medium,
+      createdByMemberId: 'member_carlos',
+      createdAt: DateTime.now().subtract(const Duration(days: 2)),
+    ),
+    TaskItem(
+      id: 'task_3',
+      title: 'Trocar lâmpada do corredor',
+      description: 'Lâmpada LED amarela',
+      dueDate: DateTime.now().subtract(const Duration(days: 1)),
+      assignedToMemberId: 'member_carlos',
+      assignedToMemberName: 'Carlos',
+      isCompleted: true,
+      completedAt: DateTime.now().subtract(const Duration(hours: 12)),
+      completedByMemberId: 'member_carlos',
+      priority: TaskPriority.low,
+      cost: const Money(2200), // R$ 22,00
+      createdByMemberId: 'member_marina',
+      createdAt: DateTime.now().subtract(const Duration(days: 3)),
+    ),
+  ];
+
+  Future<List<CalendarEvent>> getEvents() async => List.unmodifiable(_events);
+
+  Future<void> addEvent(CalendarEvent event) async {
+    _events.insert(0, event);
+  }
+
+  Future<void> updateRsvp({
+    required String eventId,
+    required String memberId,
+    required RsvpStatus status,
+  }) async {
+    final eventIndex = _events.indexWhere((e) => e.id == eventId);
+    if (eventIndex == -1) return;
+
+    final event = _events[eventIndex];
+    final updatedParticipants = event.participants.map((p) {
+      if (p.memberId == memberId) {
+        return p.copyWith(
+          rsvpStatus: status,
+          respondedAt: DateTime.now(),
+        );
+      }
+      return p;
+    }).toList();
+
+    _events[eventIndex] = event.copyWith(participants: updatedParticipants);
+  }
+
+  Future<void> cancelEvent(String eventId) async {
+    final eventIndex = _events.indexWhere((e) => e.id == eventId);
+    if (eventIndex != -1) {
+      _events[eventIndex] = _events[eventIndex].copyWith(isCancelled: true);
+    }
+  }
+
+  Future<List<TaskItem>> getTasks() async => List.unmodifiable(_tasks);
+
+  Future<void> addTask(TaskItem task) async {
+    _tasks.insert(0, task);
+  }
+
+  Future<void> toggleTaskComplete({
+    required String taskId,
+    required String completedByMemberId,
+  }) async {
+    final taskIndex = _tasks.indexWhere((t) => t.id == taskId);
+    if (taskIndex == -1) return;
+
+    final task = _tasks[taskIndex];
+    final isDone = !task.isCompleted;
+
+    _tasks[taskIndex] = task.copyWith(
+      isCompleted: isDone,
+      completedAt: isDone ? DateTime.now() : null,
+      completedByMemberId: isDone ? completedByMemberId : null,
+    );
+  }
+
+  Future<void> deleteTask(String taskId) async {
+    _tasks.removeWhere((t) => t.id == taskId);
+  }
+}

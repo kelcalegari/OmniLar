@@ -1,0 +1,30 @@
+import '../entities/user_profile.dart';
+import '../entities/house.dart';
+import '../entities/house_member_info.dart';
+
+abstract class AuthRepository {
+  Stream<UserProfile?> get authStateChanges;
+  Stream<House?> get houseChanges;
+
+  UserProfile? get currentUser;
+  House? get currentHouse;
+
+  Future<UserProfile> signInWithEmailPassword(String email, String password);
+  Future<UserProfile> signUpWithEmailPassword({
+    required String email,
+    required String password,
+    required String fullName,
+  });
+  Future<void> signInDemo({required String memberId});
+  Future<void> signOut();
+
+  Future<List<House>> getUserHouses();
+  Future<House> createHouse({
+    required String name,
+    int cycleStartDay = 5,
+  });
+  Future<House> joinHouseWithInvite(String inviteCode);
+  Future<void> selectHouse(String houseId);
+  Future<List<HouseMemberInfo>> getHouseMembers(String houseId);
+  Future<String> createHouseInvite(String houseId);
+}

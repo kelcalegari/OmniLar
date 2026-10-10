@@ -1,0 +1,246 @@
+import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:go_router/go_router.dart';
+import '../../../../core/theme/app_colors.dart';
+import '../../../../core/di/service_locator.dart';
+import '../../../finance/presentation/cubit/finance_cubit.dart';
+import '../../../finance/presentation/cubit/finance_state.dart';
+import '../../../finance/presentation/widgets/folego_gauge_card.dart';
+import '../../../finance/presentation/widgets/expense_timeline_item.dart';
+
+class HomePage extends StatelessWidget {
+  const HomePage({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return const _HomePageContent();
+  }
+}
+
+class _HomePageContent extends StatelessWidget {
+  const _HomePageContent();
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    return Scaffold(
+      appBar: AppBar(
+        title: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: AppColors.primary.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: const Icon(Icons.home_rounded, color: AppColors.primary),
+            ),
+            const SizedBox(width: 12),
+            const Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('Nossa Casa', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+                Text('Carlos & Marina', style: TextStyle(fontSize: 12, color: Colors.grey)),
+              ],
+            ),
+          ],
+        ),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.notifications_none_rounded),
+            onPressed: () {},
+          ),
+        ],
+      ),
+      body: BlocBuilder<FinanceCubit, FinanceState>(
+        builder: (context, state) {
+          if (state.status == FinanceStatus.loading && state.summary == null) {
+            return const Center(child: CircularProgressIndicator());
+          }
+
+          final summary = state.summary;
+          if (summary == null) {
+            return const Center(child: Text('Nenhum dado encontrado para o ciclo.'));
+          }
+
+          final cubit = context.read<FinanceCubit>();
+
+          return RefreshIndicator(
+            onRefresh: () => cubit.loadCycleData(),
+            child: ListView(
+              padding: const EdgeInsets.all(16),
+              children: [
+                // Termômetro de Fôlego
+                FolegoGaugeCard(
+                  summary: summary,
+                  cycle: state.currentCycle,
+                  onPreviousCycle: cubit.previousCycle,
+                  onNextCycle: cubit.nextCycle,
+                ),
+                const SizedBox(height: 16),
+
+                // Card do Hub de Liquidação (Fechamento do Ciclo / Super Pix)
+                InkWell(
+                  onTap: () => context.push('/fechamento'),
+                  borderRadius: BorderRadius.circular(16),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        colors: [
+                          AppColors.primary.withValues(alpha: 0.12),
+                          AppColors.primaryLight.withValues(alpha: 0.08),
+                        ],
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                      ),
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: AppColors.primary.withValues(alpha: 0.3)),
+                    ),
+                    child: Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(10),
+                          decoration: BoxDecoration(
+                            color: AppColors.primary,
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: const Icon(Icons.flash_on_rounded, color: Colors.white, size: 22),
+                        ),
+                        const SizedBox(width: 14),
+                        const Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Hub de Liquidação',
+                                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+                              ),
+                              Text(
+                                'Cruzar dívidas e gerar o Super Pix de fechamento',
+                                style: TextStyle(fontSize: 12, color: Colors.grey),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const Icon(Icons.chevron_right_rounded, color: AppColors.primary),
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 16),
+
+                // Cards de Acesso Rápido (Compras & Tarefas)
+                Row(
+                  children: [
+                    Expanded(
+                      child: InkWell(
+                        onTap: () => context.push('/compras'),
+                        borderRadius: BorderRadius.circular(12),
+                        child: Card(
+                          child: Padding(
+                            padding: const EdgeInsets.all(16),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Row(
+                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                  children: [
+                                    Icon(Icons.shopping_bag_outlined, color: AppColors.primaryLight),
+                                    Icon(Icons.chevron_right_rounded, size: 18, color: Colors.grey),
+                                  ],
+                                ),
+                                const SizedBox(height: 8),
+                                const Text('Compras', style: TextStyle(fontWeight: FontWeight.bold)),
+                                Text('4 itens pendentes', style: theme.textTheme.bodySmall),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: InkWell(
+                        onTap: () => context.go('/agenda'),
+                        borderRadius: BorderRadius.circular(12),
+                        child: Card(
+                          child: Padding(
+                            padding: const EdgeInsets.all(16),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Row(
+                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                  children: [
+                                    Icon(Icons.task_alt_rounded, color: AppColors.accent),
+                                    Icon(Icons.chevron_right_rounded, size: 18, color: Colors.grey),
+                                  ],
+                                ),
+                                const SizedBox(height: 8),
+                                const Text('Tarefas', style: TextStyle(fontWeight: FontWeight.bold)),
+                                Text('2 para hoje', style: theme.textTheme.bodySmall),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 24),
+
+                // Seção: Linha do Tempo de Gastos do Ciclo
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      'Gastos do Ciclo',
+                      style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
+                    ),
+                    Text(
+                      '${state.expenses.length} lançamentos',
+                      style: theme.textTheme.bodySmall,
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+
+                if (state.expenses.isEmpty)
+                  Container(
+                    padding: const EdgeInsets.all(24),
+                    alignment: Alignment.center,
+                    child: const Text('Nenhuma despesa lançada neste ciclo'),
+                  )
+                else
+                  ...state.expenses.map((expense) {
+                    final category = state.categories.firstWhere(
+                      (c) => c.id == expense.categoryId,
+                      orElse: () => state.categories.first,
+                    );
+                    final paymentMethod = state.paymentMethods.firstWhere(
+                      (pm) => pm.id == expense.paymentMethodId,
+                      orElse: () => state.paymentMethods.first,
+                    );
+                    final paidByMember = state.members.firstWhere(
+                      (m) => m.id == expense.paidByMemberId,
+                      orElse: () => state.members.first,
+                    );
+
+                    return ExpenseTimelineItem(
+                      expense: expense,
+                      category: category,
+                      paymentMethod: paymentMethod,
+                      paidByMember: paidByMember,
+                    );
+                  }),
+                const SizedBox(height: 80), // Espaço para o Smart FAB
+              ],
+            ),
+          );
+        },
+      ),
+    );
+  }
+}
