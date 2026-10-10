@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import '../../../../core/domain/value_objects/money.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../domain/entities/p2p_loan.dart';
 import '../../domain/services/p2p_calculator.dart';

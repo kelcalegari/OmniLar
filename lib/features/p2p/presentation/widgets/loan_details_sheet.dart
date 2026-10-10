@@ -259,7 +259,7 @@ class LoanDetailsSheet extends StatelessWidget {
                     ),
                   ),
                   title: Text(
-                    'Parcela ${inst.number}/${inst.totalCount}' + (isInstCancelled ? ' (Cancelada)' : ''),
+                    'Parcela ${inst.number}/${inst.totalCount}${isInstCancelled ? ' (Cancelada)' : ''}',
                     style: TextStyle(
                       fontWeight: FontWeight.w600,
                       decoration: isInstPaid || isInstCancelled ? TextDecoration.lineThrough : null,

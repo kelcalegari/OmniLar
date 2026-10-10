@@ -39,7 +39,7 @@ class _P2PPageContent extends StatelessWidget {
           // Layout Desktop (Duas colunas simultâneas: Eu Devo à esquerda, Me Devem à direita)
           return Scaffold(
             appBar: AppBar(
-              title: const Text('Empréstimos P2P (Visão Geral)', style: TextStyle(fontWeight: FontWeight.bold)),
+              title: const Text('Empréstimos P2P', style: TextStyle(fontWeight: FontWeight.bold)),
               actions: const [
                 PrivacyToggleButton(),
               ],
@@ -149,6 +149,7 @@ class _P2PPageContent extends StatelessWidget {
         }
 
         // Layout Mobile (Abas clássicas Eu Devo / Me Devem)
+        final theme = Theme.of(context);
         return DefaultTabController(
           length: 2,
           child: Scaffold(
@@ -157,44 +158,82 @@ class _P2PPageContent extends StatelessWidget {
               actions: const [
                 PrivacyToggleButton(),
               ],
-              bottom: PreferredSize(
-                preferredSize: const Size.fromHeight(130),
-                child: Column(
-                  children: [
-                    _buildBalanceCard(netBalance, isNetPositive),
-                    const SizedBox(height: 12),
-                    TabBar(
-                      indicatorColor: AppColors.primary,
-                      labelColor: Theme.of(context).colorScheme.primary,
-                      unselectedLabelColor: Theme.of(context).textTheme.bodySmall?.color,
+            ),
+            body: Column(
+              children: [
+                const SizedBox(height: 8),
+                _buildBalanceCard(netBalance, isNetPositive),
+                const SizedBox(height: 12),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  child: Container(
+                    decoration: BoxDecoration(
+                      color: theme.cardColor,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: Colors.grey.withValues(alpha: 0.15)),
+                    ),
+                    child: TabBar(
+                      indicatorSize: TabBarIndicatorSize.tab,
+                      indicator: BoxDecoration(
+                        color: AppColors.primary.withValues(alpha: 0.15),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      labelColor: AppColors.primary,
+                      unselectedLabelColor: Colors.grey,
+                      labelStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
                       tabs: [
                         Tab(
-                          icon: const Icon(Icons.arrow_upward_rounded, color: AppColors.debtRed),
-                          text: 'Eu Devo (${state.totalIDowe.format()})',
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              const Icon(Icons.arrow_upward_rounded, size: 16, color: AppColors.debtRed),
+                              const SizedBox(width: 6),
+                              Flexible(
+                                child: Text(
+                                  'Eu Devo (${state.totalIDowe.format()})',
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                            ],
+                          ),
                         ),
                         Tab(
-                          icon: const Icon(Icons.arrow_downward_rounded, color: AppColors.creditGreen),
-                          text: 'Me Devem (${state.totalTheyOweMe.format()})',
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              const Icon(Icons.arrow_downward_rounded, size: 16, color: AppColors.creditGreen),
+                              const SizedBox(width: 6),
+                              Flexible(
+                                child: Text(
+                                  'Me Devem (${state.totalTheyOweMe.format()})',
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                            ],
+                          ),
                         ),
                       ],
                     ),
-                  ],
+                  ),
                 ),
-              ),
-            ),
-            body: TabBarView(
-              children: [
-                _buildLoansList(
-                  context,
-                  loans: state.loansIDowe,
-                  isDebtor: true,
-                  emptyMessage: 'Você não tem nenhuma dívida pendente 🎉',
-                ),
-                _buildLoansList(
-                  context,
-                  loans: state.loansTheyOweMe,
-                  isDebtor: false,
-                  emptyMessage: 'Nenhum valor a receber no momento',
+                const SizedBox(height: 8),
+                Expanded(
+                  child: TabBarView(
+                    children: [
+                      _buildLoansList(
+                        context,
+                        loans: state.loansIDowe,
+                        isDebtor: true,
+                        emptyMessage: 'Você não tem nenhuma dívida pendente 🎉',
+                      ),
+                      _buildLoansList(
+                        context,
+                        loans: state.loansTheyOweMe,
+                        isDebtor: false,
+                        emptyMessage: 'Nenhum valor a receber no momento',
+                      ),
+                    ],
+                  ),
                 ),
               ],
             ),
@@ -219,24 +258,27 @@ class _P2PPageContent extends StatelessWidget {
         child: Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text(
-                  'Saldo Pessoal Líquido',
-                  style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Colors.grey),
-                ),
-                const SizedBox(height: 2),
-                PrivacySensitiveText(
-                  netBalance.formatSigned(),
-                  style: TextStyle(
-                    fontSize: 20,
-                    fontWeight: FontWeight.bold,
-                    color: isNetPositive ? AppColors.creditGreen : AppColors.debtRed,
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'Saldo Pessoal Líquido',
+                    style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Colors.grey),
                   ),
-                ),
-              ],
+                  const SizedBox(height: 2),
+                  PrivacySensitiveText(
+                    netBalance.formatSigned(),
+                    style: TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.bold,
+                      color: isNetPositive ? AppColors.creditGreen : AppColors.debtRed,
+                    ),
+                  ),
+                ],
+              ),
             ),
+            const SizedBox(width: 8),
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
               decoration: BoxDecoration(
