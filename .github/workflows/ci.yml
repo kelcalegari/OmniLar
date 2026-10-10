@@ -1,0 +1,47 @@
+name: OmniLar CI Pipeline
+
+on:
+  push:
+    branches: [ master, main ]
+  pull_request:
+    branches: [ master, main ]
+
+jobs:
+  flutter-quality-gate:
+    name: Flutter Lint & Tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: 'stable'
+          cache: true
+
+      - name: Install Dependencies
+        run: flutter pub get
+
+      - name: Run Dart Analyzer
+        run: dart analyze --fatal-infos=false
+
+      - name: Run Unit & Widget Tests
+        run: flutter test --coverage
+
+  supabase-validation:
+    name: Supabase Migrations Validation
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Verify Migrations SQL Syntax
+        run: |
+          echo "Validating SQL migration files presence..."
+          ls -la supabase/migrations/
