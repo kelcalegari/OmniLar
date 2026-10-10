@@ -12,7 +12,7 @@ Este documento consolida o estado atual do desenvolvimento e mapeia com clareza 
 | **Fase 1 — Despesas da Casa** (Caixa, Fôlego, Rateio, Aportes) | Concluído ✅ | 100% |
 | **Fase 2 — Empréstimos P2P** (Parcelas, Parcial, Perdão, Renegociação) | Concluído ✅ | 100% |
 | **Fase 3 — Motor de Fechamento** (Global Clearing Engine / Super Pix) | Concluído ✅ | 100% |
-| **Fase 4 — Organização** (Agenda do Lar 100% Eventos, Nova Seção Tarefas & Compras, Pessoal P2P) | Concluído ✅ | 100% |
+| **Fase 4 — Organização** (Agenda do Lar com Visão Dia/Semana/Mês/Lista, Seção Tarefas & Compras, Pessoal P2P) | Concluído ✅ | 100% |
 | **Fase 5 — Captura Inteligente** (Boleto 47 dígitos, NFC-e, Revisão) | Concluído ✅ | 100% |
 | **Fase 6 — Conciliação** (Extratos CSV, "Rachar a Fatura" RN09) | Concluído ✅ | 100% |
 | **Fase 7 — Assistente de IA** (Chat, Motor Determinístico, Confirmação) | Concluído ✅ | 100% |
@@ -21,7 +21,7 @@ Este documento consolida o estado atual do desenvolvimento e mapeia com clareza 
 | **Humanização & UX** (Input ATM centavos, Modo Privacidade, 3 Colunas) | Concluído ✅ | 100% |
 | **Backend & Infra SQL** (Migrações 0001 a 0004 com RLS, Fila Offline) | Concluído ✅ | 100% |
 
-> **Métrica de Confiabilidade:** **67 testes automatizados (unitários e widgets) passando (100% verde)** e cobertura contínua de regressão.
+> **Métrica de Confiabilidade:** **69 testes automatizados (unitários e widgets) passando (100% verde)** e cobertura contínua de regressão.
 
 ---
 
