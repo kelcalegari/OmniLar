@@ -5,6 +5,7 @@ import '../../domain/entities/house_expense.dart';
 import '../../domain/entities/contribution.dart';
 import '../../domain/entities/split_rule.dart';
 import '../../domain/entities/financial_cycle_summary.dart';
+import '../../domain/entities/savings_vault.dart';
 import '../../../../core/domain/value_objects/money.dart';
 import '../../../../core/domain/value_objects/financial_cycle.dart';
 
@@ -237,7 +238,98 @@ class MockFinanceDataSource {
     _categories.add(category);
   }
 
+  final List<SavingsVault> _savingsVaults = [
+    SavingsVault(
+      id: 'vault_reserva',
+      name: 'Reserva de Emergência da Casa',
+      targetAmount: const Money(600000), // R$ 6.000,00
+      currentBalance: const Money(340000), // R$ 3.400,00 (56%)
+      icon: 'shield',
+      colorHex: '#10B981',
+      createdAt: DateTime.now().subtract(const Duration(days: 90)),
+    ),
+    SavingsVault(
+      id: 'vault_viagem',
+      name: 'Viagem de Férias do Casal',
+      targetAmount: const Money(300000), // R$ 3.000,00
+      currentBalance: const Money(180000), // R$ 1.800,00 (60%)
+      icon: 'flight',
+      colorHex: '#3B82F6',
+      createdAt: DateTime.now().subtract(const Duration(days: 45)),
+    ),
+    SavingsVault(
+      id: 'vault_reforma',
+      name: 'Reforma e Móveis Novos',
+      targetAmount: const Money(200000), // R$ 2.000,00
+      currentBalance: const Money(85000), // R$ 850,00 (42%)
+      icon: 'home',
+      colorHex: '#8B5CF6',
+      createdAt: DateTime.now().subtract(const Duration(days: 30)),
+    ),
+  ];
+
+  final List<SavingsTransaction> _savingsTransactions = [];
+
   Future<void> addPaymentMethod(PaymentMethod paymentMethod) async {
     _paymentMethods.add(paymentMethod);
   }
+
+  // --- Caixinhas & Metas da Casa (Dinheiro Blindado) ---
+  Future<List<SavingsVault>> getSavingsVaults() async {
+    return List.unmodifiable(_savingsVaults);
+  }
+
+  Future<void> createSavingsVault(SavingsVault vault) async {
+    _savingsVaults.add(vault);
+  }
+
+  Future<void> depositToVault({
+    required String vaultId,
+    required String memberId,
+    required Money amount,
+    required String description,
+  }) async {
+    final index = _savingsVaults.indexWhere((v) => v.id == vaultId);
+    if (index != -1) {
+      final current = _savingsVaults[index];
+      _savingsVaults[index] = current.copyWith(
+        currentBalance: current.currentBalance + amount,
+      );
+      _savingsTransactions.add(SavingsTransaction(
+        id: 'tx_${DateTime.now().millisecondsSinceEpoch}',
+        vaultId: vaultId,
+        memberId: memberId,
+        amount: amount,
+        type: 'deposit',
+        description: description,
+        date: DateTime.now(),
+      ));
+    }
+  }
+
+  Future<void> withdrawFromVault({
+    required String vaultId,
+    required String memberId,
+    required Money amount,
+    required String description,
+  }) async {
+    final index = _savingsVaults.indexWhere((v) => v.id == vaultId);
+    if (index != -1) {
+      final current = _savingsVaults[index];
+      final newBalance = current.currentBalance - amount;
+      _savingsVaults[index] = current.copyWith(
+        currentBalance: newBalance.cents < 0 ? const Money.zero() : newBalance,
+      );
+      _savingsTransactions.add(SavingsTransaction(
+        id: 'tx_${DateTime.now().millisecondsSinceEpoch}',
+        vaultId: vaultId,
+        memberId: memberId,
+        amount: amount,
+        type: 'withdraw',
+        description: description,
+        date: DateTime.now(),
+      ));
+    }
+  }
 }
+

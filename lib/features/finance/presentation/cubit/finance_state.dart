@@ -5,6 +5,8 @@ import '../../domain/entities/payment_method.dart';
 import '../../domain/entities/house_expense.dart';
 import '../../domain/entities/contribution.dart';
 import '../../domain/entities/financial_cycle_summary.dart';
+import '../../domain/entities/savings_vault.dart';
+import '../../../../core/domain/value_objects/money.dart';
 import '../../../../core/domain/value_objects/financial_cycle.dart';
 
 enum FinanceStatus { initial, loading, success, failure }
@@ -18,6 +20,7 @@ class FinanceState extends Equatable {
   final List<HouseMember> members;
   final List<ExpenseCategory> categories;
   final List<PaymentMethod> paymentMethods;
+  final List<SavingsVault> savingsVaults;
   final String? errorMessage;
 
   const FinanceState({
@@ -29,8 +32,12 @@ class FinanceState extends Equatable {
     this.members = const [],
     this.categories = const [],
     this.paymentMethods = const [],
+    this.savingsVaults = const [],
     this.errorMessage,
   });
+
+  Money get totalSavings =>
+      savingsVaults.fold(const Money.zero(), (total, v) => total + v.currentBalance);
 
   FinanceState copyWith({
     FinanceStatus? status,
@@ -41,6 +48,7 @@ class FinanceState extends Equatable {
     List<HouseMember>? members,
     List<ExpenseCategory>? categories,
     List<PaymentMethod>? paymentMethods,
+    List<SavingsVault>? savingsVaults,
     String? errorMessage,
   }) {
     return FinanceState(
@@ -52,6 +60,7 @@ class FinanceState extends Equatable {
       members: members ?? this.members,
       categories: categories ?? this.categories,
       paymentMethods: paymentMethods ?? this.paymentMethods,
+      savingsVaults: savingsVaults ?? this.savingsVaults,
       errorMessage: errorMessage ?? this.errorMessage,
     );
   }
@@ -66,6 +75,7 @@ class FinanceState extends Equatable {
         members,
         categories,
         paymentMethods,
+        savingsVaults,
         errorMessage,
       ];
 }

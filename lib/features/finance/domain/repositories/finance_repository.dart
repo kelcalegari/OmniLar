@@ -4,6 +4,8 @@ import '../entities/payment_method.dart';
 import '../entities/house_expense.dart';
 import '../entities/contribution.dart';
 import '../entities/financial_cycle_summary.dart';
+import '../entities/savings_vault.dart';
+import '../../../../core/domain/value_objects/money.dart';
 import '../../../../core/domain/value_objects/financial_cycle.dart';
 
 abstract class FinanceRepository {
@@ -19,4 +21,11 @@ abstract class FinanceRepository {
   Future<void> addContribution(Contribution contribution);
   Future<void> addCategory(ExpenseCategory category);
   Future<void> addPaymentMethod(PaymentMethod paymentMethod);
+
+  // Caixinhas & Metas da Casa (Dinheiro Blindado)
+  Future<List<SavingsVault>> getSavingsVaults();
+  Future<void> createSavingsVault(SavingsVault vault);
+  Future<void> depositToVault({required String vaultId, required String memberId, required Money amount, required String description});
+  Future<void> withdrawFromVault({required String vaultId, required String memberId, required Money amount, required String description});
 }
+

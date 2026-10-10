@@ -300,47 +300,74 @@ class _HomePageContent extends StatelessWidget {
             borderRadius: BorderRadius.circular(12),
             child: Card(
               child: Padding(
-                padding: const EdgeInsets.all(16),
+                padding: const EdgeInsets.all(12),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     const Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        Icon(Icons.shopping_bag_outlined, color: AppColors.primaryLight),
-                        Icon(Icons.chevron_right_rounded, size: 18, color: Colors.grey),
+                        Icon(Icons.shopping_bag_outlined, color: AppColors.primaryLight, size: 20),
+                        Icon(Icons.chevron_right_rounded, size: 16, color: Colors.grey),
                       ],
                     ),
-                    const SizedBox(height: 8),
-                    const Text('Compras', style: TextStyle(fontWeight: FontWeight.bold)),
-                    Text('4 itens pendentes', style: theme.textTheme.bodySmall),
+                    const SizedBox(height: 6),
+                    const Text('Compras', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                    Text('4 itens', style: theme.textTheme.bodySmall?.copyWith(fontSize: 11)),
                   ],
                 ),
               ),
             ),
           ),
         ),
-        const SizedBox(width: 12),
+        const SizedBox(width: 8),
         Expanded(
           child: InkWell(
-            onTap: () => context.go('/agenda'),
+            onTap: () => context.push('/caixinhas'),
             borderRadius: BorderRadius.circular(12),
             child: Card(
               child: Padding(
-                padding: const EdgeInsets.all(16),
+                padding: const EdgeInsets.all(12),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     const Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        Icon(Icons.task_alt_rounded, color: AppColors.accent),
-                        Icon(Icons.chevron_right_rounded, size: 18, color: Colors.grey),
+                        Icon(Icons.savings_outlined, color: Colors.teal, size: 20),
+                        Icon(Icons.chevron_right_rounded, size: 16, color: Colors.grey),
                       ],
                     ),
-                    const SizedBox(height: 8),
-                    const Text('Tarefas', style: TextStyle(fontWeight: FontWeight.bold)),
-                    Text('2 para hoje', style: theme.textTheme.bodySmall),
+                    const SizedBox(height: 6),
+                    const Text('Caixinhas', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                    Text('Metas da casa', style: theme.textTheme.bodySmall?.copyWith(fontSize: 11)),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          child: InkWell(
+            onTap: () => context.go('/agenda'),
+            borderRadius: BorderRadius.circular(12),
+            child: Card(
+              child: Padding(
+                padding: const EdgeInsets.all(12),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Icon(Icons.task_alt_rounded, color: AppColors.accent, size: 20),
+                        Icon(Icons.chevron_right_rounded, size: 16, color: Colors.grey),
+                      ],
+                    ),
+                    const SizedBox(height: 6),
+                    const Text('Tarefas', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                    Text('2 hoje', style: theme.textTheme.bodySmall?.copyWith(fontSize: 11)),
                   ],
                 ),
               ),

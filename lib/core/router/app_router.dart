@@ -15,6 +15,7 @@ import '../../features/reports/presentation/pages/reports_page.dart';
 import '../../features/settings/presentation/pages/settings_page.dart';
 import '../../features/settlement/presentation/pages/settlement_hub_page.dart';
 import '../../features/shopping/presentation/pages/shopping_list_page.dart';
+import '../../features/finance/presentation/pages/savings_vaults_page.dart';
 
 class GoRouterRefreshStream extends ChangeNotifier {
   late final StreamSubscription<dynamic> _subscription;
@@ -106,9 +107,14 @@ class AppRouter {
                     name: 'shopping',
                     builder: (context, state) => const ShoppingListPage(),
                   ),
+                  GoRoute(
+                    path: 'caixinhas',
+                    name: 'savings_vaults',
+                    builder: (context, state) => const SavingsVaultsPage(),
+                  ),
                 ],
               ),
-              // Aliases para compatibilidade retroativa com context.push('/fechamento') e context.push('/compras')
+              // Aliases para compatibilidade retroativa com context.push('/fechamento'), context.push('/compras') e context.push('/caixinhas')
               GoRoute(
                 path: '/fechamento',
                 redirect: (context, state) => '/casa/fechamento',
@@ -116,6 +122,10 @@ class AppRouter {
               GoRoute(
                 path: '/compras',
                 redirect: (context, state) => '/casa/compras',
+              ),
+              GoRoute(
+                path: '/caixinhas',
+                redirect: (context, state) => '/casa/caixinhas',
               ),
             ],
           ),
