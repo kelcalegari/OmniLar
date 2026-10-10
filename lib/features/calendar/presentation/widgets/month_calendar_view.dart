@@ -313,15 +313,17 @@ class MonthCalendarView extends StatelessWidget {
           ),
           child: Row(
             children: List.generate(7, (index) {
-              final label = isDesktop ? weekHeaders[index] : shortWeekHeaders[index];
+              final useShortHeaders = isCompact || !isDesktop;
+              final label = useShortHeaders ? shortWeekHeaders[index] : weekHeaders[index];
               final isWeekend = index == 0 || index == 6;
               return Expanded(
                 child: Center(
                   child: Text(
                     label,
+                    maxLines: 1,
                     style: TextStyle(
                       fontWeight: FontWeight.bold,
-                      fontSize: isDesktop ? 13 : 11,
+                      fontSize: useShortHeaders ? 12 : 13,
                       color: isWeekend ? Colors.grey : theme.textTheme.bodyMedium?.color,
                     ),
                   ),
