@@ -11,6 +11,8 @@ class AppTheme {
       brightness: Brightness.light,
       primaryColor: AppColors.primary,
       scaffoldBackgroundColor: AppColors.backgroundLight,
+      cardColor: AppColors.cardLight,
+      dividerColor: AppColors.borderLight,
       colorScheme: const ColorScheme.light(
         primary: AppColors.primary,
         onPrimary: Colors.white,
@@ -37,6 +39,29 @@ class AppTheme {
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(16),
           side: const BorderSide(color: AppColors.borderLight, width: 1),
+        ),
+      ),
+      bottomSheetTheme: const BottomSheetThemeData(
+        backgroundColor: AppColors.surfaceLight,
+        surfaceTintColor: Colors.transparent,
+      ),
+      dialogTheme: const DialogThemeData(
+        backgroundColor: AppColors.surfaceLight,
+        surfaceTintColor: Colors.transparent,
+      ),
+      navigationRailTheme: const NavigationRailThemeData(
+        backgroundColor: AppColors.surfaceLight,
+        elevation: 0,
+        selectedIconTheme: IconThemeData(color: AppColors.primary),
+        unselectedIconTheme: IconThemeData(color: AppColors.textSecondaryLight),
+        selectedLabelTextStyle: TextStyle(
+          color: AppColors.primary,
+          fontWeight: FontWeight.w600,
+          fontSize: 12,
+        ),
+        unselectedLabelTextStyle: TextStyle(
+          color: AppColors.textSecondaryLight,
+          fontSize: 12,
         ),
       ),
       navigationBarTheme: NavigationBarThemeData(
@@ -72,6 +97,8 @@ class AppTheme {
       brightness: Brightness.dark,
       primaryColor: AppColors.primaryLight,
       scaffoldBackgroundColor: AppColors.backgroundDark,
+      cardColor: AppColors.cardDark,
+      dividerColor: AppColors.borderDark,
       colorScheme: const ColorScheme.dark(
         primary: AppColors.primaryLight,
         onPrimary: Colors.black,
@@ -98,6 +125,29 @@ class AppTheme {
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(16),
           side: const BorderSide(color: AppColors.borderDark, width: 1),
+        ),
+      ),
+      bottomSheetTheme: const BottomSheetThemeData(
+        backgroundColor: AppColors.surfaceDark,
+        surfaceTintColor: Colors.transparent,
+      ),
+      dialogTheme: const DialogThemeData(
+        backgroundColor: AppColors.surfaceDark,
+        surfaceTintColor: Colors.transparent,
+      ),
+      navigationRailTheme: const NavigationRailThemeData(
+        backgroundColor: AppColors.surfaceDark,
+        elevation: 0,
+        selectedIconTheme: IconThemeData(color: AppColors.primaryLight),
+        unselectedIconTheme: IconThemeData(color: AppColors.textSecondaryDark),
+        selectedLabelTextStyle: TextStyle(
+          color: AppColors.primaryLight,
+          fontWeight: FontWeight.w600,
+          fontSize: 12,
+        ),
+        unselectedLabelTextStyle: TextStyle(
+          color: AppColors.textSecondaryDark,
+          fontSize: 12,
         ),
       ),
       navigationBarTheme: NavigationBarThemeData(

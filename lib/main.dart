@@ -5,6 +5,7 @@ import 'package:intl/date_symbol_data_local.dart';
 import 'core/di/service_locator.dart';
 import 'core/router/app_router.dart';
 import 'core/theme/app_theme.dart';
+import 'core/theme/theme_cubit.dart';
 import 'features/auth/presentation/cubit/auth_cubit.dart';
 import 'features/finance/presentation/cubit/finance_cubit.dart';
 import 'features/p2p/presentation/cubit/p2p_cubit.dart';
@@ -30,6 +31,9 @@ class OmniLarApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MultiBlocProvider(
       providers: [
+        BlocProvider<ThemeCubit>(
+          create: (_) => sl<ThemeCubit>(),
+        ),
         BlocProvider<AuthCubit>(
           create: (_) => sl<AuthCubit>(),
         ),
@@ -46,22 +50,26 @@ class OmniLarApp extends StatelessWidget {
           create: (_) => sl<CalendarCubit>()..loadCalendarData(),
         ),
       ],
-      child: MaterialApp.router(
-        title: 'Omni Lar',
-        debugShowCheckedModeBanner: false,
-        theme: AppTheme.lightTheme,
-        darkTheme: AppTheme.darkTheme,
-        themeMode: ThemeMode.system,
-        localizationsDelegates: const [
-          GlobalMaterialLocalizations.delegate,
-          GlobalWidgetsLocalizations.delegate,
-          GlobalCupertinoLocalizations.delegate,
-        ],
-        supportedLocales: const [
-          Locale('pt', 'BR'),
-        ],
-        locale: const Locale('pt', 'BR'),
-        routerConfig: AppRouter.router,
+      child: BlocBuilder<ThemeCubit, ThemeMode>(
+        builder: (context, themeMode) {
+          return MaterialApp.router(
+            title: 'Omni Lar',
+            debugShowCheckedModeBanner: false,
+            theme: AppTheme.lightTheme,
+            darkTheme: AppTheme.darkTheme,
+            themeMode: themeMode,
+            localizationsDelegates: const [
+              GlobalMaterialLocalizations.delegate,
+              GlobalWidgetsLocalizations.delegate,
+              GlobalCupertinoLocalizations.delegate,
+            ],
+            supportedLocales: const [
+              Locale('pt', 'BR'),
+            ],
+            locale: const Locale('pt', 'BR'),
+            routerConfig: AppRouter.router,
+          );
+        },
       ),
     );
   }

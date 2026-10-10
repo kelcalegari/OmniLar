@@ -15,6 +15,8 @@ import '../../../reconciliation/presentation/widgets/split_invoice_modal.dart';
 import '../../../../core/domain/value_objects/money.dart';
 import '../../../../core/domain/enums/recurrence.dart';
 import '../../../../core/widgets/recurrence_scope_dialog.dart';
+import '../../../../core/theme/theme_cubit.dart';
+import '../../../../core/widgets/theme_toggle_button.dart';
 
 class SettingsPage extends StatelessWidget {
   const SettingsPage({super.key});
@@ -1323,6 +1325,9 @@ class SettingsPage extends StatelessWidget {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Ajustes da Casa', style: TextStyle(fontWeight: FontWeight.bold)),
+        actions: const [
+          ThemeToggleButton(),
+        ],
       ),
       body: BlocBuilder<AuthCubit, AuthState>(
         builder: (context, authState) {
@@ -1459,6 +1464,21 @@ class SettingsPage extends StatelessWidget {
                 trailing: const Icon(Icons.chevron_right_rounded),
                 onTap: () => _showAssistantPreferencesModal(context),
               ),
+              Builder(
+                builder: (context) {
+                  ThemeMode mode = ThemeMode.system;
+                  try {
+                    mode = context.watch<ThemeCubit>().state;
+                  } catch (_) {}
+                  return ListTile(
+                    leading: const Icon(Icons.palette_outlined, color: Colors.blueAccent),
+                    title: const Text('Aparência & Tema'),
+                    subtitle: Text(_getThemeModeLabel(mode)),
+                    trailing: const Icon(Icons.chevron_right_rounded),
+                    onTap: () => showThemeSelectionDialog(context),
+                  );
+                },
+              ),
               const Divider(),
               const SizedBox(height: 16),
 
@@ -1487,6 +1507,17 @@ class SettingsPage extends StatelessWidget {
     },
   ),
 );
+  }
+
+  String _getThemeModeLabel(ThemeMode mode) {
+    switch (mode) {
+      case ThemeMode.light:
+        return 'Modo Claro';
+      case ThemeMode.dark:
+        return 'Modo Escuro';
+      case ThemeMode.system:
+        return 'Padrão do Sistema';
+    }
   }
 }
 

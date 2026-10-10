@@ -4,6 +4,7 @@ import '../theme/app_colors.dart';
 import '../utils/responsive.dart';
 import 'omni_logo.dart';
 import 'smart_fab.dart';
+import 'theme_toggle_button.dart';
 
 class ScaffoldWithNavBar extends StatelessWidget {
   const ScaffoldWithNavBar({
@@ -87,6 +88,15 @@ class ScaffoldWithNavBar extends StatelessWidget {
                   label: Text('Ajustes'),
                 ),
               ],
+              trailing: const Expanded(
+                child: Align(
+                  alignment: Alignment.bottomCenter,
+                  child: Padding(
+                    padding: EdgeInsets.only(bottom: 16),
+                    child: ThemeToggleButton(),
+                  ),
+                ),
+              ),
             ),
             VerticalDivider(
               width: 1,

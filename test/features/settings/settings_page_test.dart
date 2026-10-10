@@ -3,6 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:omni_lar/core/di/service_locator.dart';
 import 'package:omni_lar/core/domain/value_objects/money.dart';
+import 'package:omni_lar/core/theme/theme_cubit.dart';
 import 'package:omni_lar/features/auth/presentation/cubit/auth_cubit.dart';
 import 'package:omni_lar/features/finance/presentation/cubit/finance_cubit.dart';
 import 'package:omni_lar/features/settings/presentation/pages/settings_page.dart';
@@ -17,6 +18,7 @@ void main() {
   Widget buildTestableWidget() {
     return MultiBlocProvider(
       providers: [
+        BlocProvider<ThemeCubit>.value(value: sl<ThemeCubit>()),
         BlocProvider<AuthCubit>.value(value: sl<AuthCubit>()),
         BlocProvider<FinanceCubit>.value(value: sl<FinanceCubit>()),
       ],

@@ -1,5 +1,6 @@
 import 'package:get_it/get_it.dart';
 import '../network/offline_queue.dart';
+import '../theme/theme_cubit.dart';
 import '../../features/auth/data/datasources/mock_auth_datasource.dart';
 import '../../features/auth/data/repositories/auth_repository_impl.dart';
 import '../../features/auth/domain/repositories/auth_repository.dart';
@@ -36,8 +37,9 @@ import '../../features/assistant/presentation/cubit/assistant_cubit.dart';
 final sl = GetIt.instance;
 
 Future<void> initServiceLocator() async {
-  // Core Infrastructure
+  // Core Infrastructure & Theme
   sl.registerLazySingleton<OfflineQueueManager>(() => OfflineQueueManager());
+  sl.registerLazySingleton<ThemeCubit>(() => ThemeCubit());
 
   // Auth & House Feature (Fase 0: Fundação)
   sl.registerLazySingleton<MockAuthDataSource>(() => MockAuthDataSource());

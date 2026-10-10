@@ -5,6 +5,7 @@ import '../../../../core/theme/app_colors.dart';
 import '../../../../core/utils/responsive.dart';
 import '../../../../core/widgets/privacy_toggle.dart';
 import '../../../../core/widgets/responsive_container.dart';
+import '../../../../core/widgets/theme_toggle_button.dart';
 import '../../../finance/presentation/cubit/finance_cubit.dart';
 import '../../../finance/presentation/cubit/finance_state.dart';
 import '../../../finance/presentation/widgets/folego_gauge_card.dart';
@@ -37,6 +38,7 @@ class _HomePageContent extends StatelessWidget {
           ],
         ),
         actions: [
+          const ThemeToggleButton(),
           const PrivacyToggleButton(),
           IconButton(
             icon: const Icon(Icons.notifications_none_rounded),
