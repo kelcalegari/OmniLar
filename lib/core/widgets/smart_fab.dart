@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 import '../theme/app_colors.dart';
+import '../utils/responsive.dart';
 import '../../features/finance/presentation/pages/add_expense_page.dart';
 import '../../features/finance/presentation/pages/add_contribution_page.dart';
 import '../../features/p2p/presentation/pages/create_loan_page.dart';
@@ -10,185 +11,237 @@ import '../../features/calendar/presentation/widgets/add_event_sheet.dart';
 import '../../features/calendar/presentation/widgets/add_task_sheet.dart';
 
 class SmartFAB extends StatelessWidget {
-  const SmartFAB({super.key});
+  final bool isExtended;
+
+  const SmartFAB({
+    this.isExtended = false,
+    super.key,
+  });
 
   void _showActionsModal(BuildContext context) {
-    showModalBottomSheet(
+    showAdaptiveModal(
       context: context,
-      isScrollControlled: true,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-      ),
-      builder: (modalContext) {
-        return SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Center(
-                  child: Container(
-                    width: 40,
-                    height: 4,
-                    decoration: BoxDecoration(
-                      color: Colors.grey.withValues(alpha: 0.3),
-                      borderRadius: BorderRadius.circular(2),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 16),
-                const Text(
-                  'Ações Rápidas',
-                  style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-                ),
-                const SizedBox(height: 16),
+      maxWidth: 520,
+      child: const _SmartFABContent(),
+    );
+  }
 
-                // Inteligente
-                _buildSectionHeader('Inteligência'),
-                Row(
-                  children: [
-                    _buildActionButton(
-                      context,
-                      icon: Icons.qr_code_scanner_rounded,
-                      label: 'Escanear',
-                      color: AppColors.primary,
-                      onTap: () {
-                        Navigator.pop(modalContext);
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('Captura Inteligente em breve (Fase 5)')),
-                        );
-                      },
-                    ),
-                    const SizedBox(width: 12),
-                    _buildActionButton(
-                      context,
-                      icon: Icons.auto_awesome_rounded,
-                      label: 'Assistente',
-                      color: AppColors.accent,
-                      onTap: () {
-                        Navigator.pop(modalContext);
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('Assistente IA em breve (Fase 7)')),
-                        );
-                      },
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 16),
-
-                // Financeiro
-                _buildSectionHeader('Financeiro'),
-                Row(
-                  children: [
-                    _buildActionButton(
-                      context,
-                      icon: Icons.shopping_cart_outlined,
-                      label: 'Gasto da Casa',
-                      color: AppColors.primaryLight,
-                      onTap: () {
-                        Navigator.pop(modalContext);
-                        showModalBottomSheet(
-                          context: context,
-                          isScrollControlled: true,
-                          useSafeArea: true,
-                          builder: (_) => const AddExpensePage(),
-                        );
-                      },
-                    ),
-                    const SizedBox(width: 12),
-                    _buildActionButton(
-                      context,
-                      icon: Icons.swap_horiz_rounded,
-                      label: 'Empréstimo',
-                      color: AppColors.debtRed,
-                      onTap: () {
-                        Navigator.pop(modalContext);
-                        showModalBottomSheet(
-                          context: context,
-                          isScrollControlled: true,
-                          useSafeArea: true,
-                          builder: (_) => const CreateLoanPage(),
-                        );
-                      },
-                    ),
-                    const SizedBox(width: 12),
-                    _buildActionButton(
-                      context,
-                      icon: Icons.move_to_inbox_rounded,
-                      label: 'Aporte',
-                      color: AppColors.creditGreen,
-                      onTap: () {
-                        Navigator.pop(modalContext);
-                        showModalBottomSheet(
-                          context: context,
-                          isScrollControlled: true,
-                          useSafeArea: true,
-                          builder: (_) => const AddContributionPage(),
-                        );
-                      },
-                    ),
-                    const SizedBox(width: 12),
-                    _buildActionButton(
-                      context,
-                      icon: Icons.flash_on_rounded,
-                      label: 'Super Pix',
-                      color: AppColors.primary,
-                      onTap: () {
-                        Navigator.pop(modalContext);
-                        context.push('/fechamento');
-                      },
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 16),
-
-                // Casa / Organização
-                _buildSectionHeader('Organização'),
-                Row(
-                  children: [
-                    _buildActionButton(
-                      context,
-                      icon: Icons.event_available_rounded,
-                      label: 'Evento',
-                      color: Colors.orange,
-                      onTap: () {
-                        Navigator.pop(modalContext);
-                        final activeMemberId = context.read<CalendarCubit>().state.activeMemberId;
-                        AddEventSheet.show(context, activeMemberId);
-                      },
-                    ),
-                    const SizedBox(width: 12),
-                    _buildActionButton(
-                      context,
-                      icon: Icons.check_circle_outline_rounded,
-                      label: 'Tarefa',
-                      color: Colors.blue,
-                      onTap: () {
-                        Navigator.pop(modalContext);
-                        final activeMemberId = context.read<CalendarCubit>().state.activeMemberId;
-                        AddTaskSheet.show(context, activeMemberId);
-                      },
-                    ),
-                    const SizedBox(width: 12),
-                    _buildActionButton(
-                      context,
-                      icon: Icons.playlist_add_rounded,
-                      label: 'Item Compra',
-                      color: Colors.purple,
-                      onTap: () {
-                        Navigator.pop(modalContext);
-                        context.push('/compras');
-                      },
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 12),
-              ],
-            ),
+  @override
+  Widget build(BuildContext context) {
+    if (isExtended) {
+      return Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        child: FilledButton.icon(
+          onPressed: () => _showActionsModal(context),
+          icon: const Icon(Icons.add_rounded, size: 20),
+          label: const Text('Nova Ação', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+          style: FilledButton.styleFrom(
+            backgroundColor: AppColors.primary,
+            foregroundColor: Colors.white,
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
           ),
-        );
-      },
+        ),
+      );
+    }
+
+    return FloatingActionButton(
+      onPressed: () => _showActionsModal(context),
+      tooltip: 'Ações Rápidas',
+      child: const Icon(Icons.add_rounded, size: 28),
+    );
+  }
+}
+
+class _SmartFABContent extends StatelessWidget {
+  const _SmartFABContent();
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final isDesktop = !context.isMobile;
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (!isDesktop) ...[
+            Center(
+              child: Container(
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: Colors.grey.withValues(alpha: 0.3),
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+            ),
+            const SizedBox(height: 12),
+          ],
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Row(
+                children: [
+                  Icon(Icons.bolt_rounded, color: AppColors.primary, size: 24),
+                  SizedBox(width: 8),
+                  Text(
+                    'Ações Rápidas',
+                    style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                  ),
+                ],
+              ),
+              if (isDesktop)
+                IconButton(
+                  icon: const Icon(Icons.close_rounded, size: 20),
+                  onPressed: () => Navigator.pop(context),
+                  tooltip: 'Fechar',
+                ),
+            ],
+          ),
+          const SizedBox(height: 16),
+
+          // 1. Inteligência
+          _buildSectionHeader('Inteligência'),
+          Row(
+            children: [
+              _buildActionButton(
+                context,
+                icon: Icons.qr_code_scanner_rounded,
+                label: 'Escanear',
+                color: AppColors.primary,
+                onTap: () {
+                  Navigator.pop(context);
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Captura Inteligente em breve (Fase 5)')),
+                  );
+                },
+              ),
+              const SizedBox(width: 12),
+              _buildActionButton(
+                context,
+                icon: Icons.auto_awesome_rounded,
+                label: 'Assistente',
+                color: AppColors.accent,
+                onTap: () {
+                  Navigator.pop(context);
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Assistente IA em breve (Fase 7)')),
+                  );
+                },
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+
+          // 2. Financeiro
+          _buildSectionHeader('Financeiro'),
+          Row(
+            children: [
+              _buildActionButton(
+                context,
+                icon: Icons.shopping_cart_outlined,
+                label: 'Gasto da Casa',
+                color: AppColors.primaryLight,
+                onTap: () {
+                  Navigator.pop(context);
+                  showAdaptiveModal(
+                    context: context,
+                    maxWidth: 540,
+                    child: const AddExpensePage(),
+                  );
+                },
+              ),
+              const SizedBox(width: 12),
+              _buildActionButton(
+                context,
+                icon: Icons.swap_horiz_rounded,
+                label: 'Empréstimo',
+                color: AppColors.debtRed,
+                onTap: () {
+                  Navigator.pop(context);
+                  showAdaptiveModal(
+                    context: context,
+                    maxWidth: 540,
+                    child: const CreateLoanPage(),
+                  );
+                },
+              ),
+              const SizedBox(width: 12),
+              _buildActionButton(
+                context,
+                icon: Icons.move_to_inbox_rounded,
+                label: 'Aporte',
+                color: AppColors.creditGreen,
+                onTap: () {
+                  Navigator.pop(context);
+                  showAdaptiveModal(
+                    context: context,
+                    maxWidth: 540,
+                    child: const AddContributionPage(),
+                  );
+                },
+              ),
+              const SizedBox(width: 12),
+              _buildActionButton(
+                context,
+                icon: Icons.flash_on_rounded,
+                label: 'Super Pix',
+                color: AppColors.primary,
+                onTap: () {
+                  Navigator.pop(context);
+                  context.push('/fechamento');
+                },
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+
+          // 3. Casa / Organização
+          _buildSectionHeader('Organização'),
+          Row(
+            children: [
+              _buildActionButton(
+                context,
+                icon: Icons.event_available_rounded,
+                label: 'Evento',
+                color: Colors.orange,
+                onTap: () {
+                  Navigator.pop(context);
+                  final activeMemberId = context.read<CalendarCubit>().state.activeMemberId;
+                  AddEventSheet.show(context, activeMemberId);
+                },
+              ),
+              const SizedBox(width: 12),
+              _buildActionButton(
+                context,
+                icon: Icons.check_circle_outline_rounded,
+                label: 'Tarefa',
+                color: Colors.blue,
+                onTap: () {
+                  Navigator.pop(context);
+                  final activeMemberId = context.read<CalendarCubit>().state.activeMemberId;
+                  AddTaskSheet.show(context, activeMemberId);
+                },
+              ),
+              const SizedBox(width: 12),
+              _buildActionButton(
+                context,
+                icon: Icons.playlist_add_rounded,
+                label: 'Item Compra',
+                color: Colors.purple,
+                onTap: () {
+                  Navigator.pop(context);
+                  context.push('/compras');
+                },
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+        ],
+      ),
     );
   }
 
@@ -241,15 +294,6 @@ class SmartFAB extends StatelessWidget {
           ),
         ),
       ),
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return FloatingActionButton(
-      onPressed: () => _showActionsModal(context),
-      tooltip: 'Ações Rápidas',
-      child: const Icon(Icons.add_rounded, size: 28),
     );
   }
 }

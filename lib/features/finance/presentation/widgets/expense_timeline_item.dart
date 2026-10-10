@@ -136,25 +136,14 @@ class ExpenseTimelineItem extends StatelessWidget {
                 const SizedBox(height: 4),
                 Row(
                   children: [
-                    Text(
-                      '$dateFormatted • ${paidByMember?.name ?? "Membro"}',
-                      style: theme.textTheme.bodySmall?.copyWith(fontSize: 12),
-                    ),
-                    if (paymentMethod != null) ...[
-                      Text(' • ', style: theme.textTheme.bodySmall),
-                      Flexible(
-                        child: Text(
-                          paymentMethod!.name,
-                          style: theme.textTheme.bodySmall?.copyWith(
-                            fontSize: 12,
-                            color: paymentMethod!.isBenefit ? AppColors.primary : null,
-                            fontWeight: paymentMethod!.isBenefit ? FontWeight.w600 : null,
-                          ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
+                    Flexible(
+                      child: Text(
+                        '$dateFormatted • ${paidByMember?.name ?? "Membro"}${paymentMethod != null ? " • ${paymentMethod!.name}" : ""}',
+                        style: theme.textTheme.bodySmall?.copyWith(fontSize: 12),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                       ),
-                    ],
+                    ),
                   ],
                 ),
               ],

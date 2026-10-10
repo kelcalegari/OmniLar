@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:intl/intl.dart';
 import '../../../../core/theme/app_colors.dart';
+import '../../../../core/utils/responsive.dart';
 import '../../domain/entities/calendar_event.dart';
 import '../../domain/entities/event_participant.dart';
 import '../cubit/calendar_cubit.dart';
@@ -15,14 +16,10 @@ class AddEventSheet extends StatefulWidget {
   });
 
   static Future<void> show(BuildContext context, String activeMemberId) {
-    return showModalBottomSheet(
+    return showAdaptiveModal(
       context: context,
-      isScrollControlled: true,
-      useSafeArea: true,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-      ),
-      builder: (_) => AddEventSheet(activeMemberId: activeMemberId),
+      maxWidth: 560,
+      child: AddEventSheet(activeMemberId: activeMemberId),
     );
   }
 

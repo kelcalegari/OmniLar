@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import '../../../../core/di/service_locator.dart';
 import '../../../../core/domain/value_objects/money.dart';
 import '../../../../core/theme/app_colors.dart';
+import '../../../../core/widgets/responsive_container.dart';
 import '../../../finance/domain/entities/category.dart';
 import '../../../finance/domain/entities/financial_cycle_summary.dart';
 import '../../../finance/presentation/cubit/finance_cubit.dart';
@@ -49,29 +50,34 @@ class _ReportsPageContent extends StatelessWidget {
 
           return RefreshIndicator(
             onRefresh: () => cubit.loadCycleData(),
-            child: ListView(
-              padding: const EdgeInsets.all(16),
-              children: [
-                // Seletor de Ciclo
-                _buildCycleSelector(context, state, cubit),
-                const SizedBox(height: 16),
+            child: SingleChildScrollView(
+              physics: const AlwaysScrollableScrollPhysics(),
+              child: ResponsiveContainer(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    // Seletor de Ciclo
+                    _buildCycleSelector(context, state, cubit),
+                    const SizedBox(height: 16),
 
-                // Cards de Resumo Executivo
-                _buildExecutiveCards(context, summary),
-                const SizedBox(height: 20),
+                    // Cards de Resumo Executivo
+                    _buildExecutiveCards(context, summary),
+                    const SizedBox(height: 20),
 
-                // Seção: Gastos por Categoria
-                _buildCategoriesSection(context, state),
-                const SizedBox(height: 20),
+                    // Seção: Gastos por Categoria
+                    _buildCategoriesSection(context, state),
+                    const SizedBox(height: 20),
 
-                // Seção: Aportes por Membro
-                _buildMembersSection(context, state),
-                const SizedBox(height: 20),
+                    // Seção: Aportes por Membro
+                    _buildMembersSection(context, state),
+                    const SizedBox(height: 20),
 
-                // Card de Acesso ao Hub de Fechamento
-                _buildSettlementCard(context),
-                const SizedBox(height: 32),
-              ],
+                    // Card de Acesso ao Hub de Fechamento
+                    _buildSettlementCard(context),
+                    const SizedBox(height: 32),
+                  ],
+                ),
+              ),
             ),
           );
         },

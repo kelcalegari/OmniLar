@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../../../core/theme/app_colors.dart';
+import '../../../../core/utils/responsive.dart';
+import '../../../../core/widgets/responsive_container.dart';
 import '../../../auth/presentation/cubit/auth_cubit.dart';
 import '../../../auth/presentation/cubit/auth_state.dart';
 
@@ -9,18 +11,14 @@ class SettingsPage extends StatelessWidget {
   const SettingsPage({super.key});
 
   void _showMembersModal(BuildContext context, String houseName, String houseId) {
-    showModalBottomSheet(
+    showAdaptiveModal(
       context: context,
-      isScrollControlled: true,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-      ),
-      builder: (ctx) {
-        return SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.all(20),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
+      maxWidth: 500,
+      child: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
               mainAxisAlignment: MainAxisAlignment.start,
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
@@ -145,10 +143,9 @@ class SettingsPage extends StatelessWidget {
               ],
             ),
           ),
-        );
-      },
-    );
-  }
+        ),
+      );
+    }
 
   void _confirmSignOut(BuildContext context) {
     showDialog(
@@ -195,12 +192,14 @@ class SettingsPage extends StatelessWidget {
           final houseName = house?.name ?? 'Minha Casa';
           final cycleDay = house?.cycleStartDay ?? 5;
 
-          return ListView(
-            padding: const EdgeInsets.symmetric(vertical: 12),
-            children: [
-              // Card do Perfil e Casa Ativa
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          return SingleChildScrollView(
+            child: ResponsiveContainer(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  // Card do Perfil e Casa Ativa
+                  Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 8),
                 child: Container(
                   padding: const EdgeInsets.all(16),
                   decoration: BoxDecoration(
@@ -332,9 +331,11 @@ class SettingsPage extends StatelessWidget {
               ),
               const SizedBox(height: 32),
             ],
-          );
-        },
-      ),
-    );
+          ),
+        ),
+      );
+    },
+  ),
+);
   }
 }

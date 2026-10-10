@@ -3,6 +3,8 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:intl/intl.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/domain/value_objects/money.dart';
+import '../../../../core/utils/responsive.dart';
+import '../../../../core/widgets/responsive_container.dart';
 import '../../domain/entities/calendar_event.dart';
 import '../../domain/entities/event_participant.dart';
 import '../../domain/entities/task_item.dart';
@@ -81,52 +83,131 @@ class CalendarPage extends StatelessWidget {
               ),
             ],
           ),
-          body: Column(
-            children: [
-              // Seletor de visualização (Compromissos vs Tarefas)
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                child: Container(
-                  decoration: BoxDecoration(
-                    color: theme.cardColor,
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: Colors.grey.withValues(alpha: 0.15)),
-                  ),
-                  child: Row(
-                    children: [
-                      Expanded(
-                        child: _buildTabButton(
-                          context,
-                          label: 'Compromissos (${state.events.length})',
-                          icon: Icons.calendar_today_rounded,
-                          isSelected: state.activeView == CalendarViewType.events,
-                          onTap: () => cubit.switchView(CalendarViewType.events),
-                        ),
+          body: state.status == CalendarCubitStatus.loading && state.events.isEmpty
+              ? const Center(child: CircularProgressIndicator())
+              : context.isDesktop
+                  ? ResponsiveContainer(
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          // Coluna 1: Compromissos
+                          Expanded(
+                            flex: 6,
+                            child: Card(
+                              elevation: 0,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(16),
+                                side: BorderSide(color: Colors.grey.withValues(alpha: 0.15)),
+                              ),
+                              child: Padding(
+                                padding: const EdgeInsets.all(16),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Row(
+                                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                      children: [
+                                        Text(
+                                          'Compromissos (${state.events.length})',
+                                          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                                        ),
+                                        FilledButton.tonalIcon(
+                                          onPressed: () => AddEventSheet.show(context, state.activeMemberId),
+                                          icon: const Icon(Icons.add_rounded, size: 18),
+                                          label: const Text('Novo Evento'),
+                                        ),
+                                      ],
+                                    ),
+                                    const SizedBox(height: 12),
+                                    Expanded(child: _buildEventsList(context, state, cubit)),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 20),
+                          // Coluna 2: Tarefas
+                          Expanded(
+                            flex: 5,
+                            child: Card(
+                              elevation: 0,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(16),
+                                side: BorderSide(color: Colors.grey.withValues(alpha: 0.15)),
+                              ),
+                              child: Padding(
+                                padding: const EdgeInsets.all(16),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Row(
+                                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                      children: [
+                                        Text(
+                                          'Tarefas (${state.tasks.where((t) => !t.isCompleted).length})',
+                                          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                                        ),
+                                        FilledButton.tonalIcon(
+                                          onPressed: () => AddTaskSheet.show(context, state.activeMemberId),
+                                          icon: const Icon(Icons.add_rounded, size: 18),
+                                          label: const Text('Nova Tarefa'),
+                                        ),
+                                      ],
+                                    ),
+                                    const SizedBox(height: 12),
+                                    Expanded(child: _buildTasksList(context, state, cubit)),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
                       ),
-                      Expanded(
-                        child: _buildTabButton(
-                          context,
-                          label: 'Tarefas (${state.tasks.where((t) => !t.isCompleted).length})',
-                          icon: Icons.checklist_rounded,
-                          isSelected: state.activeView == CalendarViewType.tasks,
-                          onTap: () => cubit.switchView(CalendarViewType.tasks),
+                    )
+                  : Column(
+                      children: [
+                        // Seletor de visualização Mobile (Compromissos vs Tarefas)
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                          child: Container(
+                            decoration: BoxDecoration(
+                              color: theme.cardColor,
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(color: Colors.grey.withValues(alpha: 0.15)),
+                            ),
+                            child: Row(
+                              children: [
+                                Expanded(
+                                  child: _buildTabButton(
+                                    context,
+                                    label: 'Compromissos (${state.events.length})',
+                                    icon: Icons.calendar_today_rounded,
+                                    isSelected: state.activeView == CalendarViewType.events,
+                                    onTap: () => cubit.switchView(CalendarViewType.events),
+                                  ),
+                                ),
+                                Expanded(
+                                  child: _buildTabButton(
+                                    context,
+                                    label: 'Tarefas (${state.tasks.where((t) => !t.isCompleted).length})',
+                                    icon: Icons.checklist_rounded,
+                                    isSelected: state.activeView == CalendarViewType.tasks,
+                                    onTap: () => cubit.switchView(CalendarViewType.tasks),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
                         ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
 
-              // Conteúdo Dinâmico
-              Expanded(
-                child: state.status == CalendarCubitStatus.loading && state.events.isEmpty
-                    ? const Center(child: CircularProgressIndicator())
-                    : state.activeView == CalendarViewType.events
-                        ? _buildEventsList(context, state, cubit)
-                        : _buildTasksList(context, state, cubit),
-              ),
-            ],
-          ),
+                        // Conteúdo Dinâmico Mobile
+                        Expanded(
+                          child: state.activeView == CalendarViewType.events
+                              ? _buildEventsList(context, state, cubit)
+                              : _buildTasksList(context, state, cubit),
+                        ),
+                      ],
+                    ),
         );
       },
     );
