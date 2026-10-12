@@ -5,7 +5,8 @@ import '../entities/house_expense.dart';
 /// Cada despesa conta em um único ciclo, para nunca ser cobrada duas vezes.
 ///
 /// - Despesas de projeto vivem só no projeto (não pesam no Caixa nem no fechamento).
-/// - Compra no cartão com fatura definida conta no ciclo do vencimento da fatura.
+/// - Compra no cartão conta no ciclo do vencimento da fatura; se o pagamento da
+///   fatura foi registrado, conta no ciclo em que ela foi paga.
 /// - Despesa já paga conta no ciclo em que foi lançada; se era uma conta
 ///   pendente, conta no ciclo em que recebeu baixa.
 /// - Conta pendente conta no ciclo do vencimento e, se vencer sem ser paga,
@@ -22,7 +23,7 @@ bool expenseBelongsToCycle(
   if (isOverdueLiability) return true;
 
   if (isCardPayment && expense.dueDate != null) {
-    return cycle.contains(expense.dueDate!);
+    return cycle.contains(expense.paidAt ?? expense.dueDate!);
   }
 
   return expense.isPaid

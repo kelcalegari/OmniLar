@@ -13,6 +13,8 @@ import '../../../auth/presentation/cubit/auth_state.dart';
 import '../../../finance/presentation/cubit/finance_cubit.dart';
 import '../../../finance/domain/entities/category.dart';
 import '../../../finance/domain/entities/house_member.dart';
+import '../../../finance/domain/repositories/finance_repository.dart';
+import '../../../finance/presentation/widgets/card_invoice_payment_sheet.dart';
 import '../../../finance/domain/entities/payment_method.dart';
 import '../../../finance/presentation/cubit/finance_state.dart';
 import '../../../finance/presentation/pages/add_expense_page.dart';
@@ -1971,7 +1973,19 @@ class SettingsPage extends StatelessWidget {
                                     ),
                                     tooltip: 'Opções',
                                     onSelected: (action) {
-                                      if (action == 'edit') {
+                                      if (action == 'invoice') {
+                                        showAdaptiveModal(
+                                          context: context,
+                                          maxWidth: 480,
+                                          child: CardInvoicePaymentSheet(
+                                            card: pm,
+                                            repository: sl<FinanceRepository>(),
+                                            financeCubit: financeCubit,
+                                            cycleStartDay:
+                                                sl<AuthRepository>().currentHouse?.cycleStartDay ?? 5,
+                                          ),
+                                        );
+                                      } else if (action == 'edit') {
                                         _showPaymentMethodFormDialog(
                                           context: context,
                                           financeCubit: financeCubit,
@@ -1988,6 +2002,21 @@ class SettingsPage extends StatelessWidget {
                                       }
                                     },
                                     itemBuilder: (context) => [
+                                      if (pm.type == PaymentMethodType.card)
+                                        const PopupMenuItem(
+                                          value: 'invoice',
+                                          child: Row(
+                                            children: [
+                                              Icon(
+                                                Icons.receipt_long_outlined,
+                                                size: 18,
+                                                color: AppColors.primary,
+                                              ),
+                                              SizedBox(width: 8),
+                                              Text('Registrar pagamento da fatura'),
+                                            ],
+                                          ),
+                                        ),
                                       const PopupMenuItem(
                                         value: 'edit',
                                         child: Row(

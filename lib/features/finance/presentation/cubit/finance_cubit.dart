@@ -339,6 +339,29 @@ class FinanceCubit extends Cubit<FinanceState> {
     }
   }
 
+  /// Registra o dia em que a fatura do cartão foi paga. Retorna false em caso de erro.
+  Future<bool> payCardInvoice({
+    required String paymentMethodId,
+    required DateTime invoiceDueDate,
+    required DateTime paidAt,
+  }) async {
+    try {
+      await _repository.payCardInvoice(
+        paymentMethodId: paymentMethodId,
+        invoiceDueDate: invoiceDueDate,
+        paidAt: paidAt,
+      );
+      await loadCycleData(cycle: state.currentCycle);
+      return true;
+    } catch (e) {
+      emit(state.copyWith(
+        status: FinanceStatus.failure,
+        errorMessage: 'Erro ao registrar pagamento da fatura: $e',
+      ));
+      return false;
+    }
+  }
+
   // --- Ações de Caixinhas & Metas da Casa (Dinheiro Blindado) ---
   Future<void> createSavingsVault(SavingsVault vault) async {
     try {

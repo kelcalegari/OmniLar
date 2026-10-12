@@ -1,3 +1,4 @@
+import '../../domain/entities/card_invoice.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../../core/domain/enums/recurrence.dart';
 import '../../../../core/domain/value_objects/financial_cycle.dart';
@@ -1190,6 +1191,52 @@ class SupabaseFinanceDataSource implements FinanceDataSource {
       } catch (_) {
         return [];
       }
+    }
+  }
+
+  @override
+  Future<List<CardInvoice>> getOpenCardInvoices(String paymentMethodId) async {
+    try {
+      if (!_isUuid(paymentMethodId)) return const [];
+
+      // Só faturas recentes: compras antigas nunca marcadas não poluem a lista
+      final since = DateTime.now().subtract(const Duration(days: 62));
+      final rows = await client
+          .from('house_expenses')
+          .select('*, house_expense_items(*), split_rules(*)')
+          .eq('house_id', _houseId)
+          .eq('payment_method_id', paymentMethodId)
+          .isFilter('project_id', null)
+          .isFilter('deleted_at', null)
+          .isFilter('paid_at', null)
+          .gte('due_date', since.toIso8601String().split('T')[0]);
+
+      return CardInvoice.groupOpenInvoices(
+        paymentMethodId,
+        rows.map((r) => _mapRowToHouseExpense(r)),
+      );
+    } catch (e) {
+      throw ServerFailure('Erro ao buscar faturas do cartão: $e');
+    }
+  }
+
+  @override
+  Future<void> payCardInvoice({
+    required String paymentMethodId,
+    required DateTime invoiceDueDate,
+    required DateTime paidAt,
+  }) async {
+    try {
+      await client
+          .from('house_expenses')
+          .update({'paid_at': paidAt.toUtc().toIso8601String()})
+          .eq('house_id', _houseId)
+          .eq('payment_method_id', paymentMethodId)
+          .eq('due_date', invoiceDueDate.toIso8601String().split('T')[0])
+          .isFilter('deleted_at', null)
+          .isFilter('paid_at', null);
+    } catch (e) {
+      throw ServerFailure('Erro ao registrar pagamento da fatura: $e');
     }
   }
 }

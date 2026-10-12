@@ -1,3 +1,4 @@
+import '../../domain/entities/card_invoice.dart';
 import '../../../../core/network/offline_queue.dart';
 import '../../../../core/network/offline_sync_service.dart';
 import '../../../../core/utils/uuid.dart';
@@ -147,4 +148,20 @@ class FinanceRepositoryImpl implements FinanceRepository {
   @override
   Future<List<AuditEntry>> getAuditLog({String? entityId, int limit = 50}) =>
       _dataSource.getAuditLog(entityId: entityId, limit: limit);
+
+  @override
+  Future<List<CardInvoice>> getOpenCardInvoices(String paymentMethodId) =>
+      _dataSource.getOpenCardInvoices(paymentMethodId);
+
+  @override
+  Future<void> payCardInvoice({
+    required String paymentMethodId,
+    required DateTime invoiceDueDate,
+    required DateTime paidAt,
+  }) =>
+      _dataSource.payCardInvoice(
+        paymentMethodId: paymentMethodId,
+        invoiceDueDate: invoiceDueDate,
+        paidAt: paidAt,
+      );
 }

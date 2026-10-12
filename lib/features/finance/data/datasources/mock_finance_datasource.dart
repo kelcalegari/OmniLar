@@ -1,3 +1,4 @@
+import '../../domain/entities/card_invoice.dart';
 import '../../domain/entities/house_member.dart';
 import '../../domain/entities/category.dart';
 import '../../domain/entities/payment_method.dart';
@@ -684,5 +685,28 @@ class MockFinanceDataSource implements FinanceDataSource {
     }
     return logs.reversed.take(limit).toList();
   }
-}
 
+  @override
+  Future<List<CardInvoice>> getOpenCardInvoices(String paymentMethodId) async =>
+      CardInvoice.groupOpenInvoices(paymentMethodId, _expenses);
+
+  @override
+  Future<void> payCardInvoice({
+    required String paymentMethodId,
+    required DateTime invoiceDueDate,
+    required DateTime paidAt,
+  }) async {
+    bool sameDay(DateTime a, DateTime b) =>
+        a.year == b.year && a.month == b.month && a.day == b.day;
+
+    for (int i = 0; i < _expenses.length; i++) {
+      final e = _expenses[i];
+      if (e.paymentMethodId == paymentMethodId &&
+          e.dueDate != null &&
+          e.paidAt == null &&
+          sameDay(e.dueDate!, invoiceDueDate)) {
+        _expenses[i] = e.copyWith(paidAt: paidAt);
+      }
+    }
+  }
+}

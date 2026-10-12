@@ -1,3 +1,4 @@
+import 'package:omni_lar/features/finance/domain/entities/card_invoice.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -18,6 +19,14 @@ import 'package:omni_lar/features/finance/domain/entities/savings_vault.dart';
 import 'package:omni_lar/features/finance/domain/entities/audit_entry.dart';
 
 class _FakeFinanceRepository implements FinanceRepository {
+  @override
+  Future<List<CardInvoice>> getOpenCardInvoices(String paymentMethodId) async => [];
+  @override
+  Future<void> payCardInvoice({
+    required String paymentMethodId,
+    required DateTime invoiceDueDate,
+    required DateTime paidAt,
+  }) async {}
   @override
   Future<List<HouseExpense>> getExpensesForCycle(FinancialCycle cycle) async => [];
   @override

@@ -1,3 +1,4 @@
+import '../../domain/entities/card_invoice.dart';
 import '../../../../core/domain/enums/recurrence.dart';
 import '../../../../core/domain/value_objects/financial_cycle.dart';
 import '../../../../core/domain/value_objects/money.dart';
@@ -62,4 +63,15 @@ abstract class FinanceDataSource {
 
   // Auditoria da Casa
   Future<List<AuditEntry>> getAuditLog({String? entityId, int limit = 50});
+
+  // Faturas de cartão
+  /// Faturas do cartão cujo pagamento ainda não foi registrado.
+  Future<List<CardInvoice>> getOpenCardInvoices(String paymentMethodId);
+
+  /// Registra o dia em que a fatura que vence em [invoiceDueDate] foi paga.
+  Future<void> payCardInvoice({
+    required String paymentMethodId,
+    required DateTime invoiceDueDate,
+    required DateTime paidAt,
+  });
 }

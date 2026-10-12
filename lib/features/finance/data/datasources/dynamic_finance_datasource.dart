@@ -1,3 +1,4 @@
+import '../../domain/entities/card_invoice.dart';
 import '../../../../core/domain/enums/recurrence.dart';
 import '../../../../core/domain/value_objects/financial_cycle.dart';
 import '../../../../core/domain/value_objects/money.dart';
@@ -139,4 +140,20 @@ class DynamicFinanceDataSource implements FinanceDataSource {
   @override
   Future<List<AuditEntry>> getAuditLog({String? entityId, int limit = 50}) =>
       _active.getAuditLog(entityId: entityId, limit: limit);
+
+  @override
+  Future<List<CardInvoice>> getOpenCardInvoices(String paymentMethodId) =>
+      _active.getOpenCardInvoices(paymentMethodId);
+
+  @override
+  Future<void> payCardInvoice({
+    required String paymentMethodId,
+    required DateTime invoiceDueDate,
+    required DateTime paidAt,
+  }) =>
+      _active.payCardInvoice(
+        paymentMethodId: paymentMethodId,
+        invoiceDueDate: invoiceDueDate,
+        paidAt: paidAt,
+      );
 }
