@@ -1,3 +1,7 @@
+import '../../../../core/network/offline_queue.dart';
+import '../../../../core/network/offline_sync_service.dart';
+import '../../../../core/utils/uuid.dart';
+import '../offline/shopping_item_offline_codec.dart';
 import '../../../../core/domain/value_objects/money.dart';
 import '../../domain/entities/shopping_item.dart';
 import '../../domain/entities/shopping_list.dart';
@@ -7,8 +11,9 @@ import '../datasources/shopping_datasource.dart';
 
 class ShoppingRepositoryImpl implements ShoppingRepository {
   final ShoppingDataSource _dataSource;
+  final OfflineSyncService? _offlineSync;
 
-  ShoppingRepositoryImpl(this._dataSource);
+  ShoppingRepositoryImpl(this._dataSource, [this._offlineSync]);
 
   @override
   Future<List<ShoppingList>> getLists() => _dataSource.getLists();
@@ -20,7 +25,17 @@ class ShoppingRepositoryImpl implements ShoppingRepository {
   Stream<List<ShoppingItem>> watchItems(String listId) => _dataSource.watchItems(listId);
 
   @override
-  Future<void> addItem(ShoppingItem item) => _dataSource.addItem(item);
+  Future<void> addItem(ShoppingItem item) async {
+    final sync = _offlineSync;
+    if (sync == null || !sync.isActive) return _dataSource.addItem(item);
+
+    final withId = isUuid(item.id) ? item : item.copyWith(id: generateUuidV4());
+    await sync.runOrQueue(
+      OfflineActionType.addShoppingItem,
+      () => shoppingItemToJson(withId),
+      () => _dataSource.addItem(withId),
+    );
+  }
 
   @override
   Future<void> toggleItemBought(String itemId) => _dataSource.toggleItemBought(itemId);

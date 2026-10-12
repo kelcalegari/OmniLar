@@ -1,3 +1,4 @@
+import 'offline_sync_banner.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../utils/responsive.dart';
@@ -124,7 +125,7 @@ class ScaffoldWithNavBar extends StatelessWidget {
               color: Colors.grey.withValues(alpha: 0.15),
             ),
             Expanded(
-              child: navigationShell,
+              child: OfflineSyncHost(child: navigationShell),
             ),
           ],
         ),
@@ -133,7 +134,7 @@ class ScaffoldWithNavBar extends StatelessWidget {
 
     // Layout Mobile / Celular (NavigationBar inferior clássico)
     return Scaffold(
-      body: navigationShell,
+      body: OfflineSyncHost(child: navigationShell),
       bottomNavigationBar: NavigationBar(
         selectedIndex: navigationShell.currentIndex,
         onDestinationSelected: _onTap,

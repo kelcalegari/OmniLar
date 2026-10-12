@@ -1,6 +1,8 @@
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:get_it/get_it.dart';
 import '../network/offline_queue.dart';
+import '../network/offline_sync_service.dart';
+import '../utils/uuid.dart';
 import '../network/supabase_config.dart';
 import '../security/biometric_auth_service.dart';
 import '../services/ai_config_service.dart';
@@ -61,6 +63,9 @@ import '../../features/settlement/data/datasources/dynamic_settlement_datasource
 import '../../features/projects/domain/repositories/projects_repository.dart';
 import '../../features/projects/presentation/cubit/projects_cubit.dart';
 import '../../features/capture/domain/services/capture_service.dart';
+import '../../features/finance/data/offline/house_expense_offline_codec.dart';
+import '../../features/shopping/data/offline/shopping_item_offline_codec.dart';
+import '../../features/calendar/data/offline/calendar_offline_codec.dart';
 
 final sl = GetIt.instance;
 
@@ -101,6 +106,18 @@ Future<void> initServiceLocator() async {
         },
       ));
 
+  // Fila offline: só vale para sessão real em uma casa (o modo demo grava em memória)
+  sl.registerLazySingleton<OfflineSyncService>(() => OfflineSyncService(
+        queue: sl<OfflineQueueManager>(),
+        currentScope: () {
+          final authRepo = sl<AuthRepository>();
+          final userId = authRepo.currentUser?.id;
+          final houseId = authRepo.currentHouse?.id;
+          if (authRepo.isDemoMode || !isUuid(userId) || !isUuid(houseId)) return null;
+          return '$userId|$houseId';
+        },
+      ));
+
   bool isDemoModeActive() {
     final authRepo = sl<AuthRepository>();
     if (authRepo.isDemoMode) return true;
@@ -127,7 +144,7 @@ Future<void> initServiceLocator() async {
     }
     return mock;
   });
-  sl.registerLazySingleton<FinanceRepository>(() => FinanceRepositoryImpl(sl()));
+  sl.registerLazySingleton<FinanceRepository>(() => FinanceRepositoryImpl(sl(), sl<OfflineSyncService>()));
   sl.registerLazySingleton<FinanceCubit>(() => FinanceCubit(sl()));
 
   // P2P Feature
@@ -199,7 +216,7 @@ Future<void> initServiceLocator() async {
     }
     return mock;
   });
-  sl.registerLazySingleton<ShoppingRepository>(() => ShoppingRepositoryImpl(sl()));
+  sl.registerLazySingleton<ShoppingRepository>(() => ShoppingRepositoryImpl(sl(), sl<OfflineSyncService>()));
   sl.registerLazySingleton<ShoppingCubit>(() => ShoppingCubit(sl()));
 
   // Calendar & Tasks Feature (Fase 4: Agenda do Lar e Tarefas)
@@ -219,7 +236,7 @@ Future<void> initServiceLocator() async {
     }
     return mock;
   });
-  sl.registerLazySingleton<CalendarRepository>(() => CalendarRepositoryImpl(sl()));
+  sl.registerLazySingleton<CalendarRepository>(() => CalendarRepositoryImpl(sl(), sl<OfflineSyncService>()));
   sl.registerLazySingleton<CalendarCubit>(() => CalendarCubit(sl(), sl<AuthRepository>()));
 
   // Assistant Feature (Fase 7: Assistente de IA Determinístico)
@@ -251,6 +268,25 @@ Future<void> initServiceLocator() async {
         projectsRepository: sl(),
         financeRepository: sl(),
       ));
+
+  // Reenvio da fila offline: cada ação volta pela mesma gravação que faria online
+  sl<OfflineSyncService>()
+    ..registerHandler(
+      OfflineActionType.addExpense,
+      (payload) => sl<FinanceDataSource>().addExpense(houseExpenseFromJson(payload)),
+    )
+    ..registerHandler(
+      OfflineActionType.addShoppingItem,
+      (payload) => sl<ShoppingDataSource>().addItem(shoppingItemFromJson(payload)),
+    )
+    ..registerHandler(
+      OfflineActionType.addCalendarEvent,
+      (payload) => sl<CalendarDataSource>().addEvent(calendarEventFromJson(payload)),
+    )
+    ..registerHandler(
+      OfflineActionType.addTask,
+      (payload) => sl<CalendarDataSource>().addTask(taskItemFromJson(payload)),
+    );
 
   // Capture Feature
   sl.registerLazySingleton<CaptureService>(() => CaptureService(

@@ -1,3 +1,7 @@
+import '../../../../core/network/offline_queue.dart';
+import '../../../../core/network/offline_sync_service.dart';
+import '../../../../core/utils/uuid.dart';
+import '../offline/house_expense_offline_codec.dart';
 import '../../domain/entities/house_member.dart';
 import '../../domain/entities/category.dart';
 import '../../domain/entities/payment_method.dart';
@@ -14,8 +18,9 @@ import '../../../../core/domain/value_objects/financial_cycle.dart';
 
 class FinanceRepositoryImpl implements FinanceRepository {
   final FinanceDataSource _dataSource;
+  final OfflineSyncService? _offlineSync;
 
-  FinanceRepositoryImpl(this._dataSource);
+  FinanceRepositoryImpl(this._dataSource, [this._offlineSync]);
 
   @override
   Future<List<HouseMember>> getMembers() => _dataSource.getMembers();
@@ -43,7 +48,18 @@ class FinanceRepositoryImpl implements FinanceRepository {
       _dataSource.getCycleSummary(cycle);
 
   @override
-  Future<void> addExpense(HouseExpense expense) => _dataSource.addExpense(expense);
+  Future<void> addExpense(HouseExpense expense) async {
+    final sync = _offlineSync;
+    if (sync == null || !sync.isActive) return _dataSource.addExpense(expense);
+
+    // O id definitivo nasce no aparelho: reenviar depois não duplica a despesa
+    final withId = isUuid(expense.id) ? expense : expense.copyWith(id: generateUuidV4());
+    await sync.runOrQueue(
+      OfflineActionType.addExpense,
+      () => houseExpenseToJson(withId),
+      () => _dataSource.addExpense(withId),
+    );
+  }
 
   @override
   Future<void> updateExpense(

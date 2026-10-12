@@ -126,6 +126,15 @@ class OfflineQueueManager {
     unawaited(_persist());
   }
 
+  /// Conta uma tentativa de envio que o servidor recusou.
+  void registerFailedAttempt(String actionId) {
+    final index = _queue.indexWhere((a) => a.id == actionId);
+    if (index == -1) return;
+    _queue[index] = _queue[index].copyWith(retryCount: _queue[index].retryCount + 1);
+    _controller.add(List.unmodifiable(_queue));
+    unawaited(_persist());
+  }
+
   void clear() {
     _queue.clear();
     _controller.add(List.unmodifiable(_queue));

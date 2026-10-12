@@ -1,3 +1,7 @@
+import '../../../../core/network/offline_queue.dart';
+import '../../../../core/network/offline_sync_service.dart';
+import '../../../../core/utils/uuid.dart';
+import '../offline/calendar_offline_codec.dart';
 import '../../../../core/domain/enums/recurrence.dart';
 import '../../domain/entities/calendar_event.dart';
 import '../../domain/entities/event_participant.dart';
@@ -7,14 +11,25 @@ import '../datasources/calendar_datasource.dart';
 
 class CalendarRepositoryImpl implements CalendarRepository {
   final CalendarDataSource _dataSource;
+  final OfflineSyncService? _offlineSync;
 
-  CalendarRepositoryImpl(this._dataSource);
+  CalendarRepositoryImpl(this._dataSource, [this._offlineSync]);
 
   @override
   Future<List<CalendarEvent>> getEvents() => _dataSource.getEvents();
 
   @override
-  Future<void> addEvent(CalendarEvent event) => _dataSource.addEvent(event);
+  Future<void> addEvent(CalendarEvent event) async {
+    final sync = _offlineSync;
+    if (sync == null || !sync.isActive) return _dataSource.addEvent(event);
+
+    final withId = isUuid(event.id) ? event : event.copyWith(id: generateUuidV4());
+    await sync.runOrQueue(
+      OfflineActionType.addCalendarEvent,
+      () => calendarEventToJson(withId),
+      () => _dataSource.addEvent(withId),
+    );
+  }
 
   @override
   Future<void> updateEvent(
@@ -54,7 +69,17 @@ class CalendarRepositoryImpl implements CalendarRepository {
       _dataSource.watchTasks(includeArchived: includeArchived);
 
   @override
-  Future<void> addTask(TaskItem task) => _dataSource.addTask(task);
+  Future<void> addTask(TaskItem task) async {
+    final sync = _offlineSync;
+    if (sync == null || !sync.isActive) return _dataSource.addTask(task);
+
+    final withId = isUuid(task.id) ? task : task.copyWith(id: generateUuidV4());
+    await sync.runOrQueue(
+      OfflineActionType.addTask,
+      () => taskItemToJson(withId),
+      () => _dataSource.addTask(withId),
+    );
+  }
 
   @override
   Future<void> toggleTaskComplete({
