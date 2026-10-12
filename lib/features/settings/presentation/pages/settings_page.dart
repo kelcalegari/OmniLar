@@ -12,6 +12,7 @@ import '../../../auth/presentation/cubit/auth_cubit.dart';
 import '../../../auth/presentation/cubit/auth_state.dart';
 import '../../../finance/presentation/cubit/finance_cubit.dart';
 import '../../../finance/domain/entities/category.dart';
+import '../../../finance/domain/entities/house_member.dart';
 import '../../../finance/domain/entities/payment_method.dart';
 import '../../../finance/presentation/cubit/finance_state.dart';
 import '../../../finance/presentation/pages/add_expense_page.dart';
@@ -1071,6 +1072,29 @@ class SettingsPage extends StatelessWidget {
         ? members[1].defaultSplitPercent
         : (100.0 - percent1);
 
+    // Com 3 ou mais moradores cada um tem o seu percentual (inteiros que somam 100)
+    final isMultiMember = members.length > 2;
+    final percentByMember = <String, int>{
+      for (final m in members) m.id: m.defaultSplitPercent.round(),
+    };
+    String firstName(HouseMember m) => m.name.split(' ').first;
+    int percentTotal() => percentByMember.values.fold<int>(0, (a, b) => a + b);
+    void splitEqually() {
+      final base = 100 ~/ members.length;
+      final remainder = 100 % members.length;
+      for (int i = 0; i < members.length; i++) {
+        percentByMember[members[i].id] = base + (i < remainder ? 1 : 0);
+      }
+    }
+
+    // O arredondamento de 23,33 / 43,34 / 33,33 daria 99: a maior fatia absorve a diferença
+    if (isMultiMember && (percentTotal() - 100).abs() <= members.length) {
+      final largest = members.reduce(
+        (a, b) => percentByMember[b.id]! > percentByMember[a.id]! ? b : a,
+      );
+      percentByMember[largest.id] = percentByMember[largest.id]! + (100 - percentTotal());
+    }
+
     // Aportes fixos por membro (ex: Balde Comum)
     final fixedAmountsByMember = <String, int>{};
     for (int i = 0; i < members.length; i++) {
@@ -1085,7 +1109,6 @@ class SettingsPage extends StatelessWidget {
         fixedAmountsByMember[m.id] = 100000;
       }
     }
-    String deficitPolicy = 'proportional'; // 'proportional' ou 'equal'
 
     showAdaptiveModal(
       context: context,
@@ -1142,7 +1165,11 @@ class SettingsPage extends StatelessWidget {
                         style: TextStyle(fontWeight: FontWeight.w600),
                       ),
                       subtitle: Text(
-                        '${percent1.round()}% $name1 / ${percent2.round()}% $name2',
+                        isMultiMember
+                            ? members
+                                  .map((m) => '${percentByMember[m.id]}% ${firstName(m)}')
+                                  .join(' / ')
+                            : '${percent1.round()}% $name1 / ${percent2.round()}% $name2',
                       ),
                       value: 'percentage',
                       groupValue: selectedModel,
@@ -1150,7 +1177,71 @@ class SettingsPage extends StatelessWidget {
                           setModalState(() => selectedModel = val!),
                       contentPadding: EdgeInsets.zero,
                     ),
-                    if (selectedModel == 'percentage') ...[
+                    if (selectedModel == 'percentage' && isMultiMember) ...[
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 8),
+                        child: Column(
+                          children: [
+                            for (final m in members)
+                              Row(
+                                children: [
+                                  SizedBox(
+                                    width: 110,
+                                    child: Text(
+                                      '${firstName(m)}: ${percentByMember[m.id]}%',
+                                      overflow: TextOverflow.ellipsis,
+                                      style: const TextStyle(
+                                        fontWeight: FontWeight.w600,
+                                        fontSize: 13,
+                                      ),
+                                    ),
+                                  ),
+                                  Expanded(
+                                    child: Slider(
+                                      value: percentByMember[m.id]!.toDouble().clamp(0, 100),
+                                      min: 0,
+                                      max: 100,
+                                      divisions: 100,
+                                      activeColor: AppColors.primary,
+                                      inactiveColor: AppColors.accent.withValues(
+                                        alpha: 0.3,
+                                      ),
+                                      onChanged: (val) {
+                                        setModalState(() {
+                                          percentByMember[m.id] = val.round();
+                                        });
+                                      },
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                Text(
+                                  percentTotal() == 100
+                                      ? 'Total: 100%'
+                                      : percentTotal() < 100
+                                      ? 'Total: ${percentTotal()}% (faltam ${100 - percentTotal()}%)'
+                                      : 'Total: ${percentTotal()}% (passou ${percentTotal() - 100}%)',
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.w600,
+                                    fontSize: 13,
+                                    color: percentTotal() == 100
+                                        ? AppColors.creditGreen
+                                        : AppColors.debtRed,
+                                  ),
+                                ),
+                                ActionChip(
+                                  label: const Text('Dividir igualmente'),
+                                  onPressed: () => setModalState(splitEqually),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+                    ] else if (selectedModel == 'percentage') ...[
                       Padding(
                         padding: const EdgeInsets.symmetric(horizontal: 8),
                         child: Column(
@@ -1567,61 +1658,11 @@ class SettingsPage extends StatelessWidget {
                                       ),
                                       const SizedBox(height: 10),
                                       const Text(
-                                        'Divisão do excedente (se o cofre não cobrir):',
+                                        'Se os gastos passarem do balde, quem fechar o ciclo escolhe como cobrir o excedente.',
                                         style: TextStyle(
                                           fontSize: 11,
-                                          fontWeight: FontWeight.bold,
                                           color: Colors.grey,
                                         ),
-                                      ),
-                                      const SizedBox(height: 4),
-                                      Row(
-                                        children: [
-                                          Expanded(
-                                            child: ChoiceChip(
-                                              visualDensity:
-                                                  VisualDensity.compact,
-                                              label: const Text(
-                                                'Proporcional',
-                                                style: TextStyle(fontSize: 11),
-                                              ),
-                                              selected:
-                                                  deficitPolicy ==
-                                                  'proportional',
-                                              selectedColor: AppColors.primary
-                                                  .withValues(alpha: 0.2),
-                                              onSelected: (sel) {
-                                                if (sel)
-                                                  setModalState(
-                                                    () => deficitPolicy =
-                                                        'proportional',
-                                                  );
-                                              },
-                                            ),
-                                          ),
-                                          const SizedBox(width: 8),
-                                          Expanded(
-                                            child: ChoiceChip(
-                                              visualDensity:
-                                                  VisualDensity.compact,
-                                              label: const Text(
-                                                '50% / 50%',
-                                                style: TextStyle(fontSize: 11),
-                                              ),
-                                              selected:
-                                                  deficitPolicy == 'equal',
-                                              selectedColor: AppColors.primary
-                                                  .withValues(alpha: 0.2),
-                                              onSelected: (sel) {
-                                                if (sel)
-                                                  setModalState(
-                                                    () =>
-                                                        deficitPolicy = 'equal',
-                                                  );
-                                              },
-                                            ),
-                                          ),
-                                        ],
                                       ),
                                     ],
                                   ),
@@ -1653,7 +1694,12 @@ class SettingsPage extends StatelessWidget {
 
                     const SizedBox(height: 20),
                     FilledButton(
-                      onPressed: () {
+                      onPressed:
+                          (selectedModel == 'percentage' &&
+                              isMultiMember &&
+                              percentTotal() != 100)
+                          ? null
+                          : () {
                         Navigator.pop(context);
 
                         // Monta os percentuais e quantias nominais para persistência
@@ -1661,8 +1707,14 @@ class SettingsPage extends StatelessWidget {
                         final fixedAmounts = <String, int>{};
 
                         if (selectedModel == 'percentage') {
-                          if (members.isNotEmpty) percentages[members[0].id] = percent1;
-                          if (members.length > 1) percentages[members[1].id] = percent2;
+                          if (isMultiMember) {
+                            for (final m in members) {
+                              percentages[m.id] = percentByMember[m.id]!.toDouble();
+                            }
+                          } else {
+                            if (members.isNotEmpty) percentages[members[0].id] = percent1;
+                            if (members.length > 1) percentages[members[1].id] = percent2;
+                          }
                           // Reseta valores fixos quando estiver no modelo percentual
                           for (final m in members) {
                             fixedAmounts[m.id] = 0;
@@ -1692,8 +1744,9 @@ class SettingsPage extends StatelessWidget {
 
                         String feedback;
                         if (selectedModel == 'percentage') {
-                          feedback =
-                              'Rateio atualizado: ${percent1.round()}% $name1 e ${percent2.round()}% $name2.';
+                          feedback = isMultiMember
+                              ? 'Rateio atualizado: ${members.map((m) => '${percentByMember[m.id]}% ${firstName(m)}').join(', ')}.'
+                              : 'Rateio atualizado: ${percent1.round()}% $name1 e ${percent2.round()}% $name2.';
                         } else if (selectedModel == 'fixed') {
                           final totalBalde = fixedAmountsByMember.values
                               .fold<int>(0, (a, b) => a + b);
