@@ -702,7 +702,7 @@ class SupabaseFinanceDataSource implements FinanceDataSource {
       // 2. Busca dados da despesa atual para guiar a exclusão direta caso a RPC falhe
       final current = await client
           .from('house_expenses')
-          .select('id, recurring_series_id, is_recurring, due_date, date, title')
+          .select('id, recurring_series_id, is_recurring, due_date, date')
           .eq('id', expenseId)
           .maybeSingle();
 
@@ -713,7 +713,6 @@ class SupabaseFinanceDataSource implements FinanceDataSource {
       final expenseDateStr = current != null
           ? ((current['due_date'] ?? current['date']) as String?)
           : null;
-      final title = current?['title'] as String?;
 
       if (scope == RecurrenceScope.allInstances) {
         // Soft delete na própria despesa imediatamente
@@ -734,16 +733,6 @@ class SupabaseFinanceDataSource implements FinanceDataSource {
               .from('house_expenses')
               .update({'deleted_at': nowIso, 'is_active': false})
               .eq('recurring_series_id', seriesId);
-        }
-
-        // Se for recorrente com mesmo título na mesma casa, limpa também
-        if (title != null && current?['is_recurring'] == true) {
-          await client
-              .from('house_expenses')
-              .update({'deleted_at': nowIso, 'is_active': false})
-              .eq('house_id', _houseId)
-              .eq('title', title)
-              .eq('is_recurring', true);
         }
         return;
       } else if (scope == RecurrenceScope.thisAndFuture) {
@@ -960,19 +949,13 @@ class SupabaseFinanceDataSource implements FinanceDataSource {
     required String description,
   }) async {
     try {
-      await client.from('savings_transactions').insert({
-        'vault_id': vaultId,
-        'member_id': memberId,
-        'type': 'deposit',
-        'amount_cents': amount.cents,
-        'description': description,
+      // Saldo e extrato mudam juntos no banco, com a caixinha travada
+      await client.rpc('move_vault_balance', params: {
+        'p_vault_id': vaultId,
+        'p_type': 'deposit',
+        'p_amount_cents': amount.cents,
+        'p_description': description,
       });
-
-      final vault = await client.from('savings_vaults').select('current_balance_cents').eq('id', vaultId).single();
-      final current = (vault['current_balance_cents'] as num).toInt();
-      await client.from('savings_vaults').update({
-        'current_balance_cents': current + amount.cents,
-      }).eq('id', vaultId);
     } catch (e) {
       throw ServerFailure('Erro ao depositar na caixinha: $e');
     }
@@ -986,19 +969,12 @@ class SupabaseFinanceDataSource implements FinanceDataSource {
     required String description,
   }) async {
     try {
-      await client.from('savings_transactions').insert({
-        'vault_id': vaultId,
-        'member_id': memberId,
-        'type': 'withdraw',
-        'amount_cents': amount.cents,
-        'description': description,
+      await client.rpc('move_vault_balance', params: {
+        'p_vault_id': vaultId,
+        'p_type': 'withdraw',
+        'p_amount_cents': amount.cents,
+        'p_description': description,
       });
-
-      final vault = await client.from('savings_vaults').select('current_balance_cents').eq('id', vaultId).single();
-      final current = (vault['current_balance_cents'] as num).toInt();
-      await client.from('savings_vaults').update({
-        'current_balance_cents': (current - amount.cents).clamp(0, current),
-      }).eq('id', vaultId);
     } catch (e) {
       throw ServerFailure('Erro ao resgatar da caixinha: $e');
     }

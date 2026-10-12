@@ -427,9 +427,7 @@ class MockFinanceDataSource implements FinanceDataSource {
           final fromDate = current.date;
           for (int i = 0; i < _expenses.length; i++) {
             final e = _expenses[i];
-            final matches = e.recurringSeriesId == seriesId ||
-                e.id == seriesId ||
-                (e.title == current.title && e.isRecurring);
+            final matches = e.recurringSeriesId == seriesId || e.id == seriesId;
             if (matches && !e.date.isBefore(fromDate)) {
               _expenses[i] = e.copyWith(
                 title: expense.title,
@@ -452,9 +450,7 @@ class MockFinanceDataSource implements FinanceDataSource {
         if (seriesId != null) {
           for (int i = 0; i < _expenses.length; i++) {
             final e = _expenses[i];
-            final matches = e.recurringSeriesId == seriesId ||
-                e.id == seriesId ||
-                (e.title == current.title && e.isRecurring);
+            final matches = e.recurringSeriesId == seriesId || e.id == seriesId;
             if (matches) {
               _expenses[i] = e.copyWith(
                 title: expense.title,
@@ -503,15 +499,12 @@ class MockFinanceDataSource implements FinanceDataSource {
         if (seriesId != null) {
           final fromDate = current.date;
           for (int i = 0; i < _expenses.length; i++) {
-            if (_expenses[i].id == seriesId ||
-                (_expenses[i].title == current.title && _expenses[i].isRecurring)) {
+            if (_expenses[i].id == seriesId) {
               _expenses[i] = _expenses[i].copyWith(isActive: false);
             }
           }
           _expenses.removeWhere((e) {
-            final matches = e.recurringSeriesId == seriesId ||
-                e.id == seriesId ||
-                (e.title == current.title && e.isRecurring);
+            final matches = e.recurringSeriesId == seriesId || e.id == seriesId;
             return matches && !e.date.isBefore(fromDate);
           });
         } else {
@@ -522,10 +515,7 @@ class MockFinanceDataSource implements FinanceDataSource {
       case RecurrenceScope.allInstances:
         final seriesId = current.recurringSeriesId ?? (current.isRecurring ? current.id : null);
         if (seriesId != null) {
-          _expenses.removeWhere((e) =>
-              e.recurringSeriesId == seriesId ||
-              e.id == seriesId ||
-              (e.title == current.title && e.isRecurring));
+          _expenses.removeWhere((e) => e.recurringSeriesId == seriesId || e.id == seriesId);
         } else {
           _expenses.removeAt(index);
         }

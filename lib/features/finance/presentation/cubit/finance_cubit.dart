@@ -175,12 +175,10 @@ class FinanceCubit extends Cubit<FinanceState> {
     try {
       // Atualização otimista: remove imediatamente da lista local e recalcula saldo do fôlego
       final deleted = state.expenses.where((e) => e.id == expenseId).firstOrNull;
+      final seriesId = deleted?.recurringSeriesId ?? expenseId;
       final remaining = (deleted != null && scope == RecurrenceScope.allInstances && deleted.isRecurring)
           ? state.expenses.where((e) {
-              if (e.id == expenseId) return false;
-              if (deleted.recurringSeriesId != null && e.recurringSeriesId == deleted.recurringSeriesId) return false;
-              if (e.isRecurring && e.title.trim().toLowerCase() == deleted.title.trim().toLowerCase()) return false;
-              return true;
+              return e.id != expenseId && e.id != seriesId && e.recurringSeriesId != seriesId;
             }).toList()
           : state.expenses.where((e) => e.id != expenseId).toList();
 
