@@ -1,10 +1,8 @@
-import 'package:flutter/foundation.dart' show debugPrint;
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../../core/domain/value_objects/financial_cycle.dart';
 import '../../../../core/domain/value_objects/money.dart';
+import '../../../../core/errors/failures.dart';
 import '../../../finance/data/datasources/finance_datasource.dart';
-import '../../../finance/domain/entities/contribution.dart';
-import '../../../finance/domain/entities/house_expense.dart';
 import '../../../p2p/data/datasources/p2p_datasource.dart';
 import '../../../p2p/domain/entities/p2p_loan.dart';
 import '../../../p2p/domain/services/p2p_calculator.dart';
@@ -145,241 +143,204 @@ class SupabaseSettlementDataSource implements SettlementDataSource {
     SettlementSummary summary, {
     SettlementOptions? options,
   }) async {
-    final now = DateTime.now();
-    final cycleStartStr = summary.cycle.startDate.toIso8601String().split(
-      'T',
-    )[0];
+    final cycle = summary.cycle;
+    final actorId = client.auth.currentUser?.id;
+    String dateOnly(DateTime d) => d.toIso8601String().split('T')[0];
 
-    // 1. Se houver sobra no Caixa e a opção for guardar na Caixinha, efetua o depósito
+    final vaultOperations = <Map<String, dynamic>>[];
+    final newLoans = <Map<String, dynamic>>[];
+
+    // 1. Sobra do Caixa guardada na Caixinha
     if (options?.surplusAction == SurplusAction.toVault &&
         options?.targetVaultId != null &&
         summary.houseTreasuryBalance.cents > 0) {
-      final actorId =
-          client.auth.currentUser?.id ??
-          summary.memberBalances.firstOrNull?.memberId ??
-          'user';
-      try {
-        await financeDataSource.depositToVault(
-          vaultId: options!.targetVaultId!,
-          memberId: actorId,
-          amount: summary.houseTreasuryBalance,
-          description:
-              'Sobra do Fechamento do Ciclo ${summary.cycle.formattedPeriod}',
-        );
-      } catch (_) {}
+      vaultOperations.add({
+        'vault_id': options!.targetVaultId,
+        'member_id': actorId,
+        'type': 'deposit',
+        'amount_cents': summary.houseTreasuryBalance.cents,
+        'description': 'Sobra do Fechamento do Ciclo ${cycle.formattedPeriod}',
+      });
     }
 
-    // 2. Registra aportes compensatórios no Caixa da Casa
-    for (final balance in summary.memberBalances) {
-      final missingAporteCents =
-          balance.contributionDue.cents - balance.contributionPaid.cents;
-      if (missingAporteCents > 0) {
-        await financeDataSource.addContribution(
-          Contribution(
-            id: 'contrib_settle_${summary.cycle.startDate.millisecondsSinceEpoch}_${balance.memberId}',
-            memberId: balance.memberId,
-            amount: Money(missingAporteCents),
-            date: summary.cycle.startDate,
-            paymentMethodId: 'pm_pix',
+    // 2. Aportes compensatórios no Caixa da Casa
+    final contributions = [
+      for (final balance in summary.memberBalances)
+        if (_isUuid(balance.memberId) &&
+            balance.contributionDue.cents > balance.contributionPaid.cents)
+          {
+            'member_id': balance.memberId,
+            'amount_cents':
+                balance.contributionDue.cents - balance.contributionPaid.cents,
+          },
+    ];
+
+    // 3. Contas pendentes do ciclo
+    final expenses = await financeDataSource.getExpensesForCycle(cycle);
+    final expenseIds = [
+      for (final exp in expenses)
+        if (exp.isPending && _isUuid(exp.id)) exp.id,
+    ];
+
+    // 4. Parcelas P2P cobradas neste fechamento (mesma regra do motor)
+    final loans = await p2pDataSource.getLoans();
+    final installmentPayments = [
+      for (final loan in loans)
+        for (final inst in loan.installmentsChargedIn(cycle))
+          if (_isUuid(inst.id) && inst.remainingAmount.cents > 0)
+            {
+              'installment_id': inst.id,
+              'amount_cents': inst.remainingAmount.cents,
+            },
+    ];
+
+    // 5. Quem pagou a menos no Super Pix: acordo P2P ou cobertura pela Caixinha
+    Map<String, dynamic> loanPlan({
+      required String? lenderId,
+      required String borrowerId,
+      required String title,
+      required String description,
+      required Money total,
+      required bool noDueDate,
+      required int installmentsCount,
+    }) {
+      final firstDueDate = noDueDate
+          ? P2PLoan.openEndedPlaceholderDueDate
+          : DateTime(cycle.endDate.year, cycle.endDate.month, 10);
+      final installments = noDueDate
+          ? P2PCalculator.buildOpenEndedInstallment(
+              loanId: 'settlement',
+              totalAmount: total,
+            )
+          : P2PCalculator.generateInstallments(
+              loanId: 'settlement',
+              totalAmount: total,
+              installmentsCount: installmentsCount,
+              firstDueDate: firstDueDate,
+            );
+      return {
+        'lender_id': lenderId,
+        'borrower_id': borrowerId,
+        'title': title,
+        'description': description,
+        'total_amount_cents': total.cents,
+        'repayment_mode': noDueDate ? 'open_ended' : 'installments',
+        'installments': [
+          for (final inst in installments)
+            {
+              'number': inst.number,
+              'amount_cents': inst.amount.cents,
+              'due_date': dateOnly(inst.dueDate),
+            },
+        ],
+      };
+    }
+
+    for (final t in summary.transfers) {
+      final resolution = options?.transferResolutions[t.id];
+      if (resolution == null || !resolution.isPartialPayment) continue;
+      if (!_isUuid(t.fromMemberId)) continue;
+
+      if (resolution.shortfallAction == ShortfallAction.createP2PLoan) {
+        if (!_isUuid(t.toMemberId)) continue;
+        final noDueDate = resolution.loanHasNoDueDate;
+        newLoans.add(
+          loanPlan(
+            lenderId: t.toMemberId,
+            borrowerId: t.fromMemberId,
+            title: noDueDate
+                ? 'Acordo Livre: Saldo do Ciclo ${cycle.formattedPeriod}'
+                : 'Saldo restante do Ciclo ${cycle.formattedPeriod}',
+            description: noDueDate
+                ? 'Financiamento sem prazo fixo: ${t.fromMemberName} pagou ${resolution.amountPaid.formatted} de ${t.amount.formatted}'
+                : 'Financiamento do fechamento: ${t.fromMemberName} pagou ${resolution.amountPaid.formatted} de ${t.amount.formatted}',
+            total: resolution.shortfall,
+            noDueDate: noDueDate,
+            installmentsCount: resolution.loanInstallmentsCount,
           ),
         );
-      }
-    }
+      } else if (resolution.shortfallAction == ShortfallAction.deductFromVault &&
+          resolution.vaultId != null) {
+        vaultOperations.add({
+          'vault_id': resolution.vaultId,
+          'member_id': t.fromMemberId,
+          'type': 'withdraw',
+          'amount_cents': resolution.shortfall.cents,
+          'description':
+              'Cobertura temporária do Fechamento do Ciclo ${cycle.formattedPeriod}',
+        });
 
-    // 2. Baixa contas pendentes do ciclo
-    final expenses = await financeDataSource.getExpensesForCycle(summary.cycle);
-    for (final exp in expenses) {
-      if (exp.isPending) {
-        await financeDataSource.updateExpense(
-          exp.copyWith(status: ExpenseStatus.paid),
-        );
-      }
-    }
-
-    // 3. Processa resoluções parciais do Super Pix (criação de P2P ou saques em caixinha)
-    if (options?.transferResolutions != null) {
-      for (final t in summary.transfers) {
-        final resolution = options!.transferResolutions[t.id];
-        if (resolution != null && resolution.isPartialPayment) {
-          if (resolution.shortfallAction == ShortfallAction.createP2PLoan) {
-            try {
-              final newLoanId =
-                  'loan_settle_${summary.cycle.startDate.millisecondsSinceEpoch}_${t.fromMemberId}';
-              final isNoDueDate = resolution.loanHasNoDueDate;
-              final newDueDate = isNoDueDate
-                  ? P2PLoan.openEndedPlaceholderDueDate
-                  : DateTime(
-                      summary.cycle.endDate.year,
-                      summary.cycle.endDate.month,
-                      10,
-                    );
-              final installments = isNoDueDate
-                  ? P2PCalculator.buildOpenEndedInstallment(
-                    loanId: newLoanId,
-                    totalAmount: resolution.shortfall,
-                  )
-                  : P2PCalculator.generateInstallments(
-                    loanId: newLoanId,
-                    totalAmount: resolution.shortfall,
-                    installmentsCount: resolution.loanInstallmentsCount,
-                    firstDueDate: newDueDate,
-                  );
-              final newLoan = P2PLoan(
-                id: newLoanId,
-                title: isNoDueDate
-                    ? 'Acordo Livre: Saldo do Ciclo ${summary.cycle.formattedPeriod}'
-                    : 'Saldo restante do Ciclo ${summary.cycle.formattedPeriod}',
-                description: isNoDueDate
-                    ? 'Financiamento sem prazo fixo: ${t.fromMemberName} pagou ${resolution.amountPaid.formatted} de ${t.amount.formatted}'
-                    : 'Financiamento do fechamento: ${t.fromMemberName} pagou ${resolution.amountPaid.formatted} de ${t.amount.formatted}',
-                totalAmount: resolution.shortfall,
-                lenderMemberId: t.toMemberId,
-                borrowerMemberId: t.fromMemberId,
-                installmentsCount: isNoDueDate ? 1 : resolution.loanInstallmentsCount,
-                createdAt: now,
-                firstDueDate: newDueDate,
-                installments: installments,
-                repaymentMode: isNoDueDate
-                    ? LoanRepaymentMode.openEnded
-                    : LoanRepaymentMode.installments,
-              );
-              await p2pDataSource.createLoan(newLoan);
-            } catch (e) {
-              debugPrint('[Fechamento] Falha ao registrar acordo do saldo restante: $e');
-            }
-          } else if (resolution.shortfallAction ==
-                  ShortfallAction.deductFromVault &&
-              resolution.vaultId != null) {
-            try {
-              await financeDataSource.withdrawFromVault(
-                vaultId: resolution.vaultId!,
-                memberId: t.fromMemberId,
-                amount: resolution.shortfall,
-                description:
-                    'Cobertura temporária do Fechamento do Ciclo ${summary.cycle.formattedPeriod}',
-              );
-
-              // Se o morador escolheu gerar Acordo de Reposição para a Caixinha
-              if (resolution.vaultRepaymentMode != VaultRepaymentMode.grant) {
-                final isNoDueDate = resolution.vaultRepaymentMode == VaultRepaymentMode.openEnded;
-                final newLoanId =
-                    'loan_vault_${summary.cycle.startDate.millisecondsSinceEpoch}_${t.fromMemberId}';
-                final newDueDate = isNoDueDate
-                    ? P2PLoan.openEndedPlaceholderDueDate
-                    : DateTime(
-                        summary.cycle.endDate.year,
-                        summary.cycle.endDate.month,
-                        10,
-                      );
-                final installmentsCount = isNoDueDate ? 1 : resolution.loanInstallmentsCount;
-                final installments = isNoDueDate
-                    ? P2PCalculator.buildOpenEndedInstallment(
-                      loanId: newLoanId,
-                      totalAmount: resolution.shortfall,
-                    )
-                    : P2PCalculator.generateInstallments(
-                      loanId: newLoanId,
-                      totalAmount: resolution.shortfall,
-                      installmentsCount: installmentsCount,
-                      firstDueDate: newDueDate,
-                    );
-                final vaultLoan = P2PLoan(
-                  id: newLoanId,
-                  title: isNoDueDate
-                      ? 'Reposição da Caixinha (Livre / Sem Prazo)'
-                      : 'Reposição da Caixinha (${installmentsCount}x)',
-                  description:
-                      'Empréstimo do Lar: reposição para a Caixinha da Casa pela cobertura do Ciclo ${summary.cycle.formattedPeriod}',
-                  totalAmount: resolution.shortfall,
-                  lenderMemberId: P2PLoan.houseLenderId,
-                  borrowerMemberId: t.fromMemberId,
-                  installmentsCount: installmentsCount,
-                  createdAt: now,
-                  firstDueDate: newDueDate,
-                  installments: installments,
-                  repaymentMode: isNoDueDate
-                      ? LoanRepaymentMode.openEnded
-                      : LoanRepaymentMode.installments,
-                );
-                await p2pDataSource.createLoan(vaultLoan);
-              }
-            } catch (e) {
-              debugPrint('[Fechamento] Falha ao registrar acordo do saldo restante: $e');
-            }
-          }
+        // Reposição para a Caixinha: empréstimo em que o credor é a Casa
+        if (resolution.vaultRepaymentMode != VaultRepaymentMode.grant) {
+          final noDueDate =
+              resolution.vaultRepaymentMode == VaultRepaymentMode.openEnded;
+          final count = noDueDate ? 1 : resolution.loanInstallmentsCount;
+          newLoans.add(
+            loanPlan(
+              lenderId: null,
+              borrowerId: t.fromMemberId,
+              title: noDueDate
+                  ? 'Reposição da Caixinha (Livre / Sem Prazo)'
+                  : 'Reposição da Caixinha (${count}x)',
+              description:
+                  'Empréstimo do Lar: reposição para a Caixinha da Casa pela cobertura do Ciclo ${cycle.formattedPeriod}',
+              total: resolution.shortfall,
+              noDueDate: noDueDate,
+              installmentsCount: count,
+            ),
+          );
         }
       }
     }
 
-    // 4. Quita parcelas P2P que venciam no ciclo
-    final loans = await p2pDataSource.getLoans();
-    for (final loan in loans) {
-      // Mesma regra do motor: só parcelas em aberto de empréstimos cobrados no ciclo.
-      for (final inst in loan.installmentsChargedIn(summary.cycle)) {
-        await p2pDataSource.payInstallment(inst.id, inst.remainingAmount);
-      }
+    // 6. Super Pix entre moradores, com o valor efetivamente pago
+    final transfers = <Map<String, dynamic>>[];
+    for (final t in summary.transfers) {
+      if (!_isUuid(t.fromMemberId) || !_isUuid(t.toMemberId)) continue;
+      final resolution = options?.transferResolutions[t.id];
+      final effectiveCents = (resolution != null && resolution.isPartialPayment)
+          ? resolution.amountPaid.cents
+          : t.amount.cents;
+      if (effectiveCents <= 0) continue;
+      transfers.add({
+        'from_member_id': t.fromMemberId,
+        'to_member_id': t.toMemberId,
+        'amount_cents': effectiveCents,
+      });
     }
 
-    // 5. Grava na tabela de liquidações do Supabase
+    // O banco grava tudo em uma única transação: ou o ciclo fecha por inteiro,
+    // ou nada é alterado. Só administradores da casa podem fechar.
     try {
-      final currentUserId = client.auth.currentUser?.id;
-      final settlementRow = {
-        'house_id': _houseId,
-        'cycle_start_date': cycleStartStr,
-        'status': 'confirmed',
-        'total_expenses_cents': summary.totalHouseExpenses.cents,
-        'total_contributions_cents': summary.totalContributions.cents,
-        'total_cleared_p2p_cents': summary.totalP2PCleared.cents,
-        'settled_at': now.toIso8601String(),
-        if (_isUuid(currentUserId)) 'settled_by': currentUserId,
-      };
-
-      final insertedSettlement = await client
-          .from('settlements')
-          .upsert(settlementRow, onConflict: 'house_id,cycle_start_date')
-          .select()
-          .single();
-
-      final settlementId = insertedSettlement['id'] as String;
-
-      // 6. Grava transferências P2P entre membros reais (registrando o valor efetivamente pago)
-      final transfersToInsert = summary.transfers
-          .where((t) => _isUuid(t.fromMemberId) && _isUuid(t.toMemberId))
-          .map((t) {
-            final resolution = options?.transferResolutions[t.id];
-            final effectiveCents =
-                (resolution != null && resolution.isPartialPayment)
-                ? resolution.amountPaid.cents
-                : t.amount.cents;
-
-            return {
-              'settlement_id': settlementId,
-              'from_member_id': t.fromMemberId,
-              'to_member_id': t.toMemberId,
-              'amount_cents': effectiveCents,
-              'status': 'confirmed',
-              'paid_at': now.toIso8601String(),
-            };
-          })
-          .toList();
-
-      if (transfersToInsert.isNotEmpty) {
-        await client.from('settlement_transfers').insert(transfersToInsert);
-      }
-    } catch (_) {
-      // Ignora falhas de persistência de metadados se schema remoto não estiver acessível
+      await client.rpc('confirm_cycle_settlement', params: {
+        'p_plan': {
+          'house_id': _houseId,
+          'cycle_start_date': dateOnly(cycle.startDate),
+          'total_expenses_cents': summary.totalHouseExpenses.cents,
+          'total_contributions_cents': summary.totalContributions.cents,
+          'total_cleared_p2p_cents': summary.totalP2PCleared.cents,
+          'vault_operations': vaultOperations,
+          'contributions': contributions,
+          'expense_ids': expenseIds,
+          'installment_payments': installmentPayments,
+          'new_loans': newLoans,
+          'transfers': transfers,
+        },
+      });
+    } on PostgrestException catch (e) {
+      throw ServerFailure(e.message);
     }
   }
 
   @override
   Future<void> reopenSettlement(FinancialCycle cycle) async {
-    final cycleStartStr = cycle.startDate.toIso8601String().split('T')[0];
     try {
-      await client
-          .from('settlements')
-          .delete()
-          .eq('house_id', _houseId)
-          .eq('cycle_start_date', cycleStartStr);
-    } catch (_) {}
+      await client.rpc('reopen_cycle_settlement', params: {
+        'p_house_id': _houseId,
+        'p_cycle_start_date': cycle.startDate.toIso8601String().split('T')[0],
+      });
+    } on PostgrestException catch (e) {
+      throw ServerFailure(e.message);
+    }
   }
 }

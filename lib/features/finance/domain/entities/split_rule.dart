@@ -59,19 +59,7 @@ class SplitRule extends Equatable {
 
       case SplitType.percentage:
         if (percentages != null && percentages!.isNotEmpty) {
-          int allocatedCents = 0;
-          for (int i = 0; i < memberIds.length; i++) {
-            final id = memberIds[i];
-            final percent = percentages![id] ?? 0.0;
-            if (i == memberIds.length - 1) {
-              // Garante que a soma bate exatamente o total em centavos
-              allocations[id] = Money(totalAmount.cents - allocatedCents);
-            } else {
-              final share = totalAmount.percentage(percent);
-              allocations[id] = share;
-              allocatedCents += share.cents;
-            }
-          }
+          allocations.addAll(_allocateByWeights(totalAmount, memberIds));
         } else {
           final parts = totalAmount.splitEqually(memberIds.length);
           for (int i = 0; i < memberIds.length; i++) {
@@ -82,6 +70,43 @@ class SplitRule extends Equatable {
     }
 
     return allocations;
+  }
+
+  /// Reparte [totalAmount] na proporção dos percentuais: eles são normalizados
+  /// pela própria soma (35/65/50 vira 35/150, 65/150 e 50/150), então ninguém
+  /// "absorve o resto" por estar no fim da lista. Os centavos que sobram do
+  /// arredondamento vão para quem ficou com a maior fração; só em empate exato
+  /// vale a ordem da lista.
+  Map<String, Money> _allocateByWeights(Money totalAmount, List<String> memberIds) {
+    // Pesos inteiros (centésimos de ponto percentual) para a conta ser exata.
+    final weights = [
+      for (final id in memberIds)
+        (percentages![id] ?? 0.0) > 0 ? (percentages![id]! * 10000).round() : 0,
+    ];
+    final totalWeight = weights.fold<int>(0, (acc, w) => acc + w);
+
+    if (totalWeight <= 0) {
+      final parts = totalAmount.splitEqually(memberIds.length);
+      return {for (int i = 0; i < memberIds.length; i++) memberIds[i]: parts[i]};
+    }
+
+    final cents = [for (final w in weights) totalAmount.cents * w ~/ totalWeight];
+    final remainders = [for (final w in weights) totalAmount.cents * w % totalWeight];
+    var leftover = totalAmount.cents - cents.fold<int>(0, (acc, c) => acc + c);
+
+    final byLargestRemainder = List.generate(memberIds.length, (i) => i)
+      ..sort((a, b) {
+        final byRemainder = remainders[b].compareTo(remainders[a]);
+        return byRemainder != 0 ? byRemainder : a.compareTo(b);
+      });
+    for (final i in byLargestRemainder) {
+      if (leftover <= 0) break;
+      if (weights[i] <= 0) continue;
+      cents[i] += 1;
+      leftover -= 1;
+    }
+
+    return {for (int i = 0; i < memberIds.length; i++) memberIds[i]: Money(cents[i])};
   }
 
   @override
