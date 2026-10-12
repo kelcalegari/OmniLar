@@ -28,11 +28,13 @@ class LoanDetailsSheet extends StatelessWidget {
     required this.isDebtor,
   });
 
-  /// Aguarda a ação no servidor e só então fecha o sheet e confirma ao usuário.
+  /// Aguarda a ação no servidor e só então confirma ao usuário. O painel continua
+  /// aberto e se atualiza sozinho, a menos que [closeOnSuccess] seja true.
   Future<void> _runAction(
     BuildContext context,
     Future<bool> Function(P2PCubit cubit) action, {
     required String successMessage,
+    bool closeOnSuccess = false,
   }) async {
     final cubit = context.read<P2PCubit>();
     final messenger = ScaffoldMessenger.of(context);
@@ -40,15 +42,26 @@ class LoanDetailsSheet extends StatelessWidget {
 
     final ok = await action(cubit);
     if (ok) {
-      if (context.mounted) navigator.pop(); // Fecha o sheet
+      if (closeOnSuccess && context.mounted) navigator.pop(); // Fecha o painel
       messenger.showSnackBar(SnackBar(content: Text(successMessage)));
-    } else {
-      messenger.showSnackBar(
-        SnackBar(
-          content: Text(cubit.state.errorMessage ?? 'Não foi possível concluir a operação.'),
-          backgroundColor: AppColors.debtRed,
+      return;
+    }
+
+    final message = cubit.state.errorMessage ?? 'Não foi possível concluir a operação.';
+    if (context.mounted) {
+      // Diálogo, e não snackbar: o painel aberto cobriria a mensagem de erro.
+      await showDialog<void>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('Não foi possível concluir'),
+          content: Text(message),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('OK')),
+          ],
         ),
       );
+    } else {
+      messenger.showSnackBar(SnackBar(content: Text(message), backgroundColor: AppColors.debtRed));
     }
   }
 
@@ -92,6 +105,7 @@ class LoanDetailsSheet extends StatelessWidget {
                 context,
                 (cubit) => cubit.deleteLoan(loan.id),
                 successMessage: 'Empréstimo excluído com sucesso.',
+                closeOnSuccess: true,
               );
             },
             child: const Text('Excluir'),
@@ -367,7 +381,8 @@ class LoanDetailsSheet extends StatelessWidget {
           ),
         ],
         const SizedBox(height: 8),
-        _PaymentHistory(loan: loan),
+        // A chave muda a cada abatimento para o histórico ser recarregado.
+        _PaymentHistory(key: ValueKey('${loan.id}_${loan.totalPaidAmount.cents}'), loan: loan),
       ],
     );
   }
@@ -708,7 +723,7 @@ class LoanDetailsSheet extends StatelessWidget {
 class _PaymentHistory extends StatefulWidget {
   final P2PLoan loan;
 
-  const _PaymentHistory({required this.loan});
+  const _PaymentHistory({super.key, required this.loan});
 
   @override
   State<_PaymentHistory> createState() => _PaymentHistoryState();

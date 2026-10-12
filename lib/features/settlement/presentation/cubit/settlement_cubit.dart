@@ -2,6 +2,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../../../core/domain/value_objects/financial_cycle.dart';
 import '../../../finance/domain/repositories/finance_repository.dart';
 import '../../domain/entities/settlement_options.dart';
+import '../../domain/entities/settlement_summary.dart';
 import '../../domain/entities/transfer_settlement_resolution.dart';
 import '../../domain/repositories/settlement_repository.dart';
 import 'settlement_state.dart';
@@ -114,6 +115,30 @@ class SettlementCubit extends BlocBase<SettlementState> {
 
     emit(state.copyWith(status: SettlementCubitStatus.confirming));
     try {
+      // Recalcula antes de gravar: se alguém pagou ou lançou algo com a tela
+      // aberta (ex: antecipou uma parcela P2P), o Super Pix exibido está defasado.
+      final freshSummary = await _repository.getSettlementSummary(
+        currentSummary.cycle,
+      );
+      if (_fingerprint(freshSummary) != _fingerprint(currentSummary)) {
+        emit(
+          state.copyWith(
+            status: SettlementCubitStatus.error,
+            errorMessage:
+                'Os valores mudaram desde que você abriu o fechamento. Revise as transferências e confirme de novo.',
+          ),
+        );
+        emit(
+          state.copyWith(
+            status: SettlementCubitStatus.loaded,
+            summary: freshSummary,
+            // As resoluções foram decididas sobre transferências que não valem mais.
+            options: state.options.copyWith(transferResolutions: const {}),
+          ),
+        );
+        return;
+      }
+
       await _repository.confirmSettlement(
         currentSummary,
         options: state.options,
@@ -135,6 +160,21 @@ class SettlementCubit extends BlocBase<SettlementState> {
         ),
       );
     }
+  }
+
+  /// Resumo dos valores que o usuário revisou: totais e transferências do Super Pix.
+  String _fingerprint(SettlementSummary summary) {
+    final transfers = summary.transfers
+        .map((t) => '${t.fromMemberId}>${t.toMemberId}:${t.amount.cents}')
+        .toList()
+      ..sort();
+    return [
+      summary.status.name,
+      summary.totalHouseExpenses.cents,
+      summary.totalContributions.cents,
+      summary.totalP2PCleared.cents,
+      ...transfers,
+    ].join('|');
   }
 
   Future<void> reopenSettlement() async {

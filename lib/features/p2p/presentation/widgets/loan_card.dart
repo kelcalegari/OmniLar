@@ -7,6 +7,8 @@ import '../../../auth/domain/repositories/auth_repository.dart';
 import '../../../finance/domain/entities/house_member.dart';
 import '../../../finance/presentation/cubit/finance_cubit.dart';
 import '../../domain/entities/p2p_loan.dart';
+import '../cubit/p2p_cubit.dart';
+import '../cubit/p2p_state.dart';
 import 'loan_details_sheet.dart';
 
 class LoanCard extends StatelessWidget {
@@ -25,7 +27,14 @@ class LoanCard extends StatelessWidget {
     showAdaptiveModal(
       context: context,
       maxWidth: 580,
-      child: LoanDetailsSheet(loan: loan, isDebtor: isDebtor),
+      // Lê o empréstimo do estado da página para o painel refletir pagamentos e
+      // ajustes sem precisar ser reaberto.
+      child: BlocBuilder<P2PCubit, P2PState>(
+        builder: (_, state) {
+          final current = state.allLoans.where((l) => l.id == loan.id).firstOrNull ?? loan;
+          return LoanDetailsSheet(loan: current, isDebtor: isDebtor);
+        },
+      ),
     );
   }
 
