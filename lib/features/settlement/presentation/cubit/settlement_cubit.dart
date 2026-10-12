@@ -22,7 +22,10 @@ class SettlementCubit extends BlocBase<SettlementState> {
       ),
     );
     try {
-      final summary = await _repository.getSettlementSummary(cycle);
+      final summary = await _repository.getSettlementSummary(
+        cycle,
+        options: state.options,
+      );
 
       // Carrega as Caixinhas da Casa para permitir seleção no fechamento
       var vaults = state.vaults;
@@ -85,6 +88,42 @@ class SettlementCubit extends BlocBase<SettlementState> {
     emit(state.copyWith(options: state.options.copyWith(creditAction: action)));
   }
 
+  /// Como ratear o que passou do balde: recalcula o Super Pix na hora.
+  Future<void> updateDeficitSplit(DeficitSplit split) =>
+      _applyDeficitOptions(state.options.copyWith(deficitSplit: split));
+
+  /// Caixinha que cobre o excedente antes do rateio (null = não usar caixinha).
+  Future<void> updateDeficitVault(String? vaultId) => _applyDeficitOptions(
+    vaultId == null
+        ? state.options.copyWith(clearDeficitVault: true)
+        : state.options.copyWith(deficitVaultId: vaultId),
+  );
+
+  Future<void> _applyDeficitOptions(SettlementOptions options) async {
+    final cycle = state.currentCycle ?? state.summary?.cycle;
+    // As transferências mudam: resoluções decididas antes deixam de valer.
+    final nextOptions = options.copyWith(transferResolutions: const {});
+    emit(state.copyWith(options: nextOptions));
+    if (cycle == null) return;
+
+    try {
+      final summary = await _repository.getSettlementSummary(
+        cycle,
+        options: nextOptions,
+      );
+      emit(
+        state.copyWith(status: SettlementCubitStatus.loaded, summary: summary),
+      );
+    } catch (e) {
+      emit(
+        state.copyWith(
+          status: SettlementCubitStatus.error,
+          errorMessage: 'Erro ao recalcular o fechamento do ciclo: $e',
+        ),
+      );
+    }
+  }
+
   void updateTransferResolution(TransferSettlementResolution resolution) {
     final updatedMap = Map<String, TransferSettlementResolution>.from(
       state.options.transferResolutions,
@@ -119,6 +158,7 @@ class SettlementCubit extends BlocBase<SettlementState> {
       // aberta (ex: antecipou uma parcela P2P), o Super Pix exibido está defasado.
       final freshSummary = await _repository.getSettlementSummary(
         currentSummary.cycle,
+        options: state.options,
       );
       if (_fingerprint(freshSummary) != _fingerprint(currentSummary)) {
         emit(
@@ -184,7 +224,10 @@ class SettlementCubit extends BlocBase<SettlementState> {
     emit(state.copyWith(status: SettlementCubitStatus.loading));
     try {
       await _repository.reopenSettlement(cycle);
-      final refreshed = await _repository.getSettlementSummary(cycle);
+      final refreshed = await _repository.getSettlementSummary(
+        cycle,
+        options: state.options,
+      );
       emit(
         state.copyWith(
           status: SettlementCubitStatus.loaded,

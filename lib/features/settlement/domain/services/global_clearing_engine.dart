@@ -7,6 +7,7 @@ import '../../../finance/domain/entities/split_rule.dart';
 import '../../../p2p/domain/entities/p2p_loan.dart';
 import '../entities/member_audit_trail.dart';
 import '../entities/member_net_balance.dart';
+import '../entities/settlement_options.dart';
 import '../entities/settlement_summary.dart';
 import '../entities/super_pix_transfer.dart';
 
@@ -29,6 +30,8 @@ class GlobalClearingEngine {
     Map<String, Money>? customContributionTargets,
     String? housePixKey,
     String? housePixKeyHolderName,
+    DeficitSplit deficitSplit = DeficitSplit.proportional,
+    Money deficitVaultBalance = const Money.zero(),
   }) {
     // 0. Despesas de projetos compartilhados são liquidadas apenas no próprio projeto
     // (ProjectSettlementService). Filtramos aqui por defesa em profundidade para
@@ -57,6 +60,8 @@ class GlobalClearingEngine {
     final Map<String, List<ExpenseShareAudit>> memberExpenseShares = {
       for (final m in members) m.id: [],
     };
+    int bucketDeficitCents = 0;
+    int deficitCoveredCents = 0;
 
     if (customContributionTargets != null) {
       contributionTargets.addAll(customContributionTargets);
@@ -71,6 +76,51 @@ class GlobalClearingEngine {
             date: cycle.startDate,
           ),
         );
+      }
+
+      // Gastos acima do balde: a Caixinha escolhida cobre o que puder e o
+      // restante é rateado entre os moradores conforme a opção do fechamento.
+      final bucketCents = customContributionTargets.values.fold<int>(
+        0,
+        (acc, t) => acc + t.cents,
+      );
+      if (totalExpensesCents > bucketCents) {
+        bucketDeficitCents = totalExpensesCents - bucketCents;
+      }
+      final vaultCents = deficitVaultBalance.cents > 0 ? deficitVaultBalance.cents : 0;
+      deficitCoveredCents = vaultCents < bucketDeficitCents ? vaultCents : bucketDeficitCents;
+
+      final deficitToSplit = Money(bucketDeficitCents - deficitCoveredCents);
+      if (deficitToSplit.cents > 0 && members.isNotEmpty) {
+        final proportional = deficitSplit == DeficitSplit.proportional && bucketCents > 0;
+        final rule = proportional
+            ? SplitRule.percentage({
+                for (final m in members)
+                  m.id: (customContributionTargets[m.id]?.cents ?? 0) * 100 / bucketCents,
+              })
+            : const SplitRule.percentage(null);
+        final allocations = rule.calculateAllocations(
+          totalAmount: deficitToSplit,
+          memberIds: members.map((m) => m.id).toList(),
+        );
+        for (final entry in allocations.entries) {
+          if (entry.value.cents <= 0) continue;
+          contributionTargets[entry.key] = Money(
+            (contributionTargets[entry.key]?.cents ?? 0) + entry.value.cents,
+          );
+          memberExpenseShares[entry.key]?.add(
+            ExpenseShareAudit(
+              expenseId: 'bucket_deficit',
+              expenseTitle: 'Excedente do balde',
+              totalExpenseAmount: deficitToSplit,
+              allocatedAmount: entry.value,
+              ruleDescription: proportional
+                  ? 'Rateio proporcional ao aporte fixo'
+                  : 'Rateio em partes iguais',
+              date: cycle.endDate,
+            ),
+          );
+        }
       }
     } else {
       final memberIds = members.map((m) => m.id).toList();
@@ -338,7 +388,8 @@ class GlobalClearingEngine {
     );
 
     // 6. Saldo do Caixa da Casa
-    final houseTreasuryCents = totalContributionsCents - totalExpensesCents;
+    final houseTreasuryCents =
+        totalContributionsCents - totalExpensesCents + deficitCoveredCents;
 
     return SettlementSummary(
       cycle: cycle,
@@ -350,6 +401,8 @@ class GlobalClearingEngine {
       houseTreasuryBalance: Money(houseTreasuryCents),
       status: SettlementStatus.readyToSettle,
       auditTrails: auditTrails,
+      bucketDeficit: Money(bucketDeficitCents),
+      deficitCoveredByVault: Money(deficitCoveredCents),
     );
   }
 

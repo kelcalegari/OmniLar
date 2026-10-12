@@ -17,8 +17,10 @@ class DynamicSettlementDataSource implements SettlementDataSource {
   SettlementDataSource get _active => isDemoMode() ? mock : remote;
 
   @override
-  Future<SettlementSummary> getSettlementSummary(FinancialCycle cycle) =>
-      _active.getSettlementSummary(cycle);
+  Future<SettlementSummary> getSettlementSummary(
+    FinancialCycle cycle, {
+    SettlementOptions? options,
+  }) => _active.getSettlementSummary(cycle, options: options);
 
   @override
   Future<void> confirmSettlement(

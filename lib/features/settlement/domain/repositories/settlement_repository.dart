@@ -3,7 +3,10 @@ import '../entities/settlement_options.dart';
 import '../entities/settlement_summary.dart';
 
 abstract class SettlementRepository {
-  Future<SettlementSummary> getSettlementSummary(FinancialCycle cycle);
+  Future<SettlementSummary> getSettlementSummary(
+    FinancialCycle cycle, {
+    SettlementOptions? options,
+  });
   Future<void> confirmSettlement(
     SettlementSummary summary, {
     SettlementOptions? options,

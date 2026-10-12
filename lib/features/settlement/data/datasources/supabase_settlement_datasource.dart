@@ -42,7 +42,10 @@ class SupabaseSettlementDataSource implements SettlementDataSource {
   }
 
   @override
-  Future<SettlementSummary> getSettlementSummary(FinancialCycle cycle) async {
+  Future<SettlementSummary> getSettlementSummary(
+    FinancialCycle cycle, {
+    SettlementOptions? options,
+  }) async {
     final cycleStartStr = cycle.startDate.toIso8601String().split('T')[0];
 
     // 1. Verifica se já existe um fechamento gravado no Supabase para este ciclo
@@ -126,6 +129,16 @@ class SupabaseSettlementDataSource implements SettlementDataSource {
 
     final house = getCurrentHouse?.call();
 
+    // Caixinha escolhida para cobrir o excedente do balde (se houver)
+    var deficitVaultBalance = const Money.zero();
+    final deficitVaultId = options?.deficitVaultId;
+    if (deficitVaultId != null) {
+      final vaults = await financeDataSource.getSavingsVaults();
+      deficitVaultBalance =
+          vaults.where((v) => v.id == deficitVaultId).firstOrNull?.currentBalance ??
+          const Money.zero();
+    }
+
     return engine.computeSettlement(
       cycle: cycle,
       members: members,
@@ -135,6 +148,8 @@ class SupabaseSettlementDataSource implements SettlementDataSource {
       customContributionTargets: customTargets,
       housePixKey: house?.pixKey,
       housePixKeyHolderName: house?.pixKeyHolderName,
+      deficitSplit: options?.deficitSplit ?? DeficitSplit.proportional,
+      deficitVaultBalance: deficitVaultBalance,
     );
   }
 
@@ -160,6 +175,17 @@ class SupabaseSettlementDataSource implements SettlementDataSource {
         'type': 'deposit',
         'amount_cents': summary.houseTreasuryBalance.cents,
         'description': 'Sobra do Fechamento do Ciclo ${cycle.formattedPeriod}',
+      });
+    }
+
+    // Excedente do balde coberto pela Caixinha escolhida
+    if (summary.deficitCoveredByVault.cents > 0 && options?.deficitVaultId != null) {
+      vaultOperations.add({
+        'vault_id': options!.deficitVaultId,
+        'member_id': actorId,
+        'type': 'withdraw',
+        'amount_cents': summary.deficitCoveredByVault.cents,
+        'description': 'Cobertura do excedente do Ciclo ${cycle.formattedPeriod}',
       });
     }
 

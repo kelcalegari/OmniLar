@@ -10,8 +10,10 @@ class SettlementRepositoryImpl implements SettlementRepository {
   SettlementRepositoryImpl(this._dataSource);
 
   @override
-  Future<SettlementSummary> getSettlementSummary(FinancialCycle cycle) =>
-      _dataSource.getSettlementSummary(cycle);
+  Future<SettlementSummary> getSettlementSummary(
+    FinancialCycle cycle, {
+    SettlementOptions? options,
+  }) => _dataSource.getSettlementSummary(cycle, options: options);
 
   @override
   Future<void> confirmSettlement(

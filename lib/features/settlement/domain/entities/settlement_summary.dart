@@ -18,6 +18,12 @@ class SettlementSummary {
   final DateTime? settledAt;
   final Map<String, MemberAuditTrail> auditTrails;
 
+  /// Quanto os gastos passaram do balde (só no modelo de aportes fixos).
+  final Money bucketDeficit;
+
+  /// Parte do excedente coberta pela Caixinha escolhida no fechamento.
+  final Money deficitCoveredByVault;
+
   const SettlementSummary({
     required this.cycle,
     required this.memberBalances,
@@ -29,6 +35,8 @@ class SettlementSummary {
     this.status = SettlementStatus.readyToSettle,
     this.settledAt,
     this.auditTrails = const {},
+    this.bucketDeficit = const Money.zero(),
+    this.deficitCoveredByVault = const Money.zero(),
   });
 
   /// Verifica se os saldos fecham matematicamente
@@ -66,6 +74,8 @@ class SettlementSummary {
     SettlementStatus? status,
     DateTime? settledAt,
     Map<String, MemberAuditTrail>? auditTrails,
+    Money? bucketDeficit,
+    Money? deficitCoveredByVault,
   }) {
     return SettlementSummary(
       cycle: cycle ?? this.cycle,
@@ -78,6 +88,8 @@ class SettlementSummary {
       status: status ?? this.status,
       settledAt: settledAt ?? this.settledAt,
       auditTrails: auditTrails ?? this.auditTrails,
+      bucketDeficit: bucketDeficit ?? this.bucketDeficit,
+      deficitCoveredByVault: deficitCoveredByVault ?? this.deficitCoveredByVault,
     );
   }
 }

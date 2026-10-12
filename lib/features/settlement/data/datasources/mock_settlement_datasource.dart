@@ -31,7 +31,10 @@ class MockSettlementDataSource implements SettlementDataSource {
   });
 
   @override
-  Future<SettlementSummary> getSettlementSummary(FinancialCycle cycle) async {
+  Future<SettlementSummary> getSettlementSummary(
+    FinancialCycle cycle, {
+    SettlementOptions? options,
+  }) async {
     // Se já estiver explicitamente liquidado neste ciclo, mantém o veredito arquivado
     if (_cachedSettlement != null &&
         _cachedSettlement!.cycle == cycle &&
@@ -61,6 +64,16 @@ class MockSettlementDataSource implements SettlementDataSource {
 
     final house = getCurrentHouse?.call();
 
+    // Caixinha escolhida para cobrir o excedente do balde (se houver)
+    var deficitVaultBalance = const Money.zero();
+    final deficitVaultId = options?.deficitVaultId;
+    if (deficitVaultId != null) {
+      final vaults = await financeDataSource.getSavingsVaults();
+      deficitVaultBalance =
+          vaults.where((v) => v.id == deficitVaultId).firstOrNull?.currentBalance ??
+          const Money.zero();
+    }
+
     final summary = engine.computeSettlement(
       cycle: cycle,
       members: members,
@@ -70,6 +83,8 @@ class MockSettlementDataSource implements SettlementDataSource {
       customContributionTargets: customTargets,
       housePixKey: house?.pixKey,
       housePixKeyHolderName: house?.pixKeyHolderName,
+      deficitSplit: options?.deficitSplit ?? DeficitSplit.proportional,
+      deficitVaultBalance: deficitVaultBalance,
     );
 
     _cachedSettlement = summary;
@@ -81,6 +96,17 @@ class MockSettlementDataSource implements SettlementDataSource {
     SettlementSummary summary, {
     SettlementOptions? options,
   }) async {
+    // 0. Excedente do balde coberto pela Caixinha escolhida
+    if (summary.deficitCoveredByVault.cents > 0 && options?.deficitVaultId != null) {
+      await financeDataSource.withdrawFromVault(
+        vaultId: options!.deficitVaultId!,
+        memberId: summary.memberBalances.firstOrNull?.memberId ?? 'user',
+        amount: summary.deficitCoveredByVault,
+        description:
+            'Cobertura do excedente do Ciclo ${summary.cycle.formattedPeriod}',
+      );
+    }
+
     // 1. Processa as transferências (integrais ou parciais)
     final confirmedTransfers = <SuperPixTransfer>[];
     for (final t in summary.transfers) {

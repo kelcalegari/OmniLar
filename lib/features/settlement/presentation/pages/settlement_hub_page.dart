@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../../../core/di/service_locator.dart';
 import '../../../../core/domain/value_objects/financial_cycle.dart';
+import '../../../../core/domain/value_objects/money.dart';
 import '../../../../core/security/biometric_auth_service.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/utils/responsive.dart';
@@ -557,6 +558,8 @@ class _SettlementHubContent extends StatelessWidget {
                 ),
               ],
             ),
+            if (!isSettled && summary.bucketDeficit.cents > 0)
+              _buildDeficitCard(context, summary, state),
             if (isSettled) ...[
               const SizedBox(height: 8),
               Text(
@@ -726,6 +729,141 @@ class _SettlementHubContent extends StatelessWidget {
                 ),
               ),
             ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// Gastos acima do balde (aportes fixos): quem fecha escolhe como cobrir.
+  Widget _buildDeficitCard(
+    BuildContext context,
+    SettlementSummary summary,
+    SettlementState state,
+  ) {
+    final cubit = context.read<SettlementCubit>();
+    final covered = summary.deficitCoveredByVault;
+    final toSplit = Money(summary.bucketDeficit.cents - covered.cents);
+    final vaultsWithBalance = state.vaults
+        .where((v) => v.currentBalance.cents > 0)
+        .toList();
+    final selectedVaultId =
+        vaultsWithBalance.any((v) => v.id == state.options.deficitVaultId)
+        ? state.options.deficitVaultId
+        : null;
+
+    return Padding(
+      padding: const EdgeInsets.only(top: 16),
+      child: Container(
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: AppColors.debtRed.withValues(alpha: 0.05),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: AppColors.debtRed.withValues(alpha: 0.25)),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                const Icon(
+                  Icons.warning_amber_rounded,
+                  color: AppColors.debtRed,
+                  size: 18,
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    'Os gastos passaram do balde em ${summary.bucketDeficit.formatted}',
+                    style: const TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 13,
+                      color: AppColors.debtRed,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 4),
+            Text(
+              'Escolha como cobrir o excedente deste ciclo.',
+              style: TextStyle(color: Colors.grey.shade600, fontSize: 12),
+            ),
+            if (vaultsWithBalance.isNotEmpty) ...[
+              const SizedBox(height: 12),
+              DropdownButtonFormField<String?>(
+                value: selectedVaultId,
+                decoration: const InputDecoration(
+                  labelText: 'Usar a reserva de uma caixinha',
+                  contentPadding: EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 8,
+                  ),
+                  border: OutlineInputBorder(),
+                  isDense: true,
+                ),
+                items: [
+                  const DropdownMenuItem<String?>(
+                    value: null,
+                    child: Text(
+                      'Não usar caixinha',
+                      style: TextStyle(fontSize: 13),
+                    ),
+                  ),
+                  ...vaultsWithBalance.map(
+                    (vault) => DropdownMenuItem<String?>(
+                      value: vault.id,
+                      child: Text(
+                        '${vault.name} (${vault.currentBalance.formatted})',
+                        style: const TextStyle(fontSize: 13),
+                      ),
+                    ),
+                  ),
+                ],
+                onChanged: cubit.updateDeficitVault,
+              ),
+            ],
+            if (covered.cents > 0) ...[
+              const SizedBox(height: 8),
+              Text(
+                'A caixinha cobre ${covered.formatted}.',
+                style: const TextStyle(fontSize: 12),
+              ),
+            ],
+            const SizedBox(height: 12),
+            if (toSplit.cents > 0) ...[
+              Text(
+                'Dividir ${toSplit.formatted} entre os moradores:',
+                style: const TextStyle(
+                  fontWeight: FontWeight.w600,
+                  fontSize: 12,
+                ),
+              ),
+              const SizedBox(height: 6),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  ChoiceChip(
+                    label: const Text('Proporcional ao aporte'),
+                    selected:
+                        state.options.deficitSplit == DeficitSplit.proportional,
+                    onSelected: (_) =>
+                        cubit.updateDeficitSplit(DeficitSplit.proportional),
+                  ),
+                  ChoiceChip(
+                    label: const Text('Partes iguais'),
+                    selected: state.options.deficitSplit == DeficitSplit.equal,
+                    onSelected: (_) =>
+                        cubit.updateDeficitSplit(DeficitSplit.equal),
+                  ),
+                ],
+              ),
+            ] else
+              const Text(
+                'A caixinha cobre todo o excedente: ninguém paga a mais.',
+                style: TextStyle(fontSize: 12),
+              ),
           ],
         ),
       ),

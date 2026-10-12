@@ -36,7 +36,10 @@ class _FakeSettlementRepository implements SettlementRepository {
   int confirmCalls = 0;
 
   @override
-  Future<SettlementSummary> getSettlementSummary(FinancialCycle cycle) async => _summary(p2pCents);
+  Future<SettlementSummary> getSettlementSummary(
+    FinancialCycle cycle, {
+    SettlementOptions? options,
+  }) async => _summary(p2pCents);
 
   @override
   Future<void> confirmSettlement(SettlementSummary summary, {SettlementOptions? options}) async {
