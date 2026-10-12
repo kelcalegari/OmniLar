@@ -28,6 +28,7 @@ class _OfflineSyncHostState extends State<OfflineSyncHost> with WidgetsBindingOb
   StreamSubscription<List<OfflineQueuedAction>>? _queueSubscription;
   Timer? _retryTimer;
   bool _sending = false;
+  int _lastPendingCount = 0;
 
   @override
   void initState() {
@@ -35,6 +36,7 @@ class _OfflineSyncHostState extends State<OfflineSyncHost> with WidgetsBindingOb
     if (!sl.isRegistered<OfflineSyncService>()) return;
 
     _sync = sl<OfflineSyncService>();
+    _lastPendingCount = _pendingCount;
     WidgetsBinding.instance.addObserver(this);
     _queueSubscription = _sync!.queue.queueStream.listen((_) => _onQueueChanged());
     WidgetsBinding.instance.addPostFrameCallback((_) => _onQueueChanged(sendNow: true));
@@ -57,7 +59,23 @@ class _OfflineSyncHostState extends State<OfflineSyncHost> with WidgetsBindingOb
 
   void _onQueueChanged({bool sendNow = false}) {
     if (!mounted) return;
-    final hasPending = _pendingCount > 0;
+    final pending = _pendingCount;
+    final hasPending = pending > 0;
+
+    // Algo acabou de ir para a fila: a tela de origem pode já ter dito que deu
+    // certo, então este aviso troca aquela mensagem pela situação real.
+    if (pending > _lastPendingCount) {
+      ScaffoldMessenger.maybeOf(context)
+        ?..clearSnackBars()
+        ..showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Sem conexão: a alteração ficou guardada neste aparelho e será enviada quando a rede voltar.',
+            ),
+          ),
+        );
+    }
+    _lastPendingCount = pending;
 
     // O timer só existe enquanto há algo para enviar
     if (hasPending && _retryTimer == null) {

@@ -17,6 +17,7 @@ import '../cubit/settlement_cubit.dart';
 import '../cubit/settlement_state.dart';
 import '../widgets/settlement_audit_sheet.dart';
 import '../widgets/partial_payment_dialog.dart';
+import '../../../auth/presentation/cubit/auth_cubit.dart';
 import '../../../finance/presentation/cubit/finance_cubit.dart';
 import '../../../p2p/presentation/cubit/p2p_cubit.dart';
 
@@ -49,6 +50,23 @@ class SettlementHubPage extends StatelessWidget {
 
 class _SettlementHubContent extends StatelessWidget {
   const _SettlementHubContent();
+
+  /// Só dono ou admin fecha e reabre o ciclo (o banco recusa os demais).
+  /// Sem conseguir identificar o morador (ex: modo demo), nada é escondido.
+  bool _canManageCycle(BuildContext context) {
+    try {
+      final userId = context.read<AuthCubit>().state.user?.id;
+      final me = context
+          .read<FinanceCubit>()
+          .state
+          .members
+          .where((m) => m.id == userId)
+          .firstOrNull;
+      return me == null || me.role == 'owner' || me.role == 'admin';
+    } catch (_) {
+      return true;
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -135,6 +153,7 @@ class _SettlementHubContent extends StatelessWidget {
           }
 
           final isSettled = summary.status == SettlementStatus.settled;
+          final canManageCycle = _canManageCycle(context);
           final isDesktop = context.isDesktop;
 
           final settlementColumn = ListView(
@@ -157,7 +176,27 @@ class _SettlementHubContent extends StatelessWidget {
               const SizedBox(height: 24),
 
               // Botão de Confirmação Atômica
-              if (!isSettled)
+              if (!isSettled && !canManageCycle)
+                Container(
+                  padding: const EdgeInsets.all(14),
+                  decoration: BoxDecoration(
+                    color: Colors.grey.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  child: const Row(
+                    children: [
+                      Icon(Icons.lock_outline_rounded, size: 18),
+                      SizedBox(width: 10),
+                      Expanded(
+                        child: Text(
+                          'Só o dono ou um admin da casa pode fechar o ciclo.',
+                          style: TextStyle(fontSize: 13),
+                        ),
+                      ),
+                    ],
+                  ),
+                )
+              else if (!isSettled)
                 FilledButton.icon(
                   onPressed: state.status == SettlementCubitStatus.confirming
                       ? null
@@ -219,47 +258,49 @@ class _SettlementHubContent extends StatelessWidget {
                     ],
                   ),
                 ),
-                const SizedBox(height: 12),
-                Center(
-                  child: TextButton.icon(
-                    style: TextButton.styleFrom(
-                      foregroundColor: AppColors.primary,
-                    ),
-                    icon: const Icon(Icons.refresh_rounded, size: 18),
-                    label: const Text(
-                      'Reabrir o ciclo para novos lançamentos',
-                      style: TextStyle(
-                        fontWeight: FontWeight.w600,
-                        fontSize: 13,
+                if (canManageCycle) ...[
+                  const SizedBox(height: 12),
+                  Center(
+                    child: TextButton.icon(
+                      style: TextButton.styleFrom(
+                        foregroundColor: AppColors.primary,
                       ),
-                    ),
-                    onPressed: () async {
-                      final confirmed = await showDialog<bool>(
-                        context: context,
-                        builder: (ctx) => AlertDialog(
-                          title: const Text('Reabrir o ciclo?'),
-                          content: const Text(
-                            'O ciclo volta a aceitar lançamentos. O que já foi acertado continua valendo: '
-                            'ao fechar de novo, só a diferença dos novos lançamentos entra no Super Pix.',
-                          ),
-                          actions: [
-                            TextButton(
-                              onPressed: () => Navigator.pop(ctx, false),
-                              child: const Text('Cancelar'),
-                            ),
-                            FilledButton(
-                              onPressed: () => Navigator.pop(ctx, true),
-                              child: const Text('Reabrir'),
-                            ),
-                          ],
+                      icon: const Icon(Icons.refresh_rounded, size: 18),
+                      label: const Text(
+                        'Reabrir o ciclo para novos lançamentos',
+                        style: TextStyle(
+                          fontWeight: FontWeight.w600,
+                          fontSize: 13,
                         ),
-                      );
-                      if (confirmed == true && context.mounted) {
-                        context.read<SettlementCubit>().reopenSettlement();
-                      }
-                    },
+                      ),
+                      onPressed: () async {
+                        final confirmed = await showDialog<bool>(
+                          context: context,
+                          builder: (ctx) => AlertDialog(
+                            title: const Text('Reabrir o ciclo?'),
+                            content: const Text(
+                              'O ciclo volta a aceitar lançamentos. O que já foi acertado continua valendo: '
+                              'ao fechar de novo, só a diferença dos novos lançamentos entra no Super Pix.',
+                            ),
+                            actions: [
+                              TextButton(
+                                onPressed: () => Navigator.pop(ctx, false),
+                                child: const Text('Cancelar'),
+                              ),
+                              FilledButton(
+                                onPressed: () => Navigator.pop(ctx, true),
+                                child: const Text('Reabrir'),
+                              ),
+                            ],
+                          ),
+                        );
+                        if (confirmed == true && context.mounted) {
+                          context.read<SettlementCubit>().reopenSettlement();
+                        }
+                      },
+                    ),
                   ),
-                ),
+                ],
               ],
               const SizedBox(height: 32),
             ],
@@ -666,7 +707,7 @@ class _SettlementHubContent extends StatelessWidget {
                                   borderRadius: BorderRadius.circular(8),
                                 ),
                                 child: const Text(
-                                  'Nenhuma caixinha criada ainda. Crie uma em Caixinhas ou opte por rolar o saldo.',
+                                  'Nenhuma caixinha criada ainda. Crie uma em Caixinhas para guardar a sobra.',
                                   style: TextStyle(
                                     fontSize: 11,
                                     color: Colors.orange,
@@ -718,15 +759,11 @@ class _SettlementHubContent extends StatelessWidget {
                         ),
                       ),
                       subtitle: const Text(
-                        'Começa o próximo ciclo com fôlego inicial positivo',
+                        'Ainda não disponível',
                         style: TextStyle(fontSize: 11),
                       ),
-                      onChanged: (val) {
-                        if (val != null)
-                          context.read<SettlementCubit>().updateSurplusAction(
-                            val,
-                          );
-                      },
+                      // O fechamento ainda não leva a sobra para o ciclo seguinte
+                      onChanged: null,
                     ),
                     RadioListTile<SurplusAction>(
                       dense: true,
@@ -741,15 +778,11 @@ class _SettlementHubContent extends StatelessWidget {
                         ),
                       ),
                       subtitle: const Text(
-                        'Reembolsa o valor proporcionalmente aos membros',
+                        'Ainda não disponível',
                         style: TextStyle(fontSize: 11),
                       ),
-                      onChanged: (val) {
-                        if (val != null)
-                          context.read<SettlementCubit>().updateSurplusAction(
-                            val,
-                          );
-                      },
+                      // O fechamento ainda não gera o estorno aos membros
+                      onChanged: null,
                     ),
                   ],
                 ),
@@ -1043,7 +1076,6 @@ class _SettlementHubContent extends StatelessWidget {
     final targetVault = state.vaults
         .where((v) => v.id == state.options.targetVaultId)
         .firstOrNull;
-    final vaultName = targetVault?.name ?? 'Caixinha da Casa';
 
     return Card(
       elevation: 0,
@@ -1110,86 +1142,6 @@ class _SettlementHubContent extends StatelessWidget {
               style: TextStyle(fontSize: 12, color: Colors.grey),
             ),
             const SizedBox(height: 16),
-            if (!isSettled) ...[
-              Container(
-                margin: const EdgeInsets.only(bottom: 14),
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: Theme.of(context).cardColor,
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: Colors.grey.withValues(alpha: 0.2)),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Row(
-                      children: [
-                        Icon(
-                          Icons.tune_rounded,
-                          size: 16,
-                          color: AppColors.primary,
-                        ),
-                        SizedBox(width: 6),
-                        Text(
-                          'Acerto de despesas do bolso e aportes extras:',
-                          style: TextStyle(
-                            fontWeight: FontWeight.bold,
-                            fontSize: 12,
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 8),
-                    RadioListTile<MemberCreditAction>(
-                      dense: true,
-                      contentPadding: EdgeInsets.zero,
-                      value: MemberCreditAction.rolloverNextCycle,
-                      groupValue: state.options.creditAction,
-                      title: const Text(
-                        'Abater no próximo ciclo (Recomendado)',
-                        style: TextStyle(
-                          fontWeight: FontWeight.w600,
-                          fontSize: 12,
-                        ),
-                      ),
-                      subtitle: const Text(
-                        'Quem colocou mais dinheiro no caixa paga menos na cota do próximo mês, sem precisar de Pix hoje.',
-                        style: TextStyle(fontSize: 11),
-                      ),
-                      onChanged: (val) {
-                        if (val != null)
-                          context.read<SettlementCubit>().updateCreditAction(
-                            val,
-                          );
-                      },
-                    ),
-                    RadioListTile<MemberCreditAction>(
-                      dense: true,
-                      contentPadding: EdgeInsets.zero,
-                      value: MemberCreditAction.settleNow,
-                      groupValue: state.options.creditAction,
-                      title: const Text(
-                        'Fazer Pix de acerto agora',
-                        style: TextStyle(
-                          fontWeight: FontWeight.w600,
-                          fontSize: 12,
-                        ),
-                      ),
-                      subtitle: const Text(
-                        'Gera transferências imediatas no Super Pix para zerar tudo hoje.',
-                        style: TextStyle(fontSize: 11),
-                      ),
-                      onChanged: (val) {
-                        if (val != null)
-                          context.read<SettlementCubit>().updateCreditAction(
-                            val,
-                          );
-                      },
-                    ),
-                  ],
-                ),
-              ),
-            ],
             if (summary.transfers.isEmpty)
               const Center(
                 child: Padding(
@@ -1228,12 +1180,9 @@ class _SettlementHubContent extends StatelessWidget {
                     const SizedBox(width: 10),
                     Expanded(
                       child: Text(
-                        state.options.surplusAction == SurplusAction.toVault
-                            ? 'Sobra de ${summary.houseTreasuryBalance.formatted} será guardada na caixinha "$vaultName".'
-                            : (state.options.surplusAction ==
-                                      SurplusAction.rollover
-                                  ? 'Sobra de ${summary.houseTreasuryBalance.formatted} permanecerá no Caixa para o próximo mês.'
-                                  : 'Sobra de ${summary.houseTreasuryBalance.formatted} será estornada aos membros.'),
+                        targetVault != null
+                            ? 'Sobra de ${summary.houseTreasuryBalance.formatted} será guardada na caixinha "${targetVault.name}".'
+                            : 'Sobra de ${summary.houseTreasuryBalance.formatted} não será movimentada: crie uma caixinha para guardá-la.',
                         style: const TextStyle(
                           fontSize: 12,
                           color: AppColors.creditGreen,
@@ -1669,20 +1618,10 @@ class _SettlementHubContent extends StatelessWidget {
     final targetVault = state.vaults
         .where((v) => v.id == state.options.targetVaultId)
         .firstOrNull;
-    final vaultName = targetVault != null
-        ? targetVault.name
-        : 'Caixinha da Casa';
-
-    final surplusDesc = state.options.surplusAction == SurplusAction.toVault
-        ? 'Guardar sobra na caixinha "$vaultName"'
-        : (state.options.surplusAction == SurplusAction.rollover
-              ? 'Rolar sobra como saldo para o próximo mês'
-              : 'Devolver sobra aos membros proporcionalmente');
-
-    final creditDesc =
-        state.options.creditAction == MemberCreditAction.rolloverNextCycle
-        ? 'Abater créditos na cota do próximo mês'
-        : 'Acerto imediato de créditos via Pix hoje';
+    final hasSurplus = (state.summary?.houseTreasuryBalance.cents ?? 0) > 0;
+    final surplusDesc = targetVault != null
+        ? 'Guardar sobra na caixinha "${targetVault.name}"'
+        : 'Não será movimentada (nenhuma caixinha criada)';
 
     showDialog(
       context: context,
@@ -1695,34 +1634,23 @@ class _SettlementHubContent extends StatelessWidget {
             const Text(
               'Esta ação gravará a liquidação de forma atômica no ledger financeiro e carimbará as parcelas e faturas deste ciclo como pagas.',
             ),
-            const SizedBox(height: 12),
-            Container(
-              padding: const EdgeInsets.all(10),
-              decoration: BoxDecoration(
-                color: Colors.grey.withValues(alpha: 0.1),
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    '• Sobra da Casa: $surplusDesc',
-                    style: const TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
-                    ),
+            if (hasSurplus) ...[
+              const SizedBox(height: 12),
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: Colors.grey.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Text(
+                  '• Sobra da Casa: $surplusDesc',
+                  style: const TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
                   ),
-                  const SizedBox(height: 4),
-                  Text(
-                    '• Créditos de Membros: $creditDesc',
-                    style: const TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ],
+                ),
               ),
-            ),
+            ],
           ],
         ),
         actions: [
