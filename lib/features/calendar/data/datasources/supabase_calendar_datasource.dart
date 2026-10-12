@@ -5,6 +5,7 @@ import '../../../../core/errors/failures.dart';
 import '../../domain/entities/calendar_event.dart';
 import '../../domain/entities/event_participant.dart';
 import '../../domain/entities/task_item.dart';
+import '../../domain/services/event_recurrence.dart';
 import 'calendar_datasource.dart';
 
 class SupabaseCalendarDataSource implements CalendarDataSource {
@@ -133,11 +134,44 @@ class SupabaseCalendarDataSource implements CalendarDataSource {
           createdByMemberId: r['created_by'] as String? ?? '',
           visibility: visibility,
           participants: participants,
+          recurrenceFrequency: RecurrenceFrequency.values.firstWhere(
+            (frequency) => frequency.name == r['recurrence_frequency'],
+            orElse: () => RecurrenceFrequency.none,
+          ),
+          seriesId: r['recurring_series_id'] as String?,
         );
       }).toList();
     } catch (e) {
       throw ServerFailure('Erro ao carregar eventos da agenda: $e');
     }
+  }
+
+  List<Map<String, dynamic>> _participantRows(
+    String eventId,
+    String houseId,
+    List<EventParticipant> participants,
+  ) => [
+    for (final p in participants)
+      if (_isUuid(p.memberId))
+        {
+          'event_id': eventId,
+          'user_id': p.memberId,
+          'house_id': houseId,
+          'is_essential': p.isEssential,
+          'rsvp_status': p.rsvpStatus.name,
+          'responded_at': p.respondedAt?.toUtc().toIso8601String(),
+        },
+  ];
+
+  Future<void> _upsertParticipants(
+    String eventId,
+    List<EventParticipant> participants,
+  ) async {
+    final rows = _participantRows(eventId, _houseId, participants);
+    if (rows.isEmpty) return;
+    await client
+        .from('event_participants')
+        .upsert(rows, onConflict: 'event_id,user_id');
   }
 
   @override
@@ -158,39 +192,58 @@ class SupabaseCalendarDataSource implements CalendarDataSource {
         throw const ServerFailure('Usuário não autenticado.');
       }
 
-      final eventRow = {
-        if (_isUuid(event.id)) 'id': event.id,
+      Map<String, dynamic> eventRow(DateTime start, DateTime end, {String? seriesId}) => {
         'house_id': houseId,
         'title': event.title,
         'description': event.description,
         'location': event.location,
-        'start_time': event.startTime.toUtc().toIso8601String(),
-        'end_time': event.endTime.toUtc().toIso8601String(),
+        'start_time': start.toUtc().toIso8601String(),
+        'end_time': end.toUtc().toIso8601String(),
         'is_all_day': event.isAllDay,
         'visibility': event.visibility.name,
         'created_by': creatorId,
+        'recurrence_frequency': event.recurrenceFrequency.name,
+        'recurring_series_id': ?seriesId,
       };
 
-      final inserted = await client.from('events').insert(eventRow).select('id').single();
-      final realEventId = inserted['id'] as String;
+      final inserted = await client
+          .from('events')
+          .insert({
+            if (_isUuid(event.id)) 'id': event.id,
+            ...eventRow(event.startTime, event.endTime),
+          })
+          .select('id')
+          .single();
+      final firstEventId = inserted['id'] as String;
+      final eventIds = [firstEventId];
 
-      final validParticipants = event.participants
-          .where((p) => _isUuid(p.memberId))
-          .toList();
+      // Evento recorrente: a primeira ocorrência identifica a série e as próximas
+      // são gravadas como eventos próprios, para poderem ser editadas uma a uma.
+      if (event.recurrenceFrequency != RecurrenceFrequency.none) {
+        await client
+            .from('events')
+            .update({'recurring_series_id': firstEventId})
+            .eq('id', firstEventId);
 
-      if (validParticipants.isNotEmpty) {
-        final participantRows = validParticipants.map((p) {
-          return {
-            if (_isUuid(p.id)) 'id': p.id,
-            'event_id': realEventId,
-            'user_id': p.memberId,
-            'house_id': houseId,
-            'is_essential': p.isEssential,
-            'rsvp_status': p.rsvpStatus.name,
-            'responded_at': p.respondedAt?.toUtc().toIso8601String(),
-          };
-        }).toList();
+        final duration = event.endTime.difference(event.startTime);
+        final occurrenceRows = [
+          for (final start in futureOccurrenceStarts(event))
+            eventRow(start, start.add(duration), seriesId: firstEventId),
+        ];
+        if (occurrenceRows.isNotEmpty) {
+          final created = await client
+              .from('events')
+              .insert(occurrenceRows)
+              .select('id');
+          eventIds.addAll(created.map((r) => r['id'] as String));
+        }
+      }
 
+      final participantRows = [
+        for (final id in eventIds)
+          ..._participantRows(id, houseId, event.participants),
+      ];
+      if (participantRows.isNotEmpty) {
         await client.from('event_participants').insert(participantRows);
       }
     } catch (e) {
@@ -205,32 +258,62 @@ class SupabaseCalendarDataSource implements CalendarDataSource {
     RecurrenceScope scope = RecurrenceScope.thisInstanceOnly,
   }) async {
     try {
-      await client.from('events').update({
+      final current = await client
+          .from('events')
+          .select('recurring_series_id, start_time')
+          .eq('id', event.id)
+          .maybeSingle();
+      final seriesId = current?['recurring_series_id'] as String?;
+
+      final sharedFields = <String, dynamic>{
         'title': event.title,
         'description': event.description,
         'location': event.location,
-        'start_time': event.startTime.toUtc().toIso8601String(),
-        'end_time': event.endTime.toUtc().toIso8601String(),
         'is_all_day': event.isAllDay,
         'visibility': event.visibility.name,
-      }).eq('id', event.id);
+      };
 
-      if (_isUuid(event.id)) {
-        for (final p in event.participants) {
-          if (!_isUuid(p.memberId)) continue;
-          final participantRow = {
-            'event_id': event.id,
-            'user_id': p.memberId,
-            'house_id': _houseId,
-            'is_essential': p.isEssential,
-            'rsvp_status': p.rsvpStatus.name,
-            'responded_at': p.respondedAt?.toUtc().toIso8601String(),
-          };
-          await client.from('event_participants').upsert(
-            participantRow,
-            onConflict: 'event_id,user_id',
-          );
-        }
+      if (seriesId == null || scope == RecurrenceScope.thisInstanceOnly) {
+        await client.from('events').update({
+          ...sharedFields,
+          'start_time': event.startTime.toUtc().toIso8601String(),
+          'end_time': event.endTime.toUtc().toIso8601String(),
+          // Editada sozinha, a ocorrência deixa de fazer parte da série
+          if (seriesId != null) ...{
+            'recurring_series_id': null,
+            'recurrence_frequency': RecurrenceFrequency.none.name,
+          },
+        }).eq('id', event.id);
+        await _upsertParticipants(event.id, event.participants);
+        return;
+      }
+
+      var seriesQuery = client
+          .from('events')
+          .select('id, start_time, end_time')
+          .eq('recurring_series_id', seriesId);
+      if (scope == RecurrenceScope.thisAndFuture) {
+        seriesQuery = seriesQuery.gte('start_time', current!['start_time'] as String);
+      }
+
+      // Cada ocorrência mantém o seu dia e a sua duração; muda só o horário
+      for (final row in await seriesQuery) {
+        final oldStart = DateTime.parse(row['start_time'] as String).toLocal();
+        final oldEnd = DateTime.parse(row['end_time'] as String).toLocal();
+        final newStart = DateTime(
+          oldStart.year,
+          oldStart.month,
+          oldStart.day,
+          event.startTime.hour,
+          event.startTime.minute,
+        );
+
+        await client.from('events').update({
+          ...sharedFields,
+          'start_time': newStart.toUtc().toIso8601String(),
+          'end_time': newStart.add(oldEnd.difference(oldStart)).toUtc().toIso8601String(),
+        }).eq('id', row['id'] as String);
+        await _upsertParticipants(row['id'] as String, event.participants);
       }
     } catch (e) {
       if (e is Failure) rethrow;
@@ -244,6 +327,27 @@ class SupabaseCalendarDataSource implements CalendarDataSource {
     RecurrenceScope scope = RecurrenceScope.thisInstanceOnly,
   }) async {
     try {
+      if (scope != RecurrenceScope.thisInstanceOnly) {
+        final current = await client
+            .from('events')
+            .select('recurring_series_id, start_time')
+            .eq('id', eventId)
+            .maybeSingle();
+        final seriesId = current?['recurring_series_id'] as String?;
+
+        if (seriesId != null) {
+          var deletion = client
+              .from('events')
+              .delete()
+              .eq('recurring_series_id', seriesId);
+          if (scope == RecurrenceScope.thisAndFuture) {
+            deletion = deletion.gte('start_time', current!['start_time'] as String);
+          }
+          await deletion;
+          return;
+        }
+      }
+
       await client.from('events').delete().eq('id', eventId);
     } catch (e) {
       throw ServerFailure('Erro ao excluir evento da agenda: $e');

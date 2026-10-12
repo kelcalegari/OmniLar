@@ -4,6 +4,7 @@ import '../../../../core/domain/enums/recurrence.dart';
 import '../../domain/entities/calendar_event.dart';
 import '../../domain/entities/event_participant.dart';
 import '../../domain/entities/task_item.dart';
+import '../../domain/services/event_recurrence.dart';
 import 'calendar_datasource.dart';
 
 class MockCalendarDataSource implements CalendarDataSource {
@@ -162,74 +163,15 @@ class MockCalendarDataSource implements CalendarDataSource {
     final masterEvent = event.copyWith(seriesId: seriesId);
     _events.insert(0, masterEvent);
 
-    int count = 0;
-    switch (event.recurrenceFrequency) {
-      case RecurrenceFrequency.daily:
-        count = 14;
-        break;
-      case RecurrenceFrequency.weekly:
-        count = 8;
-        break;
-      case RecurrenceFrequency.biweekly:
-        count = 4;
-        break;
-      case RecurrenceFrequency.monthly:
-        count = 6;
-        break;
-      case RecurrenceFrequency.yearly:
-        count = 2;
-        break;
-      case RecurrenceFrequency.none:
-        count = 0;
-        break;
-    }
-
     final duration = event.endTime.difference(event.startTime);
+    final starts = futureOccurrenceStarts(event);
 
-    for (int i = 1; i <= count; i++) {
-      DateTime nextStart;
-      switch (event.recurrenceFrequency) {
-        case RecurrenceFrequency.daily:
-          nextStart = event.startTime.add(Duration(days: i));
-          break;
-        case RecurrenceFrequency.weekly:
-          nextStart = event.startTime.add(Duration(days: 7 * i));
-          break;
-        case RecurrenceFrequency.biweekly:
-          nextStart = event.startTime.add(Duration(days: 14 * i));
-          break;
-        case RecurrenceFrequency.monthly:
-          nextStart = DateTime(
-            event.startTime.year,
-            event.startTime.month + i,
-            event.startTime.day,
-            event.startTime.hour,
-            event.startTime.minute,
-          );
-          break;
-        case RecurrenceFrequency.yearly:
-          nextStart = DateTime(
-            event.startTime.year + i,
-            event.startTime.month,
-            event.startTime.day,
-            event.startTime.hour,
-            event.startTime.minute,
-          );
-          break;
-        case RecurrenceFrequency.none:
-          nextStart = event.startTime;
-          break;
-      }
-
-      if (event.recurrenceEndDate != null && nextStart.isAfter(event.recurrenceEndDate!)) {
-        break;
-      }
-
+    for (int i = 0; i < starts.length; i++) {
       final instance = event.copyWith(
-        id: '${seriesId}_instance_$i',
+        id: '${seriesId}_instance_${i + 1}',
         seriesId: seriesId,
-        startTime: nextStart,
-        endTime: nextStart.add(duration),
+        startTime: starts[i],
+        endTime: starts[i].add(duration),
       );
       _events.add(instance);
     }
