@@ -348,6 +348,8 @@ class SupabaseSettlementDataSource implements SettlementDataSource {
           'vault_operations': vaultOperations,
           'contributions': contributions,
           'expense_ids': expenseIds,
+          // A baixa pertence ao ciclo fechado, mesmo que o fechamento seja feito depois
+          'expenses_paid_at': _paidAtWithin(cycle).toUtc().toIso8601String(),
           'installment_payments': installmentPayments,
           'new_loans': newLoans,
           'transfers': transfers,
@@ -356,6 +358,12 @@ class SupabaseSettlementDataSource implements SettlementDataSource {
     } on PostgrestException catch (e) {
       throw ServerFailure(e.message);
     }
+  }
+
+  /// Agora, ou o fim do ciclo quando ele já terminou.
+  DateTime _paidAtWithin(FinancialCycle cycle) {
+    final now = DateTime.now();
+    return now.isAfter(cycle.endDate) ? cycle.endDate : now;
   }
 
   @override

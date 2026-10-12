@@ -13,6 +13,8 @@ import '../../domain/entities/financial_cycle_summary.dart';
 import '../../domain/entities/savings_vault.dart';
 import '../../domain/entities/split_rule.dart';
 import '../../domain/entities/audit_entry.dart';
+import '../../domain/services/cycle_expense_filter.dart';
+import '../../domain/services/credit_card_invoice_calculator.dart';
 import 'finance_datasource.dart';
 
 class SupabaseFinanceDataSource implements FinanceDataSource {
@@ -266,17 +268,44 @@ class SupabaseFinanceDataSource implements FinanceDataSource {
   @override
   Future<List<HouseExpense>> getExpensesForCycle(FinancialCycle cycle) async {
     try {
+      final startDate = cycle.startDate.toIso8601String().split('T')[0];
+      final endDate = cycle.endDate.toIso8601String().split('T')[0];
+      final startInstant = cycle.startDate.toUtc().toIso8601String();
+      final endInstant = cycle.endDate.toUtc().toIso8601String();
+
+      // Candidatas: vencem no ciclo, estão pendentes desde antes dele ou foram
+      // lançadas ou baixadas nele. A regra de competência decide quais realmente entram.
       final rows = await client
           .from('house_expenses')
           .select('*, house_expense_items(*), split_rules(*)')
           .eq('house_id', _houseId)
           .isFilter('project_id', null)
           .isFilter('deleted_at', null)
-          .gte('due_date', cycle.startDate.toIso8601String().split('T')[0])
-          .lte('due_date', cycle.endDate.toIso8601String().split('T')[0])
+          .or(
+            'and(due_date.gte.$startDate,due_date.lte.$endDate),'
+            'and(status.eq.pending,due_date.lt.$startDate),'
+            'and(date.gte."$startInstant",date.lte."$endInstant"),'
+            'and(paid_at.gte."$startInstant",paid_at.lte."$endInstant")',
+          )
           .order('due_date', ascending: false);
 
-      return rows.map((r) => _mapRowToHouseExpense(r)).toList();
+      final cardRows = await client
+          .from('payment_methods')
+          .select('id')
+          .eq('house_id', _houseId)
+          .eq('type', 'card');
+      final cardIds = {for (final r in cardRows) r['id'] as String};
+
+      return rows
+          .map((r) => _mapRowToHouseExpense(r))
+          .where(
+            (e) => expenseBelongsToCycle(
+              e,
+              cycle,
+              isCardPayment: cardIds.contains(e.paymentMethodId),
+            ),
+          )
+          .toList();
     } catch (e) {
       throw ServerFailure('Erro ao buscar despesas do ciclo: $e');
     }
@@ -394,6 +423,26 @@ class SupabaseFinanceDataSource implements FinanceDataSource {
   @override
   Future<void> addExpense(HouseExpense expense) async {
     try {
+      // Compra no cartão sem vencimento informado: vale o vencimento da fatura,
+      // qualquer que seja a tela que lançou a despesa.
+      var dueDate = expense.dueDate;
+      if (dueDate == null && _isUuid(expense.paymentMethodId)) {
+        final method = await client
+            .from('payment_methods')
+            .select('type, closing_day, due_day')
+            .eq('id', expense.paymentMethodId)
+            .maybeSingle();
+        final closingDay = (method?['closing_day'] as num?)?.toInt();
+        final dueDay = (method?['due_day'] as num?)?.toInt();
+        if (method?['type'] == 'card' && closingDay != null && dueDay != null) {
+          dueDate = CreditCardInvoiceCalculator.calculateInvoiceDueDate(
+            purchaseDate: expense.date,
+            closingDay: closingDay,
+            dueDay: dueDay,
+          );
+        }
+      }
+
       final expenseRow = {
         if (_isUuid(expense.id)) 'id': expense.id,
         'house_id': _houseId,
@@ -405,11 +454,12 @@ class SupabaseFinanceDataSource implements FinanceDataSource {
             ? expense.paidByMemberId
             : (client.auth.currentUser?.id ?? expense.paidByMemberId),
         'paid_out_of_pocket': expense.paidOutOfPocket,
-        'due_date': (expense.dueDate ?? expense.date).toIso8601String().split('T')[0],
+        'due_date': (dueDate ?? expense.date).toIso8601String().split('T')[0],
         'date': expense.date.toUtc().toIso8601String(),
         'cycle_start_date': expense.date.toIso8601String().split('T')[0],
         'split_type': _splitTypeToString(expense.splitRule.type),
         'status': expense.isPaid ? 'paid' : 'pending',
+        'paid_at': expense.isPaid ? expense.paidAt?.toUtc().toIso8601String() : null,
         'is_recurring': expense.isRecurring,
         'is_variable': expense.isVariable,
         'due_day': expense.dueDay,
@@ -432,6 +482,7 @@ class SupabaseFinanceDataSource implements FinanceDataSource {
           fallbackRow.remove('cycle_start_date');
           fallbackRow.remove('split_type');
           fallbackRow.remove('project_id');
+          fallbackRow.remove('paid_at');
           insertedRow = await client.from('house_expenses').insert(fallbackRow).select().single();
         } else {
           rethrow;
@@ -551,6 +602,7 @@ class SupabaseFinanceDataSource implements FinanceDataSource {
         'date': expense.date.toUtc().toIso8601String(),
         'split_type': _splitTypeToString(expense.splitRule.type),
         'status': expense.isPaid ? 'paid' : 'pending',
+        'paid_at': expense.isPaid ? expense.paidAt?.toUtc().toIso8601String() : null,
         'is_recurring': expense.isRecurring,
         'is_variable': expense.isVariable,
         'due_day': expense.dueDay,
@@ -1061,6 +1113,7 @@ class SupabaseFinanceDataSource implements FinanceDataSource {
       isVariable: r['is_variable'] as bool? ?? false,
       dueDay: (r['due_day'] as num?)?.toInt(),
       isActive: r['is_active'] as bool? ?? true,
+      paidAt: r['paid_at'] != null ? DateTime.tryParse(r['paid_at'] as String)?.toLocal() : null,
       paidOutOfPocket: r['paid_out_of_pocket'] as bool? ?? false,
       notes: r['notes'] as String?,
       items: items,

@@ -271,7 +271,13 @@ class MockSettlementDataSource implements SettlementDataSource {
     for (final exp in expenses) {
       if (exp.isPending) {
         await financeDataSource.updateExpense(
-          exp.copyWith(status: ExpenseStatus.paid),
+          exp.copyWith(
+            status: ExpenseStatus.paid,
+            // A baixa pertence ao ciclo fechado, mesmo que o fechamento seja feito depois
+            paidAt: DateTime.now().isAfter(summary.cycle.endDate)
+                ? summary.cycle.endDate
+                : DateTime.now(),
+          ),
         );
       }
     }

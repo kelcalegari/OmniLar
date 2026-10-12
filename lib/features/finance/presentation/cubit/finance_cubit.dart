@@ -237,6 +237,7 @@ class FinanceCubit extends Cubit<FinanceState> {
         status: ExpenseStatus.paid,
         amount: actualAmount ?? expense.amount,
         date: DateTime.now(),
+        paidAt: DateTime.now(),
       );
       await _repository.updateExpense(updated);
       await loadCycleData(cycle: state.currentCycle);

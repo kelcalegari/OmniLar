@@ -12,6 +12,7 @@ import '../../../../core/domain/enums/recurrence.dart';
 import '../../../../core/domain/value_objects/money.dart';
 import '../../../../core/domain/value_objects/financial_cycle.dart';
 import '../../domain/services/credit_card_invoice_calculator.dart';
+import '../../domain/services/cycle_expense_filter.dart';
 import 'finance_datasource.dart';
 
 class MockFinanceDataSource implements FinanceDataSource {
@@ -306,18 +307,8 @@ class MockFinanceDataSource implements FinanceDataSource {
   @override
   Future<List<HouseExpense>> getExpensesForCycle(FinancialCycle cycle) async {
     return _expenses.where((e) {
-      // Despesas de projeto vivem apenas no projeto (não pesam no Caixa/Fôlego/fechamento)
-      if (e.isProjectExpense) return false;
-
-      // Se for pagamento no cartão de crédito com fatura definida, a competência é o vencimento da fatura
       final isCard = _paymentMethods.any((pm) => pm.id == e.paymentMethodId && pm.type == PaymentMethodType.card);
-      final belongsToCycle = isCard && e.dueDate != null
-          ? cycle.contains(e.dueDate!)
-          : (cycle.contains(e.effectiveDueDate) || (e.isPaid && cycle.contains(e.date)));
-
-      // Passivos atrasados: se a conta ainda não foi paga e seu vencimento é anterior ao fim deste ciclo, deve constar como compromisso pendente
-      final isOverdueLiability = e.isPending && e.effectiveDueDate.isBefore(cycle.endDate);
-      return belongsToCycle || isOverdueLiability;
+      return expenseBelongsToCycle(e, cycle, isCardPayment: isCard);
     }).toList()
       ..sort((a, b) => b.effectiveDueDate.compareTo(a.effectiveDueDate));
   }

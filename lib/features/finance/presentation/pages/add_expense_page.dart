@@ -302,6 +302,11 @@ class _AddExpensePageState extends State<AddExpensePage> {
         splitRule: rule,
         paidOutOfPocket: paidOutOfPocket,
         status: _expenseStatus,
+        // Conta que estava pendente e foi marcada como paga agora
+        paidAt: _expenseStatus == ExpenseStatus.paid && oldExpense.isPending
+            ? DateTime.now()
+            : null,
+        clearPaidAt: _expenseStatus == ExpenseStatus.pending,
         isRecurring: _isRecurring,
         isVariable: _isVariable,
         dueDay: _isRecurring ? _dueDay : null,
