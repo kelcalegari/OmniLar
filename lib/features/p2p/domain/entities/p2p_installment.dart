@@ -53,19 +53,23 @@ class P2PInstallment extends Equatable {
   }
 
   P2PInstallment copyWith({
+    Money? amount,
     Money? paidAmount,
+    DateTime? dueDate,
     DateTime? paidAt,
     bool? isForgiven,
     bool? isCancelled,
+    int? number,
+    int? totalCount,
   }) {
     return P2PInstallment(
       id: id,
       loanId: loanId,
-      number: number,
-      totalCount: totalCount,
-      amount: amount,
+      number: number ?? this.number,
+      totalCount: totalCount ?? this.totalCount,
+      amount: amount ?? this.amount,
       paidAmount: paidAmount ?? this.paidAmount,
-      dueDate: dueDate,
+      dueDate: dueDate ?? this.dueDate,
       paidAt: paidAt ?? this.paidAt,
       isForgiven: isForgiven ?? this.isForgiven,
       isCancelled: isCancelled ?? this.isCancelled,

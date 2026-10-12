@@ -1,11 +1,20 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:intl/intl.dart';
+import '../../../../core/di/service_locator.dart';
+import '../../../../core/domain/value_objects/money.dart';
+import '../../../../core/security/biometric_auth_service.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/utils/responsive.dart';
 import '../../domain/entities/p2p_loan.dart';
 import '../../domain/entities/p2p_installment.dart';
+import '../../domain/entities/p2p_payment_record.dart';
+import '../../domain/repositories/p2p_repository.dart';
+import '../../../auth/domain/repositories/auth_repository.dart';
+import '../../../finance/domain/entities/house_member.dart';
+import '../../../finance/presentation/cubit/finance_cubit.dart';
 import '../cubit/p2p_cubit.dart';
+import 'loan_payment_dialog.dart';
 import 'partial_payment_dialog.dart';
 import 'renegotiate_loan_sheet.dart';
 
@@ -18,6 +27,79 @@ class LoanDetailsSheet extends StatelessWidget {
     required this.loan,
     required this.isDebtor,
   });
+
+  /// Aguarda a ação no servidor e só então fecha o sheet e confirma ao usuário.
+  Future<void> _runAction(
+    BuildContext context,
+    Future<bool> Function(P2PCubit cubit) action, {
+    required String successMessage,
+  }) async {
+    final cubit = context.read<P2PCubit>();
+    final messenger = ScaffoldMessenger.of(context);
+    final navigator = Navigator.of(context);
+
+    final ok = await action(cubit);
+    if (ok) {
+      if (context.mounted) navigator.pop(); // Fecha o sheet
+      messenger.showSnackBar(SnackBar(content: Text(successMessage)));
+    } else {
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text(cubit.state.errorMessage ?? 'Não foi possível concluir a operação.'),
+          backgroundColor: AppColors.debtRed,
+        ),
+      );
+    }
+  }
+
+  /// Quem pode registrar pagamento: o devedor, o credor (dar baixa no que recebeu)
+  /// ou um administrador quando o credor é o Caixa da Casa.
+  bool _canRegisterPayment(BuildContext context) {
+    if (isDebtor) return true;
+    final currentUserId = context.read<P2PCubit>().state.currentUserId;
+    if (currentUserId.isEmpty) return false;
+    if (loan.lenderMemberId == currentUserId) return true;
+    if (loan.isHouseLender) {
+      try {
+        final me = context.read<FinanceCubit>().state.members.where((m) => m.id == currentUserId).firstOrNull;
+        return me != null && (me.role == 'owner' || me.role == 'admin');
+      } catch (_) {}
+    }
+    return false;
+  }
+
+  void _confirmDelete(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Excluir Empréstimo?'),
+        content: Text(
+          'Deseja excluir permanentemente o empréstimo "${loan.title}"?\n\nEsta ação apagará todas as parcelas associadas e atualizará os saldos.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancelar'),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.debtRed,
+              foregroundColor: Colors.white,
+            ),
+            onPressed: () {
+              Navigator.pop(ctx);
+              _runAction(
+                context,
+                (cubit) => cubit.deleteLoan(loan.id),
+                successMessage: 'Empréstimo excluído com sucesso.',
+              );
+            },
+            child: const Text('Excluir'),
+          ),
+        ],
+      ),
+    );
+  }
 
   void _confirmForgive(BuildContext context) {
     showDialog(
@@ -37,13 +119,33 @@ class LoanDetailsSheet extends StatelessWidget {
               backgroundColor: AppColors.creditGreen,
               foregroundColor: Colors.white,
             ),
-            onPressed: () {
-              context.read<P2PCubit>().forgiveLoan(loan.id);
+            onPressed: () async {
               Navigator.pop(ctx);
-              Navigator.pop(context);
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Dívida perdoada com sucesso! 🎉')),
+
+              final authService = sl<BiometricAuthService>();
+              final authenticated = await authService.authenticate(
+                reason: 'Confirme sua identidade para perdoar este empréstimo.',
               );
+
+              if (!authenticated) {
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('Autenticação não confirmada. Perdão de dívida cancelado.'),
+                      backgroundColor: AppColors.debtRed,
+                    ),
+                  );
+                }
+                return;
+              }
+
+              if (context.mounted) {
+                await _runAction(
+                  context,
+                  (cubit) => cubit.forgiveLoan(loan.id),
+                  successMessage: 'Dívida perdoada com sucesso! 🎉',
+                );
+              }
             },
             child: const Text('Sim, Perdoar'),
           ),
@@ -56,19 +158,81 @@ class LoanDetailsSheet extends StatelessWidget {
     PartialPaymentDialog.show(
       context: context,
       installment: installment,
+      isOpenEnded: loan.isOpenEnded,
       onConfirm: (amount) {
-        context.read<P2PCubit>().payInstallment(installment.id, amount);
-        Navigator.pop(context); // Fecha a sheet para recarregar ou ver o estado atualizado
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              amount.cents == installment.remainingAmount.cents
+        _runAction(
+          context,
+          (cubit) => cubit.payInstallment(installment.id, amount),
+          successMessage: loan.isOpenEnded
+              ? (amount.cents == installment.remainingAmount.cents
+                  ? 'Empréstimo quitado! ✅'
+                  : 'Abatimento de ${amount.format()} registrado! Saldo atualizado. 🪙')
+              : amount.cents == installment.remainingAmount.cents
                   ? 'Parcela ${installment.number}/${installment.totalCount} quitada com sucesso! ✅'
                   : 'Pagamento parcial de ${amount.format()} registrado! Saldo atualizado. 🪙',
-            ),
-          ),
         );
       },
+    );
+  }
+
+  /// Abatimento livre no empréstimo parcelado (antecipa das parcelas mais antigas para as mais novas).
+  void _openLoanPaymentDialog(BuildContext context) {
+    LoanPaymentDialog.show(
+      context: context,
+      loan: loan,
+      onConfirm: (amount) {
+        _runAction(
+          context,
+          (cubit) => cubit.payLoan(loan.id, amount),
+          successMessage: amount.cents == loan.remainingAmount.cents
+              ? 'Empréstimo quitado! ✅'
+              : 'Pagamento de ${amount.format()} registrado! Saldo atualizado. 🪙',
+        );
+      },
+    );
+  }
+
+  /// Aviso de como o empréstimo parcelado é cobrado, com a opção de tirá-lo do ciclo.
+  Widget _buildCycleChargePanel(BuildContext context, {required bool canChange}) {
+    final inCycle = loan.settleInCycle;
+    return Container(
+      padding: const EdgeInsets.only(left: 12, right: 4, top: 4, bottom: 4),
+      decoration: BoxDecoration(
+        color: AppColors.primary.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Row(
+        children: [
+          Icon(
+            inCycle ? Icons.event_repeat_rounded : Icons.event_busy_rounded,
+            size: 18,
+            color: AppColors.primary,
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: 8),
+              child: Text(
+                inCycle
+                    ? 'Cobrado no Fechamento do Ciclo: cada parcela entra no ciclo em que vence. Dá para antecipar quando quiser.'
+                    : 'Fora do Fechamento do Ciclo: as datas são só lembrete e o pagamento é sempre manual.',
+                style: const TextStyle(fontSize: 12, color: AppColors.primary, fontWeight: FontWeight.w600),
+              ),
+            ),
+          ),
+          if (canChange)
+            Switch(
+              value: inCycle,
+              onChanged: (value) => _runAction(
+                context,
+                (cubit) => cubit.setSettleInCycle(loan.id, value),
+                successMessage: value
+                    ? 'As parcelas voltam a ser cobradas no Fechamento do Ciclo.'
+                    : 'Empréstimo fora do Fechamento do Ciclo: o pagamento passa a ser manual.',
+              ),
+            ),
+        ],
+      ),
     );
   }
 
@@ -78,16 +242,133 @@ class LoanDetailsSheet extends StatelessWidget {
       maxWidth: 540,
       child: RenegotiateLoanSheet(
         loan: loan,
-        onConfirm: (newCount, newFirstDate) {
-          context.read<P2PCubit>().renegotiateLoan(loan.id, newCount, newFirstDate);
-          Navigator.pop(context); // Fecha os detalhes
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('Empréstimo renegociado em $newCount parcelas! 🤝'),
-            ),
+        onConfirm: (newCount, newFirstDate) async {
+          final authService = sl<BiometricAuthService>();
+          final authenticated = await authService.authenticate(
+            reason: 'Confirme sua identidade para renegociar os termos do empréstimo.',
           );
+
+          if (!authenticated) {
+            if (context.mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('Autenticação não confirmada. Renegociação cancelada.'),
+                  backgroundColor: AppColors.debtRed,
+                ),
+              );
+            }
+            return;
+          }
+
+          if (context.mounted) {
+            await _runAction(
+              context,
+              (cubit) => cubit.renegotiateLoan(loan.id, newCount, newFirstDate),
+              successMessage: 'Empréstimo renegociado em $newCount parcelas! 🤝',
+            );
+          }
         },
       ),
+    );
+  }
+
+  /// Painel do empréstimo sem prazo: saldo devedor, progresso e botão de abatimento livre.
+  Widget _buildOpenEndedPanel(
+    BuildContext context,
+    ThemeData theme, {
+    required bool isPaid,
+    required bool isForgiven,
+  }) {
+    final openInstallment = loan.installments
+        .where((i) => !i.isFullyPaid && !i.isCancelled && !i.isForgiven)
+        .firstOrNull;
+    final canPay = _canRegisterPayment(context) && !isPaid && !isForgiven && openInstallment != null;
+    final canDefineInstallments = !isPaid && !isForgiven && loan.remainingAmount.cents > 0;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Container(
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: AppColors.primary.withValues(alpha: 0.08),
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: const Row(
+            children: [
+              Icon(Icons.all_inclusive_rounded, size: 18, color: AppColors.primary),
+              SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  'Sem vencimento: abata o valor que puder, quando puder. Não entra no Fechamento do Ciclo.',
+                  style: TextStyle(fontSize: 12, color: AppColors.primary, fontWeight: FontWeight.w600),
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 12),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text(
+              'Já abatido: ${loan.totalPaidAmount.format()}',
+              style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.bold, color: AppColors.creditGreen),
+            ),
+            Text(
+              '${(loan.progressPercentage * 100).toInt()}%',
+              style: theme.textTheme.bodySmall?.copyWith(fontWeight: FontWeight.bold),
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        ClipRRect(
+          borderRadius: BorderRadius.circular(6),
+          child: LinearProgressIndicator(
+            value: loan.progressPercentage,
+            minHeight: 8,
+            backgroundColor: theme.brightness == Brightness.dark
+                ? Colors.white10
+                : Colors.black.withValues(alpha: 0.06),
+            valueColor: const AlwaysStoppedAnimation<Color>(AppColors.creditGreen),
+          ),
+        ),
+        const SizedBox(height: 16),
+        if (canPay)
+          SizedBox(
+            width: double.infinity,
+            height: 48,
+            child: ElevatedButton.icon(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.primary,
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              ),
+              icon: const Icon(Icons.payments_rounded),
+              label: Text(
+                isDebtor ? 'Abater valor' : 'Registrar abatimento recebido',
+                style: const TextStyle(fontWeight: FontWeight.bold),
+              ),
+              onPressed: () => _openPaymentDialog(context, openInstallment),
+            ),
+          ),
+        if (canDefineInstallments) ...[
+          const SizedBox(height: 8),
+          Center(
+            child: TextButton.icon(
+              style: TextButton.styleFrom(foregroundColor: AppColors.accent),
+              icon: const Icon(Icons.handshake_rounded, size: 16),
+              label: const Text(
+                'Combinar parcelas para o saldo',
+                style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
+              ),
+              onPressed: () => _openRenegotiateSheet(context),
+            ),
+          ),
+        ],
+        const SizedBox(height: 8),
+        _PaymentHistory(loan: loan),
+      ],
     );
   }
 
@@ -97,6 +378,28 @@ class LoanDetailsSheet extends StatelessWidget {
     final isForgiven = loan.status == LoanStatus.forgiven;
     final isPaid = loan.status == LoanStatus.paid;
     final isRenegotiated = loan.status == LoanStatus.renegotiated;
+    final canRegisterPayment = _canRegisterPayment(context);
+
+    final isDemo = sl<AuthRepository>().isDemoMode;
+    List<HouseMember> members = [];
+    try {
+      members = context.read<FinanceCubit>().state.members;
+    } catch (_) {}
+
+    String resolveName(String memberId) {
+      if (memberId == P2PLoan.houseLenderId) return 'Caixa da Casa';
+      if (isDemo) {
+        if (memberId == 'member_carlos') return 'Carlos';
+        if (memberId == 'member_marina') return 'Marina';
+      }
+      final m = members.where((x) => x.id == memberId).firstOrNull;
+      if (m != null) return m.name;
+      if (memberId == sl<AuthRepository>().currentUser?.id) return 'Você';
+      return 'Membro';
+    }
+
+    final lenderName = resolveName(loan.lenderMemberId);
+    final borrowerName = resolveName(loan.borrowerMemberId);
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
@@ -147,6 +450,15 @@ class LoanDetailsSheet extends StatelessWidget {
                   ),
                   child: const Text('Quitado ✅', style: TextStyle(color: AppColors.primary, fontWeight: FontWeight.bold)),
                 )
+              else if (loan.isOpenEnded)
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: AppColors.accent.withValues(alpha: 0.15),
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: const Text('Sem prazo', style: TextStyle(color: AppColors.accent, fontWeight: FontWeight.bold)),
+                )
               else if (isRenegotiated)
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
@@ -156,6 +468,27 @@ class LoanDetailsSheet extends StatelessWidget {
                   ),
                   child: const Text('Renegociado 🤝', style: TextStyle(color: AppColors.accent, fontWeight: FontWeight.bold)),
                 ),
+              const SizedBox(width: 8),
+              IconButton(
+                icon: const Icon(Icons.delete_outline_rounded, color: AppColors.debtRed, size: 22),
+                tooltip: 'Excluir Empréstimo',
+                onPressed: () => _confirmDelete(context),
+              ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          // Informação de Credor e Devedor
+          Row(
+            children: [
+              Text(
+                'Credor: $lenderName',
+                style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.creditGreen),
+              ),
+              const Text('  ➔  ', style: TextStyle(fontSize: 12, color: Colors.grey)),
+              Text(
+                'Devedor: $borrowerName',
+                style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.debtRed),
+              ),
             ],
           ),
           if (loan.description != null && loan.description!.isNotEmpty) ...[
@@ -199,6 +532,17 @@ class LoanDetailsSheet extends StatelessWidget {
           ),
           const SizedBox(height: 16),
 
+          if (loan.isOpenEnded)
+            Flexible(
+              child: SingleChildScrollView(
+                child: _buildOpenEndedPanel(context, theme, isPaid: isPaid, isForgiven: isForgiven),
+              ),
+            )
+          else ...[
+          if (!isPaid && !isForgiven && loan.remainingAmount.cents > 0) ...[
+            _buildCycleChargePanel(context, canChange: canRegisterPayment),
+            const SizedBox(height: 12),
+          ],
           // Lista de Parcelas
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -273,7 +617,13 @@ class LoanDetailsSheet extends StatelessWidget {
                               'Pago: ${inst.paidAmount.format()} | Resta: ${inst.remainingAmount.format()}',
                               style: const TextStyle(color: Colors.orange, fontSize: 12),
                             )
-                          : Text('Vence em $dateFmt'),
+                          : isInstPaid
+                              ? Text('Vencimento: $dateFmt')
+                              : Text(
+                                  inst.status == InstallmentStatus.overdue
+                                      ? 'Atrasada desde $dateFmt${loan.entersCycleSettlement ? ' · entra no próximo fechamento' : ''}'
+                                      : 'Vence em $dateFmt${loan.entersCycleSettlement ? ' · cobrada no fechamento' : ''}',
+                                ),
                   trailing: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
@@ -295,7 +645,7 @@ class LoanDetailsSheet extends StatelessWidget {
                             ),
                         ],
                       ),
-                      if (!isInstPaid && !isForgiven && !isInstCancelled && isDebtor) ...[
+                      if (!isInstPaid && !isForgiven && !isInstCancelled && canRegisterPayment) ...[
                         const SizedBox(width: 8),
                         IconButton(
                           icon: const Icon(Icons.payment_rounded, color: AppColors.primary),
@@ -309,6 +659,27 @@ class LoanDetailsSheet extends StatelessWidget {
               },
             ),
           ),
+          if (canRegisterPayment && !isPaid && !isForgiven && loan.remainingAmount.cents > 0) ...[
+            const SizedBox(height: 12),
+            SizedBox(
+              width: double.infinity,
+              height: 48,
+              child: ElevatedButton.icon(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.primary,
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                ),
+                icon: const Icon(Icons.fast_forward_rounded),
+                label: Text(
+                  isDebtor ? 'Antecipar ou abater valor' : 'Registrar pagamento recebido',
+                  style: const TextStyle(fontWeight: FontWeight.bold),
+                ),
+                onPressed: () => _openLoanPaymentDialog(context),
+              ),
+            ),
+          ],
+          ],
           const SizedBox(height: 16),
 
           // Ações do Credor (Perdoar Dívida)
@@ -327,6 +698,86 @@ class LoanDetailsSheet extends StatelessWidget {
                 onPressed: () => _confirmForgive(context),
               ),
             ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Histórico de abatimentos de um empréstimo sem prazo.
+class _PaymentHistory extends StatefulWidget {
+  final P2PLoan loan;
+
+  const _PaymentHistory({required this.loan});
+
+  @override
+  State<_PaymentHistory> createState() => _PaymentHistoryState();
+}
+
+class _PaymentHistoryState extends State<_PaymentHistory> {
+  late final Future<List<P2PPaymentRecord>> _future;
+
+  @override
+  void initState() {
+    super.initState();
+    _future = sl<P2PRepository>().getLoanPayments(widget.loan.id);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final dateFmt = DateFormat('dd/MM/yyyy');
+
+    return FutureBuilder<List<P2PPaymentRecord>>(
+      future: _future,
+      builder: (context, snapshot) {
+        if (snapshot.connectionState != ConnectionState.done) {
+          return const Padding(
+            padding: EdgeInsets.symmetric(vertical: 12),
+            child: Center(child: SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))),
+          );
+        }
+        if (snapshot.hasError) {
+          return Text('Não foi possível carregar o histórico de abatimentos.', style: theme.textTheme.bodySmall);
+        }
+
+        final records = snapshot.data ?? const <P2PPaymentRecord>[];
+        // Abatimentos informados no cadastro (anteriores ao app) não têm registro individual.
+        final recordedCents = records.fold<int>(0, (acc, r) => acc + r.amount.cents);
+        final priorCents = widget.loan.totalPaidAmount.cents - recordedCents;
+
+        if (records.isEmpty && priorCents <= 0) {
+          return Text('Nenhum abatimento registrado ainda.', style: theme.textTheme.bodySmall);
+        }
+
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Histórico de abatimentos',
+              style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 4),
+            for (final r in records)
+              _row(theme, dateFmt.format(r.paidAt), r.amount),
+            if (priorCents > 0) _row(theme, 'Antes do registro', Money(priorCents)),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _row(ThemeData theme, String label, Money amount) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(label, style: theme.textTheme.bodySmall),
+          Text(
+            amount.format(),
+            style: const TextStyle(fontWeight: FontWeight.w600, color: AppColors.creditGreen),
+          ),
         ],
       ),
     );

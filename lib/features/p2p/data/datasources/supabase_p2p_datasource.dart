@@ -3,6 +3,7 @@ import '../../../../core/domain/value_objects/money.dart';
 import '../../../../core/errors/failures.dart';
 import '../../domain/entities/p2p_loan.dart';
 import '../../domain/entities/p2p_installment.dart';
+import '../../domain/entities/p2p_payment_record.dart';
 import '../../domain/services/p2p_calculator.dart';
 import 'p2p_datasource.dart';
 
@@ -57,7 +58,7 @@ class SupabaseP2PDataSource implements P2PDataSource {
             amount: Money(amountCents),
             paidAmount: Money(paidCents),
             dueDate: DateTime.parse(dueDateStr),
-            paidAt: paidAtStr != null ? DateTime.tryParse(paidAtStr) : null,
+            paidAt: paidAtStr != null ? DateTime.tryParse(paidAtStr)?.toLocal() : null,
             isForgiven: statusStr == 'forgiven',
             isCancelled: statusStr == 'renegotiated',
           );
@@ -83,6 +84,14 @@ class SupabaseP2PDataSource implements P2PDataSource {
             status = LoanStatus.active;
         }
 
+        final repaymentMode = (r['repayment_mode'] as String?) == 'open_ended'
+            ? LoanRepaymentMode.openEnded
+            : LoanRepaymentMode.installments;
+        final lenderIsHouse = (r['lender_is_house'] as bool?) ?? false;
+        final lenderId = lenderIsHouse || r['lender_id'] == null
+            ? P2PLoan.houseLenderId
+            : r['lender_id'] as String;
+
         final createdAt = DateTime.parse(r['created_at'] as String);
         final firstDueDate = installments.isNotEmpty
             ? installments.first.dueDate
@@ -93,7 +102,7 @@ class SupabaseP2PDataSource implements P2PDataSource {
           title: r['title'] as String,
           description: r['description'] as String?,
           totalAmount: Money((r['total_amount_cents'] as int?) ?? 0),
-          lenderMemberId: r['lender_id'] as String,
+          lenderMemberId: lenderId,
           borrowerMemberId: r['borrower_id'] as String,
           installmentsCount: installmentsCount,
           createdAt: createdAt,
@@ -101,6 +110,8 @@ class SupabaseP2PDataSource implements P2PDataSource {
           status: status,
           installments: installments,
           attachmentUrl: r['attachment_url'] as String?,
+          repaymentMode: repaymentMode,
+          settleInCycle: (r['settle_in_cycle'] as bool?) ?? true,
         );
       }).toList();
     } catch (e) {
@@ -115,7 +126,10 @@ class SupabaseP2PDataSource implements P2PDataSource {
       final loanData = {
         if (_isUuid(loan.id)) 'id': loan.id,
         'house_id': _houseId,
-        'lender_id': loan.lenderMemberId,
+        'lender_id': loan.isHouseLender ? null : loan.lenderMemberId,
+        'lender_is_house': loan.isHouseLender,
+        'repayment_mode': loan.isOpenEnded ? 'open_ended' : 'installments',
+        'settle_in_cycle': loan.settleInCycle,
         'borrower_id': loan.borrowerMemberId,
         'title': loan.title,
         'description': loan.description,
@@ -128,7 +142,7 @@ class SupabaseP2PDataSource implements P2PDataSource {
                 : loan.status == LoanStatus.renegotiated
                     ? 'renegotiated'
                     : 'active',
-        'created_by': currentUserId ?? loan.lenderMemberId,
+        'created_by': currentUserId ?? (loan.isHouseLender ? loan.borrowerMemberId : loan.lenderMemberId),
         'created_at': loan.createdAt.toIso8601String(),
       };
 
@@ -142,12 +156,17 @@ class SupabaseP2PDataSource implements P2PDataSource {
 
       final installmentsToInsert = loan.installments.isNotEmpty
           ? loan.installments
-          : P2PCalculator.generateInstallments(
-              loanId: realLoanId,
-              totalAmount: loan.totalAmount,
-              installmentsCount: loan.installmentsCount,
-              firstDueDate: loan.firstDueDate,
-            );
+          : loan.isOpenEnded
+              ? P2PCalculator.buildOpenEndedInstallment(
+                  loanId: realLoanId,
+                  totalAmount: loan.totalAmount,
+                )
+              : P2PCalculator.generateInstallments(
+                  loanId: realLoanId,
+                  totalAmount: loan.totalAmount,
+                  installmentsCount: loan.installmentsCount,
+                  firstDueDate: loan.firstDueDate,
+                );
 
       final installmentRows = installmentsToInsert.map((inst) {
         return {
@@ -199,7 +218,7 @@ class SupabaseP2PDataSource implements P2PDataSource {
           .from('p2p_installments')
           .select('id, status')
           .eq('loan_id', loanId)
-          .neq('status', 'paid');
+          .inFilter('status', ['pending', 'partial']);
 
       if (remainingInstallments.isEmpty) {
         await client
@@ -245,6 +264,8 @@ class SupabaseP2PDataSource implements P2PDataSource {
 
       int remainingCents = 0;
       int paidCount = 0;
+      // Números de parcelas que continuam vigentes (pagas/perdoadas) e não podem ser reutilizados.
+      final keptNumbers = <int>{};
 
       for (final r in rows) {
         final amountCents = r['amount_cents'] as int;
@@ -253,7 +274,10 @@ class SupabaseP2PDataSource implements P2PDataSource {
 
         if (status == 'paid' || paidCents >= amountCents) {
           paidCount++;
-        } else if (status != 'forgiven' && status != 'renegotiated') {
+          keptNumbers.add(r['installment_number'] as int);
+        } else if (status == 'forgiven') {
+          keptNumbers.add(r['installment_number'] as int);
+        } else if (status != 'renegotiated') {
           remainingCents += (amountCents - paidCents);
         }
       }
@@ -275,7 +299,12 @@ class SupabaseP2PDataSource implements P2PDataSource {
       final totalCombinedCount = paidCount + newInstallmentsCount;
 
       final newRows = <Map<String, dynamic>>[];
+      int nextNumber = 0;
       for (int i = 0; i < newInstallmentsCount; i++) {
+        do {
+          nextNumber++;
+        } while (keptNumbers.contains(nextNumber));
+
         final dueMonth = newFirstDueDate.month + i;
         final dueYear = newFirstDueDate.year + ((dueMonth - 1) ~/ 12);
         final normalizedMonth = ((dueMonth - 1) % 12) + 1;
@@ -285,7 +314,7 @@ class SupabaseP2PDataSource implements P2PDataSource {
 
         newRows.add({
           'loan_id': loanId,
-          'installment_number': paidCount + i + 1,
+          'installment_number': nextNumber,
           'amount_cents': splitAmounts[i].cents,
           'paid_cents': 0,
           'due_date': dueDate.toIso8601String().split('T')[0],
@@ -295,13 +324,71 @@ class SupabaseP2PDataSource implements P2PDataSource {
 
       await client.from('p2p_installments').insert(newRows);
 
+      // Ao definir um parcelamento, um empréstimo sem prazo passa a ser parcelado.
       await client.from('p2p_loans').update({
         'status': 'renegotiated',
         'installments_count': totalCombinedCount,
+        'repayment_mode': 'installments',
       }).eq('id', loanId);
     } catch (e) {
       if (e is Failure) rethrow;
       throw ServerFailure('Erro ao renegociar empréstimo P2P: $e');
+    }
+  }
+
+  @override
+  Future<void> deleteLoan(String loanId) async {
+    try {
+      await client.from('p2p_loans').delete().eq('id', loanId);
+    } catch (e) {
+      if (e is Failure) rethrow;
+      throw ServerFailure('Erro ao excluir empréstimo P2P: $e');
+    }
+  }
+
+  @override
+  Future<List<P2PPaymentRecord>> getLoanPayments(String loanId) async {
+    try {
+      final rows = await client
+          .from('payment_allocations')
+          .select('allocated_cents, created_at, p2p_installments!inner(loan_id)')
+          .eq('p2p_installments.loan_id', loanId)
+          .order('created_at', ascending: false);
+
+      return rows.map((r) {
+        return P2PPaymentRecord(
+          amount: Money((r['allocated_cents'] as int?) ?? 0),
+          paidAt: DateTime.parse(r['created_at'] as String).toLocal(),
+        );
+      }).toList();
+    } catch (e) {
+      throw ServerFailure('Erro ao carregar histórico de pagamentos P2P: $e');
+    }
+  }
+
+  @override
+  Future<void> payLoan(String loanId, Money amount) async {
+    try {
+      // A RPC distribui o valor das parcelas mais antigas para as mais novas
+      // e marca o empréstimo como 'completed' quando o saldo zera.
+      await client.rpc('pay_p2p_loan', params: {
+        'p_loan_id': loanId,
+        'p_amount_cents': amount.cents,
+      });
+    } catch (e) {
+      throw ServerFailure('Erro ao registrar abatimento do empréstimo P2P: $e');
+    }
+  }
+
+  @override
+  Future<void> setSettleInCycle(String loanId, bool settleInCycle) async {
+    try {
+      await client
+          .from('p2p_loans')
+          .update({'settle_in_cycle': settleInCycle})
+          .eq('id', loanId);
+    } catch (e) {
+      throw ServerFailure('Erro ao atualizar cobrança no ciclo do empréstimo P2P: $e');
     }
   }
 }

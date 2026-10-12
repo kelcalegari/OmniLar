@@ -1,9 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:intl/intl.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/domain/value_objects/money.dart';
 import '../../../../core/widgets/money_input_field.dart';
+import '../../../../core/di/service_locator.dart';
+import '../../../auth/domain/repositories/auth_repository.dart';
+import '../../../finance/domain/entities/house_member.dart';
+import '../../../finance/presentation/cubit/finance_cubit.dart';
+import '../../../finance/presentation/cubit/finance_state.dart';
 import '../../domain/entities/p2p_loan.dart';
+import '../../domain/entities/p2p_installment.dart';
 import '../../domain/services/p2p_calculator.dart';
 import '../cubit/p2p_cubit.dart';
 
@@ -20,15 +27,206 @@ class _CreateLoanPageState extends State<CreateLoanPage> {
 
   int _cents = 0;
   int _installmentsCount = 1;
-  final DateTime _firstDueDate = DateTime.now().add(const Duration(days: 30));
-  String _borrowerId = 'member_marina';
-  final String _lenderId = 'member_carlos';
+  DateTime _firstDueDate = DateTime.now().add(const Duration(days: 30));
+  late String _borrowerId;
+  late String _lenderId;
+
+  bool _initializedParties = false;
+
+  // Controle de empréstimo antigo / pregressos
+  bool _isHistorical = false;
+  bool _settleInCycle = true;
+  int _paidInstallmentsCount = 0;
+
+  // Lista editável de parcelas
+  List<P2PInstallment> _installments = [];
+
+  // Modalidade: parcelado (padrão) ou livre / sem prazo
+  LoanRepaymentMode _repaymentMode = LoanRepaymentMode.installments;
+  bool _openEndedHasPriorPayments = false;
+  int _openEndedPaidCents = 0;
+
+  bool get _isOpenEnded => _repaymentMode == LoanRepaymentMode.openEnded;
+
+  @override
+  void initState() {
+    super.initState();
+    final authRepo = sl<AuthRepository>();
+    final isDemo = authRepo.isDemoMode;
+    final currentUserId = authRepo.currentUser?.id;
+
+    if (!isDemo && currentUserId != null) {
+      _lenderId = currentUserId;
+      _borrowerId = '';
+    } else {
+      _lenderId = 'member_carlos';
+      _borrowerId = 'member_marina';
+    }
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (!_initializedParties) {
+      final authRepo = sl<AuthRepository>();
+      final isDemo = authRepo.isDemoMode;
+      final currentUserId = authRepo.currentUser?.id;
+
+      if (!isDemo && currentUserId != null) {
+        _lenderId = currentUserId;
+        try {
+          final members = context.read<FinanceCubit>().state.members;
+          final otherMember = members.where((m) => m.id != currentUserId).firstOrNull;
+          if (otherMember != null) {
+            _borrowerId = otherMember.id;
+          }
+        } catch (_) {}
+      }
+      _initializedParties = true;
+    }
+  }
+
+  void _swapParties() {
+    if (_lenderId.isEmpty && _borrowerId.isEmpty) return;
+    setState(() {
+      final temp = _lenderId;
+      _lenderId = _borrowerId;
+      _borrowerId = temp;
+    });
+  }
 
   @override
   void dispose() {
     _titleController.dispose();
     _descriptionController.dispose();
     super.dispose();
+  }
+
+  void _regenerateInstallments() {
+    if (_cents <= 0) {
+      setState(() {
+        _installments = [];
+      });
+      return;
+    }
+
+    final newInstallments = P2PCalculator.generateInstallments(
+      loanId: 'temp_loan',
+      totalAmount: Money(_cents),
+      installmentsCount: _installmentsCount,
+      firstDueDate: _firstDueDate,
+      paidInstallmentsCount: _isHistorical ? _paidInstallmentsCount : 0,
+    );
+
+    setState(() {
+      _installments = newInstallments;
+    });
+  }
+
+  Future<void> _pickFirstDueDate() async {
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: _firstDueDate,
+      firstDate: DateTime(2000),
+      lastDate: DateTime(2100),
+      helpText: 'Data do 1º Vencimento',
+    );
+    if (picked != null) {
+      setState(() {
+        _firstDueDate = picked;
+      });
+      _regenerateInstallments();
+    }
+  }
+
+  Future<void> _pickInstallmentDueDate(int index) async {
+    final current = _installments[index].dueDate;
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: current,
+      firstDate: DateTime(2000),
+      lastDate: DateTime(2100),
+      helpText: 'Vencimento da Parcela ${_installments[index].number}',
+    );
+    if (picked != null) {
+      setState(() {
+        _installments[index] = _installments[index].copyWith(dueDate: picked);
+      });
+    }
+  }
+
+  Future<void> _editInstallmentAmount(int index) async {
+    final current = _installments[index];
+    int tempCents = current.amount.cents;
+
+    await showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text('Valor da Parcela ${current.number}/${current.totalCount}'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            MoneyInputField(
+              label: 'Novo Valor Nominal',
+              initialValue: Money(tempCents),
+              primaryColor: AppColors.accent,
+              onChanged: (money) {
+                tempCents = money.cents;
+              },
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancelar'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              if (tempCents > 0) {
+                setState(() {
+                  final isPaid = _installments[index].isFullyPaid;
+                  _installments[index] = _installments[index].copyWith(
+                    amount: Money(tempCents),
+                    paidAmount: isPaid ? Money(tempCents) : _installments[index].paidAmount,
+                  );
+                });
+              }
+              Navigator.pop(ctx);
+            },
+            child: const Text('Salvar'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _toggleInstallmentPaidStatus(int index) {
+    final current = _installments[index];
+    final currentlyPaid = current.isFullyPaid;
+    setState(() {
+      if (currentlyPaid) {
+        _installments[index] = current.copyWith(
+          paidAmount: const Money.zero(),
+          paidAt: null,
+        );
+      } else {
+        _installments[index] = current.copyWith(
+          paidAmount: current.amount,
+          paidAt: current.dueDate,
+        );
+      }
+      _paidInstallmentsCount = _installments.where((i) => i.isFullyPaid).length;
+    });
+  }
+
+  void _balanceInstallments() {
+    setState(() {
+      _installments = P2PCalculator.balanceLastInstallment(
+        installments: _installments,
+        totalAmount: Money(_cents),
+      );
+    });
   }
 
   void _submit() {
@@ -46,15 +244,66 @@ class _CreateLoanPageState extends State<CreateLoanPage> {
       return;
     }
 
-    final loanId = 'loan_${DateTime.now().millisecondsSinceEpoch}';
-    final totalAmount = Money(_cents);
+    if (_lenderId.isEmpty || _borrowerId.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Selecione quem emprestou e quem tomou o empréstimo')),
+      );
+      return;
+    }
 
-    final installments = P2PCalculator.generateInstallments(
-      loanId: loanId,
-      totalAmount: totalAmount,
-      installmentsCount: _installmentsCount,
-      firstDueDate: _firstDueDate,
-    );
+    if (_lenderId == _borrowerId) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('O credor (quem emprestou) e o devedor (quem tomou) não podem ser a mesma pessoa.'),
+          backgroundColor: AppColors.debtRed,
+        ),
+      );
+      return;
+    }
+
+    if (_isOpenEnded) {
+      _submitOpenEnded();
+      return;
+    }
+
+    if (_installments.isEmpty) {
+      _regenerateInstallments();
+    }
+
+    final totalAmount = Money(_cents);
+    final installmentsSum = P2PCalculator.sumInstallments(_installments);
+
+    if (installmentsSum.cents != totalAmount.cents) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'A soma das parcelas (${installmentsSum.format()}) difere do total (${totalAmount.format()}). Clique em "Equilibrar" para ajustar.',
+          ),
+          action: SnackBarAction(
+            label: 'Equilibrar',
+            onPressed: _balanceInstallments,
+          ),
+        ),
+      );
+      return;
+    }
+
+    final loanId = 'loan_${DateTime.now().millisecondsSinceEpoch}';
+    final allPaid = _installments.every((i) => i.isFullyPaid);
+
+    final finalInstallments = [
+      for (int i = 0; i < _installments.length; i++)
+        P2PInstallment(
+          id: '${loanId}_inst_${i + 1}',
+          loanId: loanId,
+          number: i + 1,
+          totalCount: _installments.length,
+          amount: _installments[i].amount,
+          paidAmount: _installments[i].paidAmount,
+          dueDate: _installments[i].dueDate,
+          paidAt: _installments[i].paidAt,
+        ),
+    ];
 
     final loan = P2PLoan(
       id: loanId,
@@ -63,23 +312,281 @@ class _CreateLoanPageState extends State<CreateLoanPage> {
       totalAmount: totalAmount,
       lenderMemberId: _lenderId,
       borrowerMemberId: _borrowerId,
-      installmentsCount: _installmentsCount,
-      createdAt: DateTime.now(),
+      installmentsCount: finalInstallments.length,
+      createdAt: _isHistorical ? _firstDueDate : DateTime.now(),
       firstDueDate: _firstDueDate,
-      installments: installments,
+      status: allPaid ? LoanStatus.paid : LoanStatus.active,
+      installments: finalInstallments,
+      settleInCycle: _settleInCycle,
     );
 
-    context.read<P2PCubit>().createLoan(loan);
-    Navigator.pop(context);
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Empréstimo registrado com sucesso! 🎉')),
+    _saveLoan(loan, 'Empréstimo registrado com sucesso! 🎉');
+  }
+
+  /// Aguarda a gravação e só então fecha a tela e confirma ao usuário.
+  Future<void> _saveLoan(P2PLoan loan, String successMessage) async {
+    final cubit = context.read<P2PCubit>();
+    final messenger = ScaffoldMessenger.of(context);
+    final navigator = Navigator.of(context);
+
+    final ok = await cubit.createLoan(loan);
+    if (ok) {
+      if (mounted) navigator.pop();
+      messenger.showSnackBar(SnackBar(content: Text(successMessage)));
+    } else {
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text(cubit.state.errorMessage ?? 'Não foi possível registrar o empréstimo.'),
+          backgroundColor: AppColors.debtRed,
+        ),
+      );
+    }
+  }
+
+  /// Cria um empréstimo livre (sem prazo): uma única parcela de "saldo aberto"
+  /// que o devedor vai abatendo com o valor que puder, sem vencimento.
+  void _submitOpenEnded() {
+    final totalAmount = Money(_cents);
+    final paidCents = _openEndedHasPriorPayments ? _openEndedPaidCents : 0;
+
+    if (paidCents > totalAmount.cents) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'O valor já abatido (${Money(paidCents).format()}) não pode ser maior que o total (${totalAmount.format()}).',
+          ),
+          backgroundColor: AppColors.debtRed,
+        ),
+      );
+      return;
+    }
+
+    final loanId = 'loan_${DateTime.now().millisecondsSinceEpoch}';
+    final installments = P2PCalculator.buildOpenEndedInstallment(
+      loanId: loanId,
+      totalAmount: totalAmount,
+      alreadyPaid: Money(paidCents),
+    );
+    final isFullyPaid = paidCents == totalAmount.cents;
+
+    final loan = P2PLoan(
+      id: loanId,
+      title: _titleController.text.trim(),
+      description: _descriptionController.text.trim().isNotEmpty ? _descriptionController.text.trim() : null,
+      totalAmount: totalAmount,
+      lenderMemberId: _lenderId,
+      borrowerMemberId: _borrowerId,
+      installmentsCount: 1,
+      createdAt: DateTime.now(),
+      firstDueDate: P2PLoan.openEndedPlaceholderDueDate,
+      status: isFullyPaid ? LoanStatus.paid : LoanStatus.active,
+      installments: installments,
+      repaymentMode: LoanRepaymentMode.openEnded,
+    );
+
+    _saveLoan(loan, 'Empréstimo sem prazo registrado! O devedor pode abater quando puder.');
+  }
+
+  Widget _buildRepaymentModeSelector(ThemeData theme) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text('Forma de pagamento', style: theme.textTheme.titleSmall),
+        const SizedBox(height: 8),
+        SizedBox(
+          width: double.infinity,
+          child: SegmentedButton<LoanRepaymentMode>(
+            showSelectedIcon: false,
+            segments: const [
+              ButtonSegment(
+                value: LoanRepaymentMode.installments,
+                icon: Icon(Icons.calendar_month_rounded),
+                label: Text('Parcelado'),
+              ),
+              ButtonSegment(
+                value: LoanRepaymentMode.openEnded,
+                icon: Icon(Icons.all_inclusive_rounded),
+                label: Text('Sem prazo'),
+              ),
+            ],
+            selected: {_repaymentMode},
+            onSelectionChanged: (selection) {
+              setState(() {
+                _repaymentMode = selection.first;
+              });
+              if (!_isOpenEnded) _regenerateInstallments();
+            },
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildOpenEndedSection(ThemeData theme) {
+    final totalCents = _cents;
+    final paidCents = _openEndedHasPriorPayments ? _openEndedPaidCents : 0;
+    final openCents = totalCents > paidCents ? totalCents - paidCents : 0;
+    final exceedsTotal = paidCents > totalCents && totalCents > 0;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // Explicação da modalidade
+        Container(
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            color: AppColors.primary.withValues(alpha: 0.08),
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: const Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Icon(Icons.info_outline_rounded, size: 20, color: AppColors.primary),
+              SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  'Sem parcelas e sem vencimento: o devedor abate o valor que puder, quando puder. '
+                  'Este empréstimo não entra no Fechamento do Ciclo e nunca fica "vencido".',
+                  style: TextStyle(fontSize: 12, color: AppColors.primary, fontWeight: FontWeight.w600),
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 16),
+
+        // Abatimentos anteriores ao Omni Lar
+        Material(
+          color: _openEndedHasPriorPayments
+              ? AppColors.accent.withValues(alpha: 0.08)
+              : (theme.brightness == Brightness.dark ? AppColors.surfaceDark : Colors.grey.shade50),
+          shape: RoundedRectangleBorder(
+            side: BorderSide(
+              color: _openEndedHasPriorPayments ? AppColors.accent : theme.dividerColor,
+              width: _openEndedHasPriorPayments ? 1.5 : 1,
+            ),
+            borderRadius: BorderRadius.circular(14),
+          ),
+          clipBehavior: Clip.antiAlias,
+          child: Column(
+            children: [
+              SwitchListTile(
+                title: const Text(
+                  'Já houve abatimentos?',
+                  style: TextStyle(fontWeight: FontWeight.bold),
+                ),
+                subtitle: const Text(
+                  'Registrar o que o devedor já pagou antes de usar o Omni Lar',
+                  style: TextStyle(fontSize: 12),
+                ),
+                secondary: Icon(
+                  Icons.history_rounded,
+                  color: _openEndedHasPriorPayments ? AppColors.accent : Colors.grey,
+                ),
+                value: _openEndedHasPriorPayments,
+                onChanged: (val) {
+                  setState(() {
+                    _openEndedHasPriorPayments = val;
+                    if (!val) _openEndedPaidCents = 0;
+                  });
+                },
+              ),
+              if (_openEndedHasPriorPayments)
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                  child: MoneyInputField(
+                    label: 'Valor já abatido',
+                    initialValue: Money(_openEndedPaidCents),
+                    primaryColor: AppColors.creditGreen,
+                    onChanged: (money) {
+                      setState(() {
+                        _openEndedPaidCents = money.cents;
+                      });
+                    },
+                  ),
+                ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 16),
+
+        // Resumo
+        if (totalCents > 0)
+          Card(
+            elevation: 0,
+            color: theme.brightness == Brightness.dark ? AppColors.surfaceDark : Colors.grey.shade100,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            child: Padding(
+              padding: const EdgeInsets.all(14),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceAround,
+                children: [
+                  Column(
+                    children: [
+                      Text('Total', style: theme.textTheme.bodySmall),
+                      Text(Money(totalCents).format(), style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                    ],
+                  ),
+                  Container(height: 28, width: 1, color: theme.dividerColor),
+                  Column(
+                    children: [
+                      Text('Já abatido', style: theme.textTheme.bodySmall),
+                      Text(
+                        Money(paidCents).format(),
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 14,
+                          color: exceedsTotal ? AppColors.debtRed : AppColors.creditGreen,
+                        ),
+                      ),
+                    ],
+                  ),
+                  Container(height: 28, width: 1, color: theme.dividerColor),
+                  Column(
+                    children: [
+                      Text('Saldo devedor', style: theme.textTheme.bodySmall),
+                      Text(
+                        Money(openCents).format(),
+                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: AppColors.accent),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ),
+        if (exceedsTotal)
+          const Padding(
+            padding: EdgeInsets.only(top: 8),
+            child: Text(
+              'O valor já abatido não pode ser maior que o total do empréstimo.',
+              style: TextStyle(fontSize: 12, color: AppColors.debtRed, fontWeight: FontWeight.w600),
+            ),
+          ),
+      ],
     );
   }
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final installmentAmount = _cents > 0 ? Money(_cents ~/ _installmentsCount).format() : 'R\$ 0,00';
+    final dateFmt = DateFormat('dd/MM/yyyy');
+
+    // Cálculos de resumo
+    final totalMoney = Money(_cents);
+    final currentSum = P2PCalculator.sumInstallments(_installments);
+    final hasSumMismatch = _cents > 0 && _installments.isNotEmpty && currentSum.cents != _cents;
+
+    int paidCents = 0;
+    int paidCount = 0;
+    for (final inst in _installments) {
+      if (inst.isFullyPaid) {
+        paidCents += inst.amount.cents;
+        paidCount++;
+      }
+    }
+    final openCount = _installments.length - paidCount;
+    final openCents = _cents > paidCents ? _cents - paidCents : 0;
 
     return Scaffold(
       appBar: AppBar(
@@ -92,16 +599,17 @@ class _CreateLoanPageState extends State<CreateLoanPage> {
       body: ListView(
         padding: const EdgeInsets.all(20),
         children: [
-          // Campo ATM Contínuo de Valor
+          // Campo Contínuo de Valor Total
           MoneyInputField(
             label: 'Valor Total do Empréstimo',
             initialValue: Money(_cents),
             primaryColor: AppColors.accent,
-            quickAddCents: const [5000, 10000, 20000, 50000], // +50, +100, +200, +500
+            quickAddCents: const [5000, 10000, 20000, 50000],
             onChanged: (money) {
               setState(() {
                 _cents = money.cents;
               });
+              _regenerateInstallments();
             },
           ),
           const SizedBox(height: 20),
@@ -110,68 +618,236 @@ class _CreateLoanPageState extends State<CreateLoanPage> {
             controller: _titleController,
             decoration: InputDecoration(
               labelText: 'Título do Empréstimo',
-              hintText: 'Ex: Camisa Zara, Celular Novo, Conserto',
+              hintText: 'Ex: Celular Novo, Camisa Zara, Conserto do Carro',
               prefixIcon: const Icon(Icons.title_rounded),
+              border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+            ),
+          ),
+          const SizedBox(height: 16),
+
+          TextField(
+            controller: _descriptionController,
+            decoration: InputDecoration(
+              labelText: 'Descrição / Observações (Opcional)',
+              hintText: 'Ex: Compra parcelada no cartão Smiles',
+              prefixIcon: const Icon(Icons.notes_rounded),
               border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
             ),
           ),
           const SizedBox(height: 20),
 
-          Text('Quem tomou o empréstimo? (Devedor)', style: theme.textTheme.titleSmall),
-          const SizedBox(height: 8),
+          BlocBuilder<FinanceCubit, FinanceState>(
+            builder: (context, finState) {
+              final isDemo = sl<AuthRepository>().isDemoMode;
+              final members = finState.members;
+              final displayMembers = (!isDemo && members.isNotEmpty)
+                  ? members
+                  : (!isDemo && sl<AuthRepository>().currentUser != null
+                      ? [
+                          HouseMember(
+                            id: sl<AuthRepository>().currentUser!.id,
+                            name: sl<AuthRepository>().currentUser!.fullName.isNotEmpty
+                                ? sl<AuthRepository>().currentUser!.fullName
+                                : 'Você',
+                          )
+                        ]
+                      : const [
+                          HouseMember(id: 'member_carlos', name: 'Carlos'),
+                          HouseMember(id: 'member_marina', name: 'Marina'),
+                        ]);
+
+              final lenderName = displayMembers.where((m) => m.id == _lenderId).firstOrNull?.name ??
+                  (isDemo && _lenderId == 'member_carlos' ? 'Carlos' : 'Selecione');
+              final borrowerName = displayMembers.where((m) => m.id == _borrowerId).firstOrNull?.name ??
+                  (isDemo && _borrowerId == 'member_marina' ? 'Marina' : 'Selecione');
+              final hasSamePartyError = _lenderId.isNotEmpty && _lenderId == _borrowerId;
+
+              return Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: theme.cardColor,
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(
+                    color: hasSamePartyError ? AppColors.debtRed : theme.dividerColor,
+                  ),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // 1. Quem emprestou (Credor)
+                    Row(
+                      children: [
+                        const Icon(Icons.arrow_downward_rounded, color: AppColors.creditGreen, size: 20),
+                        const SizedBox(width: 8),
+                        Text(
+                          'Quem emprestou? (Credor)',
+                          style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.bold),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: displayMembers.map((m) {
+                        final isSelected = _lenderId == m.id;
+                        return ChoiceChip(
+                          selected: isSelected,
+                          label: Text(m.name),
+                          selectedColor: AppColors.creditGreen.withValues(alpha: 0.2),
+                          side: BorderSide(
+                            color: isSelected ? AppColors.creditGreen : theme.dividerColor,
+                          ),
+                          onSelected: (val) {
+                            if (val) {
+                              setState(() {
+                                _lenderId = m.id;
+                                if (_borrowerId == m.id) {
+                                  final other = displayMembers.where((x) => x.id != m.id).firstOrNull;
+                                  if (other != null) _borrowerId = other.id;
+                                }
+                              });
+                            }
+                          },
+                        );
+                      }).toList(),
+                    ),
+                    const SizedBox(height: 12),
+
+                    // Botão Inverter
+                    Center(
+                      child: TextButton.icon(
+                        style: TextButton.styleFrom(
+                          visualDensity: VisualDensity.compact,
+                          foregroundColor: AppColors.primary,
+                        ),
+                        icon: const Icon(Icons.swap_vert_rounded, size: 18),
+                        label: const Text('Inverter Credor e Devedor', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                        onPressed: _swapParties,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+
+                    // 2. Quem tomou (Devedor)
+                    Row(
+                      children: [
+                        const Icon(Icons.arrow_upward_rounded, color: AppColors.debtRed, size: 20),
+                        const SizedBox(width: 8),
+                        Text(
+                          'Quem tomou o empréstimo? (Devedor)',
+                          style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.bold),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: displayMembers.map((m) {
+                        final isSelected = _borrowerId == m.id;
+                        return ChoiceChip(
+                          selected: isSelected,
+                          label: Text(m.name),
+                          selectedColor: AppColors.debtRed.withValues(alpha: 0.2),
+                          side: BorderSide(
+                            color: isSelected ? AppColors.debtRed : theme.dividerColor,
+                          ),
+                          onSelected: (val) {
+                            if (val) {
+                              setState(() {
+                                _borrowerId = m.id;
+                                if (_lenderId == m.id) {
+                                  final other = displayMembers.where((x) => x.id != m.id).firstOrNull;
+                                  if (other != null) _lenderId = other.id;
+                                }
+                              });
+                            }
+                          },
+                        );
+                      }).toList(),
+                    ),
+
+                    const SizedBox(height: 14),
+
+                    // Resumo visual
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                      decoration: BoxDecoration(
+                        color: hasSamePartyError
+                            ? AppColors.debtRed.withValues(alpha: 0.1)
+                            : AppColors.primary.withValues(alpha: 0.08),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(
+                            hasSamePartyError ? Icons.error_outline_rounded : Icons.sync_alt_rounded,
+                            size: 18,
+                            color: hasSamePartyError ? AppColors.debtRed : AppColors.primary,
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              hasSamePartyError
+                                  ? 'Atenção: O credor e o devedor devem ser membros diferentes.'
+                                  : '$lenderName emprestou para $borrowerName',
+                              style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.bold,
+                                color: hasSamePartyError ? AppColors.debtRed : AppColors.primary,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            },
+          ),
+          const SizedBox(height: 24),
+
+          // Modalidade: Parcelado x Sem prazo
+          _buildRepaymentModeSelector(theme),
+          const SizedBox(height: 20),
+
+          if (_isOpenEnded)
+            _buildOpenEndedSection(theme)
+          else ...[
+
+          SwitchListTile(
+            contentPadding: EdgeInsets.zero,
+            title: const Text('Cobrar no Fechamento do Ciclo'),
+            subtitle: Text(
+              _settleInCycle
+                  ? 'Cada parcela entra no fechamento do ciclo em que vence. Dá para antecipar quando quiser.'
+                  : 'As datas servem só de lembrete: o pagamento é sempre manual.',
+            ),
+            value: _settleInCycle,
+            onChanged: (value) => setState(() => _settleInCycle = value),
+          ),
+          const SizedBox(height: 12),
+
+          // Quantidade de Parcelas
           Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Expanded(
-                child: OutlinedButton(
-                  style: OutlinedButton.styleFrom(
-                    backgroundColor: _borrowerId == 'member_marina' ? AppColors.accent.withValues(alpha: 0.12) : null,
-                    side: BorderSide(
-                      color: _borrowerId == 'member_marina' ? AppColors.accent : theme.dividerColor,
-                      width: _borrowerId == 'member_marina' ? 2 : 1,
-                    ),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                    padding: const EdgeInsets.symmetric(vertical: 12),
-                  ),
-                  onPressed: () {
-                    setState(() {
-                      _borrowerId = 'member_marina';
-                    });
-                  },
-                  child: const Text('Marina', style: TextStyle(fontWeight: FontWeight.bold)),
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: OutlinedButton(
-                  style: OutlinedButton.styleFrom(
-                    backgroundColor: _borrowerId == 'member_carlos' ? AppColors.accent.withValues(alpha: 0.12) : null,
-                    side: BorderSide(
-                      color: _borrowerId == 'member_carlos' ? AppColors.accent : theme.dividerColor,
-                      width: _borrowerId == 'member_carlos' ? 2 : 1,
-                    ),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                    padding: const EdgeInsets.symmetric(vertical: 12),
-                  ),
-                  onPressed: () {
-                    setState(() {
-                      _borrowerId = 'member_carlos';
-                    });
-                  },
-                  child: const Text('Carlos', style: TextStyle(fontWeight: FontWeight.bold)),
-                ),
+              Text('Número de Parcelas', style: theme.textTheme.titleSmall),
+              Text(
+                '$_installmentsCount${_installmentsCount > 1 ? " parcelas" : " parcela"}',
+                style: const TextStyle(fontWeight: FontWeight.bold, color: AppColors.accent),
               ),
             ],
           ),
-          const SizedBox(height: 20),
-
-          Text('Número de Parcelas', style: theme.textTheme.titleSmall),
           const SizedBox(height: 8),
-          Row(
-            children: [1, 2, 3, 4, 6, 12].map((count) {
-              final isSelected = _installmentsCount == count;
-              return Expanded(
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 2),
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(
+              children: [1, 2, 3, 4, 5, 6, 10, 12, 18, 24].map((count) {
+                final isSelected = _installmentsCount == count;
+                return Padding(
+                  padding: const EdgeInsets.only(right: 8),
                   child: ChoiceChip(
                     label: Text('${count}x'),
                     selected: isSelected,
@@ -180,23 +856,444 @@ class _CreateLoanPageState extends State<CreateLoanPage> {
                       if (selected) {
                         setState(() {
                           _installmentsCount = count;
+                          if (_paidInstallmentsCount > count) {
+                            _paidInstallmentsCount = count;
+                          }
                         });
+                        _regenerateInstallments();
                       }
                     },
                   ),
-                ),
-              );
-            }).toList(),
-          ),
-          if (_installmentsCount > 1) ...[
-            const SizedBox(height: 8),
-            Text(
-              '$_installmentsCount parcelas de aprox. $installmentAmount por mês',
-              style: theme.textTheme.bodySmall?.copyWith(color: AppColors.accent),
+                );
+              }).toList(),
             ),
+          ),
+          const SizedBox(height: 20),
+
+          // Data do 1º Vencimento
+          InkWell(
+            onTap: _pickFirstDueDate,
+            borderRadius: BorderRadius.circular(12),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+              decoration: BoxDecoration(
+                border: Border.all(color: theme.dividerColor),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.calendar_month_rounded, color: AppColors.accent),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('Vencimento da 1ª Parcela', style: theme.textTheme.bodySmall),
+                        Text(
+                          dateFmt.format(_firstDueDate),
+                          style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const Icon(Icons.arrow_drop_down_rounded),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 20),
+
+          // Switch: Empréstimo Iniciado no Passado (Opção 1)
+          Material(
+            color: _isHistorical
+                ? AppColors.accent.withValues(alpha: 0.08)
+                : (theme.brightness == Brightness.dark ? AppColors.surfaceDark : Colors.grey.shade50),
+            shape: RoundedRectangleBorder(
+              side: BorderSide(
+                color: _isHistorical ? AppColors.accent : theme.dividerColor,
+                width: _isHistorical ? 1.5 : 1,
+              ),
+              borderRadius: BorderRadius.circular(14),
+            ),
+            clipBehavior: Clip.antiAlias,
+            child: Column(
+              children: [
+                SwitchListTile(
+                  title: const Text(
+                    'Empréstimo iniciado no passado?',
+                    style: TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                  subtitle: const Text(
+                    'Cadastrar contrato com parcelas já quitadas antes de usar o Omni Lar',
+                    style: TextStyle(fontSize: 12),
+                  ),
+                  secondary: Icon(
+                    Icons.history_rounded,
+                    color: _isHistorical ? AppColors.accent : Colors.grey,
+                  ),
+                  value: _isHistorical,
+                  onChanged: (val) {
+                    setState(() {
+                      _isHistorical = val;
+                      if (!_isHistorical) {
+                        _paidInstallmentsCount = 0;
+                      } else if (_paidInstallmentsCount == 0 && _installmentsCount > 1) {
+                        _paidInstallmentsCount = 1;
+                      }
+                    });
+                    _regenerateInstallments();
+                  },
+                ),
+                if (_isHistorical) ...[
+                  const Divider(height: 1),
+                  Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            const Text(
+                              'Parcelas já quitadas anteriormente:',
+                              style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
+                            ),
+                            Text(
+                              '$_paidInstallmentsCount de $_installmentsCount pagas',
+                              style: const TextStyle(fontWeight: FontWeight.bold, color: AppColors.creditGreen),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 10),
+                        Row(
+                          children: [
+                            IconButton.outlined(
+                              icon: const Icon(Icons.remove_rounded),
+                              onPressed: _paidInstallmentsCount > 0
+                                  ? () {
+                                      setState(() {
+                                        _paidInstallmentsCount--;
+                                      });
+                                      _regenerateInstallments();
+                                    }
+                                  : null,
+                            ),
+                            Expanded(
+                              child: Slider(
+                                value: _paidInstallmentsCount.toDouble(),
+                                min: 0,
+                                max: _installmentsCount.toDouble(),
+                                divisions: _installmentsCount > 0 ? _installmentsCount : 1,
+                                activeColor: AppColors.creditGreen,
+                                onChanged: (val) {
+                                  setState(() {
+                                    _paidInstallmentsCount = val.round();
+                                  });
+                                  _regenerateInstallments();
+                                },
+                              ),
+                            ),
+                            IconButton.outlined(
+                              icon: const Icon(Icons.add_rounded),
+                              onPressed: _paidInstallmentsCount < _installmentsCount
+                                  ? () {
+                                      setState(() {
+                                        _paidInstallmentsCount++;
+                                      });
+                                      _regenerateInstallments();
+                                    }
+                                  : null,
+                            ),
+                          ],
+                        ),
+                        Container(
+                          padding: const EdgeInsets.all(10),
+                          decoration: BoxDecoration(
+                            color: AppColors.creditGreen.withValues(alpha: 0.1),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Row(
+                            children: [
+                              const Icon(Icons.info_outline_rounded, size: 18, color: AppColors.creditGreen),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Text(
+                                  '$_paidInstallmentsCount parcelas serão registradas como pagas no passado (sem debitar ou creditar o caixa atual). Restam ${_installmentsCount - _paidInstallmentsCount} parcelas em aberto.',
+                                  style: const TextStyle(fontSize: 12, color: AppColors.creditGreen),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+          const SizedBox(height: 24),
+
+          // Seção: Detalhamento e Edição Parcela por Parcela (Opção 2)
+          if (_cents > 0 && _installments.isNotEmpty) ...[
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  'Detalhamento das Parcelas',
+                  style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
+                ),
+                TextButton.icon(
+                  style: TextButton.styleFrom(visualDensity: VisualDensity.compact),
+                  icon: const Icon(Icons.refresh_rounded, size: 16),
+                  label: const Text('Dividir igualmente', style: TextStyle(fontSize: 12)),
+                  onPressed: _regenerateInstallments,
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+
+            // Card Resumo das Parcelas
+            Card(
+              elevation: 0,
+              color: theme.brightness == Brightness.dark ? AppColors.surfaceDark : Colors.grey.shade100,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              child: Padding(
+                padding: const EdgeInsets.all(14),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceAround,
+                  children: [
+                    Column(
+                      children: [
+                        Text('Total', style: theme.textTheme.bodySmall),
+                        Text(totalMoney.format(), style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                      ],
+                    ),
+                    Container(height: 28, width: 1, color: theme.dividerColor),
+                    Column(
+                      children: [
+                        Text('Já Pago', style: theme.textTheme.bodySmall),
+                        Text(
+                          Money(paidCents).format(),
+                          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: AppColors.creditGreen),
+                        ),
+                        Text('$paidCount parcelas', style: const TextStyle(fontSize: 10, color: Colors.grey)),
+                      ],
+                    ),
+                    Container(height: 28, width: 1, color: theme.dividerColor),
+                    Column(
+                      children: [
+                        Text('Em Aberto', style: theme.textTheme.bodySmall),
+                        Text(
+                          Money(openCents).format(),
+                          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: AppColors.accent),
+                        ),
+                        Text('$openCount parcelas', style: const TextStyle(fontSize: 10, color: Colors.grey)),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(height: 12),
+
+            // Alerta de Divergência de Centavos / Soma
+            if (hasSumMismatch)
+              Container(
+                padding: const EdgeInsets.all(12),
+                margin: const EdgeInsets.only(bottom: 12),
+                decoration: BoxDecoration(
+                  color: Colors.amber.withValues(alpha: 0.15),
+                  border: Border.all(color: Colors.amber.shade700),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Icon(Icons.warning_amber_rounded, color: Colors.amber.shade900, size: 20),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            'Soma das parcelas (${currentSum.format()}) difere do total (${totalMoney.format()})',
+                            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Colors.amber.shade900),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    Row(
+                      children: [
+                        ElevatedButton.icon(
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.amber.shade800,
+                            foregroundColor: Colors.white,
+                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                            visualDensity: VisualDensity.compact,
+                          ),
+                          icon: const Icon(Icons.auto_fix_high_rounded, size: 16),
+                          label: const Text('Equilibrar na última', style: TextStyle(fontSize: 12)),
+                          onPressed: _balanceInstallments,
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+
+            // Lista Interativa de Parcelas
+            ListView.separated(
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              itemCount: _installments.length,
+              separatorBuilder: (_, _) => const SizedBox(height: 8),
+              itemBuilder: (context, index) {
+                final inst = _installments[index];
+                final isPaid = inst.isFullyPaid;
+                final isOverdue = !isPaid && DateTime.now().isAfter(inst.dueDate);
+
+                return Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                  decoration: BoxDecoration(
+                    color: isPaid
+                        ? AppColors.creditGreen.withValues(alpha: 0.05)
+                        : (isOverdue ? AppColors.debtRed.withValues(alpha: 0.05) : theme.cardColor),
+                    border: Border.all(
+                      color: isPaid
+                          ? AppColors.creditGreen.withValues(alpha: 0.3)
+                          : (isOverdue ? AppColors.debtRed.withValues(alpha: 0.3) : theme.dividerColor),
+                    ),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Row(
+                    children: [
+                      // Número da Parcela
+                      CircleAvatar(
+                        radius: 16,
+                        backgroundColor: isPaid
+                            ? AppColors.creditGreen.withValues(alpha: 0.15)
+                            : (isOverdue ? AppColors.debtRed.withValues(alpha: 0.15) : AppColors.accent.withValues(alpha: 0.1)),
+                        child: Text(
+                          '${inst.number}',
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.bold,
+                            color: isPaid
+                                ? AppColors.creditGreen
+                                : (isOverdue ? AppColors.debtRed : AppColors.accent),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+
+                      // Detalhes: Data e Valor
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                InkWell(
+                                  onTap: () => _pickInstallmentDueDate(index),
+                                  borderRadius: BorderRadius.circular(4),
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Icon(Icons.calendar_today_rounded, size: 13, color: Colors.grey.shade600),
+                                      const SizedBox(width: 4),
+                                      Text(
+                                        dateFmt.format(inst.dueDate),
+                                        style: TextStyle(
+                                          fontSize: 12,
+                                          fontWeight: FontWeight.w600,
+                                          decoration: TextDecoration.underline,
+                                          decorationStyle: TextDecorationStyle.dotted,
+                                          color: isOverdue ? AppColors.debtRed : null,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                const SizedBox(width: 10),
+                                InkWell(
+                                  onTap: () => _editInstallmentAmount(index),
+                                  borderRadius: BorderRadius.circular(4),
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      const Icon(Icons.edit_rounded, size: 13, color: AppColors.accent),
+                                      const SizedBox(width: 4),
+                                      Text(
+                                        inst.amount.format(),
+                                        style: const TextStyle(
+                                          fontSize: 13,
+                                          fontWeight: FontWeight.bold,
+                                          color: AppColors.accent,
+                                          decoration: TextDecoration.underline,
+                                          decorationStyle: TextDecorationStyle.dotted,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+
+                      // Chip Interativo de Status
+                      InkWell(
+                        onTap: () => _toggleInstallmentPaidStatus(index),
+                        borderRadius: BorderRadius.circular(16),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                          decoration: BoxDecoration(
+                            color: isPaid
+                                ? AppColors.creditGreen.withValues(alpha: 0.15)
+                                : (isOverdue ? AppColors.debtRed.withValues(alpha: 0.15) : Colors.grey.withValues(alpha: 0.15)),
+                            borderRadius: BorderRadius.circular(16),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(
+                                isPaid
+                                    ? Icons.check_circle_rounded
+                                    : (isOverdue ? Icons.error_outline_rounded : Icons.radio_button_unchecked_rounded),
+                                size: 14,
+                                color: isPaid
+                                    ? AppColors.creditGreen
+                                    : (isOverdue ? AppColors.debtRed : Colors.grey.shade700),
+                              ),
+                              const SizedBox(width: 4),
+                              Text(
+                                isPaid
+                                    ? 'Paga'
+                                    : (isOverdue ? 'Vencida' : 'Em aberto'),
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.bold,
+                                  color: isPaid
+                                      ? AppColors.creditGreen
+                                      : (isOverdue ? AppColors.debtRed : Colors.grey.shade800),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              },
+            ),
+          ],
           ],
           const SizedBox(height: 32),
 
+          // Botão Confirmar Empréstimo
           SizedBox(
             height: 52,
             child: ElevatedButton(

@@ -1,4 +1,5 @@
 import '../../domain/entities/p2p_loan.dart';
+import '../../domain/entities/p2p_payment_record.dart';
 import '../../domain/repositories/p2p_repository.dart';
 import '../datasources/p2p_datasource.dart';
 import '../../../../core/domain/value_objects/money.dart';
@@ -24,4 +25,17 @@ class P2PRepositoryImpl implements P2PRepository {
   @override
   Future<void> renegotiateLoan(String loanId, int newInstallmentsCount, DateTime newFirstDueDate) =>
       _dataSource.renegotiateLoan(loanId, newInstallmentsCount, newFirstDueDate);
+
+  @override
+  Future<void> deleteLoan(String loanId) => _dataSource.deleteLoan(loanId);
+
+  @override
+  Future<List<P2PPaymentRecord>> getLoanPayments(String loanId) => _dataSource.getLoanPayments(loanId);
+
+  @override
+  Future<void> payLoan(String loanId, Money amount) => _dataSource.payLoan(loanId, amount);
+
+  @override
+  Future<void> setSettleInCycle(String loanId, bool settleInCycle) =>
+      _dataSource.setSettleInCycle(loanId, settleInCycle);
 }

@@ -6,8 +6,10 @@ class MemberNetBalance {
   final Money contributionDue;
   final Money contributionPaid;
   final Money outOfPocketExpenses; // Crédito que a Casa deve ao membro
-  final Money p2pLentDue; // Total de parcelas P2P que outros devem a ele no ciclo
-  final Money p2pBorrowedDue; // Total de parcelas P2P que ele deve a outros no ciclo
+  final Money
+  p2pLentDue; // Total de parcelas P2P que outros devem a ele no ciclo
+  final Money
+  p2pBorrowedDue; // Total de parcelas P2P que ele deve a outros no ciclo
 
   const MemberNetBalance({
     required this.memberId,

@@ -1,5 +1,6 @@
 import '../../domain/entities/p2p_loan.dart';
 import '../../domain/entities/p2p_installment.dart';
+import '../../domain/entities/p2p_payment_record.dart';
 import '../../domain/services/p2p_calculator.dart';
 import '../../../../core/domain/value_objects/money.dart';
 
@@ -7,6 +8,7 @@ import 'p2p_datasource.dart';
 
 class MockP2PDataSource implements P2PDataSource {
   final List<P2PLoan> _loans = [];
+  final Map<String, List<P2PPaymentRecord>> _paymentsByLoan = {};
 
   MockP2PDataSource() {
     final now = DateTime.now();
@@ -134,7 +136,12 @@ class MockP2PDataSource implements P2PDataSource {
         final updatedInstallments = List<P2PInstallment>.from(loan.installments);
         updatedInstallments[instIndex] = updatedInst;
 
-        final isAllPaid = updatedInstallments.every((inst) => inst.isFullyPaid);
+        _paymentsByLoan
+            .putIfAbsent(loan.id, () => [])
+            .insert(0, P2PPaymentRecord(amount: amount, paidAt: DateTime.now()));
+
+        final isAllPaid = updatedInstallments
+            .every((inst) => inst.isFullyPaid || inst.isCancelled || inst.isForgiven);
         _loans[i] = loan.copyWith(
           installments: updatedInstallments,
           status: isAllPaid ? LoanStatus.paid : loan.status,
@@ -178,8 +185,7 @@ class MockP2PDataSource implements P2PDataSource {
         return inst;
       }).toList();
 
-      final paidOldInstallments = updatedOldInstallments.where((i) => i.isFullyPaid).toList();
-      final paidCount = paidOldInstallments.length;
+      final paidCount = updatedOldInstallments.where((i) => i.isFullyPaid).length;
       final totalCombinedCount = paidCount + newInstallmentsCount;
 
       // Gera as novas parcelas sequenciais a partir do paidCount
@@ -196,7 +202,7 @@ class MockP2PDataSource implements P2PDataSource {
 
         newInstallments.add(
           P2PInstallment(
-            id: '${loanId}_reneg_${i + 1}',
+            id: '${loanId}_reneg_${updatedOldInstallments.length + i + 1}',
             loanId: loanId,
             number: paidCount + i + 1,
             totalCount: totalCombinedCount,
@@ -208,9 +214,47 @@ class MockP2PDataSource implements P2PDataSource {
 
       _loans[index] = loan.copyWith(
         installmentsCount: totalCombinedCount,
-        installments: [...paidOldInstallments, ...newInstallments],
+        // Mantém as parcelas canceladas para preservar o valor já abatido nelas.
+        installments: [...updatedOldInstallments, ...newInstallments],
         status: LoanStatus.renegotiated,
+        // Ao definir um parcelamento, um empréstimo sem prazo passa a ser parcelado.
+        repaymentMode: LoanRepaymentMode.installments,
       );
+    }
+  }
+
+  @override
+  Future<void> deleteLoan(String loanId) async {
+    _loans.removeWhere((l) => l.id == loanId);
+  }
+
+  @override
+  Future<List<P2PPaymentRecord>> getLoanPayments(String loanId) async {
+    return List.unmodifiable(_paymentsByLoan[loanId] ?? const []);
+  }
+
+  @override
+  Future<void> payLoan(String loanId, Money amount) async {
+    final loan = _loans.where((l) => l.id == loanId).firstOrNull;
+    if (loan == null) return;
+    if (amount.cents <= 0 || amount.cents > loan.remainingAmount.cents) {
+      throw ArgumentError('Valor inválido para abatimento do empréstimo');
+    }
+
+    int left = amount.cents;
+    for (final inst in loan.openInstallments) {
+      if (left <= 0) break;
+      final part = left < inst.remainingAmount.cents ? left : inst.remainingAmount.cents;
+      await payInstallment(inst.id, Money(part));
+      left -= part;
+    }
+  }
+
+  @override
+  Future<void> setSettleInCycle(String loanId, bool settleInCycle) async {
+    final index = _loans.indexWhere((l) => l.id == loanId);
+    if (index != -1) {
+      _loans[index] = _loans[index].copyWith(settleInCycle: settleInCycle);
     }
   }
 }

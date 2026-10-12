@@ -19,8 +19,23 @@ class P2PPage extends StatelessWidget {
   }
 }
 
-class _P2PPageContent extends StatelessWidget {
+class _P2PPageContent extends StatefulWidget {
   const _P2PPageContent();
+
+  @override
+  State<_P2PPageContent> createState() => _P2PPageContentState();
+}
+
+class _P2PPageContentState extends State<_P2PPageContent> {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        context.read<P2PCubit>().loadLoans();
+      }
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -152,6 +167,85 @@ class _P2PPageContent extends StatelessWidget {
                         ),
                       ],
                     ),
+                    if (state.allLoans.any((l) =>
+                        l.status != LoanStatus.paid &&
+                        l.status != LoanStatus.forgiven &&
+                        l.remainingAmount.cents > 0 &&
+                        l.borrowerMemberId != state.currentUserId &&
+                        l.lenderMemberId != state.currentUserId)) ...[
+                      const SizedBox(height: 24),
+                      Card(
+                        elevation: 0,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(16),
+                          side: BorderSide(color: AppColors.primary.withValues(alpha: 0.2)),
+                        ),
+                        child: Padding(
+                          padding: const EdgeInsets.all(16),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Row(
+                                children: [
+                                  Icon(Icons.people_alt_outlined, color: AppColors.primary, size: 20),
+                                  SizedBox(width: 8),
+                                  Text(
+                                    'Outros Empréstimos da Casa',
+                                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 12),
+                              ...state.allLoans
+                                  .where((l) =>
+                                      l.status != LoanStatus.paid &&
+                                      l.status != LoanStatus.forgiven &&
+                                      l.remainingAmount.cents > 0 &&
+                                      l.borrowerMemberId != state.currentUserId &&
+                                      l.lenderMemberId != state.currentUserId)
+                                  .map((l) => LoanCard(
+                                        loan: l,
+                                        isDebtor: false,
+                                        showBothParties: true,
+                                      )),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ],
+                    if (state.settledLoans.isNotEmpty) ...[
+                      const SizedBox(height: 24),
+                      Card(
+                        elevation: 0,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(16),
+                          side: BorderSide(color: Colors.grey.withValues(alpha: 0.2)),
+                        ),
+                        child: Padding(
+                          padding: const EdgeInsets.all(16),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                children: [
+                                  const Icon(Icons.check_circle_outline_rounded, color: Colors.grey, size: 20),
+                                  const SizedBox(width: 8),
+                                  Text(
+                                    'Histórico / Quitados (${state.settledLoans.length})',
+                                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 12),
+                              ...state.settledLoans.map((l) => LoanCard(
+                                    loan: l,
+                                    isDebtor: l.borrowerMemberId == state.currentUserId,
+                                  )),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ],
                     const SizedBox(height: 40),
                   ],
                 ),
@@ -160,10 +254,17 @@ class _P2PPageContent extends StatelessWidget {
           );
         }
 
-        // Layout Mobile (Abas clássicas Eu Devo / Me Devem)
+        // Layout Mobile (Abas: Eu Devo / Me Devem / Todos / Quitados)
         final theme = Theme.of(context);
+        final activeAllLoans = state.allLoans
+            .where((l) =>
+                l.status != LoanStatus.paid &&
+                l.status != LoanStatus.forgiven &&
+                l.remainingAmount.cents > 0)
+            .toList();
+
         return DefaultTabController(
-          length: 2,
+          length: 4,
           child: Scaffold(
             appBar: AppBar(
               title: const Text('Empréstimos P2P', style: TextStyle(fontWeight: FontWeight.bold)),
@@ -196,6 +297,8 @@ class _P2PPageContent extends StatelessWidget {
                       border: Border.all(color: Colors.grey.withValues(alpha: 0.15)),
                     ),
                     child: TabBar(
+                      isScrollable: true,
+                      tabAlignment: TabAlignment.start,
                       indicatorSize: TabBarIndicatorSize.tab,
                       indicator: BoxDecoration(
                         color: AppColors.primary.withValues(alpha: 0.15),
@@ -207,31 +310,41 @@ class _P2PPageContent extends StatelessWidget {
                       tabs: [
                         Tab(
                           child: Row(
-                            mainAxisAlignment: MainAxisAlignment.center,
+                            mainAxisSize: MainAxisSize.min,
                             children: [
                               const Icon(Icons.arrow_upward_rounded, size: 16, color: AppColors.debtRed),
-                              const SizedBox(width: 6),
-                              Flexible(
-                                child: Text(
-                                  'Eu Devo (${state.totalIDowe.format()})',
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                              ),
+                              const SizedBox(width: 4),
+                              Text('Eu Devo (${state.totalIDowe.format()})'),
                             ],
                           ),
                         ),
                         Tab(
                           child: Row(
-                            mainAxisAlignment: MainAxisAlignment.center,
+                            mainAxisSize: MainAxisSize.min,
                             children: [
                               const Icon(Icons.arrow_downward_rounded, size: 16, color: AppColors.creditGreen),
-                              const SizedBox(width: 6),
-                              Flexible(
-                                child: Text(
-                                  'Me Devem (${state.totalTheyOweMe.format()})',
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                              ),
+                              const SizedBox(width: 4),
+                              Text('Me Devem (${state.totalTheyOweMe.format()})'),
+                            ],
+                          ),
+                        ),
+                        Tab(
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Icon(Icons.people_alt_outlined, size: 16, color: AppColors.primary),
+                              const SizedBox(width: 4),
+                              Text('Todos (${activeAllLoans.length})'),
+                            ],
+                          ),
+                        ),
+                        Tab(
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Icon(Icons.check_circle_outline_rounded, size: 16, color: Colors.grey),
+                              const SizedBox(width: 4),
+                              Text('Quitados (${state.settledLoans.length})'),
                             ],
                           ),
                         ),
@@ -254,6 +367,20 @@ class _P2PPageContent extends StatelessWidget {
                         loans: state.loansTheyOweMe,
                         isDebtor: false,
                         emptyMessage: 'Nenhum valor a receber no momento',
+                      ),
+                      _buildLoansList(
+                        context,
+                        loans: activeAllLoans,
+                        isDebtor: false,
+                        showParties: true,
+                        emptyMessage: 'Nenhum empréstimo ativo na casa',
+                      ),
+                      _buildLoansList(
+                        context,
+                        loans: state.settledLoans,
+                        isDebtor: false,
+                        showParties: true,
+                        emptyMessage: 'Nenhum empréstimo finalizado ainda',
                       ),
                     ],
                   ),
@@ -328,6 +455,7 @@ class _P2PPageContent extends StatelessWidget {
     required List<P2PLoan> loans,
     required bool isDebtor,
     required String emptyMessage,
+    bool showParties = false,
   }) {
     if (loans.isEmpty) {
       return Center(
@@ -353,15 +481,19 @@ class _P2PPageContent extends StatelessWidget {
       );
     }
 
+    final currentUserId = context.read<P2PCubit>().state.currentUserId;
+
     return RefreshIndicator(
       onRefresh: () => context.read<P2PCubit>().loadLoans(),
       child: ListView.builder(
         padding: const EdgeInsets.all(16),
         itemCount: loans.length,
         itemBuilder: (context, index) {
+          final l = loans[index];
           return LoanCard(
-            loan: loans[index],
-            isDebtor: isDebtor,
+            loan: l,
+            isDebtor: showParties ? (l.borrowerMemberId == currentUserId) : isDebtor,
+            showBothParties: showParties,
           );
         },
       ),

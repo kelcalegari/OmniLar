@@ -5,6 +5,7 @@ import '../../../finance/domain/entities/house_expense.dart';
 import '../../../finance/domain/entities/house_member.dart';
 import '../../../finance/domain/entities/split_rule.dart';
 import '../../../p2p/domain/entities/p2p_loan.dart';
+import '../entities/member_audit_trail.dart';
 import '../entities/member_net_balance.dart';
 import '../entities/settlement_summary.dart';
 import '../entities/super_pix_transfer.dart';
@@ -26,6 +27,8 @@ class GlobalClearingEngine {
     required List<Contribution> contributions,
     required List<P2PLoan> loans,
     Map<String, Money>? customContributionTargets,
+    String? housePixKey,
+    String? housePixKeyHolderName,
   }) {
     // 0. Despesas de projetos compartilhados são liquidadas apenas no próprio projeto
     // (ProjectSettlementService). Filtramos aqui por defesa em profundidade para
@@ -47,12 +50,28 @@ class GlobalClearingEngine {
     );
     final totalContributions = Money(totalContributionsCents);
 
-    // 3. Calcular meta de aporte por membro:
+    // 3. Calcular meta de aporte por membro e auditar a partição de cada despesa:
     // Se não for fornecida meta customizada, reparte as despesas da casa considerando
     // as regras de rateio de cada despesa e seus sub-itens (se for despesa composta).
     final Map<String, Money> contributionTargets = {};
+    final Map<String, List<ExpenseShareAudit>> memberExpenseShares = {
+      for (final m in members) m.id: [],
+    };
+
     if (customContributionTargets != null) {
       contributionTargets.addAll(customContributionTargets);
+      for (final entry in customContributionTargets.entries) {
+        memberExpenseShares[entry.key]?.add(
+          ExpenseShareAudit(
+            expenseId: 'custom_target',
+            expenseTitle: 'Meta Fixa / Personalizada',
+            totalExpenseAmount: entry.value,
+            allocatedAmount: entry.value,
+            ruleDescription: 'Valor fixo definido no perfil do membro',
+            date: cycle.startDate,
+          ),
+        );
+      }
     } else {
       final memberIds = members.map((m) => m.id).toList();
       final defaultPercentages = <String, double>{
@@ -67,26 +86,49 @@ class GlobalClearingEngine {
         if (expense.isItemized) {
           // Despesa composta: reparte cada sub-item individualmente
           for (final item in expense.items) {
-            final SplitRule itemRule = item.splitRule ??
+            final SplitRule itemRule =
+                item.splitRule ??
                 (item.responsibleMemberId != null
                     ? SplitRule.singleResponsible(item.responsibleMemberId!)
                     : (expense.splitRule.type == SplitType.percentage &&
-                            (expense.splitRule.percentages == null || expense.splitRule.percentages!.isEmpty)
-                        ? SplitRule.percentage(defaultPercentages)
-                        : expense.splitRule));
+                              (expense.splitRule.percentages == null ||
+                                  expense.splitRule.percentages!.isEmpty)
+                          ? SplitRule.percentage(defaultPercentages)
+                          : expense.splitRule));
 
             final allocations = itemRule.calculateAllocations(
               totalAmount: item.amount,
               memberIds: memberIds,
             );
             for (final entry in allocations.entries) {
-              targetCentsMap[entry.key] = (targetCentsMap[entry.key] ?? 0) + entry.value.cents;
+              if (entry.value.cents > 0) {
+                targetCentsMap[entry.key] =
+                    (targetCentsMap[entry.key] ?? 0) + entry.value.cents;
+                final isPersonalItem = item.responsibleMemberId != null ||
+                    item.splitRule?.type == SplitType.categoryOwner;
+                final ruleDesc = isPersonalItem
+                    ? 'Item pessoal exclusivo'
+                    : 'Sub-item rateado (${itemRule.type.name})';
+                memberExpenseShares[entry.key]?.add(
+                  ExpenseShareAudit(
+                    expenseId: expense.id,
+                    expenseTitle: '${expense.title} • ${item.title}',
+                    totalExpenseAmount: item.amount,
+                    allocatedAmount: entry.value,
+                    ruleDescription: ruleDesc,
+                    date: expense.date,
+                    isPersonal: isPersonalItem,
+                  ),
+                );
+              }
             }
           }
         } else {
           // Despesa simples: usa a regra da despesa ou os percentuais padrão dos membros
-          final SplitRule effectiveRule = (expense.splitRule.type == SplitType.percentage &&
-                  (expense.splitRule.percentages == null || expense.splitRule.percentages!.isEmpty))
+          final SplitRule effectiveRule =
+              (expense.splitRule.type == SplitType.percentage &&
+                  (expense.splitRule.percentages == null ||
+                      expense.splitRule.percentages!.isEmpty))
               ? SplitRule.percentage(defaultPercentages)
               : expense.splitRule;
 
@@ -95,7 +137,35 @@ class GlobalClearingEngine {
             memberIds: memberIds,
           );
           for (final entry in allocations.entries) {
-            targetCentsMap[entry.key] = (targetCentsMap[entry.key] ?? 0) + entry.value.cents;
+            if (entry.value.cents > 0) {
+              targetCentsMap[entry.key] =
+                  (targetCentsMap[entry.key] ?? 0) + entry.value.cents;
+              String ruleDesc;
+              if (effectiveRule.type == SplitType.percentage) {
+                final pct =
+                    (effectiveRule.percentages?[entry.key] ??
+                    defaultPercentages[entry.key] ??
+                    0);
+                ruleDesc =
+                    '${pct.toStringAsFixed(pct.truncateToDouble() == pct ? 0 : 1)}% da despesa';
+              } else if (effectiveRule.type == SplitType.categoryOwner) {
+                ruleDesc = 'Responsável exclusivo pela despesa';
+              } else if (effectiveRule.type == SplitType.fixed) {
+                ruleDesc = 'Valor fixo definido';
+              } else {
+                ruleDesc = 'Regra ${effectiveRule.type.name}';
+              }
+              memberExpenseShares[entry.key]?.add(
+                ExpenseShareAudit(
+                  expenseId: expense.id,
+                  expenseTitle: expense.title,
+                  totalExpenseAmount: expense.amount,
+                  allocatedAmount: entry.value,
+                  ruleDescription: ruleDesc,
+                  date: expense.date,
+                ),
+              );
+            }
           }
         }
       }
@@ -105,21 +175,22 @@ class GlobalClearingEngine {
       }
     }
 
-    // 4. Calcular créditos e débitos por membro
+    // 4. Calcular créditos e débitos por membro e gerar a memória de cálculo (Audit Trail)
     final List<MemberNetBalance> memberBalances = [];
+    final Map<String, MemberAuditTrail> auditTrails = {};
     final memberIdsSet = members.map((m) => m.id).toSet();
 
     // Total de parcelas P2P que vencem neste ciclo
     int totalP2PClearedCents = 0;
     for (final loan in loans) {
-      if (!memberIdsSet.contains(loan.lenderMemberId) && !memberIdsSet.contains(loan.borrowerMemberId)) {
+      if (!memberIdsSet.contains(loan.lenderMemberId) &&
+          !memberIdsSet.contains(loan.borrowerMemberId)) {
         continue;
       }
-      for (final installment in loan.installments) {
-        final isDueInCycle = cycle.contains(installment.dueDate);
-        if (isDueInCycle && !installment.isFullyPaid && !installment.isForgiven && !installment.isCancelled) {
-          totalP2PClearedCents += installment.remainingAmount.cents;
-        }
+      // Sem prazo ou fora do ciclo nunca entram no fechamento (RN01);
+      // parcelas atrasadas de ciclos anteriores entram junto com as do ciclo.
+      for (final installment in loan.installmentsChargedIn(cycle)) {
+        totalP2PClearedCents += installment.remainingAmount.cents;
       }
     }
 
@@ -128,53 +199,143 @@ class GlobalClearingEngine {
       final due = contributionTargets[member.id] ?? const Money.zero();
 
       // Aportes pagos pelo membro
-      final paidCents = contributions
+      final memberContributions = contributions
           .where((c) => c.memberId == member.id)
-          .fold<int>(0, (acc, c) => acc + c.amount.cents);
+          .toList();
+      final paidCents = memberContributions.fold<int>(
+        0,
+        (acc, c) => acc + c.amount.cents,
+      );
       final paid = Money(paidCents);
+      final contributionAudits = memberContributions
+          .map(
+            (c) => ContributionAudit(
+              contributionId: c.id,
+              amount: c.amount,
+              date: c.date,
+              paymentMethodId: c.paymentMethodId,
+            ),
+          )
+          .toList();
 
       // Despesas da casa pagas do próprio bolso por este membro
-      final outOfPocketCents = expenses
-          .where((e) => e.paidByMemberId == member.id && e.paidOutOfPocket)
-          .fold<int>(0, (acc, e) => acc + e.amount.cents);
+      // (Apenas despesas explicitamente pagas do próprio bolso geram crédito de reembolso)
+      final memberOutOfPocketExpenses = expenses
+          .where(
+            (e) =>
+                e.paidByMemberId == member.id &&
+                e.paidOutOfPocket &&
+                e.paymentMethodId != 'pm_caixa',
+          )
+          .toList();
+      final outOfPocketCents = memberOutOfPocketExpenses.fold<int>(
+        0,
+        (acc, e) => acc + e.amount.cents,
+      );
       final outOfPocket = Money(outOfPocketCents);
+      final outOfPocketAudits = memberOutOfPocketExpenses
+          .map(
+            (e) => OutOfPocketAudit(
+              expenseId: e.id,
+              title: e.title,
+              amount: e.amount,
+              date: e.date,
+              paymentMethod: e.paymentMethodId,
+            ),
+          )
+          .toList();
 
       // Parcelas P2P que vencem neste ciclo para este membro
+      final p2pReceivables = <P2PInstallmentAudit>[];
+      final p2pPayables = <P2PInstallmentAudit>[];
       int p2pLentCents = 0;
       int p2pBorrowedCents = 0;
 
       for (final loan in loans) {
-        for (final installment in loan.installments) {
-          // Verifica se a parcela vence dentro do ciclo e está pendente/parcial
-          final isDueInCycle = cycle.contains(installment.dueDate);
-          if (isDueInCycle && !installment.isFullyPaid && !installment.isForgiven && !installment.isCancelled) {
-            final remainingCents = installment.remainingAmount.cents;
+        // Parcelas em aberto cobradas neste fechamento (do ciclo ou atrasadas)
+        for (final installment in loan.installmentsChargedIn(cycle)) {
+          final remainingCents = installment.remainingAmount.cents;
 
-            if (loan.lenderMemberId == member.id) {
-              p2pLentCents += remainingCents;
-            } else if (loan.borrowerMemberId == member.id) {
-              p2pBorrowedCents += remainingCents;
-            }
+          if (loan.lenderMemberId == member.id) {
+            p2pLentCents += remainingCents;
+            final borrower = members
+                .where((m) => m.id == loan.borrowerMemberId)
+                .firstOrNull;
+            p2pReceivables.add(
+              P2PInstallmentAudit(
+                loanId: loan.id,
+                description: loan.title,
+                otherMemberId: loan.borrowerMemberId,
+                otherMemberName: borrower?.name ?? 'Membro',
+                installmentNumber: installment.number,
+                totalInstallments: loan.installments.length,
+                amount: installment.remainingAmount,
+                dueDate: installment.dueDate,
+                isReceivable: true,
+              ),
+            );
+          } else if (loan.borrowerMemberId == member.id) {
+            p2pBorrowedCents += remainingCents;
+            final lender = members
+                .where((m) => m.id == loan.lenderMemberId)
+                .firstOrNull;
+            p2pPayables.add(
+              P2PInstallmentAudit(
+                loanId: loan.id,
+                description: loan.title,
+                otherMemberId: loan.lenderMemberId,
+                otherMemberName: lender?.name ?? 'Membro',
+                installmentNumber: installment.number,
+                totalInstallments: loan.installments.length,
+                amount: installment.remainingAmount,
+                dueDate: installment.dueDate,
+                isReceivable: false,
+              ),
+            );
           }
         }
       }
 
-      memberBalances.add(
-        MemberNetBalance(
-          memberId: member.id,
-          memberName: member.name,
-          contributionDue: due,
-          contributionPaid: paid,
-          outOfPocketExpenses: outOfPocket,
-          p2pLentDue: Money(p2pLentCents),
-          p2pBorrowedDue: Money(p2pBorrowedCents),
-        ),
+      final balance = MemberNetBalance(
+        memberId: member.id,
+        memberName: member.name,
+        contributionDue: due,
+        contributionPaid: paid,
+        outOfPocketExpenses: outOfPocket,
+        p2pLentDue: Money(p2pLentCents),
+        p2pBorrowedDue: Money(p2pBorrowedCents),
+      );
+      memberBalances.add(balance);
+
+      auditTrails[member.id] = MemberAuditTrail(
+        memberId: member.id,
+        memberName: member.name,
+        expenseShares: memberExpenseShares[member.id] ?? [],
+        contributionsMade: contributionAudits,
+        outOfPocketExpenses: outOfPocketAudits,
+        p2pReceivables: p2pReceivables,
+        p2pPayables: p2pPayables,
+        contributionDue: due,
+        contributionPaid: paid,
+        outOfPocketTotal: outOfPocket,
+        p2pLentTotal: Money(p2pLentCents),
+        p2pBorrowedTotal: Money(p2pBorrowedCents),
+        netBalance: balance.netBalance,
       );
     }
 
     // 5. Motor de Transferências Mínimas (Super Pix)
     // Agrupa em devedores (saldo líquido < 0) e credores (saldo líquido > 0)
-    final transfers = _computeMinimumTransfers(memberBalances);
+    final pixKeys = {
+      for (final m in members) m.id: m.pixKey,
+      if (housePixKey != null && housePixKey.isNotEmpty)
+        'entity_caixa': housePixKey,
+    };
+    final transfers = _computeMinimumTransfers(
+      memberBalances,
+      pixKeys: pixKeys,
+      housePixKeyHolderName: housePixKeyHolderName,
+    );
 
     // 6. Saldo do Caixa da Casa
     final houseTreasuryCents = totalContributionsCents - totalExpensesCents;
@@ -188,13 +349,16 @@ class GlobalClearingEngine {
       totalP2PCleared: Money(totalP2PClearedCents),
       houseTreasuryBalance: Money(houseTreasuryCents),
       status: SettlementStatus.readyToSettle,
+      auditTrails: auditTrails,
     );
   }
 
   /// Algoritmo Greedy de Redução de Dívidas às Transferências Mínimas
   static List<SuperPixTransfer> _computeMinimumTransfers(
-    List<MemberNetBalance> balances,
-  ) {
+    List<MemberNetBalance> balances, {
+    Map<String, String?> pixKeys = const {},
+    String? housePixKeyHolderName,
+  }) {
     // Copia os saldos líquidos em centavos
     final Map<String, int> netMap = {};
     final Map<String, String> nameMap = {};
@@ -205,10 +369,17 @@ class GlobalClearingEngine {
     }
 
     // Se houver saldo de aportes/reembolsos com o Caixa, a Casa entra como contraparte virtual
-    final houseNetDiff = balances.fold<int>(0, (acc, b) => acc + b.netBalance.cents);
+    final houseNetDiff = balances.fold<int>(
+      0,
+      (acc, b) => acc + b.netBalance.cents,
+    );
     if (houseNetDiff != 0) {
       netMap['entity_caixa'] = -houseNetDiff;
-      nameMap['entity_caixa'] = 'Caixa da Casa (Conta Conjunta)';
+      final holderSuffix =
+          (housePixKeyHolderName != null && housePixKeyHolderName.isNotEmpty)
+          ? ' ($housePixKeyHolderName)'
+          : '';
+      nameMap['entity_caixa'] = 'Caixa da Casa$holderSuffix';
     }
 
     final List<SuperPixTransfer> transfers = [];
@@ -234,19 +405,43 @@ class GlobalClearingEngine {
       }
 
       // Se não há mais devedores ou credores com diferença significativa, terminamos
-      if (maxDebtorId == null || maxCreditorId == null || minNet >= 0 || maxNet <= 0) {
+      if (maxDebtorId == null ||
+          maxCreditorId == null ||
+          minNet >= 0 ||
+          maxNet <= 0) {
         break;
       }
 
       // O valor da transferência é o menor entre a dívida e o crédito
       final debtAmount = -minNet;
       final creditAmount = maxNet;
-      final transferCents = debtAmount < creditAmount ? debtAmount : creditAmount;
+      final transferCents = debtAmount < creditAmount
+          ? debtAmount
+          : creditAmount;
 
       if (transferCents <= 0) break;
 
       final fromName = nameMap[maxDebtorId] ?? 'Membro';
       final toName = nameMap[maxCreditorId] ?? 'Membro';
+
+      final memberPixKey = pixKeys[maxCreditorId];
+      final effectivePixKey = (memberPixKey != null && memberPixKey.isNotEmpty)
+          ? memberPixKey
+          : (maxCreditorId == 'entity_caixa'
+                ? null
+                : 'pix_${maxCreditorId.replaceAll('member_', '')}@banco.com');
+
+      String explanation;
+      if (maxDebtorId == 'entity_caixa') {
+        explanation =
+            'O Caixa da Casa possui sobra acumulada e reembolsa $toName por despesas adiantadas.';
+      } else if (maxCreditorId == 'entity_caixa') {
+        explanation =
+            '$fromName repassa aporte ao Caixa da Casa para cobrir despesas comuns do ciclo.';
+      } else {
+        explanation =
+            'Compensação direta entre $fromName e $toName para quitar saldo cruzado de despesas e empréstimos.';
+      }
 
       transfers.add(
         SuperPixTransfer(
@@ -258,7 +453,8 @@ class GlobalClearingEngine {
           amount: Money(transferCents),
           description: 'Super Pix de Fechamento do Ciclo ($fromName ➔ $toName)',
           status: TransferStatus.pending,
-          pixKey: 'pix_${maxCreditorId.replaceAll('member_', '')}@banco.com',
+          pixKey: effectivePixKey,
+          explanation: explanation,
         ),
       );
 

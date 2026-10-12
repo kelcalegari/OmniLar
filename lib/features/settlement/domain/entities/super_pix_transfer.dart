@@ -1,10 +1,6 @@
 import '../../../../core/domain/value_objects/money.dart';
 
-enum TransferStatus {
-  pending,
-  paid,
-  confirmed,
-}
+enum TransferStatus { pending, paid, confirmed }
 
 class SuperPixTransfer {
   final String id;
@@ -17,6 +13,7 @@ class SuperPixTransfer {
   final TransferStatus status;
   final String? pixKey;
   final DateTime? paidAt;
+  final String? explanation;
 
   const SuperPixTransfer({
     required this.id,
@@ -29,6 +26,7 @@ class SuperPixTransfer {
     this.status = TransferStatus.pending,
     this.pixKey,
     this.paidAt,
+    this.explanation,
   });
 
   SuperPixTransfer copyWith({
@@ -42,6 +40,7 @@ class SuperPixTransfer {
     TransferStatus? status,
     String? pixKey,
     DateTime? paidAt,
+    String? explanation,
   }) {
     return SuperPixTransfer(
       id: id ?? this.id,
@@ -54,6 +53,7 @@ class SuperPixTransfer {
       status: status ?? this.status,
       pixKey: pixKey ?? this.pixKey,
       paidAt: paidAt ?? this.paidAt,
+      explanation: explanation ?? this.explanation,
     );
   }
 }

@@ -8,22 +8,28 @@ class PartialPaymentDialog extends StatefulWidget {
   final P2PInstallment installment;
   final void Function(Money amount) onConfirm;
 
+  /// Empréstimo sem prazo: o texto fala em "abater saldo" em vez de "pagar parcela".
+  final bool isOpenEnded;
+
   const PartialPaymentDialog({
     super.key,
     required this.installment,
     required this.onConfirm,
+    this.isOpenEnded = false,
   });
 
   static Future<void> show({
     required BuildContext context,
     required P2PInstallment installment,
     required void Function(Money amount) onConfirm,
+    bool isOpenEnded = false,
   }) {
     return showDialog(
       context: context,
       builder: (_) => PartialPaymentDialog(
         installment: installment,
         onConfirm: onConfirm,
+        isOpenEnded: isOpenEnded,
       ),
     );
   }
@@ -68,7 +74,9 @@ class _PartialPaymentDialogState extends State<PartialPaymentDialog> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            'O valor não pode exceder o saldo restante da parcela (${widget.installment.remainingAmount.format()})',
+            widget.isOpenEnded
+                ? 'O valor não pode exceder o saldo devedor (${widget.installment.remainingAmount.format()})'
+                : 'O valor não pode exceder o saldo restante da parcela (${widget.installment.remainingAmount.format()})',
           ),
         ),
       );
@@ -99,7 +107,9 @@ class _PartialPaymentDialogState extends State<PartialPaymentDialog> {
           const SizedBox(width: 12),
           Expanded(
             child: Text(
-              'Pagar Parcela ${widget.installment.number}/${widget.installment.totalCount}',
+              widget.isOpenEnded
+                  ? 'Abater do Saldo Devedor'
+                  : 'Pagar Parcela ${widget.installment.number}/${widget.installment.totalCount}',
               style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
             ),
           ),
@@ -158,8 +168,12 @@ class _PartialPaymentDialogState extends State<PartialPaymentDialog> {
             const SizedBox(height: 8),
             Text(
               _centsToPay < remaining.cents
-                  ? 'O valor restante de ${Money(remaining.cents - _centsToPay).format()} continuará em aberto nesta parcela.'
-                  : 'Esta parcela será totalmente quitada com esta confirmação.',
+                  ? (widget.isOpenEnded
+                      ? 'O saldo de ${Money(remaining.cents - _centsToPay).format()} continua em aberto, sem vencimento.'
+                      : 'O valor restante de ${Money(remaining.cents - _centsToPay).format()} continuará em aberto nesta parcela.')
+                  : (widget.isOpenEnded
+                      ? 'O empréstimo será totalmente quitado com esta confirmação.'
+                      : 'Esta parcela será totalmente quitada com esta confirmação.'),
               style: theme.textTheme.bodySmall?.copyWith(
                 color: _centsToPay < remaining.cents ? Colors.orange.shade800 : AppColors.creditGreen,
               ),

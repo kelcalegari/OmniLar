@@ -1,17 +1,24 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
+import '../../../../core/di/service_locator.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/utils/responsive.dart';
+import '../../../auth/domain/repositories/auth_repository.dart';
+import '../../../finance/domain/entities/house_member.dart';
+import '../../../finance/presentation/cubit/finance_cubit.dart';
 import '../../domain/entities/p2p_loan.dart';
 import 'loan_details_sheet.dart';
 
 class LoanCard extends StatelessWidget {
   final P2PLoan loan;
   final bool isDebtor; // true se eu devo, false se me devem
+  final bool showBothParties;
 
   const LoanCard({
     super.key,
     required this.loan,
     required this.isDebtor,
+    this.showBothParties = false,
   });
 
   void _showDetails(BuildContext context) {
@@ -29,6 +36,34 @@ class LoanCard extends StatelessWidget {
     final isForgiven = loan.status == LoanStatus.forgiven;
 
     final progress = loan.progressPercentage;
+
+    final isDemo = sl<AuthRepository>().isDemoMode;
+    List<HouseMember> members = [];
+    try {
+      members = context.read<FinanceCubit>().state.members;
+    } catch (_) {}
+
+    String resolveMemberName(String memberId) {
+      if (memberId == P2PLoan.houseLenderId) return 'Caixa da Casa';
+      if (isDemo) {
+        if (memberId == 'member_carlos') return 'Carlos';
+        if (memberId == 'member_marina') return 'Marina';
+      }
+      final matched = members.where((m) => m.id == memberId).firstOrNull;
+      if (matched != null) return matched.name;
+      final currentUserId = sl<AuthRepository>().currentUser?.id;
+      if (memberId == currentUserId) return 'Você';
+      return 'Membro';
+    }
+
+    String counterpartyLabel;
+    if (showBothParties) {
+      counterpartyLabel = '${resolveMemberName(loan.lenderMemberId)} ➔ ${resolveMemberName(loan.borrowerMemberId)}';
+    } else {
+      final targetId = isDebtor ? loan.lenderMemberId : loan.borrowerMemberId;
+      final name = resolveMemberName(targetId);
+      counterpartyLabel = isDebtor ? 'Credor: $name' : 'Devedor: $name';
+    }
 
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
@@ -72,7 +107,7 @@ class LoanCard extends StatelessWidget {
                           ),
                           const SizedBox(height: 2),
                           Text(
-                            isDebtor ? 'Credor: Carlos' : 'Devedor: Marina',
+                            counterpartyLabel,
                             style: theme.textTheme.bodySmall?.copyWith(fontSize: 12),
                           ),
                         ],
@@ -120,10 +155,31 @@ class LoanCard extends StatelessWidget {
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Text(
-                      '${loan.paidInstallmentsCount}/${loan.installmentsCount} parcelas pagas (${(progress * 100).toInt()}%)',
-                      style: theme.textTheme.bodySmall?.copyWith(fontSize: 12),
+                    if (loan.isOpenEnded || !loan.settleInCycle) ...[
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: AppColors.accent.withValues(alpha: 0.15),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Text(
+                          loan.isOpenEnded ? 'Sem prazo' : 'Fora do ciclo',
+                          style: const TextStyle(color: AppColors.accent, fontSize: 11, fontWeight: FontWeight.bold),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                    ],
+                    Expanded(
+                      child: Text(
+                        loan.isOpenEnded
+                            ? '${loan.totalPaidAmount.format()} abatidos (${(progress * 100).toInt()}%)'
+                            : '${loan.paidInstallmentsCount}/${loan.installmentsCount} parcelas pagas (${(progress * 100).toInt()}%)',
+                        style: theme.textTheme.bodySmall?.copyWith(fontSize: 12),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
                     ),
+                    const SizedBox(width: 8),
                     if (isForgiven)
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
@@ -144,8 +200,9 @@ class LoanCard extends StatelessWidget {
                       )
                     else
                       const Row(
+                        mainAxisSize: MainAxisSize.min,
                         children: [
-                          Text('Ver parcelas', style: TextStyle(fontSize: 12, color: AppColors.primary, fontWeight: FontWeight.w600)),
+                          Text('Detalhes', style: TextStyle(fontSize: 12, color: AppColors.primary, fontWeight: FontWeight.w600)),
                           Icon(Icons.chevron_right_rounded, size: 16, color: AppColors.primary),
                         ],
                       ),
