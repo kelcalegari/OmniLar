@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:intl/date_symbol_data_local.dart';
+import 'package:flutter_web_plugins/url_strategy.dart';
 import 'core/di/service_locator.dart';
 import 'core/router/app_router.dart';
 import 'core/theme/app_theme.dart';
@@ -14,6 +15,9 @@ import 'features/calendar/presentation/cubit/calendar_cubit.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // Configura URLs limpas (sem #) na Web
+  usePathUrlStrategy();
 
   // Inicializa formatação de datas em Português (Brasil)
   await initializeDateFormatting('pt_BR', null);

@@ -7,27 +7,38 @@ class AssistantState extends Equatable {
   final List<AssistantMessage> messages;
   final bool isLoading;
   final String? errorMessage;
+  /// Nome da ferramenta que foi executada pela última ação do assistente.
+  /// Usado pelo BlocListener da página para disparar reload dos Cubits afetados.
+  final String? lastExecutedToolName;
+  /// Indica se o usuário possui ou está utilizando uma chave própria configurada (BYOK).
+  final bool hasCustomKey;
 
   const AssistantState({
     this.messages = const [],
     this.isLoading = false,
     this.errorMessage,
+    this.lastExecutedToolName,
+    this.hasCustomKey = false,
   });
 
   AssistantState copyWith({
     List<AssistantMessage>? messages,
     bool? isLoading,
     String? errorMessage,
+    String? lastExecutedToolName,
+    bool? hasCustomKey,
   }) {
     return AssistantState(
       messages: messages ?? this.messages,
       isLoading: isLoading ?? this.isLoading,
       errorMessage: errorMessage,
+      lastExecutedToolName: lastExecutedToolName,
+      hasCustomKey: hasCustomKey ?? this.hasCustomKey,
     );
   }
 
   @override
-  List<Object?> get props => [messages, isLoading, errorMessage];
+  List<Object?> get props => [messages, isLoading, errorMessage, lastExecutedToolName, hasCustomKey];
 }
 
 class AssistantCubit extends Cubit<AssistantState> {
@@ -49,7 +60,14 @@ class AssistantCubit extends Cubit<AssistantState> {
               'Adicionar leite na lista',
             ],
           ),
-        ]));
+        ])) {
+    checkAiKeyStatus();
+  }
+
+  Future<void> checkAiKeyStatus() async {
+    final hasKey = await interpreterService.aiConfigService?.hasCustomKey() ?? false;
+    emit(state.copyWith(hasCustomKey: hasKey));
+  }
 
   Future<void> sendMessage(String text) async {
     final query = text.trim();
@@ -68,7 +86,10 @@ class AssistantCubit extends Cubit<AssistantState> {
     ));
 
     try {
-      final interpretation = await interpreterService.interpretMessage(query);
+      final interpretation = await interpreterService.interpretMessage(
+        query,
+        history: state.messages,
+      );
 
       final assistantMsg = AssistantMessage(
         id: 'msg_a_${DateTime.now().millisecondsSinceEpoch}',
@@ -82,6 +103,7 @@ class AssistantCubit extends Cubit<AssistantState> {
       emit(state.copyWith(
         messages: [...state.messages, assistantMsg],
         isLoading: false,
+        hasCustomKey: interpretation.usingCustomKey || state.hasCustomKey,
       ));
     } catch (e) {
       final errorMsg = AssistantMessage(
@@ -136,6 +158,10 @@ class AssistantCubit extends Cubit<AssistantState> {
       emit(state.copyWith(
         messages: [...updatedMessages, confirmationFeedback],
         isLoading: false,
+        // Sinaliza para o BlocListener da página qual ferramenta foi executada,
+        // permitindo que a UI recarregue os Cubits afetados sem violar
+        // a regra "Cubits não consomem outros Cubits".
+        lastExecutedToolName: proposal.toolName,
       ));
     } catch (e) {
       emit(state.copyWith(
@@ -152,6 +178,31 @@ class AssistantCubit extends Cubit<AssistantState> {
         final updatedActions = msg.proposedActions.map((a) {
           if (a.id == actionId) {
             return a.copyWith(status: AssistantActionStatus.cancelled);
+          }
+          return a;
+        }).toList();
+        return AssistantMessage(
+          id: msg.id,
+          role: msg.role,
+          content: msg.content,
+          createdAt: msg.createdAt,
+          proposedActions: updatedActions,
+          quickFollowups: msg.quickFollowups,
+        );
+      }
+      return msg;
+    }).toList();
+
+    emit(state.copyWith(messages: updatedMessages));
+  }
+
+  /// Atualizar dados de uma proposta de ação editada pelo usuário (RN01)
+  void updateActionProposal(String messageId, AssistantActionProposal updatedProposal) {
+    final updatedMessages = state.messages.map((msg) {
+      if (msg.id == messageId) {
+        final updatedActions = msg.proposedActions.map((a) {
+          if (a.id == updatedProposal.id) {
+            return updatedProposal;
           }
           return a;
         }).toList();

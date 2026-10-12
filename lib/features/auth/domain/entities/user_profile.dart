@@ -6,6 +6,7 @@ class UserProfile extends Equatable {
   final String fullName;
   final String? avatarUrl;
   final String? phone;
+  final String? pixKey;
 
   const UserProfile({
     required this.id,
@@ -13,6 +14,7 @@ class UserProfile extends Equatable {
     required this.fullName,
     this.avatarUrl,
     this.phone,
+    this.pixKey,
   });
 
   UserProfile copyWith({
@@ -21,6 +23,7 @@ class UserProfile extends Equatable {
     String? fullName,
     String? avatarUrl,
     String? phone,
+    String? pixKey,
   }) {
     return UserProfile(
       id: id ?? this.id,
@@ -28,9 +31,10 @@ class UserProfile extends Equatable {
       fullName: fullName ?? this.fullName,
       avatarUrl: avatarUrl ?? this.avatarUrl,
       phone: phone ?? this.phone,
+      pixKey: pixKey ?? this.pixKey,
     );
   }
 
   @override
-  List<Object?> get props => [id, email, fullName, avatarUrl, phone];
+  List<Object?> get props => [id, email, fullName, avatarUrl, phone, pixKey];
 }

@@ -15,6 +15,51 @@ class BoletoParser {
     return clean.length == 47 || clean.length == 48;
   }
 
+  /// Busca um padrão de linha digitável de boleto dentro de um texto bruto ou documento
+  static String? findBoletoLineInText(String text) {
+    // 1. Linha digitável com pontos e espaços (ex: 74891.12628 02607.826068 22628.201067 6 15950000048921)
+    final formattedRegex = RegExp(
+      r'(\d{5}\.\d{5}\s+\d{5}\.\d{6}\s+\d{5}\.\d{6}\s+\d\s+\d{14})',
+    );
+    final match = formattedRegex.firstMatch(text);
+    if (match != null) return match.group(1);
+
+    // 2. Linha digitável contínua de 47 dígitos
+    final continuousRegex = RegExp(r'\b(\d{47})\b');
+    final matchCont = continuousRegex.firstMatch(text);
+    if (matchCont != null) return matchCont.group(1);
+
+    return null;
+  }
+
+  /// Distribui centavos proporcionalmente entre os itens (Algoritmo do Maior Resto do Omni Lar)
+  static List<int> distributeCentsProportionally(int newTotalCents, List<int> originalWeights) {
+    final sum = originalWeights.fold<int>(0, (a, b) => a + b);
+    if (sum == 0 || originalWeights.isEmpty) {
+      if (originalWeights.isEmpty) return [];
+      final part = newTotalCents ~/ originalWeights.length;
+      var rest = newTotalCents - (part * originalWeights.length);
+      return List.generate(originalWeights.length, (i) => part + (rest-- > 0 ? 1 : 0));
+    }
+
+    final base = [for (final w in originalWeights) (newTotalCents * w) ~/ sum];
+    var rest = newTotalCents - base.fold<int>(0, (a, b) => a + b);
+
+    final order = List.generate(originalWeights.length, (i) => i)
+      ..sort((a, b) {
+        final ra = (newTotalCents * originalWeights[a]) % sum;
+        final rb = (newTotalCents * originalWeights[b]) % sum;
+        return rb != ra ? rb.compareTo(ra) : a.compareTo(b);
+      });
+
+    for (final i in order) {
+      if (rest <= 0) break;
+      base[i]++;
+      rest--;
+    }
+    return base;
+  }
+
   /// Calcula a data de vencimento a partir do fator de vencimento FEBRABAN/BACEN.
   /// Trata o rollover de 22/02/2025, onde o fator de 4 dígitos reiniciou em 1000.
   static DateTime calculateDueDateFromFactor(int factor, {DateTime? referenceDate}) {

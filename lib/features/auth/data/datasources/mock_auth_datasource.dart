@@ -17,6 +17,7 @@ class MockAuthDataSource implements AuthDataSource {
       fullName: 'Carlos Eduardo',
       avatarUrl: null,
       phone: '(11) 98765-4321',
+      pixKey: 'carlos@omnilar.com',
     ),
     'marina@omnilar.com': const UserProfile(
       id: 'member_marina',
@@ -24,6 +25,7 @@ class MockAuthDataSource implements AuthDataSource {
       fullName: 'Marina Silva',
       avatarUrl: null,
       phone: '(11) 91234-5678',
+      pixKey: 'marina@omnilar.com',
     ),
   };
 
@@ -40,6 +42,10 @@ class MockAuthDataSource implements AuthDataSource {
       cycleStartDay: 5,
       timezone: 'America/Sao_Paulo',
       createdBy: 'member_carlos',
+      pixKey: 'financeiro.nossacasa@banco.com',
+      pixKeyType: 'email',
+      pixKeyHolderName: 'Caixa Nossa Casa',
+      pixKeyBank: 'Nubank',
     ),
   };
 
@@ -74,9 +80,7 @@ class MockAuthDataSource implements AuthDataSource {
   };
 
   // Códigos de convite: code -> houseId
-  final Map<String, String> _invites = {
-    'LAR123': 'house_nossa_casa',
-  };
+  final Map<String, String> _invites = {'LAR123': 'house_nossa_casa'};
 
   UserProfile? _currentUser;
   House? _currentHouse;
@@ -100,9 +104,14 @@ class MockAuthDataSource implements AuthDataSource {
   UserProfile? get currentUser => _currentUser;
   @override
   House? get currentHouse => _currentHouse;
+  @override
+  bool get isDemoMode => true;
 
   @override
-  Future<UserProfile> signInWithEmailPassword(String email, String password) async {
+  Future<UserProfile> signInWithEmailPassword(
+    String email,
+    String password,
+  ) async {
     await Future.delayed(const Duration(milliseconds: 300));
     final normalizedEmail = email.trim().toLowerCase();
 
@@ -184,6 +193,65 @@ class MockAuthDataSource implements AuthDataSource {
   }
 
   @override
+  Future<UserProfile> updateProfile({
+    required String fullName,
+    String? email,
+    String? pixKey,
+  }) async {
+    await Future.delayed(const Duration(milliseconds: 150));
+    if (_currentUser == null) {
+      throw const AuthFailure('Usuário não autenticado.');
+    }
+
+    final trimmedName = fullName.trim();
+    final trimmedEmail = email?.trim().toLowerCase();
+    final currentOldEmail = _currentUser!.email.toLowerCase();
+
+    if (trimmedEmail != null &&
+        trimmedEmail.isNotEmpty &&
+        trimmedEmail != currentOldEmail) {
+      if (_users.containsKey(trimmedEmail)) {
+        throw const AuthFailure('Este e-mail já está em uso.');
+      }
+      final pass = _passwords.remove(currentOldEmail) ?? '123456';
+      _passwords[trimmedEmail] = pass;
+      _users.remove(currentOldEmail);
+    }
+
+    final updatedEmail = (trimmedEmail != null && trimmedEmail.isNotEmpty)
+        ? trimmedEmail
+        : _currentUser!.email;
+
+    final updatedUser = _currentUser!.copyWith(
+      fullName: trimmedName,
+      email: updatedEmail,
+      pixKey: pixKey != null ? pixKey.trim() : _currentUser!.pixKey,
+    );
+
+    _users[updatedEmail] = updatedUser;
+    _currentUser = updatedUser;
+
+    for (final houseId in _houseMembers.keys) {
+      final members = _houseMembers[houseId]!;
+      for (int i = 0; i < members.length; i++) {
+        if (members[i].userId == updatedUser.id) {
+          members[i] = HouseMemberInfo(
+            id: members[i].id,
+            houseId: members[i].houseId,
+            userId: members[i].userId,
+            role: members[i].role,
+            joinedAt: members[i].joinedAt,
+            profile: updatedUser,
+          );
+        }
+      }
+    }
+
+    _authStateController.add(_currentUser);
+    return updatedUser;
+  }
+
+  @override
   Future<List<House>> getUserHouses() async {
     if (_currentUser == null) return [];
     final userId = _currentUser!.id;
@@ -204,7 +272,9 @@ class MockAuthDataSource implements AuthDataSource {
     int cycleStartDay = 5,
   }) async {
     if (_currentUser == null) {
-      throw const AuthFailure('Você precisa estar autenticado para criar uma casa.');
+      throw const AuthFailure(
+        'Você precisa estar autenticado para criar uma casa.',
+      );
     }
 
     await Future.delayed(const Duration(milliseconds: 300));
@@ -230,7 +300,8 @@ class MockAuthDataSource implements AuthDataSource {
     _houseMembers[houseId] = [memberInfo];
 
     // Gera um código de convite padrão
-    final inviteCode = 'LAR${DateTime.now().millisecondsSinceEpoch.toString().substring(7, 10)}';
+    final inviteCode =
+        'LAR${DateTime.now().millisecondsSinceEpoch.toString().substring(7, 10)}';
     _invites[inviteCode] = houseId;
 
     _currentHouse = newHouse;
@@ -240,9 +311,42 @@ class MockAuthDataSource implements AuthDataSource {
   }
 
   @override
+  Future<House> updateHouse({
+    required String houseId,
+    String? name,
+    int? cycleStartDay,
+    String? pixKey,
+    String? pixKeyType,
+    String? pixKeyHolderName,
+    String? pixKeyBank,
+  }) async {
+    await Future.delayed(const Duration(milliseconds: 150));
+    final existing = _houses[houseId];
+    if (existing == null) throw const NotFoundFailure('Casa não encontrada.');
+
+    final updated = existing.copyWith(
+      name: name ?? existing.name,
+      cycleStartDay: cycleStartDay ?? existing.cycleStartDay,
+      pixKey: pixKey ?? existing.pixKey,
+      pixKeyType: pixKeyType ?? existing.pixKeyType,
+      pixKeyHolderName: pixKeyHolderName ?? existing.pixKeyHolderName,
+      pixKeyBank: pixKeyBank ?? existing.pixKeyBank,
+    );
+    _houses[houseId] = updated;
+
+    if (_currentHouse?.id == houseId) {
+      _currentHouse = updated;
+      _houseStateController.add(_currentHouse);
+    }
+    return updated;
+  }
+
+  @override
   Future<House> joinHouseWithInvite(String inviteCode) async {
     if (_currentUser == null) {
-      throw const AuthFailure('Você precisa estar autenticado para entrar em uma casa.');
+      throw const AuthFailure(
+        'Você precisa estar autenticado para entrar em uma casa.',
+      );
     }
 
     await Future.delayed(const Duration(milliseconds: 300));

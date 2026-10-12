@@ -134,5 +134,37 @@ void main() {
       final created = cubit.state.tasks.firstWhere((t) => t.title == 'Varrer a varanda');
       expect(created.cost, isNull);
     });
+
+    testWidgets('Traz todos os integrantes da casa como opção de responsável', (tester) async {
+      tester.view.physicalSize = const Size(800, 1400);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.resetPhysicalSize);
+
+      await tester.pumpWidget(
+        BlocProvider<CalendarCubit>.value(
+          value: sl<CalendarCubit>(),
+          child: MaterialApp(
+            home: Builder(
+              builder: (ctx) => Scaffold(
+                body: ElevatedButton(
+                  onPressed: () => AddTaskSheet.show(ctx, 'member_carlos'),
+                  child: const Text('Abrir'),
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('Abrir'));
+      await tester.pumpAndSettle();
+
+      // Confirma que os integrantes da casa estão disponíveis
+      expect(find.text('Responsável pela Tarefa:'), findsOneWidget);
+      expect(find.text('Carlos'), findsOneWidget);
+      expect(find.text('Marina'), findsOneWidget);
+      expect(find.text('Qualquer um'), findsOneWidget);
+    });
   });
 }

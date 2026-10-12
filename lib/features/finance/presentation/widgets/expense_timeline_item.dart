@@ -13,12 +13,18 @@ import '../../domain/entities/payment_method.dart';
 import '../../domain/entities/house_member.dart';
 import '../../domain/entities/split_rule.dart';
 import '../cubit/finance_cubit.dart';
+import '../cubit/finance_state.dart';
+import '../pages/add_expense_page.dart';
+import 'audit_log_sheet.dart';
 
 class ExpenseTimelineItem extends StatelessWidget {
   final HouseExpense expense;
   final ExpenseCategory? category;
   final PaymentMethod? paymentMethod;
   final HouseMember? paidByMember;
+  final List<HouseMember>? members;
+  final bool isSelected;
+  final VoidCallback? onSelect;
 
   const ExpenseTimelineItem({
     super.key,
@@ -26,6 +32,9 @@ class ExpenseTimelineItem extends StatelessWidget {
     this.category,
     this.paymentMethod,
     this.paidByMember,
+    this.members,
+    this.isSelected = false,
+    this.onSelect,
   });
 
   IconData _getCategoryIcon(String iconName) {
@@ -57,13 +66,32 @@ class ExpenseTimelineItem extends StatelessWidget {
     if (expense.isItemized) {
       return 'Composto (${expense.items.length})';
     }
+    final houseMembers = members;
+    final hasBalde = houseMembers?.any((m) => (m.defaultFixedAmountCents ?? 0) > 0) ?? false;
+
     switch (expense.splitRule.type) {
       case SplitType.categoryOwner:
         return 'Dono 100%';
       case SplitType.fixed:
-        return 'Fixo';
+        return hasBalde ? 'Balde' : 'Fixo';
       case SplitType.percentage:
-        return '60/40';
+        final pcts = expense.splitRule.percentages;
+        if (pcts != null && pcts.isNotEmpty) {
+          final sortedPcts = pcts.values.toList();
+          return sortedPcts.map((v) => v.round().toString()).join('/');
+        }
+
+        if (houseMembers != null && houseMembers.isNotEmpty) {
+          final memberPcts = houseMembers.map((m) => m.defaultSplitPercent.round().toString()).toList();
+          if (memberPcts.length <= 3 && memberPcts.every((p) => p != '0')) {
+            return memberPcts.join('/');
+          }
+          if (hasBalde) {
+            return 'Balde';
+          }
+        }
+
+        return 'Proporcional';
     }
   }
 
@@ -241,54 +269,299 @@ class ExpenseTimelineItem extends StatelessWidget {
                     child: const Text('Confirmar Pagamento', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
                   ),
                 ),
-                const SizedBox(height: 8),
+                const SizedBox(height: 10),
+                Row(
+                  children: [
+                    Expanded(
+                      child: OutlinedButton.icon(
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: AppColors.primary,
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                        ),
+                        icon: const Icon(Icons.edit_outlined, size: 16),
+                        label: const Text('Editar Dados', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                        onPressed: () {
+                          Navigator.pop(modalContext);
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => AddExpensePage(expenseToEdit: expense),
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: TextButton.icon(
+                        style: TextButton.styleFrom(foregroundColor: AppColors.debtRed),
+                        icon: const Icon(Icons.delete_outline_rounded, size: 16),
+                        label: const Text('Excluir conta', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
+                        onPressed: () => _confirmAndDeleteExpense(context, modalContext),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 6),
                 Center(
                   child: TextButton.icon(
-                    style: TextButton.styleFrom(foregroundColor: AppColors.debtRed),
-                    icon: const Icon(Icons.delete_outline_rounded, size: 16),
-                    label: const Text('Excluir esta conta', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
-                    onPressed: () async {
-                      RecurrenceScope scope = RecurrenceScope.thisInstanceOnly;
-                      if (expense.isRecurring) {
-                        final chosenScope = await showRecurrenceScopeDialog(
-                          context: modalContext,
-                          itemTitle: expense.title,
-                          isDelete: true,
-                          isExpense: true,
-                        );
-                        if (chosenScope == null) return;
-                        scope = chosenScope;
-                      } else {
-                        final confirmed = await showDialog<bool>(
-                          context: modalContext,
-                          builder: (ctx) => AlertDialog(
-                            title: const Text('Excluir Despesa'),
-                            content: Text('Tem certeza que deseja excluir "${expense.title}"?'),
-                            actions: [
-                              TextButton(
-                                onPressed: () => Navigator.pop(ctx, false),
-                                child: const Text('Cancelar'),
-                              ),
-                              ElevatedButton(
-                                style: ElevatedButton.styleFrom(backgroundColor: AppColors.debtRed, foregroundColor: Colors.white),
-                                onPressed: () => Navigator.pop(ctx, true),
-                                child: const Text('Excluir'),
-                              ),
-                            ],
-                          ),
-                        );
-                        if (confirmed != true) return;
-                      }
+                    style: TextButton.styleFrom(foregroundColor: Colors.grey),
+                    icon: const Icon(Icons.history_edu_rounded, size: 15),
+                    label: const Text('Histórico & Auditoria', style: TextStyle(fontSize: 12)),
+                    onPressed: () {
+                      Navigator.pop(modalContext);
+                      showAuditLogSheet(
+                        context: context,
+                        entityId: expense.id,
+                        title: 'Auditoria: ${expense.title}',
+                      );
+                    },
+                  ),
+                ),
+              ],
+            ),
+          );
+        },
+      ),
+    );
+  }
 
-                      if (modalContext.mounted) Navigator.pop(modalContext);
-                      if (context.mounted) {
-                        await context.read<FinanceCubit>().deleteExpense(expense.id, scope: scope);
-                        if (context.mounted) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(content: Text('Despesa "${expense.title}" excluída.')),
+  Future<void> _confirmAndDeleteExpense(BuildContext pageContext, [BuildContext? modalContext]) async {
+    RecurrenceScope scope = RecurrenceScope.thisInstanceOnly;
+    final dialogContext = modalContext ?? pageContext;
+    if (expense.isRecurring) {
+      final chosenScope = await showRecurrenceScopeDialog(
+        context: dialogContext,
+        itemTitle: expense.title,
+        isDelete: true,
+        isExpense: true,
+      );
+      if (chosenScope == null) return;
+      scope = chosenScope;
+    } else {
+      final confirmed = await showDialog<bool>(
+        context: dialogContext,
+        builder: (ctx) => AlertDialog(
+          title: const Text('Excluir Despesa'),
+          content: Text('Tem certeza que deseja excluir "${expense.title}"?'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Cancelar'),
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(backgroundColor: AppColors.debtRed, foregroundColor: Colors.white),
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('Excluir'),
+            ),
+          ],
+        ),
+      );
+      if (confirmed != true) return;
+    }
+
+    if (modalContext != null && modalContext.mounted) {
+      Navigator.pop(modalContext);
+    }
+    if (pageContext.mounted) {
+      await pageContext.read<FinanceCubit>().deleteExpense(expense.id, scope: scope);
+      if (pageContext.mounted) {
+        final state = pageContext.read<FinanceCubit>().state;
+        if (state.status == FinanceStatus.failure && state.errorMessage != null) {
+          ScaffoldMessenger.of(pageContext).showSnackBar(
+            SnackBar(
+              backgroundColor: AppColors.debtRed,
+              content: Text(state.errorMessage!),
+            ),
+          );
+        } else {
+          ScaffoldMessenger.of(pageContext).showSnackBar(
+            SnackBar(content: Text('Despesa "${expense.title}" excluída.')),
+          );
+        }
+      }
+    }
+  }
+
+  void _showPaidExpenseDetailsModal(BuildContext context) {
+    final catColor = _parseColor(category?.colorHex);
+    final dateFormatted = DateFormat('dd/MM/yyyy').format(expense.date);
+
+    showAdaptiveModal(
+      context: context,
+      maxWidth: 500,
+      child: StatefulBuilder(
+        builder: (modalContext, setModalState) {
+          return Padding(
+            padding: const EdgeInsets.all(20),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Center(
+                  child: Container(
+                    width: 40,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: Colors.grey.withValues(alpha: 0.3),
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                Row(
+                  children: [
+                    Container(
+                      width: 44,
+                      height: 44,
+                      decoration: BoxDecoration(
+                        color: catColor.withValues(alpha: 0.12),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Icon(
+                        _getCategoryIcon(category?.icon ?? ''),
+                        color: catColor,
+                        size: 22,
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            expense.title,
+                            style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
+                          ),
+                          Text(
+                            'Paga em $dateFormatted • ${category?.name ?? "Geral"}',
+                            style: const TextStyle(color: Colors.grey, fontSize: 13),
+                          ),
+                        ],
+                      ),
+                    ),
+                    Text(
+                      expense.amount.format(),
+                      style: const TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                        color: AppColors.creditGreen,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 16),
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Theme.of(context).cardColor,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: Theme.of(context).dividerColor.withValues(alpha: 0.5)),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          const Text('Quem pagou:', style: TextStyle(fontSize: 13, color: Colors.grey)),
+                          Text(paidByMember?.name ?? 'Membro', style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
+                        ],
+                      ),
+                      const SizedBox(height: 6),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          const Text('Forma de Pagamento:', style: TextStyle(fontSize: 13, color: Colors.grey)),
+                          Text(paymentMethod?.name ?? 'Pix', style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+                        ],
+                      ),
+                      const SizedBox(height: 6),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          const Text('Rateio:', style: TextStyle(fontSize: 13, color: Colors.grey)),
+                          Text(_getSplitBadgeText(), style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+                        ],
+                      ),
+                      if (expense.notes != null && expense.notes!.isNotEmpty) ...[
+                        const Divider(height: 16),
+                        Text('Observações: ${expense.notes!}', style: const TextStyle(fontSize: 12, fontStyle: FontStyle.italic)),
+                      ],
+                    ],
+                  ),
+                ),
+                if (expense.isItemized) ...[
+                  const SizedBox(height: 12),
+                  _buildItemizedBreakdown(Theme.of(context)),
+                ],
+                const SizedBox(height: 20),
+                SizedBox(
+                  height: 48,
+                  child: ElevatedButton.icon(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppColors.primary,
+                      foregroundColor: Colors.white,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    ),
+                    icon: const Icon(Icons.edit_rounded, size: 18),
+                    label: const Text('Editar Despesa', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+                    onPressed: () {
+                      Navigator.pop(modalContext);
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => AddExpensePage(expenseToEdit: expense),
+                        ),
+                      );
+                    },
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Row(
+                  children: [
+                    Expanded(
+                      child: OutlinedButton.icon(
+                        icon: const Icon(Icons.undo_rounded, size: 16),
+                        label: const Text('Reverter p/ Pendente', style: TextStyle(fontSize: 11)),
+                        style: OutlinedButton.styleFrom(
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                        ),
+                        onPressed: () {
+                          context.read<FinanceCubit>().updateExpense(
+                            expense.copyWith(status: ExpenseStatus.pending),
                           );
-                        }
-                      }
+                          Navigator.pop(modalContext);
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(content: Text('Despesa "${expense.title}" revertida para pendente.')),
+                          );
+                        },
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: TextButton.icon(
+                        style: TextButton.styleFrom(foregroundColor: AppColors.debtRed),
+                        icon: const Icon(Icons.delete_outline_rounded, size: 16),
+                        label: const Text('Excluir conta', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600)),
+                        onPressed: () => _confirmAndDeleteExpense(context, modalContext),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 6),
+                Center(
+                  child: TextButton.icon(
+                    style: TextButton.styleFrom(foregroundColor: Colors.grey),
+                    icon: const Icon(Icons.history_edu_rounded, size: 15),
+                    label: const Text('Histórico & Auditoria', style: TextStyle(fontSize: 12)),
+                    onPressed: () {
+                      Navigator.pop(modalContext);
+                      showAuditLogSheet(
+                        context: context,
+                        entityId: expense.id,
+                        title: 'Auditoria: ${expense.title}',
+                      );
                     },
                   ),
                 ),
@@ -310,20 +583,34 @@ class ExpenseTimelineItem extends StatelessWidget {
 
     return InkWell(
       borderRadius: BorderRadius.circular(16),
-      onTap: isPending ? () => _showConfirmPaymentModal(context) : null,
+      onTap: () {
+        if (onSelect != null) {
+          onSelect!();
+        } else {
+          if (isPending) {
+            _showConfirmPaymentModal(context);
+          } else {
+            _showPaidExpenseDetailsModal(context);
+          }
+        }
+      },
       child: Container(
         margin: const EdgeInsets.only(bottom: 10),
         padding: const EdgeInsets.all(14),
         decoration: BoxDecoration(
-          color: theme.cardTheme.color,
+          color: isSelected
+              ? AppColors.primary.withValues(alpha: 0.08)
+              : theme.cardTheme.color,
           borderRadius: BorderRadius.circular(16),
           border: Border.all(
-            color: isOverdue
-                ? AppColors.debtRed.withValues(alpha: 0.6)
-                : (isPending
-                    ? AppColors.folegoWarning.withValues(alpha: 0.4)
-                    : (theme.brightness == Brightness.dark ? AppColors.borderDark : AppColors.borderLight)),
-            width: (isOverdue || isPending) ? 1.5 : 1,
+            color: isSelected
+                ? AppColors.primary
+                : (isOverdue
+                    ? AppColors.debtRed.withValues(alpha: 0.6)
+                    : (isPending
+                        ? AppColors.folegoWarning.withValues(alpha: 0.4)
+                        : (theme.brightness == Brightness.dark ? AppColors.borderDark : AppColors.borderLight))),
+            width: isSelected ? 2 : ((isOverdue || isPending) ? 1.5 : 1),
           ),
         ),
         child: Column(
@@ -353,17 +640,16 @@ class ExpenseTimelineItem extends StatelessWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Row(
+                      Wrap(
+                        crossAxisAlignment: WrapCrossAlignment.center,
+                        spacing: 6,
+                        runSpacing: 4,
                         children: [
-                          Flexible(
-                            child: Text(
-                              expense.title,
-                              style: const TextStyle(
-                                fontSize: 15,
-                                fontWeight: FontWeight.w600,
-                              ),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
+                          Text(
+                            expense.title,
+                            style: const TextStyle(
+                              fontSize: 15,
+                              fontWeight: FontWeight.w600,
                             ),
                           ),
                           if (expense.isRecurring) ...[
@@ -479,8 +765,8 @@ class ExpenseTimelineItem extends StatelessWidget {
                             : (isPending ? AppColors.folegoWarning : null),
                       ),
                     ),
-                    const SizedBox(height: 4),
-                    if (isPending)
+                    if (isPending) ...[
+                      const SizedBox(height: 4),
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                         decoration: BoxDecoration(
@@ -503,25 +789,63 @@ class ExpenseTimelineItem extends StatelessWidget {
                             ),
                           ],
                         ),
-                      )
-                    else
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                        decoration: BoxDecoration(
-                          color: theme.brightness == Brightness.dark
-                              ? Colors.white10
-                              : Colors.black.withValues(alpha: 0.05),
-                          borderRadius: BorderRadius.circular(6),
-                        ),
-                        child: Text(
-                          _getSplitBadgeText(),
-                          style: TextStyle(
-                            fontSize: 10,
-                            fontWeight: FontWeight.w600,
-                            color: theme.textTheme.bodySmall?.color,
-                          ),
-                        ),
                       ),
+                    ],
+                  ],
+                ),
+                PopupMenuButton<String>(
+                  padding: EdgeInsets.zero,
+                  icon: const Icon(Icons.more_vert_rounded, size: 20, color: Colors.grey),
+                  tooltip: 'Opções da despesa',
+                  onSelected: (val) {
+                    if (val == 'edit') {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => AddExpensePage(expenseToEdit: expense),
+                        ),
+                      );
+                    } else if (val == 'delete') {
+                      _confirmAndDeleteExpense(context);
+                    } else if (val == 'audit') {
+                      showAuditLogSheet(
+                        context: context,
+                        entityId: expense.id,
+                        title: 'Auditoria: ${expense.title}',
+                      );
+                    }
+                  },
+                  itemBuilder: (ctx) => [
+                    const PopupMenuItem(
+                      value: 'edit',
+                      child: Row(
+                        children: [
+                          Icon(Icons.edit_outlined, size: 18, color: AppColors.primary),
+                          SizedBox(width: 10),
+                          Expanded(child: Text('Editar Despesa')),
+                        ],
+                      ),
+                    ),
+                    const PopupMenuItem(
+                      value: 'delete',
+                      child: Row(
+                        children: [
+                          Icon(Icons.delete_outline_rounded, size: 18, color: AppColors.debtRed),
+                          SizedBox(width: 10),
+                          Expanded(child: Text('Excluir Despesa', style: TextStyle(color: AppColors.debtRed))),
+                        ],
+                      ),
+                    ),
+                    const PopupMenuItem(
+                      value: 'audit',
+                      child: Row(
+                        children: [
+                          Icon(Icons.history_edu_rounded, size: 18, color: Colors.grey),
+                          SizedBox(width: 10),
+                          Expanded(child: Text('Histórico / Auditoria')),
+                        ],
+                      ),
+                    ),
                   ],
                 ),
               ],

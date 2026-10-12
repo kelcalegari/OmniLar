@@ -99,5 +99,66 @@ void main() {
       // Verifica se o título foi atualizado
       expect(cubit.state.events.any((e) => e.title == 'Consulta Médica Reagendada'), isTrue);
     });
+
+    testWidgets('Traz todos os integrantes da casa na lista de participantes', (tester) async {
+      tester.view.physicalSize = const Size(800, 1400);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.resetPhysicalSize);
+
+      await tester.pumpWidget(
+        BlocProvider<CalendarCubit>.value(
+          value: sl<CalendarCubit>(),
+          child: const MaterialApp(
+            home: Scaffold(
+              body: AddEventSheet(activeMemberId: 'member_carlos'),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      // Confirma que a seção e múltiplos integrantes estão presentes
+      expect(find.text('Participantes da Casa e Papel:'), findsOneWidget);
+      expect(find.text('Carlos'), findsOneWidget);
+      expect(find.text('Marina'), findsOneWidget);
+    });
+
+    testWidgets('Inicializa com initialDate fornecido e cria evento nessa data', (tester) async {
+      tester.view.physicalSize = const Size(800, 1400);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.resetPhysicalSize);
+
+      final cubit = sl<CalendarCubit>();
+      final customDate = DateTime(2026, 12, 25, 10, 0);
+
+      await tester.pumpWidget(
+        BlocProvider<CalendarCubit>.value(
+          value: cubit,
+          child: MaterialApp(
+            home: Scaffold(
+              body: AddEventSheet(
+                activeMemberId: 'member_carlos',
+                initialDate: customDate,
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('Novo Compromisso'), findsOneWidget);
+
+      final titleField = find.byType(TextFormField).first;
+      await tester.enterText(titleField, 'Almoço de Natal');
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('Salvar Compromisso'));
+      await tester.pumpAndSettle();
+
+      final created = cubit.state.events.firstWhere((e) => e.title == 'Almoço de Natal');
+      expect(created.startTime.year, equals(2026));
+      expect(created.startTime.month, equals(12));
+      expect(created.startTime.day, equals(25));
+    });
   });
 }

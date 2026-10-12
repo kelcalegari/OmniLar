@@ -17,6 +17,9 @@ class ShoppingRepositoryImpl implements ShoppingRepository {
   Future<List<ShoppingItem>> getItems(String listId) => _dataSource.getItems(listId);
 
   @override
+  Stream<List<ShoppingItem>> watchItems(String listId) => _dataSource.watchItems(listId);
+
+  @override
   Future<void> addItem(ShoppingItem item) => _dataSource.addItem(item);
 
   @override

@@ -6,6 +6,7 @@ import '../../domain/entities/calendar_event.dart';
 class MonthCalendarView extends StatelessWidget {
   final DateTime selectedDate;
   final List<CalendarEvent> events;
+  final List<DateTime> billDueDates;
   final ValueChanged<DateTime> onDateSelected;
   final ValueChanged<CalendarEvent> onEventTap;
   final ValueChanged<DateTime>? onAddEvent;
@@ -15,6 +16,7 @@ class MonthCalendarView extends StatelessWidget {
     super.key,
     required this.selectedDate,
     required this.events,
+    this.billDueDates = const [],
     required this.onDateSelected,
     required this.onEventTap,
     this.onAddEvent,
@@ -91,6 +93,7 @@ class MonthCalendarView extends StatelessWidget {
 
           // Eventos deste dia
           final dayEvents = events.where((e) => _isSameDay(e.startTime, cellDate)).toList();
+          final hasBillDue = billDueDates.any((b) => _isSameDay(b, cellDate));
 
           return InkWell(
             onTap: () => onDateSelected(cellDate),
@@ -132,17 +135,33 @@ class MonthCalendarView extends StatelessWidget {
                           ),
                         ),
                         const SizedBox(height: 2),
-                        if (dayEvents.isNotEmpty)
-                          Container(
-                            width: 5,
-                            height: 5,
-                            decoration: BoxDecoration(
-                              shape: BoxShape.circle,
-                              color: isSelected ? AppColors.primary : AppColors.primary.withValues(alpha: 0.85),
-                            ),
-                          )
-                        else
-                          const SizedBox(height: 5),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            if (dayEvents.isNotEmpty)
+                              Container(
+                                width: 5,
+                                height: 5,
+                                margin: const EdgeInsets.symmetric(horizontal: 1),
+                                decoration: BoxDecoration(
+                                  shape: BoxShape.circle,
+                                  color: isSelected ? AppColors.primary : AppColors.primary.withValues(alpha: 0.85),
+                                ),
+                              ),
+                            if (hasBillDue)
+                              Container(
+                                width: 5,
+                                height: 5,
+                                margin: const EdgeInsets.symmetric(horizontal: 1),
+                                decoration: const BoxDecoration(
+                                  shape: BoxShape.circle,
+                                  color: Colors.amber,
+                                ),
+                              ),
+                            if (dayEvents.isEmpty && !hasBillDue)
+                              const SizedBox(height: 5),
+                          ],
+                        ),
                       ],
                     )
                   : Column(
@@ -175,14 +194,29 @@ class MonthCalendarView extends StatelessWidget {
                                 ),
                               ),
                             ),
-                            if (dayEvents.isNotEmpty && !isDesktop)
-                              Container(
-                                width: 6,
-                                height: 6,
-                                decoration: const BoxDecoration(
-                                  shape: BoxShape.circle,
-                                  color: AppColors.primary,
-                                ),
+                            if (!isDesktop)
+                              Row(
+                                children: [
+                                  if (dayEvents.isNotEmpty)
+                                    Container(
+                                      width: 6,
+                                      height: 6,
+                                      margin: const EdgeInsets.only(right: 2),
+                                      decoration: const BoxDecoration(
+                                        shape: BoxShape.circle,
+                                        color: AppColors.primary,
+                                      ),
+                                    ),
+                                  if (hasBillDue)
+                                    Container(
+                                      width: 6,
+                                      height: 6,
+                                      decoration: const BoxDecoration(
+                                        shape: BoxShape.circle,
+                                        color: Colors.amber,
+                                      ),
+                                    ),
+                                ],
                               ),
                             if (isDesktop && isCurrentMonth)
                               InkWell(

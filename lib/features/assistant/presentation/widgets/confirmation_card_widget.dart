@@ -7,13 +7,148 @@ class ConfirmationCardWidget extends StatelessWidget {
   final AssistantActionProposal proposal;
   final VoidCallback onConfirm;
   final VoidCallback onCancel;
+  final ValueChanged<AssistantActionProposal>? onEdit;
 
   const ConfirmationCardWidget({
     super.key,
     required this.proposal,
     required this.onConfirm,
     required this.onCancel,
+    this.onEdit,
   });
+
+  void _showEditDialog(BuildContext context) {
+    final titleKey = proposal.arguments.containsKey('title') ? 'title' : 'name';
+    final initialTitle = proposal.arguments[titleKey]?.toString() ?? '';
+    final initialCents = proposal.arguments['cents'] as int?;
+    final initialPm = proposal.arguments['paymentMethodName']?.toString() ?? '';
+    final initialQty = proposal.arguments['quantity']?.toString() ?? '';
+
+    final titleController = TextEditingController(text: initialTitle);
+    final amountController = TextEditingController(
+      text: initialCents != null ? (initialCents / 100).toStringAsFixed(2).replaceAll('.', ',') : '',
+    );
+    final pmController = TextEditingController(text: initialPm);
+    final qtyController = TextEditingController(text: initialQty);
+
+    showDialog(
+      context: context,
+      builder: (ctx) {
+        return AlertDialog(
+          title: Row(
+            children: [
+              const Icon(Icons.edit_note_rounded, color: AppColors.primary),
+              const SizedBox(width: 8),
+              Text(
+                'Editar Proposta',
+                style: Theme.of(ctx).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
+              ),
+            ],
+          ),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextField(
+                  controller: titleController,
+                  decoration: const InputDecoration(
+                    labelText: 'Título / Descrição',
+                    border: OutlineInputBorder(),
+                    contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                  ),
+                ),
+                if (initialCents != null) ...[
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: amountController,
+                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                    decoration: const InputDecoration(
+                      labelText: 'Valor em Reais (R\$)',
+                      prefixText: 'R\$ ',
+                      border: OutlineInputBorder(),
+                      contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                    ),
+                  ),
+                ],
+                if (proposal.arguments.containsKey('paymentMethodName') || proposal.toolName.contains('Expense')) ...[
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: pmController,
+                    decoration: const InputDecoration(
+                      labelText: 'Meio de Pagamento',
+                      border: OutlineInputBorder(),
+                      contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                    ),
+                  ),
+                ],
+                if (proposal.arguments.containsKey('quantity')) ...[
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: qtyController,
+                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                    decoration: const InputDecoration(
+                      labelText: 'Quantidade',
+                      border: OutlineInputBorder(),
+                      contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('Cancelar'),
+            ),
+            FilledButton(
+              onPressed: () {
+                final updatedArgs = Map<String, dynamic>.from(proposal.arguments);
+                final newTitle = titleController.text.trim();
+                if (newTitle.isNotEmpty) {
+                  updatedArgs[titleKey] = newTitle;
+                }
+
+                if (initialCents != null) {
+                  final rawAmount = amountController.text.replaceAll(',', '.').trim();
+                  final parsedVal = double.tryParse(rawAmount) ?? (initialCents / 100);
+                  updatedArgs['cents'] = (parsedVal * 100).round();
+                }
+
+                if (pmController.text.trim().isNotEmpty) {
+                  updatedArgs['paymentMethodName'] = pmController.text.trim();
+                }
+
+                if (qtyController.text.trim().isNotEmpty) {
+                  updatedArgs['quantity'] = double.tryParse(qtyController.text.trim()) ?? 1.0;
+                }
+
+                // Reconstrói a descrição legível
+                String newDesc = proposal.description;
+                if (updatedArgs.containsKey('cents')) {
+                  final cents = updatedArgs['cents'] as int;
+                  final formattedMoney = 'R\$ ${(cents / 100).toStringAsFixed(2).replaceAll('.', ',')}';
+                  final pm = updatedArgs['paymentMethodName']?.toString();
+                  newDesc = '$newTitle: $formattedMoney${pm != null ? " • Meio de pagamento: $pm" : ""}';
+                } else if (newTitle.isNotEmpty) {
+                  newDesc = newTitle;
+                }
+
+                final updatedProposal = proposal.copyWith(
+                  arguments: updatedArgs,
+                  description: newDesc,
+                );
+
+                Navigator.pop(ctx);
+                onEdit?.call(updatedProposal);
+              },
+              child: const Text('Salvar'),
+            ),
+          ],
+        );
+      },
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -86,6 +221,28 @@ class ConfirmationCardWidget extends StatelessWidget {
               decoration: isCancelled ? TextDecoration.lineThrough : null,
             ),
           ),
+          if (proposal.arguments['paymentMethodName'] != null) ...[
+            const SizedBox(height: 8),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+              decoration: BoxDecoration(
+                color: AppColors.primary.withValues(alpha: 0.08),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: AppColors.primary.withValues(alpha: 0.2)),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(Icons.credit_card_rounded, size: 14, color: AppColors.primary),
+                  const SizedBox(width: 6),
+                  Text(
+                    'Meio de pagamento: ${proposal.arguments['paymentMethodName']}',
+                    style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.primary),
+                  ),
+                ],
+              ),
+            ),
+          ],
           if (!isExecuted && !isCancelled) ...[
             const SizedBox(height: 12),
             Row(
@@ -98,6 +255,17 @@ class ConfirmationCardWidget extends StatelessWidget {
                   },
                   child: const Text('Cancelar', style: TextStyle(color: Colors.grey)),
                 ),
+                if (onEdit != null) ...[
+                  const SizedBox(width: 4),
+                  TextButton.icon(
+                    onPressed: () {
+                      AppHaptics.light();
+                      _showEditDialog(context);
+                    },
+                    icon: const Icon(Icons.edit_outlined, size: 14),
+                    label: const Text('Editar'),
+                  ),
+                ],
                 const SizedBox(width: 8),
                 FilledButton.icon(
                   onPressed: () {

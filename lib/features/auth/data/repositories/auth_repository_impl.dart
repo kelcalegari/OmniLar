@@ -22,6 +22,9 @@ class AuthRepositoryImpl implements AuthRepository {
   House? get currentHouse => _dataSource.currentHouse;
 
   @override
+  bool get isDemoMode => _dataSource.isDemoMode;
+
+  @override
   Future<UserProfile> signInWithEmailPassword(String email, String password) {
     return _dataSource.signInWithEmailPassword(email, password);
   }
@@ -50,16 +53,47 @@ class AuthRepositoryImpl implements AuthRepository {
   }
 
   @override
+  Future<UserProfile> updateProfile({
+    required String fullName,
+    String? email,
+    String? pixKey,
+  }) {
+    return _dataSource.updateProfile(
+      fullName: fullName,
+      email: email,
+      pixKey: pixKey,
+    );
+  }
+
+  @override
   Future<List<House>> getUserHouses() {
     return _dataSource.getUserHouses();
   }
 
   @override
-  Future<House> createHouse({
-    required String name,
-    int cycleStartDay = 5,
-  }) {
+  Future<House> createHouse({required String name, int cycleStartDay = 5}) {
     return _dataSource.createHouse(name: name, cycleStartDay: cycleStartDay);
+  }
+
+  @override
+  Future<House> updateHouse({
+    required String houseId,
+    String? name,
+    int? cycleStartDay,
+    String? pixKey,
+    String? pixKeyType,
+    String? pixKeyHolderName,
+    String? pixKeyBank,
+  }) {
+    return _dataSource.updateHouse(
+      houseId: houseId,
+      name: name,
+      cycleStartDay: cycleStartDay,
+      pixKey: pixKey,
+      pixKeyType: pixKeyType,
+      pixKeyHolderName: pixKeyHolderName,
+      pixKeyBank: pixKeyBank,
+    );
   }
 
   @override

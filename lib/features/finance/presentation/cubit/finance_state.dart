@@ -6,6 +6,7 @@ import '../../domain/entities/house_expense.dart';
 import '../../domain/entities/contribution.dart';
 import '../../domain/entities/financial_cycle_summary.dart';
 import '../../domain/entities/savings_vault.dart';
+import '../../domain/entities/cycle_funding_estimate.dart';
 import '../../../../core/domain/value_objects/money.dart';
 import '../../../../core/domain/value_objects/financial_cycle.dart';
 
@@ -15,6 +16,9 @@ class FinanceState extends Equatable {
   final FinanceStatus status;
   final FinancialCycle currentCycle;
   final FinancialCycleSummary? summary;
+  final CycleFundingEstimate? fundingEstimate;
+  final FundingEstimateMode fundingEstimateMode;
+  final Map<String, Money> customCategoryOverrides;
   final List<HouseExpense> expenses;
   final List<Contribution> contributions;
   final List<HouseMember> members;
@@ -27,6 +31,9 @@ class FinanceState extends Equatable {
     this.status = FinanceStatus.initial,
     required this.currentCycle,
     this.summary,
+    this.fundingEstimate,
+    this.fundingEstimateMode = FundingEstimateMode.historicalAverage,
+    this.customCategoryOverrides = const {},
     this.expenses = const [],
     this.contributions = const [],
     this.members = const [],
@@ -43,6 +50,9 @@ class FinanceState extends Equatable {
     FinanceStatus? status,
     FinancialCycle? currentCycle,
     FinancialCycleSummary? summary,
+    CycleFundingEstimate? fundingEstimate,
+    FundingEstimateMode? fundingEstimateMode,
+    Map<String, Money>? customCategoryOverrides,
     List<HouseExpense>? expenses,
     List<Contribution>? contributions,
     List<HouseMember>? members,
@@ -55,6 +65,9 @@ class FinanceState extends Equatable {
       status: status ?? this.status,
       currentCycle: currentCycle ?? this.currentCycle,
       summary: summary ?? this.summary,
+      fundingEstimate: fundingEstimate ?? this.fundingEstimate,
+      fundingEstimateMode: fundingEstimateMode ?? this.fundingEstimateMode,
+      customCategoryOverrides: customCategoryOverrides ?? this.customCategoryOverrides,
       expenses: expenses ?? this.expenses,
       contributions: contributions ?? this.contributions,
       members: members ?? this.members,
@@ -70,6 +83,9 @@ class FinanceState extends Equatable {
         status,
         currentCycle,
         summary,
+        fundingEstimate,
+        fundingEstimateMode,
+        customCategoryOverrides,
         expenses,
         contributions,
         members,

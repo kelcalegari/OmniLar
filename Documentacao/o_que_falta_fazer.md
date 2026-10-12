@@ -25,12 +25,17 @@ Este documento consolida o estado atual do desenvolvimento e mapeia com clareza 
 | **Eventos & Despesas Recorrentes** (3 Escopos de Edição/Exclusão RFC 5545) | Concluído ✅ | 100% |
 | **Projetos & Viagens Compartilhadas** (Isolamento da Casa, Rateio Próprio, Super Pix) | Concluído ✅ | 100% |
 | **Backend & Infra SQL** (Migrações 0001 a 0006, RLS, Views Seguras e RPCs) | Concluído ✅ | 100% |
-| **Integração Real Supabase** (AuthDataSource e FinanceDataSource) | Concluído ✅ | 100% |
+| **Integração Real Supabase** (Auth, Finance, P2P, Shopping, Calendar) | Concluído ✅ | 100% |
+| **Realtime Sync / Sincronização em Tempo Real** (Compras & Tarefas entre moradores) | Concluído ✅ | 100% |
+| **Fila Offline com Armazenamento Seguro** (FlutterSecureStorage, AES Hardware Keystore) | Concluído ✅ | 100% |
+| **Segurança & Biometria RN07** (local_auth, Fingerprint/FaceID/PIN para risco) | Concluído ✅ | 100% |
+| **Edge Functions & Leitura Inteligente OCR** (Gemini Vision estruturado e desmembramento) | Concluído ✅ | 100% |
+| **Identidade Visual & Assets Nativos** (Launcher Icons adaptativos e Native Splash) | Concluído ✅ | 100% |
 | **Compartilhamento WhatsApp / Super Pix** (Copiar Pix, Veredito e Cobrança Amigável) | Concluído ✅ | 100% |
 | **CI / CD Quality Gate** (GitHub Actions, dart analyze 0 warnings, flutter test) | Concluído ✅ | 100% |
 | **Auditoria & Resolução de Casos de Borda** (Clearing Engine, FEBRABAN rollover, serialização offline, IA dinâmica) | Concluído ✅ | 100% |
 
-> **Métrica de Confiabilidade:** **126 testes automatizados (unitários e widgets) passando (100% verde)**, `dart analyze` com zero erros e pipeline de CI integrado.
+> **Métrica de Confiabilidade:** **162 testes automatizados (unitários e widgets) passando (100% verde)**, `dart analyze` com zero erros e zero warnings, pipeline de CI integrado.
 
 ---
 
@@ -114,6 +119,12 @@ flowchart TD
 - [x] **Despesas Recorrentes (`HouseExpense`, `FinanceRepository`, `ExpenseTimelineItem`, `SettingsPage`):**
   - Vínculo por `recurringSeriesId`.
   - Edição e Exclusão com escopo (apenas este mês, deste mês em diante, toda a série).
+- [x] **Edição, Exclusão Segura e Auditoria Financeira (`AuditEntry`, `audit_log`, `AddExpensePage`, `ExpenseTimelineItem`):**
+  - Soft-delete contábil (`deleted_at`) em conformidade com RLS (sem DELETE físico em ledger).
+  - Fluxo completo de Edição de despesas com ressincronização atômica de `split_rules` e `house_expense_items`.
+  - Modal adaptativo de detalhes e edição tanto para despesas pendentes quanto já pagas.
+  - Migration 0012 com database trigger `fn_audit_record` populando `audit_log` em todas as mutações financeiras.
+  - Interface visual de auditoria (`AuditLogSheet`) acessível nos cards de despesa e no menu de Ajustes da Casa.
 
 ---
 
@@ -124,30 +135,33 @@ Atualmente, o app utiliza **DataSources Mockados** altamente consistentes em mem
   - Implementados através de interfaces desacopladas e injeção resiliente:
     - `AuthDataSource` & `SupabaseAuthDataSource` (Autenticação real, criação de casa, convites).
     - `FinanceDataSource` & `SupabaseFinanceDataSource` (`house_expenses`, `house_expense_items`, `contributions`, `savings_vaults`, `savings_transactions`).
-  - [ ] `SupabaseP2PDataSource` (`loans`, `installments`, `payments`).
-  - [ ] `SupabaseShoppingDataSource` (`shopping_lists`, `shopping_items`, `shopping_trips`).
-  - [ ] `SupabaseCalendarDataSource` (`events`, `tasks`).
-- [ ] **Supabase Realtime:**
-  - Plugar streams de Realtime nas listas de compras e tarefas para que alterações feitas por um parceiro reflitam instantaneamente no dispositivo do outro sem recarregar.
-- [ ] **Edge Functions (Deno / TypeScript):**
-  - Subir a Edge Function `capture-read` com o SDK do Google Gemini (usando `AI_MODEL_VISION`).
-  - Configurar secret `GEMINI_API_KEY` apenas no cofre seguro do Supabase (nunca no app).
+  - [x] `SupabaseP2PDataSource` (`loans`, `installments`, `payments`).
+  - [x] `SupabaseShoppingDataSource` (`shopping_lists`, `shopping_items`, `shopping_trips`).
+  - [x] `SupabaseCalendarDataSource` (`events`, `tasks`).
+- [x] **Supabase Realtime:**
+  - Streams reativas de Realtime plugadas nas listas de compras e tarefas (`watchItems`, `watchTasks`) com sincronização instantânea entre aparelhos de diferentes moradores.
+- [x] **Fila Offline com Armazenamento Seguro (`OfflineQueueManager`):**
+  - Criptografia via hardware keystore / keychain (`FlutterSecureStorage`), garantindo persistência e recuperação de mutações pendentes entre reinicializações.
+- [x] **Edge Functions (Deno / TypeScript):**
+  - Edge Function `capture-read` com o Google Gemini Flash estruturado (`Structured JSON Schema`) para leitura e extração inteligente de notas, cupons e boletos/condomínios desmembrados (taxa, água, gás, obras).
+  - Mascaramento prévio de CPFs e números de cartão para proteção de privacidade (`mask.ts`).
+  - Configuração do segredo `GEMINI_API_KEY` exclusivamente no backend da Edge Function.
 
 ---
 
-### Frente 3: Segurança e Confirmação de Risco (RN07)
+### Frente 5: Segurança e Confirmação de Risco (RN07)
 A especificação do projeto prevê que ações de alto impacto financeiro não possam ser disparadas acidentalmente.
 
-- [ ] **Integração com `local_auth`:**
-  - Adicionar o pacote `local_auth` ao `pubspec.yaml`.
-  - Exigir biometria (Fingerprint / Face ID) ou PIN do aparelho ao:
+- [x] **Integração com `local_auth`:**
+  - Pacote `local_auth` adicionado e integrado no `BiometricAuthService`.
+  - Exigência de biometria (Fingerprint / Face ID) ou PIN do aparelho com feedback tátil e confirmação visual ao:
     - Executar **Perdão de Empréstimo (Anistia)**.
     - Executar **Renegociação de Dívida**.
     - Executar **Liquidação do Ciclo Financeiro (Fechar Ciclo)**.
 
 ---
 
-### Frente 4: Compartilhamento e Notificações Push
+### Frente 6: Compartilhamento e Notificações Push
 O objetivo do Omni Lar é "viver junto sem atrito". Para isso, a comunicação entre os moradores precisa ser fluida.
 
 - [x] **Compartilhamento do Super Pix (Comprovante, Veredito e Cobrança Amigável):**
@@ -161,12 +175,12 @@ O objetivo do Omni Lar é "viver junto sem atrito". Para isso, a comunicação e
 
 ---
 
-### Frente 5: Assets, Identidade Visual e Lojas
+### Frente 7: Assets, Identidade Visual e Lojas
 Preparar o binário para distribuição pública.
 
-- [ ] **Ícone do Aplicativo e Splash Screen:**
-  - Configurar `flutter_launcher_icons` com o logo oficial do Omni Lar em todas as densidades (Android adaptativo e iOS).
-  - Configurar `flutter_native_splash` para remover o flash branco inicial na inicialização do Flutter.
+- [x] **Ícone do Aplicativo e Splash Screen:**
+  - `flutter_launcher_icons` configurado e gerado com os assets oficiais do Omni Lar em todas as densidades (Android adaptativo e iOS).
+  - `flutter_native_splash` configurado e gerado com `#0F172A` e logotipo vertical escuro, eliminando o flash branco inicial na inicialização do Flutter.
 - [ ] **Configurações de Build:**
   - Definir `applicationId = "br.com.omnilar.app"` no Android (`build.gradle`).
   - Criar `key.properties` e keystore para release.

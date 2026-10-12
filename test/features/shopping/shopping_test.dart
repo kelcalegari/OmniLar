@@ -7,6 +7,7 @@ import 'package:omni_lar/features/p2p/data/datasources/mock_p2p_datasource.dart'
 import 'package:omni_lar/features/p2p/data/repositories/p2p_repository_impl.dart';
 import 'package:omni_lar/features/shopping/data/datasources/mock_shopping_datasource.dart';
 import 'package:omni_lar/features/shopping/data/repositories/shopping_repository_impl.dart';
+import 'package:omni_lar/features/finance/domain/services/credit_card_invoice_calculator.dart';
 import 'package:omni_lar/features/shopping/domain/entities/shopping_item.dart';
 
 void main() {
@@ -72,8 +73,13 @@ void main() {
       // Vamos marcar item_4: Shampoo Especial (R$ 35,00) - pessoal da Marina como comprado
       await shoppingRepo.toggleItemBought('item_4');
 
-      final cycle = FinancialCycle.fromDate(date: DateTime(2026, 10, 15), cycleStartDay: 5);
-      final initialExpenses = await financeRepo.getExpensesForCycle(cycle);
+      final invoiceDueDate = CreditCardInvoiceCalculator.calculateInvoiceDueDate(
+        purchaseDate: DateTime.now(),
+        closingDay: 28,
+        dueDay: 5,
+      );
+      final expenseCycle = FinancialCycle.fromDate(date: invoiceDueDate, cycleStartDay: 5);
+      final initialExpenses = await financeRepo.getExpensesForCycle(expenseCycle);
       final initialExpensesCount = initialExpenses.length;
       final initialLoans = await p2pRepo.getLoans();
       final initialLoansCount = initialLoans.length;
@@ -89,9 +95,9 @@ void main() {
       );
 
       // Verifica que uma nova despesa da casa foi criada
-      final updatedExpenses = await financeRepo.getExpensesForCycle(cycle);
+      final updatedExpenses = await financeRepo.getExpensesForCycle(expenseCycle);
       expect(updatedExpenses.length, equals(initialExpensesCount + 1));
-      final tripExpense = updatedExpenses.last;
+      final tripExpense = updatedExpenses.first;
       expect(tripExpense.paidByMemberId, equals('member_carlos'));
 
       // Verifica que um empréstimo P2P foi gerado para a Marina pagar o Carlos

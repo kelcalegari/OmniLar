@@ -7,24 +7,29 @@ import '../../domain/entities/contribution.dart';
 import '../../domain/entities/split_rule.dart';
 import '../../domain/entities/financial_cycle_summary.dart';
 import '../../domain/entities/savings_vault.dart';
+import '../../domain/entities/audit_entry.dart';
 import '../../../../core/domain/enums/recurrence.dart';
 import '../../../../core/domain/value_objects/money.dart';
 import '../../../../core/domain/value_objects/financial_cycle.dart';
+import '../../domain/services/credit_card_invoice_calculator.dart';
 import 'finance_datasource.dart';
 
 class MockFinanceDataSource implements FinanceDataSource {
+  final List<AuditEntry> _auditLogs = [];
   final List<HouseMember> _members = [
     const HouseMember(
       id: 'member_carlos',
       name: 'Carlos',
       role: 'owner',
       defaultSplitPercent: 60.0,
+      pixKey: 'carlos@omnilar.com',
     ),
     const HouseMember(
       id: 'member_marina',
       name: 'Marina',
       role: 'admin',
       defaultSplitPercent: 40.0,
+      pixKey: 'marina@omnilar.com',
     ),
   ];
 
@@ -97,20 +102,25 @@ class MockFinanceDataSource implements FinanceDataSource {
 
   MockFinanceDataSource() {
     final now = DateTime.now();
+    final currentCycle = FinancialCycle.fromDate(
+      date: now,
+      cycleStartDay: 5,
+    );
+    final cycleStart = currentCycle.startDate;
 
-    // Aportes de exemplo do ciclo atual
+    // Aportes de exemplo do ciclo atual (no início do ciclo)
     _contributions.addAll([
       Contribution(
         id: 'contrib_1',
         memberId: 'member_carlos',
         amount: const Money(300000), // R$ 3.000,00
-        date: DateTime(now.year, now.month, 5),
+        date: cycleStart,
       ),
       Contribution(
         id: 'contrib_2',
         memberId: 'member_marina',
         amount: const Money(200000), // R$ 2.000,00
-        date: DateTime(now.year, now.month, 5),
+        date: cycleStart,
       ),
     ]);
 
@@ -120,7 +130,7 @@ class MockFinanceDataSource implements FinanceDataSource {
         id: 'exp_1',
         title: 'Aluguel do Apartamento',
         amount: const Money(220000), // R$ 2.200,00
-        date: DateTime(now.year, now.month, 6),
+        date: cycleStart.add(const Duration(days: 1)),
         categoryId: 'cat_moradia',
         paidByMemberId: 'member_carlos',
         paymentMethodId: 'pm_caixa',
@@ -134,7 +144,7 @@ class MockFinanceDataSource implements FinanceDataSource {
         id: 'exp_2',
         title: 'Compras Pão de Açúcar',
         amount: const Money(48560), // R$ 485,60
-        date: DateTime(now.year, now.month, 6),
+        date: cycleStart.add(const Duration(days: 1)),
         categoryId: 'cat_mercado',
         paidByMemberId: 'member_marina',
         paymentMethodId: 'pm_vr_marina',
@@ -145,7 +155,8 @@ class MockFinanceDataSource implements FinanceDataSource {
         id: 'exp_3',
         title: 'Abastecimento Posto Shell',
         amount: const Money(18000), // R$ 180,00
-        date: DateTime(now.year, now.month, 6),
+        date: cycleStart.add(const Duration(days: 1)),
+        dueDate: cycleStart.add(const Duration(days: 1)),
         categoryId: 'cat_carro', // Dono 100% Carlos
         paidByMemberId: 'member_carlos',
         paymentMethodId: 'pm_card_carlos',
@@ -157,8 +168,8 @@ class MockFinanceDataSource implements FinanceDataSource {
         id: 'exp_4',
         title: 'Conta de Luz (Enel)',
         amount: const Money(21000), // R$ 210,00 estimado
-        date: DateTime(now.year, now.month, 20),
-        dueDate: DateTime(now.year, now.month, 20),
+        date: cycleStart.add(const Duration(days: 15)),
+        dueDate: cycleStart.add(const Duration(days: 15)),
         categoryId: 'cat_contas',
         paidByMemberId: 'member_carlos',
         paymentMethodId: 'pm_caixa',
@@ -172,8 +183,8 @@ class MockFinanceDataSource implements FinanceDataSource {
         id: 'exp_5',
         title: 'Internet Fibra',
         amount: const Money(12000), // R$ 120,00 fixo
-        date: DateTime(now.year, now.month, 25),
-        dueDate: DateTime(now.year, now.month, 25),
+        date: cycleStart.add(const Duration(days: 20)),
+        dueDate: cycleStart.add(const Duration(days: 20)),
         categoryId: 'cat_contas',
         paidByMemberId: 'member_marina',
         paymentMethodId: 'pm_caixa',
@@ -187,8 +198,8 @@ class MockFinanceDataSource implements FinanceDataSource {
         id: 'exp_6',
         title: 'Netflix Assinatura',
         amount: const Money(5590), // R$ 55,90 fixo
-        date: DateTime(now.year, now.month, 10),
-        dueDate: DateTime(now.year, now.month, 10),
+        date: cycleStart.add(const Duration(days: 5)),
+        dueDate: cycleStart.add(const Duration(days: 5)),
         categoryId: 'cat_lazer',
         paidByMemberId: 'member_marina',
         paymentMethodId: 'pm_card_marina',
@@ -202,8 +213,8 @@ class MockFinanceDataSource implements FinanceDataSource {
         id: 'exp_7',
         title: 'Condomínio Edifício Solar',
         amount: const Money(85000), // R$ 850,00 total
-        date: DateTime(now.year, now.month, 10),
-        dueDate: DateTime(now.year, now.month, 10),
+        date: cycleStart.add(const Duration(days: 5)),
+        dueDate: cycleStart.add(const Duration(days: 5)),
         categoryId: 'cat_moradia',
         paidByMemberId: 'member_carlos',
         paymentMethodId: 'pm_caixa',
@@ -297,12 +308,18 @@ class MockFinanceDataSource implements FinanceDataSource {
     return _expenses.where((e) {
       // Despesas de projeto vivem apenas no projeto (não pesam no Caixa/Fôlego/fechamento)
       if (e.isProjectExpense) return false;
-      final belongsToCycle = cycle.contains(e.date) || (e.dueDate != null && cycle.contains(e.dueDate!));
+
+      // Se for pagamento no cartão de crédito com fatura definida, a competência é o vencimento da fatura
+      final isCard = _paymentMethods.any((pm) => pm.id == e.paymentMethodId && pm.type == PaymentMethodType.card);
+      final belongsToCycle = isCard && e.dueDate != null
+          ? cycle.contains(e.dueDate!)
+          : (cycle.contains(e.effectiveDueDate) || (e.isPaid && cycle.contains(e.date)));
+
       // Passivos atrasados: se a conta ainda não foi paga e seu vencimento é anterior ao fim deste ciclo, deve constar como compromisso pendente
-      final isOverdueLiability = e.isPending && (e.dueDate ?? e.date).isBefore(cycle.endDate);
+      final isOverdueLiability = e.isPending && e.effectiveDueDate.isBefore(cycle.endDate);
       return belongsToCycle || isOverdueLiability;
     }).toList()
-      ..sort((a, b) => b.date.compareTo(a.date));
+      ..sort((a, b) => b.effectiveDueDate.compareTo(a.effectiveDueDate));
   }
 
   /// Todas as despesas do projeto, de qualquer ciclo (viagens e obras atravessam meses).
@@ -359,7 +376,30 @@ class MockFinanceDataSource implements FinanceDataSource {
 
   @override
   Future<void> addExpense(HouseExpense expense) async {
-    _expenses.insert(0, expense);
+    HouseExpense toAdd = expense;
+    if (toAdd.dueDate == null && toAdd.paymentMethodId.isNotEmpty) {
+      final pm = _paymentMethods.where((p) => p.id == toAdd.paymentMethodId).firstOrNull;
+      if (pm != null && pm.type == PaymentMethodType.card && pm.closingDay != null && pm.dueDay != null) {
+        toAdd = toAdd.copyWith(
+          dueDate: CreditCardInvoiceCalculator.calculateInvoiceDueDate(
+            purchaseDate: toAdd.date,
+            closingDay: pm.closingDay!,
+            dueDay: pm.dueDay!,
+          ),
+        );
+      }
+    }
+    _expenses.insert(0, toAdd);
+    _auditLogs.add(AuditEntry(
+      id: 'aud_${DateTime.now().millisecondsSinceEpoch}_${expense.id}',
+      actorId: expense.paidByMemberId,
+      actorName: _members.firstWhere((m) => m.id == expense.paidByMemberId, orElse: () => _members.first).name,
+      entityType: 'house_expenses',
+      entityId: expense.id,
+      action: 'create',
+      diff: {'title': expense.title, 'amount_cents': expense.amount.cents},
+      createdAt: DateTime.now(),
+    ));
   }
 
   @override
@@ -373,6 +413,16 @@ class MockFinanceDataSource implements FinanceDataSource {
       return;
     }
     final current = _expenses[index];
+    _auditLogs.add(AuditEntry(
+      id: 'aud_${DateTime.now().millisecondsSinceEpoch}_${expense.id}',
+      actorId: expense.paidByMemberId,
+      actorName: _members.firstWhere((m) => m.id == expense.paidByMemberId, orElse: () => _members.first).name,
+      entityType: 'house_expenses',
+      entityId: expense.id,
+      action: 'update',
+      diff: {'title': expense.title, 'amount_cents': expense.amount.cents},
+      createdAt: DateTime.now(),
+    ));
 
     switch (scope) {
       case RecurrenceScope.thisInstanceOnly:
@@ -440,6 +490,16 @@ class MockFinanceDataSource implements FinanceDataSource {
     final index = _expenses.indexWhere((e) => e.id == expenseId);
     if (index == -1) return;
     final current = _expenses[index];
+    _auditLogs.add(AuditEntry(
+      id: 'aud_${DateTime.now().millisecondsSinceEpoch}_$expenseId',
+      actorId: current.paidByMemberId,
+      actorName: _members.firstWhere((m) => m.id == current.paidByMemberId, orElse: () => _members.first).name,
+      entityType: 'house_expenses',
+      entityId: expenseId,
+      action: 'soft_delete',
+      diff: {'title': current.title, 'amount_cents': current.amount.cents},
+      createdAt: DateTime.now(),
+    ));
 
     switch (scope) {
       case RecurrenceScope.thisInstanceOnly:
@@ -533,6 +593,36 @@ class MockFinanceDataSource implements FinanceDataSource {
     _paymentMethods.add(paymentMethod);
   }
 
+  @override
+  Future<void> updatePaymentMethod(PaymentMethod paymentMethod) async {
+    final index = _paymentMethods.indexWhere((p) => p.id == paymentMethod.id);
+    if (index != -1) {
+      _paymentMethods[index] = paymentMethod;
+    }
+  }
+
+  @override
+  Future<void> deletePaymentMethod(String paymentMethodId) async {
+    _paymentMethods.removeWhere((p) => p.id == paymentMethodId);
+  }
+
+  @override
+  Future<void> updateHouseSplitModel({
+    required String splitModel,
+    required Map<String, double> percentages,
+    required Map<String, int> fixedAmountsCents,
+  }) async {
+    for (int i = 0; i < _members.length; i++) {
+      final m = _members[i];
+      final newPercent = percentages[m.id] ?? m.defaultSplitPercent;
+      final newFixed = fixedAmountsCents[m.id] ?? m.defaultFixedAmountCents;
+      _members[i] = m.copyWith(
+        defaultSplitPercent: newPercent,
+        defaultFixedAmountCents: newFixed,
+      );
+    }
+  }
+
   // --- Caixinhas & Metas da Casa (Dinheiro Blindado) ---
   @override
   Future<List<SavingsVault>> getSavingsVaults() async {
@@ -593,6 +683,15 @@ class MockFinanceDataSource implements FinanceDataSource {
         date: DateTime.now(),
       ));
     }
+  }
+
+  @override
+  Future<List<AuditEntry>> getAuditLog({String? entityId, int limit = 50}) async {
+    var logs = _auditLogs;
+    if (entityId != null) {
+      logs = logs.where((l) => l.entityId == entityId).toList();
+    }
+    return logs.reversed.take(limit).toList();
   }
 }
 

@@ -20,7 +20,8 @@ abstract class CalendarDataSource {
     required RsvpStatus status,
   });
   Future<void> cancelEvent(String eventId);
-  Future<List<TaskItem>> getTasks();
+  Future<List<TaskItem>> getTasks({bool includeArchived = false});
+  Stream<List<TaskItem>> watchTasks({bool includeArchived = false});
   Future<void> addTask(TaskItem task);
   Future<void> toggleTaskComplete({
     required String taskId,

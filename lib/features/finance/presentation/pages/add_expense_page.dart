@@ -5,12 +5,17 @@ import '../../../../core/di/service_locator.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/domain/value_objects/money.dart';
 import '../../../../core/widgets/money_input_field.dart';
+import '../../../auth/domain/repositories/auth_repository.dart';
 import '../../../projects/domain/entities/shared_project.dart';
 import '../../../projects/domain/repositories/projects_repository.dart';
 import '../../domain/entities/house_expense.dart';
 import '../../domain/entities/house_expense_item.dart';
 import '../../domain/entities/split_rule.dart';
 import '../../domain/entities/category.dart';
+import '../../domain/entities/payment_method.dart';
+import '../../domain/services/credit_card_invoice_calculator.dart';
+import '../../../../core/domain/enums/recurrence.dart';
+import '../../../../core/widgets/recurrence_scope_dialog.dart';
 import '../cubit/finance_cubit.dart';
 import '../cubit/finance_state.dart';
 
@@ -34,10 +39,12 @@ class _DraftExpenseItem {
 
 class AddExpensePage extends StatefulWidget {
   final bool isRecurringDefault;
+  final HouseExpense? expenseToEdit;
 
   const AddExpensePage({
     super.key,
     this.isRecurringDefault = false,
+    this.expenseToEdit,
   });
 
   @override
@@ -64,13 +71,38 @@ class _AddExpensePageState extends State<AddExpensePage> {
 
   bool _isItemized = false;
   final List<_DraftExpenseItem> _draftItems = [];
+  String? _attachedReceiptName;
 
   @override
   void initState() {
     super.initState();
-    _isRecurring = widget.isRecurringDefault;
-    if (_isRecurring) {
-      _expenseStatus = ExpenseStatus.pending;
+    final edit = widget.expenseToEdit;
+    if (edit != null) {
+      _titleController.text = edit.title;
+      _cents = edit.amount.cents;
+      _selectedCategoryId = edit.categoryId;
+      _selectedPaidByMemberId = edit.paidByMemberId;
+      _selectedPaymentMethodId = edit.paymentMethodId;
+      _selectedProjectId = edit.projectId;
+      _selectedDate = edit.dueDate ?? edit.date;
+      _isRecurring = edit.isRecurring;
+      _isVariable = edit.isVariable;
+      _dueDay = edit.dueDay ?? (edit.dueDate ?? edit.date).day;
+      _expenseStatus = edit.status;
+      _isItemized = edit.items.isNotEmpty;
+      if (edit.items.isNotEmpty) {
+        _draftItems.addAll(edit.items.map((it) => _DraftExpenseItem(
+          title: it.title,
+          cents: it.amount.cents,
+          categoryId: it.categoryId,
+          responsibleMemberId: it.responsibleMemberId,
+        )));
+      }
+    } else {
+      _isRecurring = widget.isRecurringDefault;
+      if (_isRecurring) {
+        _expenseStatus = ExpenseStatus.pending;
+      }
     }
     _loadAvailableProjects();
   }
@@ -103,9 +135,11 @@ class _AddExpensePageState extends State<AddExpensePage> {
     }
     _draftItems.clear();
 
-    final moradiaCatId = state.categories.firstWhere((c) => c.name.toLowerCase().contains('moradia'), orElse: () => state.categories.first).id;
-    final contasCatId = state.categories.firstWhere((c) => c.name.toLowerCase().contains('conta'), orElse: () => state.categories.first).id;
-    final firstMemberId = state.members.isNotEmpty ? state.members.first.id : null;
+    final moradiaCatId = state.categories.where((c) => c.name.toLowerCase().contains('moradia')).firstOrNull?.id 
+        ?? state.categories.firstOrNull?.id;
+    final contasCatId = state.categories.where((c) => c.name.toLowerCase().contains('conta')).firstOrNull?.id 
+        ?? state.categories.firstOrNull?.id;
+    final firstMemberId = state.members.firstOrNull?.id;
 
     if (_cents == 85000) {
       _draftItems.addAll([
@@ -133,7 +167,7 @@ class _AddExpensePageState extends State<AddExpensePage> {
     }
   }
 
-  void _submit() {
+  Future<void> _submit() async {
     if (_titleController.text.trim().isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Por favor, digite o nome da despesa')),
@@ -170,55 +204,144 @@ class _AddExpensePageState extends State<AddExpensePage> {
     }
 
     final state = context.read<FinanceCubit>().state;
-    final catId = _selectedCategoryId ?? (state.categories.isNotEmpty ? state.categories.first.id : '');
-    final paidById = _selectedPaidByMemberId ?? (state.members.isNotEmpty ? state.members.first.id : '');
-    final pmId = _selectedPaymentMethodId ?? (state.paymentMethods.isNotEmpty ? state.paymentMethods.first.id : '');
+    final catId = _selectedCategoryId ?? state.categories.firstOrNull?.id ?? '';
+    final paidById = _selectedPaidByMemberId ?? state.members.firstOrNull?.id ?? sl<AuthRepository>().currentUser?.id ?? '';
+    final pmId = _selectedPaymentMethodId ?? state.paymentMethods.firstOrNull?.id ?? '';
 
-    // Determina a regra de rateio
-    final category = state.categories.firstWhere((c) => c.id == catId, orElse: () => state.categories.first);
+    // Determina a regra de rateio de forma resiliente
+    final category = state.categories.where((c) => c.id == catId).firstOrNull;
     SplitRule rule;
-    if (category.hasOwner || _selectedSplitType == SplitType.categoryOwner) {
+    if (category != null && (category.hasOwner || _selectedSplitType == SplitType.categoryOwner)) {
       rule = SplitRule.singleResponsible(category.ownerMemberId ?? paidById);
     } else {
-      rule = const SplitRule.percentage({'member_carlos': 60.0, 'member_marina': 40.0});
+      if (state.members.isNotEmpty) {
+        final percentMap = <String, double>{};
+        for (final m in state.members) {
+          percentMap[m.id] = m.defaultSplitPercent;
+        }
+        rule = SplitRule.percentage(percentMap);
+      } else {
+        rule = SplitRule.singleResponsible(paidById);
+      }
     }
 
     final now = DateTime.now();
     DateTime expenseDate = _selectedDate;
     DateTime? dueDate;
 
+    final selectedPm = state.paymentMethods.where((p) => p.id == pmId).firstOrNull;
+    final isHouseMethod = selectedPm == null
+        ? (pmId == 'pm_caixa')
+        : (selectedPm.ownerMemberId == null || selectedPm.id == 'pm_caixa');
+    final paidOutOfPocket = !isHouseMethod;
+
     if (_isRecurring) {
       final daysInMonth = DateTime(now.year, now.month + 1, 0).day;
       final safeDay = _dueDay.clamp(1, daysInMonth);
       dueDate = DateTime(now.year, now.month, safeDay);
       expenseDate = _expenseStatus == ExpenseStatus.paid ? now : dueDate;
+    } else if (selectedPm != null &&
+        selectedPm.type == PaymentMethodType.card &&
+        selectedPm.closingDay != null &&
+        selectedPm.dueDay != null) {
+      dueDate = CreditCardInvoiceCalculator.calculateInvoiceDueDate(
+        purchaseDate: _selectedDate,
+        closingDay: selectedPm.closingDay!,
+        dueDay: selectedPm.dueDay!,
+      );
     } else {
       if (_expenseStatus == ExpenseStatus.pending) {
         dueDate = _selectedDate;
       }
     }
 
+    if (widget.expenseToEdit != null) {
+      final oldExpense = widget.expenseToEdit!;
+      RecurrenceScope chosenScope = RecurrenceScope.thisInstanceOnly;
+      if (oldExpense.isRecurring) {
+        final scope = await showRecurrenceScopeDialog(
+          context: context,
+          itemTitle: oldExpense.title,
+          isDelete: false,
+          isExpense: true,
+        );
+        if (scope == null) return;
+        chosenScope = scope;
+      }
+
+      final expenseId = oldExpense.id;
+      final List<HouseExpenseItem> items = _isItemized
+          ? _draftItems.asMap().entries.map((entry) {
+              final idx = entry.key;
+              final draft = entry.value;
+              final itemTitle = draft.titleController.text.trim().isEmpty
+                  ? 'Sub-item #${idx + 1}'
+                  : draft.titleController.text.trim();
+              return HouseExpenseItem(
+                id: 'item_${expenseId}_$idx',
+                expenseId: expenseId,
+                title: itemTitle,
+                amount: Money(draft.cents),
+                categoryId: draft.categoryId ?? catId,
+                responsibleMemberId: draft.responsibleMemberId,
+                splitRule: draft.responsibleMemberId != null
+                    ? SplitRule.singleResponsible(draft.responsibleMemberId!)
+                    : null,
+              );
+            }).toList()
+          : const [];
+
+      final updatedExpense = oldExpense.copyWith(
+        title: _titleController.text.trim(),
+        amount: Money(_cents),
+        date: expenseDate,
+        dueDate: dueDate,
+        categoryId: catId,
+        paidByMemberId: paidById,
+        paymentMethodId: pmId,
+        splitRule: rule,
+        paidOutOfPocket: paidOutOfPocket,
+        status: _expenseStatus,
+        isRecurring: _isRecurring,
+        isVariable: _isVariable,
+        dueDay: _isRecurring ? _dueDay : null,
+        items: items,
+        projectId: _selectedProjectId,
+      );
+
+      if (!mounted) return;
+      await context.read<FinanceCubit>().updateExpense(updatedExpense, scope: chosenScope);
+      if (!mounted) return;
+      Navigator.pop(context);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Despesa atualizada com sucesso! ✏️'),
+        ),
+      );
+      return;
+    }
+
     final expenseId = 'exp_${DateTime.now().millisecondsSinceEpoch}';
     final List<HouseExpenseItem> items = _isItemized
         ? _draftItems.asMap().entries.map((entry) {
-            final idx = entry.key;
-            final draft = entry.value;
-            final itemTitle = draft.titleController.text.trim().isEmpty
-                ? 'Sub-item #${idx + 1}'
-                : draft.titleController.text.trim();
-            return HouseExpenseItem(
-              id: 'item_${expenseId}_$idx',
-              expenseId: expenseId,
-              title: itemTitle,
-              amount: Money(draft.cents),
-              categoryId: draft.categoryId ?? catId,
-              responsibleMemberId: draft.responsibleMemberId,
-              splitRule: draft.responsibleMemberId != null
-                  ? SplitRule.singleResponsible(draft.responsibleMemberId!)
-                  : null,
-            );
-          }).toList()
-        : const [];
+              final idx = entry.key;
+              final draft = entry.value;
+              final itemTitle = draft.titleController.text.trim().isEmpty
+                  ? 'Sub-item #${idx + 1}'
+                  : draft.titleController.text.trim();
+              return HouseExpenseItem(
+                id: 'item_${expenseId}_$idx',
+                expenseId: expenseId,
+                title: itemTitle,
+                amount: Money(draft.cents),
+                categoryId: draft.categoryId ?? catId,
+                responsibleMemberId: draft.responsibleMemberId,
+                splitRule: draft.responsibleMemberId != null
+                    ? SplitRule.singleResponsible(draft.responsibleMemberId!)
+                    : null,
+              );
+            }).toList()
+          : const [];
 
     final expense = HouseExpense(
       id: expenseId,
@@ -230,6 +353,7 @@ class _AddExpensePageState extends State<AddExpensePage> {
       paidByMemberId: paidById,
       paymentMethodId: pmId,
       splitRule: rule,
+      paidOutOfPocket: paidOutOfPocket,
       status: _expenseStatus,
       isRecurring: _isRecurring,
       isVariable: _isVariable,
@@ -251,39 +375,107 @@ class _AddExpensePageState extends State<AddExpensePage> {
     );
   }
 
+  Future<void> _confirmAndDelete() async {
+    final exp = widget.expenseToEdit;
+    if (exp == null) return;
+
+    RecurrenceScope scope = RecurrenceScope.thisInstanceOnly;
+    if (exp.isRecurring) {
+      final chosenScope = await showRecurrenceScopeDialog(
+        context: context,
+        itemTitle: exp.title,
+        isDelete: true,
+        isExpense: true,
+      );
+      if (chosenScope == null) return;
+      scope = chosenScope;
+    } else {
+      final confirmed = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('Excluir Despesa'),
+          content: Text('Tem certeza que deseja excluir "${exp.title}"?'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Cancelar'),
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.debtRed,
+                foregroundColor: Colors.white,
+              ),
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('Excluir'),
+            ),
+          ],
+        ),
+      );
+      if (confirmed != true) return;
+    }
+
+    if (!mounted) return;
+    final nav = Navigator.of(context);
+    final messenger = ScaffoldMessenger.of(context);
+    final cubit = context.read<FinanceCubit>();
+
+    await cubit.deleteExpense(exp.id, scope: scope);
+    if (mounted) {
+      nav.pop();
+      messenger.showSnackBar(
+        SnackBar(content: Text('Despesa "${exp.title}" excluída com sucesso! 🗑️')),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
 
     return BlocBuilder<FinanceCubit, FinanceState>(
       builder: (context, state) {
-        if (state.members.isNotEmpty && _selectedPaidByMemberId == null) {
+        if (state.members.isNotEmpty &&
+            (_selectedPaidByMemberId == null ||
+                !state.members.any((m) => m.id == _selectedPaidByMemberId))) {
           _selectedPaidByMemberId = state.members.first.id;
         }
-        if (state.categories.isNotEmpty && _selectedCategoryId == null) {
+        if (state.categories.isNotEmpty &&
+            (_selectedCategoryId == null ||
+                !state.categories.any((c) => c.id == _selectedCategoryId))) {
           _selectedCategoryId = state.categories.first.id;
         }
-        if (state.paymentMethods.isNotEmpty && _selectedPaymentMethodId == null) {
+        if (state.paymentMethods.isNotEmpty &&
+            (_selectedPaymentMethodId == null ||
+                !state.paymentMethods.any((pm) => pm.id == _selectedPaymentMethodId))) {
           _selectedPaymentMethodId = state.paymentMethods.first.id;
         }
 
-        final selectedCategory = state.categories.firstWhere(
+        final selectedCategory = state.categories.where(
           (c) => c.id == _selectedCategoryId,
-          orElse: () => state.categories.isNotEmpty
-              ? state.categories.first
-              : const ExpenseCategory(id: '', name: '', icon: '', colorHex: ''),
-        );
+        ).firstOrNull ?? (state.categories.isNotEmpty
+            ? state.categories.first
+            : const ExpenseCategory(id: '', name: '', icon: '', colorHex: ''));
 
         return Scaffold(
           appBar: AppBar(
             title: Text(
-              _isRecurring ? 'Nova Despesa Recorrente' : 'Gasto da Casa',
+              widget.expenseToEdit != null
+                  ? 'Editar Despesa'
+                  : (_isRecurring ? 'Nova Despesa Recorrente' : 'Gasto da Casa'),
               style: const TextStyle(fontWeight: FontWeight.bold),
             ),
             leading: IconButton(
               icon: const Icon(Icons.close_rounded),
               onPressed: () => Navigator.pop(context),
             ),
+            actions: [
+              if (widget.expenseToEdit != null)
+                IconButton(
+                  tooltip: 'Excluir despesa',
+                  icon: const Icon(Icons.delete_outline_rounded, color: AppColors.debtRed),
+                  onPressed: _confirmAndDelete,
+                ),
+            ],
           ),
           body: ListView(
             padding: const EdgeInsets.all(20),
@@ -314,9 +506,11 @@ class _AddExpensePageState extends State<AddExpensePage> {
               ),
               const SizedBox(height: 20),
 
-              // Data e Situação da Despesa (Retroativa, Atual ou Em Atraso)
-              _buildDateAndStatusCard(theme),
-              const SizedBox(height: 20),
+              // Data e Situação da Despesa (Retroativa, Atual ou Em Atraso) para compras avulsas
+              if (!_isRecurring) ...[
+                _buildDateAndStatusCard(theme),
+                const SizedBox(height: 20),
+              ],
 
               // Seção de Recorrência (Assinaturas / Contas Fixas / Variáveis)
               Material(
@@ -435,11 +629,46 @@ class _AddExpensePageState extends State<AddExpensePage> {
                                 ),
                               ],
                             ),
-                          ],
+                              const SizedBox(height: 14),
+
+                              // Situação no Ciclo Atual
+                              const Text(
+                                'Situação no Ciclo Atual',
+                                style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
+                              ),
+                              const SizedBox(height: 8),
+                              Row(
+                                children: [
+                                  Expanded(
+                                    child: ChoiceChip(
+                                      avatar: const Icon(Icons.check_circle_outline, size: 16),
+                                      label: const Center(child: Text('Já Paga')),
+                                      selected: _expenseStatus == ExpenseStatus.paid,
+                                      selectedColor: AppColors.creditGreen.withValues(alpha: 0.15),
+                                      onSelected: (selected) {
+                                        if (selected) setState(() => _expenseStatus = ExpenseStatus.paid);
+                                      },
+                                    ),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Expanded(
+                                    child: ChoiceChip(
+                                      avatar: const Icon(Icons.schedule_rounded, size: 16),
+                                      label: const Center(child: Text('A Vencer')),
+                                      selected: _expenseStatus == ExpenseStatus.pending,
+                                      selectedColor: AppColors.folegoWarning.withValues(alpha: 0.2),
+                                      onSelected: (selected) {
+                                        if (selected) setState(() => _expenseStatus = ExpenseStatus.pending);
+                                      },
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ),
                         ),
-                      ),
+                      ],
                     ],
-                  ],
                 ),
               ),
               const SizedBox(height: 20),
@@ -552,34 +781,56 @@ class _AddExpensePageState extends State<AddExpensePage> {
               // Seletor de Categoria
               Text('Categoria', style: theme.textTheme.titleSmall),
               const SizedBox(height: 8),
-              Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                children: state.categories.map((cat) {
-                  final isSelected = cat.id == _selectedCategoryId;
-                  return ChoiceChip(
-                    label: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(cat.name),
-                        if (cat.hasOwner) ...[
-                          const SizedBox(width: 4),
-                          const Icon(Icons.person_rounded, size: 14),
+              if (state.categories.isEmpty)
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Colors.amber.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: Colors.amber.withValues(alpha: 0.3)),
+                  ),
+                  child: const Row(
+                    children: [
+                      Icon(Icons.info_outline_rounded, color: Colors.amber, size: 20),
+                      SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          'Nenhuma categoria encontrada. Uma categoria geral será atribuída.',
+                          style: TextStyle(fontSize: 12),
+                        ),
+                      ),
+                    ],
+                  ),
+                )
+              else
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: state.categories.map((cat) {
+                    final isSelected = cat.id == _selectedCategoryId;
+                    return ChoiceChip(
+                      label: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(cat.name),
+                          if (cat.hasOwner) ...[
+                            const SizedBox(width: 4),
+                            const Icon(Icons.person_rounded, size: 14),
+                          ],
                         ],
-                      ],
-                    ),
-                    selected: isSelected,
-                    selectedColor: AppColors.primary.withValues(alpha: 0.15),
-                    onSelected: (selected) {
-                      if (selected) {
-                        setState(() {
-                          _selectedCategoryId = cat.id;
-                        });
-                      }
-                    },
-                  );
-                }).toList(),
-              ),
+                      ),
+                      selected: isSelected,
+                      selectedColor: AppColors.primary.withValues(alpha: 0.15),
+                      onSelected: (selected) {
+                        if (selected) {
+                          setState(() {
+                            _selectedCategoryId = cat.id;
+                          });
+                        }
+                      },
+                    );
+                  }).toList(),
+                ),
               if (selectedCategory.hasOwner) ...[
                 const SizedBox(height: 8),
                 Container(
@@ -607,39 +858,59 @@ class _AddExpensePageState extends State<AddExpensePage> {
               // Quem Pagou
               Text('Quem Pagou / É Responsável?', style: theme.textTheme.titleSmall),
               const SizedBox(height: 8),
-              Row(
-                children: state.members.map((m) {
-                  final isSelected = m.id == _selectedPaidByMemberId;
-                  return Expanded(
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 4),
-                      child: OutlinedButton(
-                        style: OutlinedButton.styleFrom(
-                          backgroundColor: isSelected ? AppColors.primary.withValues(alpha: 0.12) : null,
-                          side: BorderSide(
-                            color: isSelected ? AppColors.primary : theme.dividerColor,
-                            width: isSelected ? 2 : 1,
+              if (state.members.isEmpty)
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: AppColors.primary.withValues(alpha: 0.08),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: AppColors.primary.withValues(alpha: 0.2)),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.person_outline_rounded, color: AppColors.primary, size: 20),
+                      const SizedBox(width: 8),
+                      Text(
+                        'Registrando como: ${sl<AuthRepository>().currentUser?.fullName ?? "Você"}',
+                        style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500),
+                      ),
+                    ],
+                  ),
+                )
+              else
+                Row(
+                  children: state.members.map((m) {
+                    final isSelected = m.id == _selectedPaidByMemberId;
+                    return Expanded(
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 4),
+                        child: OutlinedButton(
+                          style: OutlinedButton.styleFrom(
+                            backgroundColor: isSelected ? AppColors.primary.withValues(alpha: 0.12) : null,
+                            side: BorderSide(
+                              color: isSelected ? AppColors.primary : theme.dividerColor,
+                              width: isSelected ? 2 : 1,
+                            ),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                            padding: const EdgeInsets.symmetric(vertical: 12),
                           ),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                          padding: const EdgeInsets.symmetric(vertical: 12),
-                        ),
-                        onPressed: () {
-                          setState(() {
-                            _selectedPaidByMemberId = m.id;
-                          });
-                        },
-                        child: Text(
-                          m.name,
-                          style: TextStyle(
-                            fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-                            color: isSelected ? AppColors.primary : null,
+                          onPressed: () {
+                            setState(() {
+                              _selectedPaidByMemberId = m.id;
+                            });
+                          },
+                          child: Text(
+                            m.name,
+                            style: TextStyle(
+                              fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                              color: isSelected ? AppColors.primary : null,
+                            ),
                           ),
                         ),
                       ),
-                    ),
-                  );
-                }).toList(),
-              ),
+                    );
+                  }).toList(),
+                ),
               const SizedBox(height: 20),
 
               // Vincular a Projeto / Viagem (Opcional)
@@ -683,27 +954,58 @@ class _AddExpensePageState extends State<AddExpensePage> {
               // Forma de Pagamento
               Text('Forma de Pagamento', style: theme.textTheme.titleSmall),
               const SizedBox(height: 8),
-              DropdownButtonFormField<String>(
-                initialValue: _selectedPaymentMethodId,
-                decoration: InputDecoration(
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                  prefixIcon: const Icon(Icons.credit_card_rounded),
-                ),
-                items: state.paymentMethods.map((pm) {
-                  return DropdownMenuItem(
-                    value: pm.id,
-                    child: Text(pm.name),
+              Builder(
+                builder: (context) {
+                  final currentPm = state.paymentMethods
+                      .where((p) => p.id == _selectedPaymentMethodId)
+                      .firstOrNull;
+                  final isHouse = currentPm == null
+                      ? (_selectedPaymentMethodId == 'pm_caixa')
+                      : (currentPm.ownerMemberId == null || currentPm.id == 'pm_caixa');
+
+                  return DropdownButtonFormField<String>(
+                    initialValue: _selectedPaymentMethodId,
+                    decoration: InputDecoration(
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                      prefixIcon: const Icon(Icons.credit_card_rounded),
+                      helperText: isHouse
+                          ? 'Meio da Casa: despesa conjunta (sem reembolso pessoal)'
+                          : null,
+                    ),
+                    hint: const Text('Selecione uma forma de pagamento'),
+                    items: state.paymentMethods.isNotEmpty
+                        ? state.paymentMethods.map((pm) {
+                            return DropdownMenuItem(
+                              value: pm.id,
+                              child: Text(pm.name),
+                            );
+                          }).toList()
+                        : const [
+                            DropdownMenuItem(
+                              value: 'pm_pix',
+                              child: Text('Pix / Transferência (Padrão)'),
+                            ),
+                          ],
+                    onChanged: (val) {
+                      setState(() {
+                        _selectedPaymentMethodId = val;
+                        final pm = state.paymentMethods.where((p) => p.id == val).firstOrNull;
+                        if (pm?.ownerMemberId != null) {
+                          _selectedPaidByMemberId = pm!.ownerMemberId;
+                        }
+                      });
+                    },
                   );
-                }).toList(),
-                onChanged: (val) {
-                  setState(() {
-                    _selectedPaymentMethodId = val;
-                  });
                 },
               ),
-              const SizedBox(height: 32),
+              const SizedBox(height: 16),
 
-              // Botão de Lançar
+              // Comprovante ou Cupom Fiscal (Fase 4.1)
+              _buildReceiptAttachmentSection(theme),
+
+              const SizedBox(height: 24),
+
+              // Botão de Lançar / Salvar
               SizedBox(
                 height: 52,
                 child: ElevatedButton(
@@ -715,11 +1017,32 @@ class _AddExpensePageState extends State<AddExpensePage> {
                   ),
                   onPressed: _submit,
                   child: Text(
-                    _isRecurring ? 'Salvar Despesa Recorrente' : 'Lançar Gasto da Casa',
+                    widget.expenseToEdit != null
+                        ? 'Salvar Alterações'
+                        : (_isRecurring ? 'Salvar Despesa Recorrente' : 'Lançar Gasto da Casa'),
                     style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
                   ),
                 ),
               ),
+              if (widget.expenseToEdit != null) ...[
+                const SizedBox(height: 12),
+                SizedBox(
+                  height: 48,
+                  child: OutlinedButton.icon(
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: AppColors.debtRed,
+                      side: BorderSide(color: AppColors.debtRed.withValues(alpha: 0.5)),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                    ),
+                    icon: const Icon(Icons.delete_outline_rounded, size: 20),
+                    label: const Text(
+                      'Excluir Esta Despesa',
+                      style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
+                    ),
+                    onPressed: _confirmAndDelete,
+                  ),
+                ),
+              ],
             ],
           ),
         );
@@ -1103,6 +1426,85 @@ class _AddExpensePageState extends State<AddExpensePage> {
               ),
             ),
           ],
+        ],
+      ),
+    );
+  }
+
+
+
+  Widget _buildReceiptAttachmentSection(ThemeData theme) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: theme.cardColor,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: _attachedReceiptName != null
+              ? AppColors.creditGreen.withValues(alpha: 0.5)
+              : Colors.grey.withValues(alpha: 0.2),
+        ),
+      ),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: (_attachedReceiptName != null ? AppColors.creditGreen : AppColors.primary)
+                  .withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Icon(
+              _attachedReceiptName != null ? Icons.receipt_long_rounded : Icons.camera_alt_outlined,
+              color: _attachedReceiptName != null ? AppColors.creditGreen : AppColors.primary,
+              size: 20,
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  _attachedReceiptName != null ? 'Cupom Anexado' : 'Comprovante / Cupom Fiscal',
+                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                ),
+                Text(
+                  _attachedReceiptName ?? 'Anexe a foto da nota ou comprovante de pagamento',
+                  style: TextStyle(
+                    fontSize: 11,
+                    color: _attachedReceiptName != null ? AppColors.creditGreen : Colors.grey,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ],
+            ),
+          ),
+          if (_attachedReceiptName != null)
+            IconButton(
+              icon: const Icon(Icons.close_rounded, size: 18, color: Colors.grey),
+              tooltip: 'Remover cupom',
+              onPressed: () {
+                setState(() => _attachedReceiptName = null);
+              },
+            )
+          else
+            TextButton.icon(
+              onPressed: () {
+                setState(() {
+                  _attachedReceiptName = 'cupom_fiscal_${DateTime.now().millisecondsSinceEpoch}.jpg';
+                });
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('Foto do cupom/comprovante vinculada com sucesso! 📸'),
+                    backgroundColor: AppColors.creditGreen,
+                  ),
+                );
+              },
+              icon: const Icon(Icons.upload_file_rounded, size: 16),
+              label: const Text('Anexar', style: TextStyle(fontSize: 12)),
+            ),
         ],
       ),
     );

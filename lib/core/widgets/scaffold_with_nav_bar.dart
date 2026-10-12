@@ -29,32 +29,41 @@ class ScaffoldWithNavBar extends StatelessWidget {
       return Scaffold(
         body: Row(
           children: [
-            NavigationRail(
-              selectedIndex: navigationShell.currentIndex,
-              onDestinationSelected: _onTap,
-              labelType: NavigationRailLabelType.all,
-              leading: Column(
-                children: [
-                  const SizedBox(height: 16),
-                  Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const OmniLogo.icon(width: 32, height: 32),
-                      const SizedBox(width: 8),
-                      const Text(
-                        'Omni Lar',
-                        style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, letterSpacing: -0.5),
+            SizedBox(
+              width: 152,
+              child: NavigationRail(
+                minWidth: 152,
+                selectedIndex: navigationShell.currentIndex,
+                onDestinationSelected: _onTap,
+                labelType: NavigationRailLabelType.all,
+                leading: Column(
+                  children: [
+                    const SizedBox(height: 16),
+                    ConstrainedBox(
+                      constraints: const BoxConstraints(maxWidth: 140),
+                      child: const FittedBox(
+                        fit: BoxFit.scaleDown,
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            OmniLogo.icon(width: 28, height: 28),
+                            SizedBox(width: 8),
+                            Text(
+                              'Omni Lar',
+                              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, letterSpacing: -0.5),
+                            ),
+                          ],
+                        ),
                       ),
-                    ],
-                  ),
-                  const SizedBox(height: 20),
-                  SmartFAB(
-                    isExtended: true,
-                    currentTab: navigationShell.currentIndex,
-                  ),
-                  const SizedBox(height: 12),
-                ],
-              ),
+                    ),
+                    const SizedBox(height: 20),
+                    SmartFAB(
+                      isExtended: true,
+                      currentTab: navigationShell.currentIndex,
+                    ),
+                    const SizedBox(height: 12),
+                  ],
+                ),
               destinations: const [
                 NavigationRailDestination(
                   icon: Icon(Icons.home_outlined),
@@ -91,13 +100,25 @@ class ScaffoldWithNavBar extends StatelessWidget {
                 child: Align(
                   alignment: Alignment.bottomCenter,
                   child: Padding(
-                    padding: EdgeInsets.only(bottom: 16),
-                    child: ThemeToggleButton(),
+                    padding: EdgeInsets.only(bottom: 12),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Tooltip(
+                          message: 'Omni Cloud • Conectado',
+                          child: Icon(Icons.circle, size: 8, color: Colors.green),
+                        ),
+                        SizedBox(width: 8),
+                        ThemeToggleButton(),
+                      ],
+                    ),
                   ),
                 ),
               ),
             ),
-            VerticalDivider(
+          ),
+          VerticalDivider(
               width: 1,
               thickness: 1,
               color: Colors.grey.withValues(alpha: 0.15),

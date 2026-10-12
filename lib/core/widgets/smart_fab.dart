@@ -87,13 +87,13 @@ class SmartFAB extends StatelessWidget {
   String get _extendedLabel {
     switch (_focus) {
       case QuickActionFocus.calendar:
-        return 'Ações da Agenda';
+        return 'Novo Evento';
       case QuickActionFocus.tasks:
-        return 'Ações de Tarefas';
+        return 'Nova Tarefa';
       case QuickActionFocus.p2p:
-        return 'Ações de Empréstimo';
+        return 'Empréstimo';
       case QuickActionFocus.home:
-        return 'Ações do Lar';
+        return 'Novo Gasto';
       case QuickActionFocus.general:
         return 'Nova Ação';
     }
@@ -103,19 +103,28 @@ class SmartFAB extends StatelessWidget {
   Widget build(BuildContext context) {
     if (isExtended) {
       return Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-        child: FilledButton.icon(
-          onPressed: () => _showActionsModal(context),
-          icon: Icon(_fabIcon, size: 20),
-          label: Text(
-            _extendedLabel,
-            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
-          ),
-          style: FilledButton.styleFrom(
-            backgroundColor: AppColors.primary,
-            foregroundColor: Colors.white,
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+        child: SizedBox(
+          width: 132,
+          height: 44,
+          child: Tooltip(
+            message: _fabTooltip,
+            child: FilledButton.icon(
+              onPressed: () => _showActionsModal(context),
+              icon: Icon(_fabIcon, size: 18),
+              label: Text(
+                _extendedLabel,
+                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+              style: FilledButton.styleFrom(
+                backgroundColor: AppColors.primary,
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(horizontal: 8),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              ),
+            ),
           ),
         ),
       );

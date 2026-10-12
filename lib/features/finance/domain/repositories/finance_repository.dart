@@ -6,6 +6,7 @@ import '../entities/house_expense.dart';
 import '../entities/contribution.dart';
 import '../entities/financial_cycle_summary.dart';
 import '../entities/savings_vault.dart';
+import '../entities/audit_entry.dart';
 import '../../../../core/domain/value_objects/money.dart';
 import '../../../../core/domain/value_objects/financial_cycle.dart';
 
@@ -36,11 +37,21 @@ abstract class FinanceRepository {
   Future<void> addContribution(Contribution contribution);
   Future<void> addCategory(ExpenseCategory category);
   Future<void> addPaymentMethod(PaymentMethod paymentMethod);
+  Future<void> updatePaymentMethod(PaymentMethod paymentMethod);
+  Future<void> deletePaymentMethod(String paymentMethodId);
+  Future<void> updateHouseSplitModel({
+    required String splitModel,
+    required Map<String, double> percentages,
+    required Map<String, int> fixedAmountsCents,
+  });
 
   // Caixinhas & Metas da Casa (Dinheiro Blindado)
   Future<List<SavingsVault>> getSavingsVaults();
   Future<void> createSavingsVault(SavingsVault vault);
   Future<void> depositToVault({required String vaultId, required String memberId, required Money amount, required String description});
   Future<void> withdrawFromVault({required String vaultId, required String memberId, required Money amount, required String description});
+
+  // Auditoria da Casa
+  Future<List<AuditEntry>> getAuditLog({String? entityId, int limit = 50});
 }
 

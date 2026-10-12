@@ -1,15 +1,19 @@
 import 'dart:async';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 
 import '../di/service_locator.dart';
+import '../widgets/desktop_shortcuts_wrapper.dart';
 import '../widgets/scaffold_with_nav_bar.dart';
 import '../../features/auth/presentation/cubit/auth_cubit.dart';
 import '../../features/auth/presentation/cubit/auth_state.dart';
 import '../../features/auth/presentation/pages/login_page.dart';
 import '../../features/auth/presentation/pages/house_onboarding_page.dart';
+import '../../features/splash/presentation/pages/splash_page.dart';
 import '../../features/home/presentation/pages/home_page.dart';
+import '../../features/home/presentation/pages/web_landing_page.dart';
 import '../../features/p2p/presentation/pages/p2p_page.dart';
 import '../../features/calendar/presentation/pages/calendar_page.dart';
 import '../../features/reports/presentation/pages/reports_page.dart';
@@ -40,27 +44,45 @@ class AppRouter {
 
   static final GoRouter router = GoRouter(
     navigatorKey: _rootNavigatorKey,
-    initialLocation: '/casa',
+    initialLocation: kIsWeb ? '/landing' : '/splash',
     refreshListenable: GoRouterRefreshStream(sl<AuthCubit>().stream),
     redirect: (context, state) {
       final authState = sl<AuthCubit>().state;
       final location = state.uri.path;
+      final isSplash = location == '/splash';
+      final isLanding = location == '/landing' || location == '/';
       final isLoggingIn = location == '/login';
       final isOnboarding = location == '/onboarding/house';
 
-      // 1. Não autenticado -> vai para /login
+      // 0. Enquanto estiver na rota de Splash, deixa a SplashPage coordenar o warm-up suave
+      if (isSplash) {
+        return null;
+      }
+
+      // 1. Enquanto o AuthCubit estiver em inicialização (fora do Splash)
+      if (authState.status == AuthStatus.initial) {
+        if (kIsWeb) return isLanding ? null : '/landing';
+        return '/splash';
+      }
+
+      // 2. Não autenticado -> na Web vai para a Landing Page (vitrine com Demo), no mobile vai para /login
       if (authState.status == AuthStatus.unauthenticated || !authState.isAuthenticated) {
+        if (kIsWeb) {
+          if (isLanding || isLoggingIn) return null;
+          return '/landing';
+        }
+        if (isLanding) return '/landing';
         return isLoggingIn ? null : '/login';
       }
 
-      // 2. Autenticado mas sem casa -> vai para /onboarding/house
+      // 3. Autenticado mas sem casa -> vai para /onboarding/house
       if (authState.isAuthenticated && !authState.hasHouse) {
         return isOnboarding ? null : '/onboarding/house';
       }
 
-      // 3. Autenticado com casa ativa -> não deixa ficar no login nem onboarding
+      // 4. Autenticado com casa ativa -> se estiver em rotas de entrada (login, onboarding ou landing no mobile), vai para /casa
       if (authState.isAuthenticated && authState.hasHouse) {
-        if (isLoggingIn || isOnboarding) {
+        if (isLoggingIn || isOnboarding || (isLanding && !kIsWeb)) {
           return '/casa';
         }
       }
@@ -68,6 +90,22 @@ class AppRouter {
       return null;
     },
     routes: [
+      GoRoute(
+        path: '/',
+        redirect: (context, state) => kIsWeb ? '/landing' : '/splash',
+      ),
+      GoRoute(
+        path: '/landing',
+        name: 'landing',
+        parentNavigatorKey: _rootNavigatorKey,
+        builder: (context, state) => const WebLandingPage(),
+      ),
+      GoRoute(
+        path: '/splash',
+        name: 'splash',
+        parentNavigatorKey: _rootNavigatorKey,
+        builder: (context, state) => const SplashPage(),
+      ),
       GoRoute(
         path: '/login',
         name: 'login',
@@ -83,7 +121,9 @@ class AppRouter {
       // Shell com as 6 Abas Principais
       StatefulShellRoute.indexedStack(
         builder: (context, state, navigationShell) {
-          return ScaffoldWithNavBar(navigationShell: navigationShell);
+          return DesktopShortcutsWrapper(
+            child: ScaffoldWithNavBar(navigationShell: navigationShell),
+          );
         },
         branches: [
           // Aba 1: A Casa

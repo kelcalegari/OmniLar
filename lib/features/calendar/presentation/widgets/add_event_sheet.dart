@@ -5,27 +5,39 @@ import '../../../../core/domain/enums/recurrence.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/utils/responsive.dart';
 import '../../../../core/widgets/recurrence_scope_dialog.dart';
+import '../../../../core/di/service_locator.dart';
+import '../../../auth/domain/repositories/auth_repository.dart';
 import '../../domain/entities/calendar_event.dart';
 import '../../domain/entities/event_participant.dart';
+import '../../../finance/domain/repositories/finance_repository.dart';
+import '../../../finance/presentation/cubit/finance_cubit.dart';
 import '../cubit/calendar_cubit.dart';
 
 class AddEventSheet extends StatefulWidget {
   final String activeMemberId;
   final CalendarEvent? initialEvent;
+  final DateTime? initialDate;
 
   const AddEventSheet({
     required this.activeMemberId,
     this.initialEvent,
+    this.initialDate,
     super.key,
   });
 
-  static Future<void> show(BuildContext context, String activeMemberId, {CalendarEvent? initialEvent}) {
-    return showAdaptiveModal(
+  static Future<CalendarEvent?> show(
+    BuildContext context,
+    String activeMemberId, {
+    CalendarEvent? initialEvent,
+    DateTime? initialDate,
+  }) {
+    return showAdaptiveModal<CalendarEvent>(
       context: context,
       maxWidth: 560,
       child: AddEventSheet(
         activeMemberId: activeMemberId,
         initialEvent: initialEvent,
+        initialDate: initialDate,
       ),
     );
   }
@@ -50,15 +62,24 @@ class _AddEventSheetState extends State<AddEventSheet> {
 
   // Participantes e seus papéis selecionados
   // null = não convidado
-  final Map<String, ParticipantRole?> _selectedRoles = {
-    'member_carlos': ParticipantRole.required,
-    'member_marina': ParticipantRole.required,
-  };
+  final Map<String, ParticipantRole?> _selectedRoles = {};
+  final Map<String, String> _memberNames = {};
 
-  final Map<String, String> _memberNames = {
-    'member_carlos': 'Carlos',
-    'member_marina': 'Marina',
-  };
+  bool get _isDemoMode {
+    final authRepo = sl<AuthRepository>();
+    if (authRepo.isDemoMode) return true;
+    final houseId = authRepo.currentHouse?.id;
+    if (houseId == null || houseId.isEmpty || houseId == 'house_nossa_casa') return true;
+    if (authRepo.currentUser == null) return true;
+    return false;
+  }
+
+  bool _isUuid(String id) {
+    final uuidRegex = RegExp(
+      r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$',
+    );
+    return uuidRegex.hasMatch(id);
+  }
 
   @override
   void initState() {
@@ -78,18 +99,153 @@ class _AddEventSheetState extends State<AddEventSheet> {
 
       for (final p in ev.participants) {
         _selectedRoles[p.memberId] = p.role;
+        if (p.memberName.isNotEmpty && p.memberName != 'Membro') {
+          _memberNames[p.memberId] = p.memberName;
+        }
       }
     } else {
       _titleController = TextEditingController();
       _locationController = TextEditingController();
       _descriptionController = TextEditingController();
-      _startDate = DateTime.now().add(const Duration(hours: 1));
-      _startTime = TimeOfDay.fromDateTime(DateTime.now().add(const Duration(hours: 1)));
-      _endDate = DateTime.now().add(const Duration(hours: 2));
-      _endTime = TimeOfDay.fromDateTime(DateTime.now().add(const Duration(hours: 2)));
+
+      final baseDate = widget.initialDate ?? DateTime.now();
+      final now = DateTime.now();
+      final isToday = baseDate.year == now.year && baseDate.month == now.month && baseDate.day == now.day;
+      final startHour = isToday ? (now.hour + 1) : 9;
+
+      _startDate = DateTime(baseDate.year, baseDate.month, baseDate.day, startHour, 0);
+      _startTime = TimeOfDay(hour: _startDate.hour, minute: 0);
+      _endDate = _startDate.add(const Duration(hours: 1));
+      _endTime = TimeOfDay(hour: _endDate.hour, minute: _endDate.minute);
       _isAllDay = false;
       _visibility = EventVisibility.house;
       _recurrenceFrequency = RecurrenceFrequency.none;
+    }
+
+    _initLocalMembers();
+    _loadHouseMembers();
+  }
+
+  void _initLocalMembers() {
+    final authRepo = sl<AuthRepository>();
+    if (_isDemoMode) {
+      _memberNames['member_carlos'] = 'Carlos';
+      _memberNames['member_marina'] = 'Marina';
+      if (widget.initialEvent == null) {
+        _selectedRoles['member_carlos'] = ParticipantRole.required;
+        _selectedRoles['member_marina'] = ParticipantRole.required;
+      } else {
+        _selectedRoles.putIfAbsent('member_carlos', () => null);
+        _selectedRoles.putIfAbsent('member_marina', () => null);
+      }
+    } else {
+      final user = authRepo.currentUser;
+      if (user != null) {
+        final name = user.fullName.trim();
+        final myName = name.isNotEmpty ? name : 'Eu';
+        _memberNames[user.id] = myName;
+        if (widget.initialEvent == null) {
+          _selectedRoles[user.id] = ParticipantRole.required;
+        } else {
+          _selectedRoles.putIfAbsent(user.id, () => null);
+        }
+      }
+    }
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _syncMembersFromFinanceCubit();
+  }
+
+  void _syncMembersFromFinanceCubit() {
+    if (_isDemoMode) return;
+
+    try {
+      final financeMembers = context.read<FinanceCubit>().state.members;
+      if (financeMembers.isNotEmpty) {
+        bool changed = false;
+        for (final m in financeMembers) {
+          if (m.id.isNotEmpty && _isUuid(m.id)) {
+            if (!_memberNames.containsKey(m.id) || _memberNames[m.id] == 'Membro') {
+              _memberNames[m.id] = m.name;
+              changed = true;
+            }
+            if (widget.initialEvent == null) {
+              if (!_selectedRoles.containsKey(m.id)) {
+                _selectedRoles[m.id] = ParticipantRole.required;
+                changed = true;
+              }
+            } else {
+              if (!_selectedRoles.containsKey(m.id)) {
+                _selectedRoles[m.id] = null;
+                changed = true;
+              }
+            }
+          }
+        }
+        if (changed && mounted) {
+          setState(() {});
+        }
+      }
+    } catch (_) {}
+  }
+
+  Future<void> _loadHouseMembers() async {
+    if (_isDemoMode) return;
+    final authRepo = sl<AuthRepository>();
+
+    try {
+      final houseId = authRepo.currentHouse?.id;
+      final Map<String, String> membersMap = {};
+
+      if (houseId != null && _isUuid(houseId)) {
+        try {
+          final houseMembers = await authRepo.getHouseMembers(houseId);
+          for (final m in houseMembers) {
+            final name = m.profile?.fullName.trim();
+            final displayName = (name != null && name.isNotEmpty) ? name : 'Membro';
+            membersMap[m.userId] = displayName;
+          }
+        } catch (e) {
+          debugPrint('[AddEventSheet] Falha ao carregar membros via authRepo: $e');
+        }
+      }
+
+      if (membersMap.length <= 1 && sl.isRegistered<FinanceRepository>()) {
+        try {
+          final finMembers = await sl<FinanceRepository>().getMembers();
+          for (final m in finMembers) {
+            if (m.id.isNotEmpty && m.name.isNotEmpty && _isUuid(m.id)) {
+              membersMap[m.id] = m.name;
+            }
+          }
+        } catch (e) {
+          debugPrint('[AddEventSheet] Falha ao carregar membros via financeRepo: $e');
+        }
+      }
+
+      final currentUser = authRepo.currentUser;
+      if (currentUser != null && !membersMap.containsKey(currentUser.id)) {
+        final name = currentUser.fullName.trim();
+        membersMap[currentUser.id] = name.isNotEmpty ? name : 'Eu';
+      }
+
+      if (mounted && membersMap.isNotEmpty) {
+        setState(() {
+          for (final entry in membersMap.entries) {
+            _memberNames[entry.key] = entry.value;
+            if (widget.initialEvent == null) {
+              _selectedRoles.putIfAbsent(entry.key, () => ParticipantRole.required);
+            } else {
+              _selectedRoles.putIfAbsent(entry.key, () => null);
+            }
+          }
+        });
+      }
+    } catch (e) {
+      debugPrint('[AddEventSheet] Erro ao carregar membros da casa: $e');
     }
   }
 
@@ -152,6 +308,16 @@ class _AddEventSheetState extends State<AddEventSheet> {
           ? DateTime(_endDate.year, _endDate.month, _endDate.day, 23, 59)
           : DateTime(_endDate.year, _endDate.month, _endDate.day, _endTime.hour, _endTime.minute);
 
+      if (endDateTime.isBefore(startDateTime)) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('A data e hora de término devem ser iguais ou posteriores ao início.'),
+            backgroundColor: AppColors.debtRed,
+          ),
+        );
+        return;
+      }
+
       final eventId = widget.initialEvent?.id ?? 'event_${DateTime.now().millisecondsSinceEpoch}';
 
       // Monta a lista de participantes
@@ -211,7 +377,7 @@ class _AddEventSheetState extends State<AddEventSheet> {
         }
 
         await cubit.updateEvent(updatedEvent, scope: scope);
-        if (mounted) Navigator.pop(context);
+        if (mounted) Navigator.pop(context, updatedEvent);
 
         messenger.showSnackBar(
           SnackBar(
@@ -235,7 +401,7 @@ class _AddEventSheetState extends State<AddEventSheet> {
         );
 
         await cubit.addEvent(newEvent);
-        if (mounted) Navigator.pop(context);
+        if (mounted) Navigator.pop(context, newEvent);
 
         messenger.showSnackBar(
           SnackBar(
@@ -425,23 +591,29 @@ class _AddEventSheetState extends State<AddEventSheet> {
                 child: Row(
                   children: [
                     const Icon(Icons.repeat_rounded, color: AppColors.primary, size: 20),
-                    const SizedBox(width: 10),
+                    const SizedBox(width: 8),
                     const Text('Repetição:', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
-                    const Spacer(),
-                    DropdownButton<RecurrenceFrequency>(
-                      value: _recurrenceFrequency,
-                      underline: const SizedBox.shrink(),
-                      items: RecurrenceFrequency.values.map((freq) {
-                        return DropdownMenuItem(
-                          value: freq,
-                          child: Text(freq.label, style: const TextStyle(fontSize: 13)),
-                        );
-                      }).toList(),
-                      onChanged: (newFreq) {
-                        if (newFreq != null) {
-                          setState(() => _recurrenceFrequency = newFreq);
-                        }
-                      },
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Align(
+                        alignment: Alignment.centerRight,
+                        child: DropdownButton<RecurrenceFrequency>(
+                          isDense: true,
+                          value: _recurrenceFrequency,
+                          underline: const SizedBox.shrink(),
+                          items: RecurrenceFrequency.values.map((freq) {
+                            return DropdownMenuItem(
+                              value: freq,
+                              child: Text(freq.label, style: const TextStyle(fontSize: 13)),
+                            );
+                          }).toList(),
+                          onChanged: (newFreq) {
+                            if (newFreq != null) {
+                              setState(() => _recurrenceFrequency = newFreq);
+                            }
+                          },
+                        ),
+                      ),
                     ),
                   ],
                 ),
@@ -460,36 +632,49 @@ class _AddEventSheetState extends State<AddEventSheet> {
               ),
               const SizedBox(height: 10),
 
-              ..._selectedRoles.keys.map((memberId) {
-                final name = _memberNames[memberId] ?? memberId;
-                final currentRole = _selectedRoles[memberId];
+              ...(() {
+                final sortedKeys = _selectedRoles.keys.toList()
+                  ..sort((a, b) {
+                    if (a == widget.activeMemberId) return -1;
+                    if (b == widget.activeMemberId) return 1;
+                    final nameA = _memberNames[a] ?? a;
+                    final nameB = _memberNames[b] ?? b;
+                    return nameA.toLowerCase().compareTo(nameB.toLowerCase());
+                  });
 
-                return Container(
-                  margin: const EdgeInsets.only(bottom: 8),
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                  decoration: BoxDecoration(
-                    color: theme.cardColor,
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: Colors.grey.withValues(alpha: 0.2)),
-                  ),
-                  child: Row(
-                    children: [
-                      CircleAvatar(
-                        radius: 16,
-                        backgroundColor: memberId == 'member_carlos' ? AppColors.primary : AppColors.accent,
-                        child: Text(
-                          name[0],
-                          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12),
+                return sortedKeys.map((memberId) {
+                  final name = _memberNames[memberId] ?? memberId;
+                  final currentRole = _selectedRoles[memberId];
+                  final isPrimary = memberId == widget.activeMemberId || memberId == 'member_carlos';
+                  final initial = name.isNotEmpty ? name[0].toUpperCase() : '?';
+
+                  return Container(
+                    margin: const EdgeInsets.only(bottom: 8),
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: theme.cardColor,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: Colors.grey.withValues(alpha: 0.2)),
+                    ),
+                    child: Row(
+                      children: [
+                        CircleAvatar(
+                          radius: 16,
+                          backgroundColor: isPrimary ? AppColors.primary : AppColors.accent,
+                          child: Text(
+                            initial,
+                            style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12),
+                          ),
                         ),
-                      ),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: Text(
-                          name,
-                          style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Text(
+                            name,
+                            style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
+                          ),
                         ),
-                      ),
                       DropdownButton<ParticipantRole?>(
+                        isDense: true,
                         value: currentRole,
                         underline: const SizedBox(),
                         items: const [
@@ -519,23 +704,30 @@ class _AddEventSheetState extends State<AddEventSheet> {
                     ],
                   ),
                 );
-              }),
+              });
+            })(),
 
               const SizedBox(height: 16),
 
               // Visibilidade
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              Wrap(
+                alignment: WrapAlignment.spaceBetween,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                runSpacing: 8,
+                spacing: 12,
                 children: [
                   const Text('Visibilidade:', style: TextStyle(fontWeight: FontWeight.w600)),
-                  SegmentedButton<EventVisibility>(
-                    segments: const [
-                      ButtonSegment(value: EventVisibility.house, label: Text('Casa')),
-                      ButtonSegment(value: EventVisibility.restricted, label: Text('Restrito')),
-                      ButtonSegment(value: EventVisibility.private, label: Text('Privado')),
-                    ],
-                    selected: {_visibility},
-                    onSelectionChanged: (val) => setState(() => _visibility = val.first),
+                  FittedBox(
+                    fit: BoxFit.scaleDown,
+                    child: SegmentedButton<EventVisibility>(
+                      segments: const [
+                        ButtonSegment(value: EventVisibility.house, label: Text('Casa')),
+                        ButtonSegment(value: EventVisibility.restricted, label: Text('Restrito')),
+                        ButtonSegment(value: EventVisibility.private, label: Text('Privado')),
+                      ],
+                      selected: {_visibility},
+                      onSelectionChanged: (val) => setState(() => _visibility = val.first),
+                    ),
                   ),
                 ],
               ),

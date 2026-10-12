@@ -1,4 +1,6 @@
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:mocktail/mocktail.dart';
 import 'package:omni_lar/core/network/offline_queue.dart';
 
 void main() {
@@ -63,5 +65,53 @@ void main() {
 
       newQueue.dispose();
     });
+
+    test('Persiste e restaura do FlutterSecureStorage criptografado', () async {
+      final inMemoryStorage = <String, String>{};
+      final mockStorage = MockFlutterSecureStorage();
+
+      when(() => mockStorage.read(key: any(named: 'key'))).thenAnswer(
+        (invocation) async => inMemoryStorage[invocation.namedArguments[#key] as String],
+      );
+      when(() => mockStorage.write(key: any(named: 'key'), value: any(named: 'value'))).thenAnswer(
+        (invocation) async {
+          inMemoryStorage[invocation.namedArguments[#key] as String] =
+              invocation.namedArguments[#value] as String;
+        },
+      );
+      when(() => mockStorage.delete(key: any(named: 'key'))).thenAnswer(
+        (invocation) async {
+          inMemoryStorage.remove(invocation.namedArguments[#key] as String);
+        },
+      );
+
+      final queueWithStorage = OfflineQueueManager(mockStorage);
+      await queueWithStorage.init();
+      expect(queueWithStorage.pendingActions, isEmpty);
+
+      queueWithStorage.enqueue(OfflineActionType.addExpense, {'title': 'Mercado Central', 'cents': 9800});
+      await Future<void>.delayed(const Duration(milliseconds: 20));
+
+      expect(inMemoryStorage.containsKey(OfflineQueueManager.storageKey), isTrue);
+
+      // Simula reinicialização do app recarregando nova instância
+      final restartedQueue = OfflineQueueManager(mockStorage);
+      await restartedQueue.init();
+
+      expect(restartedQueue.pendingActions.length, 1);
+      expect(restartedQueue.pendingActions.first.type, OfflineActionType.addExpense);
+      expect(restartedQueue.pendingActions.first.payload['title'], 'Mercado Central');
+      expect(restartedQueue.pendingActions.first.payload['cents'], 9800);
+
+      restartedQueue.clear();
+      await Future<void>.delayed(const Duration(milliseconds: 20));
+      expect(inMemoryStorage.containsKey(OfflineQueueManager.storageKey), isFalse);
+
+      queueWithStorage.dispose();
+      restartedQueue.dispose();
+    });
   });
 }
+
+class MockFlutterSecureStorage extends Mock implements FlutterSecureStorage {}
+

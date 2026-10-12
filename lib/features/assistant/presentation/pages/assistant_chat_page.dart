@@ -7,6 +7,10 @@ import '../../../../core/di/service_locator.dart';
 import 'package:omni_lar/features/assistant/presentation/cubit/assistant_cubit.dart';
 import 'package:omni_lar/features/assistant/domain/entities/assistant_message.dart';
 import 'package:omni_lar/features/assistant/presentation/widgets/confirmation_card_widget.dart';
+import 'package:omni_lar/features/settings/presentation/widgets/ai_key_config_sheet.dart';
+import '../../../finance/presentation/cubit/finance_cubit.dart';
+import '../../../p2p/presentation/cubit/p2p_cubit.dart';
+import '../../../shopping/presentation/cubit/shopping_cubit.dart';
 
 class AssistantChatPage extends StatefulWidget {
   const AssistantChatPage({super.key});
@@ -57,6 +61,33 @@ class _AssistantChatPageState extends State<AssistantChatPage> {
     _scrollToBottom();
   }
 
+  void _openAiSettings() async {
+    AppHaptics.light();
+    await AiKeyConfigSheet.show(context);
+    if (mounted) {
+      context.read<AssistantCubit>().checkAiKeyStatus();
+    }
+  }
+
+  void _handleVoiceInput() {
+    AppHaptics.selection();
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Row(
+          children: [
+            Icon(Icons.mic_rounded, color: Colors.white, size: 20),
+            SizedBox(width: 8),
+            Expanded(
+              child: Text('Dica: use a tecla de voz do teclado (Win + H no PC ou microfone do teclado) para ditar.'),
+            ),
+          ],
+        ),
+        backgroundColor: AppColors.accent,
+        duration: Duration(seconds: 3),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -90,12 +121,42 @@ class _AssistantChatPageState extends State<AssistantChatPage> {
                         'Assistente Omni Lar',
                         style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
                       ),
-                      Text(
-                        'Inteligência contextual com confirmação humana',
-                        style: theme.textTheme.bodySmall,
+                      BlocBuilder<AssistantCubit, AssistantState>(
+                        buildWhen: (prev, curr) => prev.hasCustomKey != curr.hasCustomKey,
+                        builder: (context, state) {
+                          return GestureDetector(
+                            onTap: _openAiSettings,
+                            child: Row(
+                              children: [
+                                Container(
+                                  width: 8,
+                                  height: 8,
+                                  decoration: BoxDecoration(
+                                    shape: BoxShape.circle,
+                                    color: state.hasCustomKey ? AppColors.creditGreen : AppColors.primary,
+                                  ),
+                                ),
+                                const SizedBox(width: 6),
+                                Text(
+                                  state.hasCustomKey ? 'Chave Pessoal (AI Studio)' : 'Cota Padrão (Toque p/ configurar)',
+                                  style: theme.textTheme.bodySmall?.copyWith(
+                                    fontSize: 11,
+                                    color: state.hasCustomKey ? AppColors.creditGreen : theme.textTheme.bodySmall?.color,
+                                    decoration: state.hasCustomKey ? null : TextDecoration.underline,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          );
+                        },
                       ),
                     ],
                   ),
+                ),
+                IconButton(
+                  icon: const Icon(Icons.settings_suggest_outlined),
+                  onPressed: _openAiSettings,
+                  tooltip: 'Configurar Chave IA',
                 ),
                 IconButton(
                   icon: const Icon(Icons.close_rounded),
@@ -112,6 +173,18 @@ class _AssistantChatPageState extends State<AssistantChatPage> {
             child: BlocConsumer<AssistantCubit, AssistantState>(
               listener: (context, state) {
                 _scrollToBottom();
+                final toolName = state.lastExecutedToolName;
+                if (toolName != null) {
+                  if (toolName.contains('expense') || toolName.contains('finance') || toolName.contains('payment')) {
+                    context.read<FinanceCubit>().loadCycleData();
+                  }
+                  if (toolName.contains('loan') || toolName.contains('p2p') || toolName.contains('installment')) {
+                    context.read<P2PCubit>().loadLoans();
+                  }
+                  if (toolName.contains('shopping') || toolName.contains('item')) {
+                    context.read<ShoppingCubit>().loadShoppingData();
+                  }
+                }
               },
               builder: (context, state) {
                 return ListView.builder(
@@ -158,11 +231,20 @@ class _AssistantChatPageState extends State<AssistantChatPage> {
                       return Padding(
                         padding: const EdgeInsets.only(right: 8),
                         child: ActionChip(
-                          avatar: const Icon(Icons.chat_bubble_outline_rounded, size: 14),
+                          avatar: Icon(
+                            sugg.contains('Ajustes') || sugg.contains('chave')
+                                ? Icons.key_rounded
+                                : Icons.chat_bubble_outline_rounded,
+                            size: 14,
+                          ),
                           label: Text(sugg, style: const TextStyle(fontSize: 12)),
                           onPressed: () {
                             AppHaptics.selection();
-                            context.read<AssistantCubit>().sendMessage(sugg);
+                            if (sugg.contains('Ajustes') || sugg.contains('chave')) {
+                              _openAiSettings();
+                            } else {
+                              context.read<AssistantCubit>().sendMessage(sugg);
+                            }
                           },
                         ),
                       );
@@ -198,6 +280,14 @@ class _AssistantChatPageState extends State<AssistantChatPage> {
                           ? AppColors.cardDark
                           : Colors.grey.shade100,
                     ),
+                  ),
+                ),
+                IconButton(
+                  onPressed: _handleVoiceInput,
+                  icon: const Icon(Icons.mic_none_rounded, color: AppColors.accent),
+                  tooltip: 'Comando de Voz',
+                  style: IconButton.styleFrom(
+                    backgroundColor: AppColors.accent.withValues(alpha: 0.15),
                   ),
                 ),
                 const SizedBox(width: 8),
@@ -263,6 +353,9 @@ class _AssistantChatPageState extends State<AssistantChatPage> {
                   },
                   onCancel: () {
                     context.read<AssistantCubit>().cancelAction(message.id, act.id);
+                  },
+                  onEdit: (updated) {
+                    context.read<AssistantCubit>().updateActionProposal(message.id, updated);
                   },
                 ),
               ),

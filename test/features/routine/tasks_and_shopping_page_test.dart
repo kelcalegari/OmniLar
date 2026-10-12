@@ -119,5 +119,57 @@ void main() {
       expect(find.text('Nova Tarefa'), findsOneWidget);
       expect(find.text('Adicionar'), findsOneWidget);
     });
+
+    testWidgets(
+        'Filtro padrão inicia em Pendentes e Todas agrupa concluídas em seção colapsável com histórico',
+        (tester) async {
+      tester.view.physicalSize = const Size(800, 1400);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.resetPhysicalSize);
+
+      await tester.pumpWidget(buildTasksAndShoppingPage());
+      await tester.pumpAndSettle();
+
+      // Item 1: Pendentes deve estar selecionado por padrão
+      final pendingChip = tester.widget<ChoiceChip>(find.widgetWithText(ChoiceChip, 'Pendentes (2)'));
+      expect(pendingChip.selected, isTrue);
+
+      // Na visualização inicial de pendentes, a tarefa concluída recente ('Trocar lâmpada do corredor') NÃO deve aparecer
+      expect(find.text('Trocar lâmpada do corredor'), findsNothing);
+      expect(find.text('Comprar botijão de gás'), findsOneWidget);
+      expect(find.text('Lavar tapetes da sala'), findsOneWidget);
+
+      // Item 2: Alterna para 'Todas'
+      await tester.tap(find.textContaining('Todas ('));
+      await tester.pumpAndSettle();
+
+      // Em 'Todas', deve renderizar a seção colapsável de Concluídas com ExpansionTile
+      expect(find.byType(ExpansionTile), findsOneWidget);
+      expect(find.textContaining('Concluídas ('), findsWidgets);
+      expect(find.text('Concluídas nos últimos 15 dias'), findsOneWidget);
+
+      // Ao expandir o ExpansionTile de Concluídas
+      await tester.tap(find.byType(ExpansionTile));
+      await tester.pumpAndSettle();
+
+      // Agora a tarefa concluída recente aparece
+      expect(find.text('Trocar lâmpada do corredor'), findsOneWidget);
+      // E a tarefa de mais de 15 dias ('Consertar torneira do jardim') NÃO está visível ainda (filtrada no banco/datasource)
+      expect(find.text('Consertar torneira do jardim'), findsNothing);
+
+      // Item 3: Banner de histórico permite carregar tarefas com mais de 15 dias
+      expect(find.text('Ver histórico'), findsOneWidget);
+      await tester.tap(find.text('Ver histórico'));
+      await tester.pumpAndSettle();
+
+      // Agora o histórico completo foi carregado e a tarefa antiga de 18 dias aparece
+      expect(find.text('Consertar torneira do jardim'), findsOneWidget);
+      expect(find.text('Ocultar antigas'), findsOneWidget);
+
+      // Tocar em 'Ocultar antigas' oculta tarefas de mais de 15 dias novamente
+      await tester.tap(find.text('Ocultar antigas'));
+      await tester.pumpAndSettle();
+      expect(find.text('Consertar torneira do jardim'), findsNothing);
+    });
   });
 }

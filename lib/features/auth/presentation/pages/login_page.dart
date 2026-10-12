@@ -4,6 +4,10 @@ import '../../../../core/theme/app_colors.dart';
 import '../../../../core/widgets/omni_logo.dart';
 import '../cubit/auth_cubit.dart';
 import '../cubit/auth_state.dart';
+import '../../../finance/presentation/cubit/finance_cubit.dart';
+import '../../../p2p/presentation/cubit/p2p_cubit.dart';
+import '../../../shopping/presentation/cubit/shopping_cubit.dart';
+import '../../../calendar/presentation/cubit/calendar_cubit.dart';
 
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
@@ -54,7 +58,8 @@ class _LoginPageState extends State<LoginPage> {
     return Scaffold(
       body: BlocConsumer<AuthCubit, AuthState>(
         listener: (context, state) {
-          if (state.status == AuthStatus.failure && state.errorMessage != null) {
+          if (state.status == AuthStatus.failure &&
+              state.errorMessage != null) {
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
                 content: Text(state.errorMessage!),
@@ -69,7 +74,10 @@ class _LoginPageState extends State<LoginPage> {
           return SafeArea(
             child: Center(
               child: SingleChildScrollView(
-                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 24,
+                  vertical: 16,
+                ),
                 child: ConstrainedBox(
                   constraints: const BoxConstraints(maxWidth: 420),
                   child: Form(
@@ -84,16 +92,15 @@ class _LoginPageState extends State<LoginPage> {
                               borderRadius: BorderRadius.circular(20),
                               boxShadow: [
                                 BoxShadow(
-                                  color: AppColors.primary.withValues(alpha: 0.25),
+                                  color: AppColors.primary.withValues(
+                                    alpha: 0.25,
+                                  ),
                                   blurRadius: 18,
                                   offset: const Offset(0, 8),
                                 ),
                               ],
                             ),
-                            child: const OmniLogo.icon(
-                              width: 80,
-                              height: 80,
-                            ),
+                            child: const OmniLogo.icon(width: 80, height: 80),
                           ),
                         ),
                         const SizedBox(height: 20),
@@ -111,10 +118,7 @@ class _LoginPageState extends State<LoginPage> {
                         const Center(
                           child: Text(
                             'Tudo da casa, em um só lugar.',
-                            style: TextStyle(
-                              fontSize: 14,
-                              color: Colors.grey,
-                            ),
+                            style: TextStyle(fontSize: 14, color: Colors.grey),
                           ),
                         ),
                         const SizedBox(height: 32),
@@ -130,17 +134,24 @@ class _LoginPageState extends State<LoginPage> {
                             children: [
                               Expanded(
                                 child: InkWell(
-                                  onTap: () => setState(() => _isSignUp = false),
+                                  onTap: () =>
+                                      setState(() => _isSignUp = false),
                                   borderRadius: BorderRadius.circular(10),
                                   child: Container(
-                                    padding: const EdgeInsets.symmetric(vertical: 10),
+                                    padding: const EdgeInsets.symmetric(
+                                      vertical: 10,
+                                    ),
                                     decoration: BoxDecoration(
-                                      color: !_isSignUp ? theme.cardColor : Colors.transparent,
+                                      color: !_isSignUp
+                                          ? theme.cardColor
+                                          : Colors.transparent,
                                       borderRadius: BorderRadius.circular(10),
                                       boxShadow: !_isSignUp
                                           ? [
                                               BoxShadow(
-                                                color: Colors.black.withValues(alpha: 0.05),
+                                                color: Colors.black.withValues(
+                                                  alpha: 0.05,
+                                                ),
                                                 blurRadius: 4,
                                               ),
                                             ]
@@ -150,8 +161,12 @@ class _LoginPageState extends State<LoginPage> {
                                       child: Text(
                                         'Entrar',
                                         style: TextStyle(
-                                          fontWeight: !_isSignUp ? FontWeight.bold : FontWeight.normal,
-                                          color: !_isSignUp ? AppColors.primary : Colors.grey,
+                                          fontWeight: !_isSignUp
+                                              ? FontWeight.bold
+                                              : FontWeight.normal,
+                                          color: !_isSignUp
+                                              ? AppColors.primary
+                                              : Colors.grey,
                                         ),
                                       ),
                                     ),
@@ -163,14 +178,20 @@ class _LoginPageState extends State<LoginPage> {
                                   onTap: () => setState(() => _isSignUp = true),
                                   borderRadius: BorderRadius.circular(10),
                                   child: Container(
-                                    padding: const EdgeInsets.symmetric(vertical: 10),
+                                    padding: const EdgeInsets.symmetric(
+                                      vertical: 10,
+                                    ),
                                     decoration: BoxDecoration(
-                                      color: _isSignUp ? theme.cardColor : Colors.transparent,
+                                      color: _isSignUp
+                                          ? theme.cardColor
+                                          : Colors.transparent,
                                       borderRadius: BorderRadius.circular(10),
                                       boxShadow: _isSignUp
                                           ? [
                                               BoxShadow(
-                                                color: Colors.black.withValues(alpha: 0.05),
+                                                color: Colors.black.withValues(
+                                                  alpha: 0.05,
+                                                ),
                                                 blurRadius: 4,
                                               ),
                                             ]
@@ -180,8 +201,12 @@ class _LoginPageState extends State<LoginPage> {
                                       child: Text(
                                         'Criar Conta',
                                         style: TextStyle(
-                                          fontWeight: _isSignUp ? FontWeight.bold : FontWeight.normal,
-                                          color: _isSignUp ? AppColors.primary : Colors.grey,
+                                          fontWeight: _isSignUp
+                                              ? FontWeight.bold
+                                              : FontWeight.normal,
+                                          color: _isSignUp
+                                              ? AppColors.primary
+                                              : Colors.grey,
                                         ),
                                       ),
                                     ),
@@ -200,11 +225,16 @@ class _LoginPageState extends State<LoginPage> {
                             textCapitalization: TextCapitalization.words,
                             decoration: InputDecoration(
                               labelText: 'Nome Completo',
-                              prefixIcon: const Icon(Icons.person_outline_rounded),
-                              border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                              prefixIcon: const Icon(
+                                Icons.person_outline_rounded,
+                              ),
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(12),
+                              ),
                             ),
                             validator: (val) {
-                              if (_isSignUp && (val == null || val.trim().isEmpty)) {
+                              if (_isSignUp &&
+                                  (val == null || val.trim().isEmpty)) {
                                 return 'Informe seu nome';
                               }
                               return null;
@@ -221,7 +251,9 @@ class _LoginPageState extends State<LoginPage> {
                           decoration: InputDecoration(
                             labelText: 'E-mail',
                             prefixIcon: const Icon(Icons.email_outlined),
-                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
                           ),
                           validator: (val) {
                             if (val == null || !val.contains('@')) {
@@ -240,12 +272,18 @@ class _LoginPageState extends State<LoginPage> {
                             labelText: 'Senha',
                             prefixIcon: const Icon(Icons.lock_outline_rounded),
                             suffixIcon: IconButton(
-                              icon: Icon(_obscurePassword
-                                  ? Icons.visibility_off_outlined
-                                  : Icons.visibility_outlined),
-                              onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
+                              icon: Icon(
+                                _obscurePassword
+                                    ? Icons.visibility_off_outlined
+                                    : Icons.visibility_outlined,
+                              ),
+                              onPressed: () => setState(
+                                () => _obscurePassword = !_obscurePassword,
+                              ),
                             ),
-                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
                           ),
                           validator: (val) {
                             if (val == null || val.length < 6) {
@@ -263,18 +301,28 @@ class _LoginPageState extends State<LoginPage> {
                             backgroundColor: AppColors.primary,
                             foregroundColor: Colors.white,
                             padding: const EdgeInsets.symmetric(vertical: 14),
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
                             elevation: 0,
                           ),
                           child: isLoading
                               ? const SizedBox(
                                   height: 20,
                                   width: 20,
-                                  child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                    color: Colors.white,
+                                  ),
                                 )
                               : Text(
-                                  _isSignUp ? 'Criar Minha Conta' : 'Acessar o Omni Lar',
-                                  style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                                  _isSignUp
+                                      ? 'Criar Minha Conta'
+                                      : 'Acessar o Omni Lar',
+                                  style: const TextStyle(
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.bold,
+                                  ),
                                 ),
                         ),
                         const SizedBox(height: 24),
@@ -282,15 +330,27 @@ class _LoginPageState extends State<LoginPage> {
                         // Divisor Demonstração
                         Row(
                           children: [
-                            Expanded(child: Divider(color: Colors.grey.withValues(alpha: 0.3))),
+                            Expanded(
+                              child: Divider(
+                                color: Colors.grey.withValues(alpha: 0.3),
+                              ),
+                            ),
                             const Padding(
                               padding: EdgeInsets.symmetric(horizontal: 12),
                               child: Text(
                                 'OU EXPERIMENTE AGORA',
-                                style: TextStyle(fontSize: 11, color: Colors.grey, fontWeight: FontWeight.bold),
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  color: Colors.grey,
+                                  fontWeight: FontWeight.bold,
+                                ),
                               ),
                             ),
-                            Expanded(child: Divider(color: Colors.grey.withValues(alpha: 0.3))),
+                            Expanded(
+                              child: Divider(
+                                color: Colors.grey.withValues(alpha: 0.3),
+                              ),
+                            ),
                           ],
                         ),
                         const SizedBox(height: 20),
@@ -299,16 +359,39 @@ class _LoginPageState extends State<LoginPage> {
                         OutlinedButton.icon(
                           onPressed: isLoading
                               ? null
-                              : () => context.read<AuthCubit>().signInDemo(memberId: 'member_carlos'),
-                          icon: const Icon(Icons.bolt_rounded, color: AppColors.accent),
+                              : () async {
+                                  await context.read<AuthCubit>().signInDemo(
+                                    memberId: 'member_carlos',
+                                  );
+                                  if (context.mounted) {
+                                    context
+                                        .read<FinanceCubit>()
+                                        .loadCycleData();
+                                    context.read<P2PCubit>().loadLoans();
+                                    context
+                                        .read<ShoppingCubit>()
+                                        .loadShoppingData();
+                                    context
+                                        .read<CalendarCubit>()
+                                        .loadCalendarData();
+                                  }
+                                },
+                          icon: const Icon(
+                            Icons.bolt_rounded,
+                            color: AppColors.accent,
+                          ),
                           label: const Text(
                             'Entrar como Carlos & Marina (Demo)',
                             style: TextStyle(fontWeight: FontWeight.w600),
                           ),
                           style: OutlinedButton.styleFrom(
                             padding: const EdgeInsets.symmetric(vertical: 14),
-                            side: BorderSide(color: AppColors.accent.withValues(alpha: 0.5)),
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                            side: BorderSide(
+                              color: AppColors.accent.withValues(alpha: 0.5),
+                            ),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
                           ),
                         ),
                       ],

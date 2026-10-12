@@ -21,6 +21,7 @@ class CalendarState extends Equatable {
   final List<TaskItem> tasks;
   final String? errorMessage;
   final String activeMemberId; // Usuário atual simulado (ex: 'member_marina')
+  final bool isShowingHistory;
 
   const CalendarState({
     this.status = CalendarCubitStatus.initial,
@@ -28,7 +29,8 @@ class CalendarState extends Equatable {
     this.events = const [],
     this.tasks = const [],
     this.errorMessage,
-    this.activeMemberId = 'member_marina',
+    this.activeMemberId = 'member_carlos',
+    this.isShowingHistory = false,
   });
 
   CalendarState copyWith({
@@ -38,6 +40,7 @@ class CalendarState extends Equatable {
     List<TaskItem>? tasks,
     String? errorMessage,
     String? activeMemberId,
+    bool? isShowingHistory,
   }) {
     return CalendarState(
       status: status ?? this.status,
@@ -46,9 +49,10 @@ class CalendarState extends Equatable {
       tasks: tasks ?? this.tasks,
       errorMessage: errorMessage ?? this.errorMessage,
       activeMemberId: activeMemberId ?? this.activeMemberId,
+      isShowingHistory: isShowingHistory ?? this.isShowingHistory,
     );
   }
 
   @override
-  List<Object?> get props => [status, activeView, events, tasks, errorMessage, activeMemberId];
+  List<Object?> get props => [status, activeView, events, tasks, errorMessage, activeMemberId, isShowingHistory];
 }

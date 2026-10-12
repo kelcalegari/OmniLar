@@ -1,26 +1,77 @@
+import 'dart:async';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../../../core/domain/enums/recurrence.dart';
 import '../../domain/entities/calendar_event.dart';
 import '../../domain/entities/event_participant.dart';
 import '../../domain/entities/task_item.dart';
 import '../../domain/repositories/calendar_repository.dart';
+import '../../../auth/domain/repositories/auth_repository.dart';
 import 'calendar_state.dart';
 
 class CalendarCubit extends Cubit<CalendarState> {
   final CalendarRepository _repository;
+  final AuthRepository? _authRepository;
+  StreamSubscription<List<TaskItem>>? _tasksSubscription;
 
-  CalendarCubit(this._repository) : super(const CalendarState());
+  CalendarCubit(this._repository, [this._authRepository])
+      : super(CalendarState(
+          activeMemberId: (_authRepository?.isDemoMode == true)
+              ? (_authRepository?.currentUser?.id ?? 'member_carlos')
+              : (_authRepository?.currentUser?.id ?? ''),
+        ));
 
-  Future<void> loadCalendarData() async {
+  void resetState() {
+    _tasksSubscription?.cancel();
+    _tasksSubscription = null;
+    emit(CalendarState(
+      activeMemberId: (_authRepository?.isDemoMode == true)
+          ? (_authRepository?.currentUser?.id ?? 'member_carlos')
+          : (_authRepository?.currentUser?.id ?? ''),
+    ));
+  }
+
+  void _listenToTasks(bool includeArchived) {
+    _tasksSubscription?.cancel();
+    _tasksSubscription = _repository.watchTasks(includeArchived: includeArchived).listen(
+      (tasks) {
+        if (!isClosed) {
+          emit(state.copyWith(tasks: tasks));
+        }
+      },
+      onError: (e) {
+        debugPrint('Aviso: Sincronização em tempo real de tarefas indisponível: $e');
+      },
+    );
+  }
+
+  Future<void> loadCalendarData({bool? includeHistory}) async {
     emit(state.copyWith(status: CalendarCubitStatus.loading));
     try {
+      final showHistory = includeHistory ?? state.isShowingHistory;
       final events = await _repository.getEvents();
-      final tasks = await _repository.getTasks();
+      final tasks = await _repository.getTasks(includeArchived: showHistory);
+
+      final currentUserId = _authRepository?.currentUser?.id;
+      final isDemo = _authRepository?.isDemoMode ?? false;
+      final String activeMember;
+      if (isDemo) {
+        activeMember = currentUserId ?? (state.activeMemberId.isNotEmpty ? state.activeMemberId : 'member_carlos');
+      } else {
+        activeMember = (currentUserId != null && currentUserId.isNotEmpty)
+            ? currentUserId
+            : state.activeMemberId;
+      }
+
       emit(state.copyWith(
         status: CalendarCubitStatus.loaded,
         events: events,
         tasks: tasks,
+        activeMemberId: activeMember,
+        isShowingHistory: showHistory,
       ));
+
+      _listenToTasks(showHistory);
     } catch (e) {
       emit(state.copyWith(
         status: CalendarCubitStatus.error,
@@ -58,9 +109,10 @@ class CalendarCubit extends Cubit<CalendarState> {
     try {
       await _repository.addEvent(event);
       final events = await _repository.getEvents();
-      emit(state.copyWith(events: events));
+      emit(state.copyWith(events: events, errorMessage: null));
     } catch (e) {
       emit(state.copyWith(errorMessage: 'Erro ao criar evento: $e'));
+      rethrow;
     }
   }
 
@@ -71,9 +123,10 @@ class CalendarCubit extends Cubit<CalendarState> {
     try {
       await _repository.updateEvent(event, scope: scope);
       final events = await _repository.getEvents();
-      emit(state.copyWith(events: events));
+      emit(state.copyWith(events: events, errorMessage: null));
     } catch (e) {
       emit(state.copyWith(errorMessage: 'Erro ao atualizar evento: $e'));
+      rethrow;
     }
   }
 
@@ -84,9 +137,10 @@ class CalendarCubit extends Cubit<CalendarState> {
     try {
       await _repository.deleteEvent(eventId, scope: scope);
       final events = await _repository.getEvents();
-      emit(state.copyWith(events: events));
+      emit(state.copyWith(events: events, errorMessage: null));
     } catch (e) {
       emit(state.copyWith(errorMessage: 'Erro ao excluir evento: $e'));
+      rethrow;
     }
   }
 
@@ -94,9 +148,24 @@ class CalendarCubit extends Cubit<CalendarState> {
     try {
       await _repository.cancelEvent(eventId);
       final events = await _repository.getEvents();
-      emit(state.copyWith(events: events));
+      emit(state.copyWith(events: events, errorMessage: null));
     } catch (e) {
       emit(state.copyWith(errorMessage: 'Erro ao cancelar evento: $e'));
+      rethrow;
+    }
+  }
+
+  Future<void> toggleShowHistory() async {
+    final newShowHistory = !state.isShowingHistory;
+    try {
+      final tasks = await _repository.getTasks(includeArchived: newShowHistory);
+      emit(state.copyWith(
+        tasks: tasks,
+        isShowingHistory: newShowHistory,
+      ));
+      _listenToTasks(newShowHistory);
+    } catch (e) {
+      emit(state.copyWith(errorMessage: 'Erro ao alternar histórico de tarefas: $e'));
     }
   }
 
@@ -106,7 +175,7 @@ class CalendarCubit extends Cubit<CalendarState> {
         taskId: taskId,
         completedByMemberId: state.activeMemberId,
       );
-      final tasks = await _repository.getTasks();
+      final tasks = await _repository.getTasks(includeArchived: state.isShowingHistory);
       emit(state.copyWith(tasks: tasks));
     } catch (e) {
       emit(state.copyWith(errorMessage: 'Erro ao alternar status da tarefa: $e'));
@@ -116,7 +185,7 @@ class CalendarCubit extends Cubit<CalendarState> {
   Future<void> addTask(TaskItem task) async {
     try {
       await _repository.addTask(task);
-      final tasks = await _repository.getTasks();
+      final tasks = await _repository.getTasks(includeArchived: state.isShowingHistory);
       emit(state.copyWith(tasks: tasks));
     } catch (e) {
       emit(state.copyWith(errorMessage: 'Erro ao criar tarefa: $e'));
@@ -126,10 +195,16 @@ class CalendarCubit extends Cubit<CalendarState> {
   Future<void> deleteTask(String taskId) async {
     try {
       await _repository.deleteTask(taskId);
-      final tasks = await _repository.getTasks();
+      final tasks = await _repository.getTasks(includeArchived: state.isShowingHistory);
       emit(state.copyWith(tasks: tasks));
     } catch (e) {
       emit(state.copyWith(errorMessage: 'Erro ao remover tarefa: $e'));
     }
+  }
+
+  @override
+  Future<void> close() {
+    _tasksSubscription?.cancel();
+    return super.close();
   }
 }

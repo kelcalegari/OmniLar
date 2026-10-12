@@ -28,11 +28,51 @@ class SupabaseCalendarDataSource implements CalendarDataSource {
   @override
   Future<List<CalendarEvent>> getEvents() async {
     try {
-      final rows = await client
-          .from('events')
-          .select('*, event_participants(*)')
-          .eq('house_id', _houseId)
-          .order('start_time', ascending: true);
+      List<dynamic> rows;
+      try {
+        rows = await client
+            .from('events')
+            .select('*, event_participants(*)')
+            .eq('house_id', _houseId)
+            .order('start_time', ascending: true);
+      } catch (innerError) {
+        // Fallback defensivo: se houver erro ao carregar os participantes juntos, tenta carregar apenas os eventos
+        rows = await client
+            .from('events')
+            .select('*')
+            .eq('house_id', _houseId)
+            .order('start_time', ascending: true);
+      }
+
+      final userIds = <String>{};
+      for (final r in rows) {
+        final rawParticipants = (r['event_participants'] as List<dynamic>? ?? []);
+        for (final p in rawParticipants) {
+          final uId = (p as Map<String, dynamic>)['user_id'] as String?;
+          if (uId != null && uId.isNotEmpty) {
+            userIds.add(uId);
+          }
+        }
+      }
+
+      final Map<String, String> profileNames = {};
+      if (userIds.isNotEmpty) {
+        try {
+          final profiles = await client
+              .from('profiles')
+              .select('id, full_name')
+              .filter('id', 'in', userIds.toList());
+          for (final prof in profiles) {
+            final id = prof['id'] as String?;
+            final fullName = prof['full_name'] as String?;
+            if (id != null && fullName != null && fullName.trim().isNotEmpty) {
+              profileNames[id] = fullName.trim();
+            }
+          }
+        } catch (_) {
+          // Fallback resiliente
+        }
+      }
 
       return rows.map((r) {
         final rawParticipants = (r['event_participants'] as List<dynamic>? ?? []);
@@ -41,6 +81,7 @@ class SupabaseCalendarDataSource implements CalendarDataSource {
           final isEssential = (pMap['is_essential'] as bool?) ?? false;
           final statusStr = pMap['rsvp_status'] as String? ?? 'pending';
           final respondedAtStr = pMap['responded_at'] as String?;
+          final userId = pMap['user_id'] as String;
 
           RsvpStatus rsvpStatus;
           switch (statusStr) {
@@ -60,8 +101,8 @@ class SupabaseCalendarDataSource implements CalendarDataSource {
           return EventParticipant(
             id: pMap['id'] as String,
             eventId: pMap['event_id'] as String,
-            memberId: pMap['user_id'] as String,
-            memberName: 'Membro',
+            memberId: userId,
+            memberName: profileNames[userId] ?? 'Membro',
             role: isEssential ? ParticipantRole.required : ParticipantRole.optional,
             rsvpStatus: rsvpStatus,
             respondedAt: respondedAtStr != null ? DateTime.tryParse(respondedAtStr) : null,
@@ -103,9 +144,23 @@ class SupabaseCalendarDataSource implements CalendarDataSource {
   Future<void> addEvent(CalendarEvent event) async {
     try {
       final currentUserId = client.auth.currentUser?.id;
+      final houseId = _houseId;
+
+      if (!_isUuid(houseId)) {
+        throw const ServerFailure('Casa não configurada ou ID inválido.');
+      }
+
+      final creatorId = (currentUserId != null && _isUuid(currentUserId))
+          ? currentUserId
+          : (_isUuid(event.createdByMemberId) ? event.createdByMemberId : currentUserId);
+
+      if (creatorId == null) {
+        throw const ServerFailure('Usuário não autenticado.');
+      }
+
       final eventRow = {
         if (_isUuid(event.id)) 'id': event.id,
-        'house_id': _houseId,
+        'house_id': houseId,
         'title': event.title,
         'description': event.description,
         'location': event.location,
@@ -113,18 +168,23 @@ class SupabaseCalendarDataSource implements CalendarDataSource {
         'end_time': event.endTime.toIso8601String(),
         'is_all_day': event.isAllDay,
         'visibility': event.visibility.name,
-        'created_by': currentUserId ?? event.createdByMemberId,
+        'created_by': creatorId,
       };
 
       final inserted = await client.from('events').insert(eventRow).select('id').single();
       final realEventId = inserted['id'] as String;
 
-      if (event.participants.isNotEmpty) {
-        final participantRows = event.participants.map((p) {
+      final validParticipants = event.participants
+          .where((p) => _isUuid(p.memberId))
+          .toList();
+
+      if (validParticipants.isNotEmpty) {
+        final participantRows = validParticipants.map((p) {
           return {
             if (_isUuid(p.id)) 'id': p.id,
             'event_id': realEventId,
             'user_id': p.memberId,
+            'house_id': houseId,
             'is_essential': p.isEssential,
             'rsvp_status': p.rsvpStatus.name,
             'responded_at': p.respondedAt?.toIso8601String(),
@@ -134,6 +194,7 @@ class SupabaseCalendarDataSource implements CalendarDataSource {
         await client.from('event_participants').insert(participantRows);
       }
     } catch (e) {
+      if (e is Failure) rethrow;
       throw ServerFailure('Erro ao adicionar evento na agenda: $e');
     }
   }
@@ -153,7 +214,26 @@ class SupabaseCalendarDataSource implements CalendarDataSource {
         'is_all_day': event.isAllDay,
         'visibility': event.visibility.name,
       }).eq('id', event.id);
+
+      if (_isUuid(event.id)) {
+        for (final p in event.participants) {
+          if (!_isUuid(p.memberId)) continue;
+          final participantRow = {
+            'event_id': event.id,
+            'user_id': p.memberId,
+            'house_id': _houseId,
+            'is_essential': p.isEssential,
+            'rsvp_status': p.rsvpStatus.name,
+            'responded_at': p.respondedAt?.toIso8601String(),
+          };
+          await client.from('event_participants').upsert(
+            participantRow,
+            onConflict: 'event_id,user_id',
+          );
+        }
+      }
     } catch (e) {
+      if (e is Failure) rethrow;
       throw ServerFailure('Erro ao atualizar evento da agenda: $e');
     }
   }
@@ -200,13 +280,46 @@ class SupabaseCalendarDataSource implements CalendarDataSource {
   }
 
   @override
-  Future<List<TaskItem>> getTasks() async {
+  Future<List<TaskItem>> getTasks({bool includeArchived = false}) async {
     try {
-      final rows = await client
+      var query = client
           .from('tasks')
           .select()
-          .eq('house_id', _houseId)
-          .order('created_at', ascending: false);
+          .eq('house_id', _houseId);
+
+      if (!includeArchived) {
+        final cutoff = DateTime.now().subtract(const Duration(days: 15)).toIso8601String();
+        query = query.or('is_completed.eq.false,completed_at.gte.$cutoff');
+      }
+
+      final rows = await query.order('created_at', ascending: false);
+
+      final userIds = <String>{};
+      for (final r in rows) {
+        final assigned = r['assigned_to'] as String?;
+        if (assigned != null && assigned.isNotEmpty) {
+          userIds.add(assigned);
+        }
+      }
+
+      final Map<String, String> profileNames = {};
+      if (userIds.isNotEmpty) {
+        try {
+          final profiles = await client
+              .from('profiles')
+              .select('id, full_name')
+              .filter('id', 'in', userIds.toList());
+          for (final prof in profiles) {
+            final id = prof['id'] as String?;
+            final fullName = prof['full_name'] as String?;
+            if (id != null && fullName != null && fullName.trim().isNotEmpty) {
+              profileNames[id] = fullName.trim();
+            }
+          }
+        } catch (_) {
+          // Fallback resiliente
+        }
+      }
 
       return rows.map((r) {
         final priorityStr = r['priority'] as String? ?? 'medium';
@@ -223,13 +336,15 @@ class SupabaseCalendarDataSource implements CalendarDataSource {
         }
 
         final costCents = r['cost_cents'] as int?;
+        final assignedTo = r['assigned_to'] as String?;
 
         return TaskItem(
           id: r['id'] as String,
           title: r['title'] as String,
           description: r['description'] as String?,
           dueDate: r['due_date'] != null ? DateTime.tryParse(r['due_date'] as String) : null,
-          assignedToMemberId: r['assigned_to'] as String?,
+          assignedToMemberId: assignedTo,
+          assignedToMemberName: assignedTo != null ? profileNames[assignedTo] : null,
           isCompleted: (r['is_completed'] as bool?) ?? false,
           completedAt: r['completed_at'] != null ? DateTime.tryParse(r['completed_at'] as String) : null,
           completedByMemberId: r['completed_by'] as String?,
@@ -242,6 +357,57 @@ class SupabaseCalendarDataSource implements CalendarDataSource {
     } catch (e) {
       throw ServerFailure('Erro ao carregar tarefas: $e');
     }
+  }
+
+  @override
+  Stream<List<TaskItem>> watchTasks({bool includeArchived = false}) {
+    return client
+        .from('tasks')
+        .stream(primaryKey: ['id'])
+        .eq('house_id', _houseId)
+        .order('created_at', ascending: false)
+        .map((rows) {
+          final cutoff = DateTime.now().subtract(const Duration(days: 15));
+          return rows.where((r) {
+            if (includeArchived) return true;
+            final isCompleted = (r['is_completed'] as bool?) ?? false;
+            if (!isCompleted) return true;
+            final completedAtStr = r['completed_at'] as String?;
+            final completedAt = completedAtStr != null ? DateTime.tryParse(completedAtStr) : null;
+            return completedAt != null && completedAt.isAfter(cutoff);
+          }).map((r) {
+            final priorityStr = r['priority'] as String? ?? 'medium';
+            TaskPriority priority;
+            switch (priorityStr) {
+              case 'low':
+                priority = TaskPriority.low;
+                break;
+              case 'high':
+                priority = TaskPriority.high;
+                break;
+              default:
+                priority = TaskPriority.medium;
+            }
+
+            final costCents = r['cost_cents'] as int?;
+            final assignedTo = r['assigned_to'] as String?;
+
+            return TaskItem(
+              id: r['id'] as String,
+              title: r['title'] as String,
+              description: r['description'] as String?,
+              dueDate: r['due_date'] != null ? DateTime.tryParse(r['due_date'] as String) : null,
+              assignedToMemberId: assignedTo,
+              isCompleted: (r['is_completed'] as bool?) ?? false,
+              completedAt: r['completed_at'] != null ? DateTime.tryParse(r['completed_at'] as String) : null,
+              completedByMemberId: r['completed_by'] as String?,
+              priority: priority,
+              cost: costCents != null ? Money(costCents) : null,
+              createdByMemberId: r['created_by'] as String? ?? '',
+              createdAt: DateTime.tryParse(r['created_at'] as String? ?? '') ?? DateTime.now(),
+            );
+          }).toList();
+        });
   }
 
   @override

@@ -6,6 +6,10 @@ class House extends Equatable {
   final int cycleStartDay;
   final String timezone;
   final String? createdBy;
+  final String? pixKey;
+  final String? pixKeyType;
+  final String? pixKeyHolderName;
+  final String? pixKeyBank;
 
   const House({
     required this.id,
@@ -13,6 +17,10 @@ class House extends Equatable {
     this.cycleStartDay = 5,
     this.timezone = 'America/Sao_Paulo',
     this.createdBy,
+    this.pixKey,
+    this.pixKeyType,
+    this.pixKeyHolderName,
+    this.pixKeyBank,
   });
 
   House copyWith({
@@ -21,6 +29,11 @@ class House extends Equatable {
     int? cycleStartDay,
     String? timezone,
     String? createdBy,
+    String? pixKey,
+    String? pixKeyType,
+    String? pixKeyHolderName,
+    String? pixKeyBank,
+    bool clearPixKey = false,
   }) {
     return House(
       id: id ?? this.id,
@@ -28,9 +41,23 @@ class House extends Equatable {
       cycleStartDay: cycleStartDay ?? this.cycleStartDay,
       timezone: timezone ?? this.timezone,
       createdBy: createdBy ?? this.createdBy,
+      pixKey: clearPixKey ? null : (pixKey ?? this.pixKey),
+      pixKeyType: clearPixKey ? null : (pixKeyType ?? this.pixKeyType),
+      pixKeyHolderName: clearPixKey ? null : (pixKeyHolderName ?? this.pixKeyHolderName),
+      pixKeyBank: clearPixKey ? null : (pixKeyBank ?? this.pixKeyBank),
     );
   }
 
   @override
-  List<Object?> get props => [id, name, cycleStartDay, timezone, createdBy];
+  List<Object?> get props => [
+        id,
+        name,
+        cycleStartDay,
+        timezone,
+        createdBy,
+        pixKey,
+        pixKeyType,
+        pixKeyHolderName,
+        pixKeyBank,
+      ];
 }

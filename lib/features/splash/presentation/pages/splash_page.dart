@@ -1,0 +1,147 @@
+import 'dart:async';
+import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
+
+import '../../../../core/di/service_locator.dart';
+import '../../../../core/theme/app_colors.dart';
+import '../../../../core/widgets/omni_logo.dart';
+import '../../../auth/presentation/cubit/auth_cubit.dart';
+import '../../../finance/presentation/cubit/finance_cubit.dart';
+
+class SplashPage extends StatefulWidget {
+  const SplashPage({super.key});
+
+  @override
+  State<SplashPage> createState() => _SplashPageState();
+}
+
+class _SplashPageState extends State<SplashPage>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+  late Animation<double> _fadeAnimation;
+  late Animation<double> _scaleAnimation;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 900),
+    );
+
+    _fadeAnimation = CurvedAnimation(
+      parent: _controller,
+      curve: Curves.easeIn,
+    );
+
+    _scaleAnimation = Tween<double>(begin: 0.85, end: 1.0).animate(
+      CurvedAnimation(
+        parent: _controller,
+        curve: Curves.easeOutBack,
+      ),
+    );
+
+    _controller.forward();
+    _runWarmupAndNavigate();
+  }
+
+  Future<void> _runWarmupAndNavigate() async {
+    // 1. Duração mínima confortável para a animação do logo
+    final minTimer = Future.delayed(const Duration(milliseconds: 850));
+
+    // 2. Dispara e aguarda checagem de autenticação e aquecimento do ciclo financeiro
+    final authCubit = sl<AuthCubit>();
+    authCubit.checkAuthStatus();
+
+    // Se já estiver com sessão e casa ativa, pré-carrega os dados do ciclo
+    Future<void>? financeFuture;
+    if (authCubit.state.isAuthenticated && authCubit.state.hasHouse) {
+      financeFuture = sl<FinanceCubit>().loadCycleData();
+    }
+
+    // Aguarda em paralelo o tempo da animação e a carga de dados
+    await Future.wait([
+      minTimer,
+      if (financeFuture != null) financeFuture,
+    ]);
+
+    if (!mounted) return;
+
+    // 3. Navegação suave direta ao destino correto
+    final authState = authCubit.state;
+    if (authState.isAuthenticated && authState.hasHouse) {
+      context.go('/casa');
+    } else if (authState.isAuthenticated && !authState.hasHouse) {
+      context.go('/onboarding/house');
+    } else {
+      context.go(kIsWeb ? '/landing' : '/login');
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+
+    return Scaffold(
+      backgroundColor: isDark ? const Color(0xFF0F172A) : Colors.white,
+      body: Center(
+        child: FadeTransition(
+          opacity: _fadeAnimation,
+          child: ScaleTransition(
+            scale: _scaleAnimation,
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                const OmniLogo.vertical(
+                  width: 140,
+                  height: 140,
+                ),
+                const SizedBox(height: 24),
+                Text(
+                  'Omni Lar',
+                  style: TextStyle(
+                    fontSize: 26,
+                    fontWeight: FontWeight.bold,
+                    letterSpacing: -0.5,
+                    color: isDark
+                        ? AppColors.textPrimaryDark
+                        : AppColors.textPrimaryLight,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  'Gestão Financeira & Harmonia do Lar',
+                  style: TextStyle(
+                    fontSize: 13,
+                    color: isDark
+                        ? AppColors.textSecondaryDark
+                        : AppColors.textSecondaryLight,
+                  ),
+                ),
+                const SizedBox(height: 36),
+                SizedBox(
+                  width: 24,
+                  height: 24,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2.5,
+                    valueColor: AlwaysStoppedAnimation<Color>(
+                      AppColors.primary,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}

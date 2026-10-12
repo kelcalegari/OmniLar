@@ -30,6 +30,10 @@ create policy "house_members_insert_owner_or_admin" on public.house_members for 
 -- 5. Adiciona coluna de e-mail na tabela profiles caso não exista
 alter table public.profiles add column if not exists email text;
 
+-- 5.1 Adiciona coluna default_split_percent na tabela house_members caso não exista
+alter table public.house_members add column if not exists default_split_percent numeric(5,2) default 50.0
+  check (default_split_percent is null or (default_split_percent >= 0 and default_split_percent <= 100));
+
 -- 6. Atualiza o trigger de cadastro automático de perfil
 create or replace function public.handle_new_user()
 returns trigger
@@ -98,3 +102,6 @@ begin
   return to_jsonb(v_house);
 end;
 $$;
+
+-- 8. Recarrega o schema cache do PostgREST imediatamente
+NOTIFY pgrst, 'reload schema';

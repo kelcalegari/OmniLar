@@ -6,6 +6,7 @@ import '../entities/shopping_trip.dart';
 abstract class ShoppingRepository {
   Future<List<ShoppingList>> getLists();
   Future<List<ShoppingItem>> getItems(String listId);
+  Stream<List<ShoppingItem>> watchItems(String listId);
   Future<void> addItem(ShoppingItem item);
   Future<void> toggleItemBought(String itemId);
   Future<void> deleteItem(String itemId);

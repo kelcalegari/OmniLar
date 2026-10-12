@@ -5,6 +5,10 @@ import '../../domain/entities/contribution.dart';
 import '../../domain/entities/category.dart';
 import '../../domain/entities/payment_method.dart';
 import '../../domain/entities/savings_vault.dart';
+import '../../domain/entities/financial_cycle_summary.dart';
+import '../../domain/entities/audit_entry.dart';
+import '../../domain/entities/cycle_funding_estimate.dart';
+import '../../domain/services/cycle_funding_estimator.dart';
 import '../../../../core/domain/enums/recurrence.dart';
 import '../../../../core/domain/value_objects/money.dart';
 import '../../../../core/domain/value_objects/financial_cycle.dart';
@@ -12,9 +16,10 @@ import 'finance_state.dart';
 
 class FinanceCubit extends Cubit<FinanceState> {
   final FinanceRepository _repository;
+  final CycleFundingEstimator _fundingEstimator;
   static const int defaultCycleStartDay = 5;
 
-  FinanceCubit(this._repository)
+  FinanceCubit(this._repository, [this._fundingEstimator = const CycleFundingEstimator()])
       : super(
           FinanceState(
             currentCycle: FinancialCycle.fromDate(
@@ -23,6 +28,17 @@ class FinanceCubit extends Cubit<FinanceState> {
             ),
           ),
         );
+
+  void resetState() {
+    emit(
+      FinanceState(
+        currentCycle: FinancialCycle.fromDate(
+          date: DateTime.now(),
+          cycleStartDay: defaultCycleStartDay,
+        ),
+      ),
+    );
+  }
 
   Future<void> loadCycleData({FinancialCycle? cycle}) async {
     final targetCycle = cycle ?? state.currentCycle;
@@ -37,10 +53,31 @@ class FinanceCubit extends Cubit<FinanceState> {
       final contributions = await _repository.getContributionsForCycle(targetCycle);
       final vaults = await _repository.getSavingsVaults();
 
+      // Busca histórico de despesas do ciclo anterior para cálculo de médias de variáveis (ex: Mercado)
+      List<HouseExpense> historicalExpenses = [];
+      try {
+        final prevCycle = targetCycle.previous(defaultCycleStartDay);
+        final prevExpenses = await _repository.getExpensesForCycle(prevCycle);
+        historicalExpenses.addAll(prevExpenses);
+      } catch (_) {}
+
+      final fundingEstimate = _fundingEstimator.calculateEstimate(
+        cycle: targetCycle,
+        members: members,
+        categories: categories,
+        currentCycleExpenses: expenses,
+        historicalExpenses: historicalExpenses.isNotEmpty ? historicalExpenses : expenses,
+        currentCycleContributions: contributions,
+        currentHouseBalance: summary.folego.isPositive ? summary.folego : const Money.zero(),
+        mode: state.fundingEstimateMode,
+        customCategoryOverrides: state.customCategoryOverrides,
+      );
+
       emit(state.copyWith(
         status: FinanceStatus.success,
         currentCycle: targetCycle,
         summary: summary,
+        fundingEstimate: fundingEstimate,
         expenses: expenses,
         contributions: contributions,
         members: members,
@@ -54,6 +91,44 @@ class FinanceCubit extends Cubit<FinanceState> {
         errorMessage: 'Erro ao carregar dados do ciclo: $e',
       ));
     }
+  }
+
+  void updateFundingEstimateMode(FundingEstimateMode mode) {
+    final updated = _fundingEstimator.calculateEstimate(
+      cycle: state.currentCycle,
+      members: state.members,
+      categories: state.categories,
+      currentCycleExpenses: state.expenses,
+      historicalExpenses: state.expenses,
+      currentCycleContributions: state.contributions,
+      currentHouseBalance: state.summary?.folego.isPositive == true ? state.summary!.folego : const Money.zero(),
+      mode: mode,
+      customCategoryOverrides: state.customCategoryOverrides,
+    );
+    emit(state.copyWith(
+      fundingEstimateMode: mode,
+      fundingEstimate: updated,
+    ));
+  }
+
+  void updateCustomCategoryFunding(String categoryId, Money amount) {
+    final newOverrides = Map<String, Money>.from(state.customCategoryOverrides);
+    newOverrides[categoryId] = amount;
+    final updated = _fundingEstimator.calculateEstimate(
+      cycle: state.currentCycle,
+      members: state.members,
+      categories: state.categories,
+      currentCycleExpenses: state.expenses,
+      historicalExpenses: state.expenses,
+      currentCycleContributions: state.contributions,
+      currentHouseBalance: state.summary?.folego.isPositive == true ? state.summary!.folego : const Money.zero(),
+      mode: state.fundingEstimateMode,
+      customCategoryOverrides: newOverrides,
+    );
+    emit(state.copyWith(
+      customCategoryOverrides: newOverrides,
+      fundingEstimate: updated,
+    ));
   }
 
   void nextCycle() {
@@ -98,6 +173,53 @@ class FinanceCubit extends Cubit<FinanceState> {
     RecurrenceScope scope = RecurrenceScope.thisInstanceOnly,
   }) async {
     try {
+      // Atualização otimista: remove imediatamente da lista local e recalcula saldo do fôlego
+      final deleted = state.expenses.where((e) => e.id == expenseId).firstOrNull;
+      final remaining = (deleted != null && scope == RecurrenceScope.allInstances && deleted.isRecurring)
+          ? state.expenses.where((e) {
+              if (e.id == expenseId) return false;
+              if (deleted.recurringSeriesId != null && e.recurringSeriesId == deleted.recurringSeriesId) return false;
+              if (e.isRecurring && e.title.trim().toLowerCase() == deleted.title.trim().toLowerCase()) return false;
+              return true;
+            }).toList()
+          : state.expenses.where((e) => e.id != expenseId).toList();
+
+      FinancialCycleSummary? updatedSummary = state.summary;
+      if (deleted != null && state.summary != null) {
+        final currentSummary = state.summary!;
+        final deletedAmount = deleted.amount;
+        if (deleted.isPaid) {
+          final newPaid = currentSummary.totalExpensesPaid - deletedAmount;
+          final newFolego = currentSummary.totalContributions - (newPaid + currentSummary.committedFutureExpenses);
+          updatedSummary = FinancialCycleSummary(
+            cycle: currentSummary.cycle,
+            totalContributions: currentSummary.totalContributions,
+            totalExpensesPaid: newPaid,
+            committedFutureExpenses: currentSummary.committedFutureExpenses,
+            folego: newFolego,
+            memberContributions: currentSummary.memberContributions,
+            memberExpensesPaid: currentSummary.memberExpensesPaid,
+          );
+        } else {
+          final newCommitted = currentSummary.committedFutureExpenses - deletedAmount;
+          final newFolego = currentSummary.totalContributions - (currentSummary.totalExpensesPaid + newCommitted);
+          updatedSummary = FinancialCycleSummary(
+            cycle: currentSummary.cycle,
+            totalContributions: currentSummary.totalContributions,
+            totalExpensesPaid: currentSummary.totalExpensesPaid,
+            committedFutureExpenses: newCommitted,
+            folego: newFolego,
+            memberContributions: currentSummary.memberContributions,
+            memberExpensesPaid: currentSummary.memberExpensesPaid,
+          );
+        }
+      }
+
+      emit(state.copyWith(
+        expenses: remaining,
+        summary: updatedSummary,
+      ));
+
       await _repository.deleteExpense(expenseId, scope: scope);
       await loadCycleData(cycle: state.currentCycle);
     } catch (e) {
@@ -153,11 +275,65 @@ class FinanceCubit extends Cubit<FinanceState> {
   Future<void> addPaymentMethod(PaymentMethod paymentMethod) async {
     try {
       await _repository.addPaymentMethod(paymentMethod);
+      final updatedList = [...state.paymentMethods, paymentMethod];
+      emit(state.copyWith(paymentMethods: updatedList));
       await loadCycleData(cycle: state.currentCycle);
     } catch (e) {
       emit(state.copyWith(
         status: FinanceStatus.failure,
         errorMessage: 'Erro ao cadastrar forma de pagamento: $e',
+      ));
+    }
+  }
+
+  Future<void> updatePaymentMethod(PaymentMethod paymentMethod) async {
+    try {
+      await _repository.updatePaymentMethod(paymentMethod);
+      final updatedList = state.paymentMethods
+          .map((p) => p.id == paymentMethod.id ? paymentMethod : p)
+          .toList();
+      emit(state.copyWith(paymentMethods: updatedList));
+      await loadCycleData(cycle: state.currentCycle);
+    } catch (e) {
+      emit(state.copyWith(
+        status: FinanceStatus.failure,
+        errorMessage: 'Erro ao atualizar forma de pagamento: $e',
+      ));
+    }
+  }
+
+  Future<void> deletePaymentMethod(String paymentMethodId) async {
+    try {
+      await _repository.deletePaymentMethod(paymentMethodId);
+      final updatedList = state.paymentMethods
+          .where((p) => p.id != paymentMethodId)
+          .toList();
+      emit(state.copyWith(paymentMethods: updatedList));
+      await loadCycleData(cycle: state.currentCycle);
+    } catch (e) {
+      emit(state.copyWith(
+        status: FinanceStatus.failure,
+        errorMessage: 'Erro ao excluir forma de pagamento: $e',
+      ));
+    }
+  }
+
+  Future<void> updateHouseSplitModel({
+    required String splitModel,
+    required Map<String, double> percentages,
+    required Map<String, int> fixedAmountsCents,
+  }) async {
+    try {
+      await _repository.updateHouseSplitModel(
+        splitModel: splitModel,
+        percentages: percentages,
+        fixedAmountsCents: fixedAmountsCents,
+      );
+      await loadCycleData(cycle: state.currentCycle);
+    } catch (e) {
+      emit(state.copyWith(
+        status: FinanceStatus.failure,
+        errorMessage: 'Erro ao salvar modelo de rateio: $e',
       ));
     }
   }
@@ -216,6 +392,14 @@ class FinanceCubit extends Cubit<FinanceState> {
         status: FinanceStatus.failure,
         errorMessage: 'Erro ao resgatar dinheiro da caixinha: $e',
       ));
+    }
+  }
+
+  Future<List<AuditEntry>> getAuditLog({String? entityId, int limit = 50}) async {
+    try {
+      return await _repository.getAuditLog(entityId: entityId, limit: limit);
+    } catch (_) {
+      return [];
     }
   }
 }

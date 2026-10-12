@@ -1,3 +1,4 @@
+import 'dart:async';
 import '../../../../core/domain/value_objects/money.dart';
 import '../../../finance/domain/entities/house_expense.dart';
 import '../../../finance/domain/entities/split_rule.dart';
@@ -75,11 +76,19 @@ class MockShoppingDataSource implements ShoppingDataSource {
   ];
 
   final List<ShoppingTrip> _trips = [];
+  final StreamController<List<ShoppingItem>> _itemsController =
+      StreamController<List<ShoppingItem>>.broadcast();
 
   MockShoppingDataSource({
     required this.financeRepository,
     required this.p2pRepository,
   });
+
+  void _notifyItems(String listId) {
+    if (!_itemsController.isClosed) {
+      _itemsController.add(_items.where((i) => i.listId == listId).toList());
+    }
+  }
 
   @override
   Future<List<ShoppingList>> getLists() async => List.unmodifiable(_lists);
@@ -87,6 +96,12 @@ class MockShoppingDataSource implements ShoppingDataSource {
   @override
   Future<List<ShoppingItem>> getItems(String listId) async {
     return _items.where((i) => i.listId == listId).toList();
+  }
+
+  @override
+  Stream<List<ShoppingItem>> watchItems(String listId) async* {
+    yield _items.where((i) => i.listId == listId).toList();
+    yield* _itemsController.stream;
   }
 
   // RN03: Se o item já existir como pendente, soma a quantidade
@@ -107,6 +122,7 @@ class MockShoppingDataSource implements ShoppingDataSource {
     } else {
       _items.insert(0, item);
     }
+    _notifyItems(item.listId);
   }
 
   @override
@@ -119,12 +135,18 @@ class MockShoppingDataSource implements ShoppingDataSource {
         isBought: newBought,
         boughtAt: newBought ? DateTime.now() : null,
       );
+      _notifyItems(item.listId);
     }
   }
 
   @override
   Future<void> deleteItem(String itemId) async {
-    _items.removeWhere((i) => i.id == itemId);
+    final index = _items.indexWhere((i) => i.id == itemId);
+    if (index != -1) {
+      final listId = _items[index].listId;
+      _items.removeAt(index);
+      _notifyItems(listId);
+    }
   }
 
   // RN06: Encerramento com integração ao Caixa da Casa e Empréstimos P2P
@@ -211,6 +233,7 @@ class MockShoppingDataSource implements ShoppingDataSource {
 
     // Remove os itens comprados desta lista para a próxima compra
     _items.removeWhere((i) => i.listId == listId && i.isBought);
+    _notifyItems(listId);
 
     return trip;
   }

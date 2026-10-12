@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/widgets/privacy_toggle.dart';
+import '../../../../core/domain/value_objects/money.dart';
 import '../../../../core/domain/value_objects/financial_cycle.dart';
 import '../../domain/entities/financial_cycle_summary.dart';
 
@@ -155,25 +156,88 @@ class FolegoGaugeCard extends StatelessWidget {
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                _buildMetricColumn(
-                  context,
-                  label: 'Aportes',
-                  value: summary.totalContributions.format(),
-                  color: AppColors.creditGreen,
+                Expanded(
+                  child: _buildMetricColumn(
+                    context,
+                    label: 'Aportes',
+                    value: summary.totalContributions.format(),
+                    color: AppColors.creditGreen,
+                  ),
                 ),
-                _buildMetricColumn(
-                  context,
-                  label: 'Despesas Pagas',
-                  value: summary.totalExpensesPaid.format(),
-                  color: theme.textTheme.bodyLarge?.color,
+                Expanded(
+                  child: _buildMetricColumn(
+                    context,
+                    label: 'Despesas Pagas',
+                    value: summary.totalExpensesPaid.format(),
+                    color: theme.textTheme.bodyLarge?.color,
+                  ),
                 ),
-                _buildMetricColumn(
-                  context,
-                  label: 'A Vencer',
-                  value: summary.committedFutureExpenses.format(),
-                  color: AppColors.folegoWarning,
+                Expanded(
+                  child: _buildMetricColumn(
+                    context,
+                    label: 'A Vencer',
+                    value: summary.committedFutureExpenses.format(),
+                    color: AppColors.folegoWarning,
+                  ),
                 ),
               ],
+            ),
+            const SizedBox(height: 14),
+
+            // Indicador de Gasto Diário Seguro (Burn Rate - Fase 2.1)
+            Builder(
+              builder: (context) {
+                final now = DateTime.now();
+                final end = cycle.endDate;
+                final daysRemaining = end.isAfter(now)
+                    ? end.difference(now).inDays + 1
+                    : 1;
+
+                final dailySafeCents = summary.folego.isPositive && daysRemaining > 0
+                    ? (summary.folego.cents / daysRemaining).round()
+                    : 0;
+
+                final isComfortable = dailySafeCents >= 5000; // >= R$ 50/dia
+
+                return Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: (summary.folego.isNegative
+                            ? AppColors.debtRed
+                            : (isComfortable ? AppColors.creditGreen : AppColors.folegoWarning))
+                        .withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(
+                        summary.folego.isNegative
+                            ? Icons.error_outline_rounded
+                            : (isComfortable ? Icons.speed_rounded : Icons.info_outline_rounded),
+                        size: 16,
+                        color: summary.folego.isNegative
+                            ? AppColors.debtRed
+                            : (isComfortable ? AppColors.creditGreen : AppColors.folegoWarning),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          summary.folego.isNegative
+                              ? 'Déficit no ciclo: requer novo aporte para reequilibrar'
+                              : 'Gasto diário seguro: ~${Money(dailySafeCents).format()}/dia ($daysRemaining dias restantes)',
+                          style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w600,
+                            color: summary.folego.isNegative
+                                ? AppColors.debtRed
+                                : (isComfortable ? AppColors.creditGreen : AppColors.folegoWarning),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              },
             ),
           ],
         ),
@@ -194,14 +258,20 @@ class FolegoGaugeCard extends StatelessWidget {
         Text(
           label,
           style: theme.textTheme.bodySmall?.copyWith(fontSize: 11),
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
         ),
         const SizedBox(height: 2),
-        Text(
-          value,
-          style: TextStyle(
-            fontSize: 14,
-            fontWeight: FontWeight.bold,
-            color: color,
+        FittedBox(
+          fit: BoxFit.scaleDown,
+          alignment: Alignment.centerLeft,
+          child: Text(
+            value,
+            style: TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.bold,
+              color: color,
+            ),
           ),
         ),
       ],

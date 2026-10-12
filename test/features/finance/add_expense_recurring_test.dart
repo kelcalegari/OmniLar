@@ -46,6 +46,7 @@ void main() {
       expect(find.text('Valor Variável'), findsOneWidget);
       expect(find.text('Dia do Vencimento'), findsOneWidget);
       expect(find.text('Situação no Ciclo Atual'), findsOneWidget);
+      await tester.ensureVisible(find.text('Salvar Despesa Recorrente'));
       expect(find.text('Salvar Despesa Recorrente'), findsOneWidget);
     });
 
@@ -62,6 +63,7 @@ void main() {
       expect(find.text('Nova Despesa Recorrente'), findsOneWidget);
       expect(find.text('Valor Fixo'), findsOneWidget);
       expect(find.text('Valor Variável'), findsOneWidget);
+      await tester.ensureVisible(find.text('Salvar Despesa Recorrente'));
       expect(find.text('Salvar Despesa Recorrente'), findsOneWidget);
     });
 
@@ -85,11 +87,17 @@ void main() {
       await tester.pumpAndSettle();
 
       // Seleciona Valor Variável
-      await tester.tap(find.text('Valor Variável'));
+      final variavelFinder = find.text('Valor Variável');
+      await tester.ensureVisible(variavelFinder);
+      await tester.pumpAndSettle();
+      await tester.tap(variavelFinder);
       await tester.pumpAndSettle();
 
       // Salva
-      await tester.tap(find.text('Salvar Despesa Recorrente'));
+      final saveButton = find.widgetWithText(ElevatedButton, 'Salvar Despesa Recorrente');
+      await tester.ensureVisible(saveButton);
+      await tester.pumpAndSettle();
+      await tester.tap(saveButton);
       await tester.pumpAndSettle();
 
       // Verifica no estado

@@ -15,6 +15,7 @@ import 'package:omni_lar/features/finance/domain/entities/category.dart';
 import 'package:omni_lar/features/finance/domain/entities/payment_method.dart';
 import 'package:omni_lar/features/finance/domain/entities/house_member.dart';
 import 'package:omni_lar/features/finance/domain/entities/savings_vault.dart';
+import 'package:omni_lar/features/finance/domain/entities/audit_entry.dart';
 
 class _FakeFinanceRepository implements FinanceRepository {
   @override
@@ -46,6 +47,16 @@ class _FakeFinanceRepository implements FinanceRepository {
   @override
   Future<void> addPaymentMethod(PaymentMethod paymentMethod) async {}
   @override
+  Future<void> updatePaymentMethod(PaymentMethod paymentMethod) async {}
+  @override
+  Future<void> deletePaymentMethod(String paymentMethodId) async {}
+  @override
+  Future<void> updateHouseSplitModel({
+    required String splitModel,
+    required Map<String, double> percentages,
+    required Map<String, int> fixedAmountsCents,
+  }) async {}
+  @override
   Future<List<SavingsVault>> getSavingsVaults() async => [];
   @override
   Future<void> createSavingsVault(SavingsVault vault) async {}
@@ -53,6 +64,8 @@ class _FakeFinanceRepository implements FinanceRepository {
   Future<void> depositToVault({required String vaultId, required String memberId, required Money amount, required String description}) async {}
   @override
   Future<void> withdrawFromVault({required String vaultId, required String memberId, required Money amount, required String description}) async {}
+  @override
+  Future<List<AuditEntry>> getAuditLog({String? entityId, int limit = 50}) async => [];
 }
 
 void main() {

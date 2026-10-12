@@ -8,6 +8,11 @@ import '../../../../core/widgets/recurrence_scope_dialog.dart';
 import '../../../../core/widgets/responsive_container.dart';
 import '../../domain/entities/calendar_event.dart';
 import '../../domain/entities/event_participant.dart';
+import '../../../../core/di/service_locator.dart';
+import '../../../auth/domain/repositories/auth_repository.dart';
+import '../../../auth/presentation/cubit/auth_cubit.dart';
+import '../../../auth/presentation/cubit/auth_state.dart';
+import '../../../finance/presentation/cubit/finance_cubit.dart';
 import '../cubit/calendar_cubit.dart';
 import '../cubit/calendar_state.dart';
 import '../widgets/add_event_sheet.dart';
@@ -143,37 +148,79 @@ class _CalendarPageState extends State<CalendarPage> {
     showAdaptiveModal(
       context: context,
       maxWidth: 540,
-      child: Padding(
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                const Text(
-                  'Detalhes do Compromisso',
-                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
-                ),
-                IconButton(
-                  icon: const Icon(Icons.close_rounded),
-                  tooltip: 'Fechar',
-                  onPressed: () => Navigator.pop(context),
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            _buildEventItem(context, event, state, cubit),
-          ],
+      child: BlocProvider.value(
+        value: cubit,
+        child: BlocBuilder<CalendarCubit, CalendarState>(
+          builder: (modalCtx, currentState) {
+            // Recarrega o evento do estado atual para refletir mudanças de RSVP
+            final currentEvent = currentState.events.firstWhere(
+              (e) => e.id == event.id,
+              orElse: () => event,
+            );
+            return Padding(
+              padding: const EdgeInsets.all(20),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Text(
+                        'Detalhes do Compromisso',
+                        style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.close_rounded),
+                        tooltip: 'Fechar',
+                        onPressed: () => Navigator.pop(modalCtx),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  _buildEventItem(modalCtx, currentEvent, currentState, cubit),
+                ],
+              ),
+            );
+          },
         ),
       ),
     );
   }
 
+  Future<void> _openAddEventSheet(
+    BuildContext context,
+    CalendarState state, {
+    CalendarEvent? initialEvent,
+    DateTime? date,
+  }) async {
+    final targetDate = date ?? _selectedDate;
+    final created = await AddEventSheet.show(
+      context,
+      state.activeMemberId,
+      initialEvent: initialEvent,
+      initialDate: targetDate,
+    );
+    if (created != null && mounted) {
+      setState(() {
+        _selectedDate = created.startTime;
+      });
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
-    return BlocBuilder<CalendarCubit, CalendarState>(
+    return BlocConsumer<CalendarCubit, CalendarState>(
+      listener: (context, state) {
+        if (state.errorMessage != null && state.errorMessage!.isNotEmpty) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(state.errorMessage!),
+              backgroundColor: AppColors.debtRed,
+            ),
+          );
+        }
+      },
       builder: (context, state) {
         final cubit = context.read<CalendarCubit>();
         final theme = Theme.of(context);
@@ -183,43 +230,84 @@ class _CalendarPageState extends State<CalendarPage> {
           appBar: AppBar(
             title: const Text('Agenda do Lar', style: TextStyle(fontWeight: FontWeight.bold)),
             actions: [
-              // Seletor rápido de quem está logado para testar RSVP
-              Padding(
-                padding: const EdgeInsets.only(right: 8),
-                child: PopupMenuButton<String>(
-                  initialValue: state.activeMemberId,
-                  tooltip: 'Simular Membro',
-                  icon: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      CircleAvatar(
-                        radius: 12,
-                        backgroundColor: AppColors.primary,
-                        child: Text(
-                          state.activeMemberId == 'member_marina' ? 'M' : 'C',
-                          style: const TextStyle(fontSize: 10, color: Colors.white, fontWeight: FontWeight.bold),
+              BlocBuilder<AuthCubit, AuthState>(
+                builder: (context, authState) {
+                  final isDemo = sl<AuthRepository>().isDemoMode;
+                  final currentUser = authState.user;
+
+                  if (isDemo) {
+                    return Padding(
+                      padding: const EdgeInsets.only(right: 8),
+                      child: PopupMenuButton<String>(
+                        initialValue: state.activeMemberId,
+                        tooltip: 'Simular Membro (Demo)',
+                        icon: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            CircleAvatar(
+                              radius: 12,
+                              backgroundColor: AppColors.primary,
+                              child: Text(
+                                state.activeMemberId == 'member_marina' ? 'M' : 'C',
+                                style: const TextStyle(fontSize: 10, color: Colors.white, fontWeight: FontWeight.bold),
+                              ),
+                            ),
+                            const SizedBox(width: 4),
+                            Text(
+                              state.activeMemberId == 'member_marina' ? 'Marina' : 'Carlos',
+                              style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+                            ),
+                            const Icon(Icons.arrow_drop_down, size: 18),
+                          ],
                         ),
+                        onSelected: (val) => cubit.switchActiveMember(val),
+                        itemBuilder: (_) => const [
+                          PopupMenuItem(
+                            value: 'member_carlos',
+                            child: Text('Ver como Carlos (Demo)'),
+                          ),
+                          PopupMenuItem(
+                            value: 'member_marina',
+                            child: Text('Ver como Marina (Demo)'),
+                          ),
+                        ],
                       ),
-                      const SizedBox(width: 4),
-                      Text(
-                        state.activeMemberId == 'member_marina' ? 'Marina' : 'Carlos',
-                        style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+                    );
+                  }
+
+                  if (currentUser != null) {
+                    final initial = currentUser.fullName.isNotEmpty
+                        ? currentUser.fullName[0].toUpperCase()
+                        : (currentUser.email.isNotEmpty ? currentUser.email[0].toUpperCase() : 'U');
+                    final displayName = currentUser.fullName.isNotEmpty
+                        ? currentUser.fullName.split(' ').first
+                        : (currentUser.email.split('@').first);
+
+                    return Padding(
+                      padding: const EdgeInsets.only(right: 16),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          CircleAvatar(
+                            radius: 13,
+                            backgroundColor: AppColors.primary,
+                            child: Text(
+                              initial,
+                              style: const TextStyle(fontSize: 11, color: Colors.white, fontWeight: FontWeight.bold),
+                            ),
+                          ),
+                          const SizedBox(width: 6),
+                          Text(
+                            displayName,
+                            style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+                          ),
+                        ],
                       ),
-                      const Icon(Icons.arrow_drop_down, size: 18),
-                    ],
-                  ),
-                  onSelected: (val) => cubit.switchActiveMember(val),
-                  itemBuilder: (_) => const [
-                    PopupMenuItem(
-                      value: 'member_marina',
-                      child: Text('Ver como Marina'),
-                    ),
-                    PopupMenuItem(
-                      value: 'member_carlos',
-                      child: Text('Ver como Carlos'),
-                    ),
-                  ],
-                ),
+                    );
+                  }
+
+                  return const SizedBox.shrink();
+                },
               ),
             ],
           ),
@@ -227,7 +315,7 @@ class _CalendarPageState extends State<CalendarPage> {
               ? const Center(child: CircularProgressIndicator())
               : Column(
                   children: [
-                    // Seletor de Modo (Dia, Semana, Mês, Lista)
+                    // Seletor de Modo (Dia, Semana, Mês, Lista no Desktop | Mês, Lista no Mobile)
                     Padding(
                       padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
                       child: ResponsiveContainer(
@@ -279,7 +367,7 @@ class _CalendarPageState extends State<CalendarPage> {
                                       child: _buildModeTabButton(
                                         label: 'Mês',
                                         icon: Icons.calendar_view_month_rounded,
-                                        isSelected: _viewMode == CalendarViewMode.month,
+                                        isSelected: _viewMode == CalendarViewMode.month || _viewMode == CalendarViewMode.day || _viewMode == CalendarViewMode.week,
                                         onTap: () => setState(() => _viewMode = CalendarViewMode.month),
                                       ),
                                     ),
@@ -297,7 +385,7 @@ class _CalendarPageState extends State<CalendarPage> {
                       ),
                     ),
 
-                    // Barra Superior de Navegação Compartilhada (exceto na lista simples se preferir)
+                    // Barra de Navegação (exceto na lista)
                     if (_viewMode != CalendarViewMode.list)
                       Padding(
                         padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
@@ -357,6 +445,11 @@ class _CalendarPageState extends State<CalendarPage> {
   }
 
   Widget _buildNavigationToolbar(ThemeData theme, CalendarState state) {
+    final monthEventsCount = state.events.where((e) =>
+      e.startTime.year == _selectedDate.year && e.startTime.month == _selectedDate.month
+    ).length;
+    final countLabel = monthEventsCount == 1 ? '1 compromisso no mês' : '$monthEventsCount compromissos no mês';
+
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       decoration: BoxDecoration(
@@ -382,11 +475,14 @@ class _CalendarPageState extends State<CalendarPage> {
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),
-                if (_isCurrentPeriodToday)
-                  const Text(
-                    'Hoje',
-                    style: TextStyle(fontSize: 11, color: AppColors.primary, fontWeight: FontWeight.bold),
+                Text(
+                  countLabel,
+                  style: TextStyle(
+                    fontSize: 11,
+                    color: _isCurrentPeriodToday ? AppColors.primary : (theme.textTheme.bodySmall?.color?.withValues(alpha: 0.8) ?? Colors.grey),
+                    fontWeight: _isCurrentPeriodToday ? FontWeight.bold : FontWeight.w500,
                   ),
+                ),
               ],
             ),
           ),
@@ -442,7 +538,7 @@ class _CalendarPageState extends State<CalendarPage> {
                     onEventTap: (event) => _showEventDetailsModal(context, event, state, cubit),
                     onAddEvent: (date) {
                       setState(() => _selectedDate = date);
-                      AddEventSheet.show(context, state.activeMemberId);
+                      _openAddEventSheet(context, state, date: date);
                     },
                   ),
                 ),
@@ -450,6 +546,14 @@ class _CalendarPageState extends State<CalendarPage> {
             : _buildMobileMonthLayout(context, state, cubit, theme);
 
       case CalendarViewMode.month:
+        final billDates = <DateTime>[];
+        try {
+          final expenses = context.read<FinanceCubit>().state.expenses;
+          for (final exp in expenses) {
+            billDates.add(exp.effectiveDueDate);
+          }
+        } catch (_) {}
+
         return isDesktop
             ? Padding(
                 padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
@@ -458,6 +562,7 @@ class _CalendarPageState extends State<CalendarPage> {
                   child: MonthCalendarView(
                     selectedDate: _selectedDate,
                     events: state.events,
+                    billDueDates: billDates,
                     onDateSelected: (date) {
                       setState(() {
                         _selectedDate = date;
@@ -467,25 +572,25 @@ class _CalendarPageState extends State<CalendarPage> {
                     onEventTap: (event) => _showEventDetailsModal(context, event, state, cubit),
                     onAddEvent: (date) {
                       setState(() => _selectedDate = date);
-                      AddEventSheet.show(context, state.activeMemberId);
+                      _openAddEventSheet(context, state, date: date);
                     },
                   ),
                 ),
               )
-            : _buildMobileMonthLayout(context, state, cubit, theme);
-
+            : _buildMobileMonthLayout(context, state, cubit, theme, billDates);
       case CalendarViewMode.list:
         return _buildListView(context, state, cubit, theme, isDesktop);
     }
   }
 
-  // --- VISÃO MÊS UNIFICADA COM AGENDA DO DIA (MOBILE) ---
+  // --- VISÃO MÊS UNIFICADA COM AGENDA DO DIA (MOBILE COM SCROLL CONTÍNUO) ---
   Widget _buildMobileMonthLayout(
     BuildContext context,
     CalendarState state,
     CalendarCubit cubit,
-    ThemeData theme,
-  ) {
+    ThemeData theme, [
+    List<DateTime> billDueDates = const [],
+  ]) {
     final dayEvents = state.events.where((e) => _isSameDay(e.startTime, _selectedDate)).toList();
     String formattedSelectedDay;
     try {
@@ -497,82 +602,73 @@ class _CalendarPageState extends State<CalendarPage> {
         ? formattedSelectedDay[0].toUpperCase() + formattedSelectedDay.substring(1)
         : '';
 
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          // Grade do Mês com visual elegante e compacto
-          MonthCalendarView(
-            isCompact: true,
-            selectedDate: _selectedDate,
-            events: state.events,
-            onDateSelected: (date) {
-              setState(() => _selectedDate = date);
-            },
-            onEventTap: (event) => _showEventDetailsModal(context, event, state, cubit),
-            onAddEvent: (date) {
-              setState(() => _selectedDate = date);
-              AddEventSheet.show(context, state.activeMemberId);
-            },
-          ),
-          const SizedBox(height: 12),
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(16, 0, 16, 80),
+      children: [
+        // Grade do Mês compacta no topo (rola junto com toda a tela)
+        MonthCalendarView(
+          isCompact: true,
+          selectedDate: _selectedDate,
+          events: state.events,
+          billDueDates: billDueDates,
+          onDateSelected: (date) {
+            setState(() => _selectedDate = date);
+          },
+          onEventTap: (event) => _showEventDetailsModal(context, event, state, cubit),
+          onAddEvent: (date) {
+            setState(() => _selectedDate = date);
+            _openAddEventSheet(context, state, date: date);
+          },
+        ),
+        const SizedBox(height: 14),
 
-          // Cabeçalho dos compromissos da data selecionada
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 4),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        capitalizedDay,
-                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: AppColors.primary),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                      Text(
-                        'Compromissos (${dayEvents.length})',
-                        style: TextStyle(fontSize: 12, color: Colors.grey[600], fontWeight: FontWeight.bold),
-                      ),
-                    ],
-                  ),
+        // Cabeçalho dos compromissos da data selecionada
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 4),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      capitalizedDay,
+                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: AppColors.primary),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    Text(
+                      'Compromissos (${dayEvents.length})',
+                      style: TextStyle(fontSize: 12, color: Colors.grey[600], fontWeight: FontWeight.bold),
+                    ),
+                  ],
                 ),
-                FilledButton.tonalIcon(
-                  onPressed: () {
-                    AddEventSheet.show(context, state.activeMemberId);
-                  },
-                  icon: const Icon(Icons.add_rounded, size: 16),
-                  label: const Text('Novo', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
-                  style: FilledButton.styleFrom(
-                    visualDensity: VisualDensity.compact,
-                    padding: const EdgeInsets.symmetric(horizontal: 10),
-                  ),
+              ),
+              FilledButton.tonalIcon(
+                onPressed: () => _openAddEventSheet(context, state, date: _selectedDate),
+                icon: const Icon(Icons.add_rounded, size: 16),
+                label: const Text('Novo', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                style: FilledButton.styleFrom(
+                  visualDensity: VisualDensity.compact,
+                  padding: const EdgeInsets.symmetric(horizontal: 10),
                 ),
-              ],
-            ),
+              ),
+            ],
           ),
-          const SizedBox(height: 8),
+        ),
+        const SizedBox(height: 8),
 
-          // Lista de compromissos do dia selecionado
-          Expanded(
-            child: dayEvents.isEmpty
-                ? SingleChildScrollView(child: _buildEmptyDayState(context, state, theme))
-                : ListView.builder(
-                    padding: const EdgeInsets.only(bottom: 16),
-                    itemCount: dayEvents.length,
-                    itemBuilder: (context, index) {
-                      return _buildEventItem(context, dayEvents[index], state, cubit);
-                    },
-                  ),
-          ),
-        ],
-      ),
+        // Lista de compromissos do dia selecionado (rola de forma unificada)
+        if (dayEvents.isEmpty)
+          _buildEmptyDayState(context, state, theme)
+        else
+          ...dayEvents.map((event) => _buildEventItem(context, event, state, cubit)),
+      ],
     );
   }
+
+
 
   // --- VISÃO DIA (DESKTOP) ---
   Widget _buildDesktopDayLayout(
@@ -602,7 +698,7 @@ class _CalendarPageState extends State<CalendarPage> {
                 onEventTap: (event) => _showEventDetailsModal(context, event, state, cubit),
                 onAddEvent: (date) {
                   setState(() => _selectedDate = date);
-                  AddEventSheet.show(context, state.activeMemberId);
+                  _openAddEventSheet(context, state, date: date);
                 },
               ),
             ),
@@ -629,7 +725,7 @@ class _CalendarPageState extends State<CalendarPage> {
                             style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
                           ),
                           FilledButton.tonalIcon(
-                            onPressed: () => AddEventSheet.show(context, state.activeMemberId),
+                            onPressed: () => _openAddEventSheet(context, state),
                             icon: const Icon(Icons.add_rounded, size: 18),
                             label: const Text('Novo Evento'),
                           ),
@@ -682,7 +778,7 @@ class _CalendarPageState extends State<CalendarPage> {
           ),
           const SizedBox(height: 14),
           FilledButton.tonalIcon(
-            onPressed: () => AddEventSheet.show(context, state.activeMemberId),
+            onPressed: () => _openAddEventSheet(context, state),
             icon: const Icon(Icons.add_rounded, size: 18),
             label: const Text('Adicionar Compromisso'),
           ),
@@ -719,7 +815,7 @@ class _CalendarPageState extends State<CalendarPage> {
                   onEventTap: (event) => _showEventDetailsModal(context, event, state, cubit),
                   onAddEvent: (date) {
                     setState(() => _selectedDate = date);
-                    AddEventSheet.show(context, state.activeMemberId);
+                    _openAddEventSheet(context, state, date: date);
                   },
                 ),
               ),
@@ -746,7 +842,7 @@ class _CalendarPageState extends State<CalendarPage> {
                               style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
                             ),
                             FilledButton.tonalIcon(
-                              onPressed: () => AddEventSheet.show(context, state.activeMemberId),
+                              onPressed: () => _openAddEventSheet(context, state),
                               icon: const Icon(Icons.add_rounded, size: 18),
                               label: const Text('Novo Evento'),
                               style: FilledButton.styleFrom(visualDensity: VisualDensity.compact),
@@ -768,7 +864,7 @@ class _CalendarPageState extends State<CalendarPage> {
       );
     }
 
-    // Mobile: Calendário compacto no topo + lista corrida de compromissos
+    // Mobile: lista corrida de compromissos com mini calendário compacto no topo
     return ListView(
       padding: const EdgeInsets.fromLTRB(16, 4, 16, 80),
       children: [
@@ -777,12 +873,15 @@ class _CalendarPageState extends State<CalendarPage> {
           selectedDate: _selectedDate,
           events: state.events,
           onDateSelected: (date) {
-            setState(() => _selectedDate = date);
+            setState(() {
+              _selectedDate = date;
+              _viewMode = CalendarViewMode.month;
+            });
           },
           onEventTap: (event) => _showEventDetailsModal(context, event, state, cubit),
           onAddEvent: (date) {
             setState(() => _selectedDate = date);
-            AddEventSheet.show(context, state.activeMemberId);
+            _openAddEventSheet(context, state, date: date);
           },
         ),
         const SizedBox(height: 14),
@@ -794,7 +893,7 @@ class _CalendarPageState extends State<CalendarPage> {
               style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
             ),
             FilledButton.tonalIcon(
-              onPressed: () => AddEventSheet.show(context, state.activeMemberId),
+              onPressed: () => _openAddEventSheet(context, state),
               icon: const Icon(Icons.add_rounded, size: 18),
               label: const Text('Novo Evento'),
               style: FilledButton.styleFrom(visualDensity: VisualDensity.compact),
@@ -830,7 +929,7 @@ class _CalendarPageState extends State<CalendarPage> {
             ),
             const SizedBox(height: 16),
             FilledButton.tonalIcon(
-              onPressed: () => AddEventSheet.show(context, state.activeMemberId),
+              onPressed: () => _openAddEventSheet(context, state),
               icon: const Icon(Icons.add_rounded),
               label: const Text('Criar Primeiro Evento'),
             ),
@@ -1011,7 +1110,7 @@ class _CalendarPageState extends State<CalendarPage> {
                   tooltip: 'Editar',
                   padding: EdgeInsets.zero,
                   constraints: const BoxConstraints(),
-                  onPressed: () => AddEventSheet.show(context, state.activeMemberId, initialEvent: event),
+                  onPressed: () => _openAddEventSheet(context, state, initialEvent: event),
                 ),
                 const SizedBox(width: 8),
                 IconButton(

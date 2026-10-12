@@ -33,16 +33,14 @@ class _HouseOnboardingPageState extends State<HouseOnboardingPage> {
   void _submitCreate() {
     if (!_createFormKey.currentState!.validate()) return;
     context.read<AuthCubit>().createHouse(
-          name: _houseNameController.text,
-          cycleStartDay: _cycleStartDay,
-        );
+      name: _houseNameController.text,
+      cycleStartDay: _cycleStartDay,
+    );
   }
 
   void _submitJoin() {
     if (!_joinFormKey.currentState!.validate()) return;
-    context.read<AuthCubit>().joinHouseWithInvite(
-          _inviteCodeController.text,
-        );
+    context.read<AuthCubit>().joinHouseWithInvite(_inviteCodeController.text);
   }
 
   @override
@@ -51,7 +49,10 @@ class _HouseOnboardingPageState extends State<HouseOnboardingPage> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Configuração da Casa', style: TextStyle(fontWeight: FontWeight.bold)),
+        title: const Text(
+          'Configuração da Casa',
+          style: TextStyle(fontWeight: FontWeight.bold),
+        ),
         actions: [
           TextButton.icon(
             onPressed: () => context.read<AuthCubit>().signOut(),
@@ -63,7 +64,8 @@ class _HouseOnboardingPageState extends State<HouseOnboardingPage> {
       ),
       body: BlocConsumer<AuthCubit, AuthState>(
         listener: (context, state) {
-          if (state.status == AuthStatus.failure && state.errorMessage != null) {
+          if (state.status == AuthStatus.failure &&
+              state.errorMessage != null) {
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
                 content: Text(state.errorMessage!),
@@ -79,7 +81,10 @@ class _HouseOnboardingPageState extends State<HouseOnboardingPage> {
           return SafeArea(
             child: Center(
               child: SingleChildScrollView(
-                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 24,
+                  vertical: 16,
+                ),
                 child: ConstrainedBox(
                   constraints: const BoxConstraints(maxWidth: 440),
                   child: Column(
@@ -91,7 +96,9 @@ class _HouseOnboardingPageState extends State<HouseOnboardingPage> {
                         decoration: BoxDecoration(
                           color: AppColors.primary.withValues(alpha: 0.1),
                           borderRadius: BorderRadius.circular(16),
-                          border: Border.all(color: AppColors.primary.withValues(alpha: 0.2)),
+                          border: Border.all(
+                            color: AppColors.primary.withValues(alpha: 0.2),
+                          ),
                         ),
                         child: Row(
                           children: [
@@ -99,8 +106,14 @@ class _HouseOnboardingPageState extends State<HouseOnboardingPage> {
                               radius: 24,
                               backgroundColor: AppColors.primary,
                               child: Text(
-                                userName.isNotEmpty ? userName[0].toUpperCase() : 'U',
-                                style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 18),
+                                userName.isNotEmpty
+                                    ? userName[0].toUpperCase()
+                                    : 'U',
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 18,
+                                ),
                               ),
                             ),
                             const SizedBox(width: 14),
@@ -110,12 +123,18 @@ class _HouseOnboardingPageState extends State<HouseOnboardingPage> {
                                 children: [
                                   Text(
                                     'Olá, $userName!',
-                                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                                    style: const TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 16,
+                                    ),
                                   ),
                                   const SizedBox(height: 2),
                                   const Text(
                                     'Para começar a organizar as contas e a rotina, você precisa se conectar a uma Casa.',
-                                    style: TextStyle(fontSize: 13, color: Colors.grey),
+                                    style: TextStyle(
+                                      fontSize: 13,
+                                      color: Colors.grey,
+                                    ),
                                   ),
                                 ],
                               ),
@@ -130,26 +149,44 @@ class _HouseOnboardingPageState extends State<HouseOnboardingPage> {
                         children: [
                           Expanded(
                             child: ChoiceChip(
-                              label: const Center(child: Text('Criar Nova Casa')),
+                              label: const Center(
+                                child: Text('Criar Nova Casa'),
+                              ),
                               selected: _selectedTab == 0,
-                              onSelected: (val) => setState(() => _selectedTab = 0),
-                              selectedColor: AppColors.primary.withValues(alpha: 0.15),
+                              onSelected: (val) =>
+                                  setState(() => _selectedTab = 0),
+                              selectedColor: AppColors.primary.withValues(
+                                alpha: 0.15,
+                              ),
                               labelStyle: TextStyle(
-                                fontWeight: _selectedTab == 0 ? FontWeight.bold : FontWeight.normal,
-                                color: _selectedTab == 0 ? AppColors.primary : Colors.grey,
+                                fontWeight: _selectedTab == 0
+                                    ? FontWeight.bold
+                                    : FontWeight.normal,
+                                color: _selectedTab == 0
+                                    ? AppColors.primary
+                                    : Colors.grey,
                               ),
                             ),
                           ),
                           const SizedBox(width: 12),
                           Expanded(
                             child: ChoiceChip(
-                              label: const Center(child: Text('Tenho um Convite')),
+                              label: const Center(
+                                child: Text('Tenho um Convite'),
+                              ),
                               selected: _selectedTab == 1,
-                              onSelected: (val) => setState(() => _selectedTab = 1),
-                              selectedColor: AppColors.primary.withValues(alpha: 0.15),
+                              onSelected: (val) =>
+                                  setState(() => _selectedTab = 1),
+                              selectedColor: AppColors.primary.withValues(
+                                alpha: 0.15,
+                              ),
                               labelStyle: TextStyle(
-                                fontWeight: _selectedTab == 1 ? FontWeight.bold : FontWeight.normal,
-                                color: _selectedTab == 1 ? AppColors.primary : Colors.grey,
+                                fontWeight: _selectedTab == 1
+                                    ? FontWeight.bold
+                                    : FontWeight.normal,
+                                color: _selectedTab == 1
+                                    ? AppColors.primary
+                                    : Colors.grey,
                               ),
                             ),
                           ),
@@ -168,9 +205,12 @@ class _HouseOnboardingPageState extends State<HouseOnboardingPage> {
                                 controller: _houseNameController,
                                 decoration: InputDecoration(
                                   labelText: 'Nome do Lar / Casa',
-                                  hintText: 'Ex: Nosso Apto, Casa da Praia, República 42',
+                                  hintText:
+                                      'Ex: Nosso Apto, Casa da Praia, República 42',
                                   prefixIcon: const Icon(Icons.home_outlined),
-                                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                                  border: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
                                 ),
                                 validator: (val) {
                                   if (val == null || val.trim().isEmpty) {
@@ -187,23 +227,39 @@ class _HouseOnboardingPageState extends State<HouseOnboardingPage> {
                                 decoration: BoxDecoration(
                                   color: theme.cardColor,
                                   borderRadius: BorderRadius.circular(14),
-                                  border: Border.all(color: Colors.grey.withValues(alpha: 0.2)),
+                                  border: Border.all(
+                                    color: Colors.grey.withValues(alpha: 0.2),
+                                  ),
                                 ),
                                 child: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
                                     Row(
-                                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                      mainAxisAlignment:
+                                          MainAxisAlignment.spaceBetween,
                                       children: [
-                                        const Text(
-                                          'Início do Ciclo Financeiro:',
-                                          style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
+                                        const Expanded(
+                                          child: Text(
+                                            'Início do Ciclo Financeiro:',
+                                            style: TextStyle(
+                                              fontWeight: FontWeight.w600,
+                                              fontSize: 14,
+                                            ),
+                                          ),
                                         ),
+                                        const SizedBox(width: 8),
                                         Container(
-                                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                          padding: const EdgeInsets.symmetric(
+                                            horizontal: 10,
+                                            vertical: 4,
+                                          ),
                                           decoration: BoxDecoration(
-                                            color: AppColors.primary.withValues(alpha: 0.12),
-                                            borderRadius: BorderRadius.circular(8),
+                                            color: AppColors.primary.withValues(
+                                              alpha: 0.12,
+                                            ),
+                                            borderRadius: BorderRadius.circular(
+                                              8,
+                                            ),
                                           ),
                                           child: Text(
                                             'Todo dia $_cycleStartDay',
@@ -218,7 +274,10 @@ class _HouseOnboardingPageState extends State<HouseOnboardingPage> {
                                     const SizedBox(height: 8),
                                     Text(
                                       'Geralmente o dia em que o salário cai (ex: dia 05 ao dia 04 do mês seguinte).',
-                                      style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        color: Colors.grey.shade600,
+                                      ),
                                     ),
                                     const SizedBox(height: 12),
                                     Slider(
@@ -228,30 +287,77 @@ class _HouseOnboardingPageState extends State<HouseOnboardingPage> {
                                       divisions: 30,
                                       label: 'Dia $_cycleStartDay',
                                       activeColor: AppColors.primary,
-                                      onChanged: (val) => setState(() => _cycleStartDay = val.round()),
+                                      onChanged: (val) => setState(
+                                        () => _cycleStartDay = val.round(),
+                                      ),
                                     ),
                                   ],
                                 ),
                               ),
-                              const SizedBox(height: 24),
+                              const SizedBox(height: 16),
+
+                              Container(
+                                padding: const EdgeInsets.all(12),
+                                decoration: BoxDecoration(
+                                  color: AppColors.primary.withValues(
+                                    alpha: 0.08,
+                                  ),
+                                  borderRadius: BorderRadius.circular(12),
+                                  border: Border.all(
+                                    color: AppColors.primary.withValues(
+                                      alpha: 0.15,
+                                    ),
+                                  ),
+                                ),
+                                child: Row(
+                                  children: [
+                                    const Icon(
+                                      Icons.auto_awesome_rounded,
+                                      color: AppColors.primary,
+                                      size: 20,
+                                    ),
+                                    const SizedBox(width: 10),
+                                    Expanded(
+                                      child: Text(
+                                        'Já deixamos tudo pronto: Caixa da Casa, Pix, Dinheiro e categorias essenciais (Supermercado, Moradia, Contas...).',
+                                        style: TextStyle(
+                                          fontSize: 12,
+                                          color: Colors.grey.shade700,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              const SizedBox(height: 20),
 
                               ElevatedButton(
                                 onPressed: isLoading ? null : _submitCreate,
                                 style: ElevatedButton.styleFrom(
                                   backgroundColor: AppColors.primary,
                                   foregroundColor: Colors.white,
-                                  padding: const EdgeInsets.symmetric(vertical: 14),
-                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                  padding: const EdgeInsets.symmetric(
+                                    vertical: 14,
+                                  ),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
                                 ),
                                 child: isLoading
                                     ? const SizedBox(
                                         height: 20,
                                         width: 20,
-                                        child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                                        child: CircularProgressIndicator(
+                                          strokeWidth: 2,
+                                          color: Colors.white,
+                                        ),
                                       )
                                     : const Text(
                                         'Criar Casa e Entrar',
-                                        style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                                        style: TextStyle(
+                                          fontSize: 16,
+                                          fontWeight: FontWeight.bold,
+                                        ),
                                       ),
                               ),
                             ],
@@ -268,12 +374,17 @@ class _HouseOnboardingPageState extends State<HouseOnboardingPage> {
                             children: [
                               TextFormField(
                                 controller: _inviteCodeController,
-                                textCapitalization: TextCapitalization.characters,
+                                textCapitalization:
+                                    TextCapitalization.characters,
                                 decoration: InputDecoration(
                                   labelText: 'Código do Convite',
                                   hintText: 'Ex: LAR123',
-                                  prefixIcon: const Icon(Icons.vpn_key_outlined),
-                                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                                  prefixIcon: const Icon(
+                                    Icons.vpn_key_outlined,
+                                  ),
+                                  border: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
                                 ),
                                 validator: (val) {
                                   if (val == null || val.trim().isEmpty) {
@@ -285,7 +396,10 @@ class _HouseOnboardingPageState extends State<HouseOnboardingPage> {
                               const SizedBox(height: 12),
                               Text(
                                 'Peça ao administrador da casa o código de 6 caracteres disponível na aba Ajustes.',
-                                style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: Colors.grey.shade600,
+                                ),
                               ),
                               const SizedBox(height: 24),
 
@@ -294,18 +408,28 @@ class _HouseOnboardingPageState extends State<HouseOnboardingPage> {
                                 style: ElevatedButton.styleFrom(
                                   backgroundColor: AppColors.accent,
                                   foregroundColor: Colors.white,
-                                  padding: const EdgeInsets.symmetric(vertical: 14),
-                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                  padding: const EdgeInsets.symmetric(
+                                    vertical: 14,
+                                  ),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
                                 ),
                                 child: isLoading
                                     ? const SizedBox(
                                         height: 20,
                                         width: 20,
-                                        child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                                        child: CircularProgressIndicator(
+                                          strokeWidth: 2,
+                                          color: Colors.white,
+                                        ),
                                       )
                                     : const Text(
                                         'Validar Código e Entrar',
-                                        style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                                        style: TextStyle(
+                                          fontSize: 16,
+                                          fontWeight: FontWeight.bold,
+                                        ),
                                       ),
                               ),
                             ],

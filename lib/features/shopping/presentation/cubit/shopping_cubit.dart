@@ -1,3 +1,5 @@
+import 'dart:async';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../../../core/domain/value_objects/money.dart';
 import '../../domain/entities/shopping_item.dart';
@@ -7,15 +9,40 @@ import 'shopping_state.dart';
 
 class ShoppingCubit extends BlocBase<ShoppingState> {
   final ShoppingRepository _repository;
+  StreamSubscription<List<ShoppingItem>>? _itemsSubscription;
 
   ShoppingCubit(this._repository) : super(const ShoppingState());
+
+  void resetState() {
+    _itemsSubscription?.cancel();
+    _itemsSubscription = null;
+    emit(const ShoppingState());
+  }
+
+  void _listenToItems(String listId) {
+    _itemsSubscription?.cancel();
+    _itemsSubscription = _repository.watchItems(listId).listen(
+      (items) {
+        if (!isClosed) {
+          emit(state.copyWith(items: items));
+        }
+      },
+      onError: (e) {
+        debugPrint('Aviso: Sincronização em tempo real de compras indisponível: $e');
+      },
+    );
+  }
 
   Future<void> loadShoppingData() async {
     emit(state.copyWith(status: ShoppingCubitStatus.loading));
     try {
       final lists = await _repository.getLists();
-      final defaultList = lists.firstWhere((l) => l.isDefault, orElse: () => lists.first);
-      final items = await _repository.getItems(defaultList.id);
+      final defaultList = lists.isNotEmpty
+          ? lists.firstWhere((l) => l.isDefault, orElse: () => lists.first)
+          : null;
+      final items = defaultList != null
+          ? await _repository.getItems(defaultList.id)
+          : const <ShoppingItem>[];
 
       emit(state.copyWith(
         status: ShoppingCubitStatus.loaded,
@@ -23,6 +50,10 @@ class ShoppingCubit extends BlocBase<ShoppingState> {
         selectedList: defaultList,
         items: items,
       ));
+
+      if (defaultList != null) {
+        _listenToItems(defaultList.id);
+      }
     } catch (e) {
       emit(state.copyWith(
         status: ShoppingCubitStatus.error,
@@ -36,6 +67,7 @@ class ShoppingCubit extends BlocBase<ShoppingState> {
     try {
       final items = await _repository.getItems(list.id);
       emit(state.copyWith(status: ShoppingCubitStatus.loaded, items: items));
+      _listenToItems(list.id);
     } catch (e) {
       emit(state.copyWith(status: ShoppingCubitStatus.error, errorMessage: '$e'));
     }
@@ -129,5 +161,11 @@ class ShoppingCubit extends BlocBase<ShoppingState> {
         errorMessage: 'Erro ao finalizar compra: $e',
       ));
     }
+  }
+
+  @override
+  Future<void> close() {
+    _itemsSubscription?.cancel();
+    return super.close();
   }
 }

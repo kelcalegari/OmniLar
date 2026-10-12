@@ -4,6 +4,9 @@ import '../../../../core/domain/value_objects/money.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/widgets/money_input_field.dart';
 import '../../../finance/presentation/cubit/finance_cubit.dart';
+import '../../../p2p/presentation/cubit/p2p_cubit.dart';
+import '../../../../core/di/service_locator.dart';
+import '../../../auth/domain/repositories/auth_repository.dart';
 import '../../domain/entities/shopping_item.dart';
 import '../cubit/shopping_cubit.dart';
 import '../cubit/shopping_state.dart';
@@ -29,10 +32,15 @@ class _ShoppingListPageState extends State<ShoppingListPage> {
     final text = _addController.text.trim();
     if (text.isEmpty) return;
 
+    final authRepo = sl<AuthRepository>();
+    final currentUserId = authRepo.currentUser?.id;
+    final isDemo = authRepo.isDemoMode;
+    final defaultMemberId = isDemo ? 'member_marina' : currentUserId;
+
     context.read<ShoppingCubit>().addItem(
           name: text,
           isPersonal: _isPersonalNewItem,
-          assignedMemberId: _isPersonalNewItem ? 'member_marina' : null,
+          assignedMemberId: _isPersonalNewItem ? defaultMemberId : null,
         );
 
     _addController.clear();
@@ -52,8 +60,10 @@ class _ShoppingListPageState extends State<ShoppingListPage> {
     final amountController = MoneyTextEditingController(allowEmpty: false);
     final personalAmountController = MoneyTextEditingController(allowEmpty: true);
     String? selectedPmId = paymentMethods.isNotEmpty ? paymentMethods.first.id : null;
-    String selectedPayerId = 'member_carlos';
-    String selectedDebtorId = 'member_marina';
+    final authRepo = sl<AuthRepository>();
+    final currentUserId = authRepo.currentUser?.id ?? (authRepo.isDemoMode ? 'member_carlos' : '');
+    String selectedPayerId = members.isNotEmpty ? members.first.id : currentUserId;
+    String selectedDebtorId = members.length > 1 ? members[1].id : currentUserId;
 
     showModalBottomSheet(
       context: context,
@@ -212,7 +222,12 @@ class _ShoppingListPageState extends State<ShoppingListPage> {
                               paidByMemberId: selectedPayerId,
                               personalItemsAmount: personalMoney,
                               personalDebtorMemberId: selectedDebtorId,
-                            );
+                            ).then((_) {
+                          if (context.mounted) {
+                            context.read<FinanceCubit>().loadCycleData();
+                            context.read<P2PCubit>().loadLoans();
+                          }
+                        });
 
                         ScaffoldMessenger.of(context).showSnackBar(
                           SnackBar(

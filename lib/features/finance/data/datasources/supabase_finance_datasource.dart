@@ -12,6 +12,7 @@ import '../../domain/entities/contribution.dart';
 import '../../domain/entities/financial_cycle_summary.dart';
 import '../../domain/entities/savings_vault.dart';
 import '../../domain/entities/split_rule.dart';
+import '../../domain/entities/audit_entry.dart';
 import 'finance_datasource.dart';
 
 class SupabaseFinanceDataSource implements FinanceDataSource {
@@ -25,13 +26,38 @@ class SupabaseFinanceDataSource implements FinanceDataSource {
 
   String get _houseId => getCurrentHouseId();
 
+  bool _isUuid(String? id) {
+    if (id == null || id.isEmpty) return false;
+    final uuidRegex = RegExp(
+      r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$',
+    );
+    return uuidRegex.hasMatch(id);
+  }
+
   @override
   Future<List<HouseMember>> getMembers() async {
     try {
       final rows = await client
           .from('house_members')
-          .select('id, user_id, role, default_split_percent, profile:profiles(full_name, avatar_url)')
+          .select('id, user_id, role, default_split_percent, default_fixed_amount_cents, profile:profiles(full_name, avatar_url, pix_key)')
           .eq('house_id', _houseId);
+
+      if (rows.isEmpty) {
+        final current = client.auth.currentUser;
+        if (current != null) {
+          final profile = await client.from('profiles').select('full_name, avatar_url, pix_key').eq('id', current.id).maybeSingle();
+          return [
+            HouseMember(
+              id: current.id,
+              name: profile?['full_name'] as String? ?? current.userMetadata?['full_name'] as String? ?? current.email ?? 'Você',
+              avatarUrl: profile?['avatar_url'] as String?,
+              role: 'owner',
+              defaultSplitPercent: 100.0,
+              pixKey: profile?['pix_key'] as String?,
+            ),
+          ];
+        }
+      }
 
       return rows.map((r) {
         final profile = r['profile'] as Map<String, dynamic>?;
@@ -39,6 +65,7 @@ class SupabaseFinanceDataSource implements FinanceDataSource {
         final avatar = profile?['avatar_url'] as String?;
         final role = r['role'] as String? ?? 'member';
         final split = (r['default_split_percent'] as num?)?.toDouble() ?? 50.0;
+        final fixedAmount = (r['default_fixed_amount_cents'] as num?)?.toInt();
 
         return HouseMember(
           id: r['user_id'] as String,
@@ -46,10 +73,54 @@ class SupabaseFinanceDataSource implements FinanceDataSource {
           avatarUrl: avatar,
           role: role,
           defaultSplitPercent: split,
+          defaultFixedAmountCents: fixedAmount,
+          pixKey: profile?['pix_key'] as String?,
         );
       }).toList();
     } catch (e) {
-      throw ServerFailure('Erro ao buscar membros da casa: $e');
+      // Fallback resiliente caso default_split_percent ou profile embed falhem no schema cache
+      try {
+        final rows = await client
+            .from('house_members')
+            .select('id, user_id, role')
+            .eq('house_id', _houseId);
+
+        final userIds = rows.map((r) => r['user_id'] as String).toList();
+        final profiles = userIds.isNotEmpty
+            ? await client.from('profiles').select('id, full_name, avatar_url, pix_key').filter('id', 'in', userIds)
+            : <Map<String, dynamic>>[];
+        final profileMap = {for (final p in profiles) p['id'] as String: p};
+
+        return rows.map((r) {
+          final uId = r['user_id'] as String;
+          final profile = profileMap[uId];
+          final name = profile?['full_name'] as String? ?? 'Membro';
+          final avatar = profile?['avatar_url'] as String?;
+          final role = r['role'] as String? ?? 'member';
+
+          return HouseMember(
+            id: uId,
+            name: name,
+            avatarUrl: avatar,
+            role: role,
+            defaultSplitPercent: 50.0,
+            pixKey: profile?['pix_key'] as String?,
+          );
+        }).toList();
+      } catch (errFallback) {
+        final current = client.auth.currentUser;
+        if (current != null) {
+          return [
+            HouseMember(
+              id: current.id,
+              name: current.userMetadata?['full_name'] as String? ?? current.email ?? 'Você',
+              role: 'owner',
+              defaultSplitPercent: 100.0,
+            ),
+          ];
+        }
+        throw ServerFailure('Erro ao buscar membros da casa: $e');
+      }
     }
   }
 
@@ -61,15 +132,51 @@ class SupabaseFinanceDataSource implements FinanceDataSource {
           .select()
           .eq('house_id', _houseId);
 
-      return rows.map((r) {
-        return ExpenseCategory(
+      if (rows.isNotEmpty) {
+        return rows.map((r) {
+          return ExpenseCategory(
+            id: r['id'] as String,
+            name: r['name'] as String,
+            icon: r['icon'] as String? ?? 'category_outlined',
+            colorHex: r['color_hex'] as String? ?? '0xFF2196F3',
+            ownerMemberId: r['owner_member_id'] as String?,
+          );
+        }).toList();
+      }
+
+      // Provisiona categorias padrão para nova casa
+      final defaultList = [
+        {'name': 'Supermercado', 'icon': 'shopping_cart_outlined', 'color_hex': '#10B981'},
+        {'name': 'Moradia / Aluguel', 'icon': 'home_outlined', 'color_hex': '#3B82F6'},
+        {'name': 'Contas (Luz, Água, Net)', 'icon': 'bolt_outlined', 'color_hex': '#F59E0B'},
+        {'name': 'Transporte', 'icon': 'directions_car_outlined', 'color_hex': '#EC4899'},
+        {'name': 'Lazer e Restaurantes', 'icon': 'restaurant_outlined', 'color_hex': '#8B5CF6'},
+        {'name': 'Saúde e Farmácia', 'icon': 'local_hospital_outlined', 'color_hex': '#EF4444'},
+      ];
+
+      try {
+        final toInsert = defaultList.map((d) => {
+          'house_id': _houseId,
+          'name': d['name'],
+          'icon': d['icon'],
+          'color_hex': d['color_hex'],
+        }).toList();
+        final inserted = await client.from('categories').insert(toInsert).select();
+        return inserted.map((r) => ExpenseCategory(
           id: r['id'] as String,
           name: r['name'] as String,
           icon: r['icon'] as String? ?? 'category_outlined',
           colorHex: r['color_hex'] as String? ?? '0xFF2196F3',
           ownerMemberId: r['owner_member_id'] as String?,
-        );
-      }).toList();
+        )).toList();
+      } catch (_) {
+        return defaultList.map((d) => ExpenseCategory(
+          id: 'cat_${d['name']!.toLowerCase().replaceAll(' ', '_')}',
+          name: d['name']!,
+          icon: d['icon']!,
+          colorHex: d['color_hex']!,
+        )).toList();
+      }
     } catch (e) {
       throw ServerFailure('Erro ao buscar categorias: $e');
     }
@@ -81,41 +188,74 @@ class SupabaseFinanceDataSource implements FinanceDataSource {
       final rows = await client
           .from('payment_methods')
           .select()
-          .eq('house_id', _houseId);
+          .eq('house_id', _houseId)
+          .neq('is_active', false);
 
-      return rows.map((r) {
-        final typeStr = r['type'] as String? ?? 'pix';
-        PaymentMethodType type;
-        switch (typeStr) {
-          case 'card':
-          case 'credit_card':
-            type = PaymentMethodType.card;
-            break;
-          case 'vr':
-            type = PaymentMethodType.vr;
-            break;
-          case 'va':
-            type = PaymentMethodType.va;
-            break;
-          case 'cash':
-            type = PaymentMethodType.cash;
-            break;
-          case 'account':
-            type = PaymentMethodType.account;
-            break;
-          default:
-            type = PaymentMethodType.pix;
-        }
+      if (rows.isNotEmpty) {
+        return rows.map((r) {
+          final typeStr = r['type'] as String? ?? 'pix';
+          PaymentMethodType type;
+          switch (typeStr) {
+            case 'card':
+            case 'credit_card':
+              type = PaymentMethodType.card;
+              break;
+            case 'vr':
+              type = PaymentMethodType.vr;
+              break;
+            case 'va':
+              type = PaymentMethodType.va;
+              break;
+            case 'cash':
+              type = PaymentMethodType.cash;
+              break;
+            case 'account':
+              type = PaymentMethodType.account;
+              break;
+            default:
+              type = PaymentMethodType.pix;
+          }
 
-        return PaymentMethod(
-          id: r['id'] as String,
-          name: r['name'] as String,
-          type: type,
-          ownerMemberId: r['owner_member_id'] as String?,
-          closingDay: (r['closing_day'] ?? r['card_closing_day'] as num?)?.toInt(),
-          dueDay: (r['due_day'] ?? r['card_due_day'] as num?)?.toInt(),
-        );
-      }).toList();
+          return PaymentMethod(
+            id: r['id'] as String,
+            name: r['name'] as String,
+            type: type,
+            ownerMemberId: (r['owner_member_id'] ?? r['owner_id']) as String?,
+            closingDay: (r['closing_day'] ?? r['card_closing_day'] as num?)?.toInt(),
+            dueDay: (r['due_day'] ?? r['card_due_day'] as num?)?.toInt(),
+          );
+        }).toList();
+      }
+
+      // Provisiona métodos de pagamento padrão para nova casa
+      final defaultPms = [
+        {'name': 'Pix / Transferência', 'type': 'pix'},
+        {'name': 'Cartão de Crédito', 'type': 'card'},
+        {'name': 'Dinheiro', 'type': 'cash'},
+      ];
+
+      try {
+        final toInsert = defaultPms.map((d) => {
+          'house_id': _houseId,
+          'name': d['name'],
+          'type': d['type'],
+        }).toList();
+        final inserted = await client.from('payment_methods').insert(toInsert).select();
+        return inserted.map((r) {
+          final typeStr = r['type'] as String? ?? 'pix';
+          return PaymentMethod(
+            id: r['id'] as String,
+            name: r['name'] as String,
+            type: typeStr == 'card' ? PaymentMethodType.card : (typeStr == 'cash' ? PaymentMethodType.cash : PaymentMethodType.pix),
+          );
+        }).toList();
+      } catch (_) {
+        return const [
+          PaymentMethod(id: 'pm_pix', name: 'Pix / Transferência', type: PaymentMethodType.pix),
+          PaymentMethod(id: 'pm_cartao', name: 'Cartão de Crédito', type: PaymentMethodType.card),
+          PaymentMethod(id: 'pm_dinheiro', name: 'Dinheiro', type: PaymentMethodType.cash),
+        ];
+      }
     } catch (e) {
       throw ServerFailure('Erro ao buscar métodos de pagamento: $e');
     }
@@ -129,6 +269,7 @@ class SupabaseFinanceDataSource implements FinanceDataSource {
           .select('*, house_expense_items(*), split_rules(*)')
           .eq('house_id', _houseId)
           .isFilter('project_id', null)
+          .isFilter('deleted_at', null)
           .gte('due_date', cycle.startDate.toIso8601String().split('T')[0])
           .lte('due_date', cycle.endDate.toIso8601String().split('T')[0])
           .order('due_date', ascending: false);
@@ -142,12 +283,24 @@ class SupabaseFinanceDataSource implements FinanceDataSource {
   @override
   Future<List<HouseExpense>> getExpensesForProject(String projectId) async {
     try {
-      final rows = await client
-          .from('house_expenses')
-          .select('*, house_expense_items(*), split_rules(*)')
-          .eq('house_id', _houseId)
-          .eq('project_id', projectId)
-          .order('date', ascending: false);
+      List<Map<String, dynamic>> rows;
+      try {
+        rows = await client
+            .from('house_expenses')
+            .select('*, house_expense_items(*), split_rules(*)')
+            .eq('house_id', _houseId)
+            .eq('project_id', projectId)
+            .isFilter('deleted_at', null)
+            .order('date', ascending: false);
+      } catch (_) {
+        rows = await client
+            .from('house_expenses')
+            .select('*, house_expense_items(*), split_rules(*)')
+            .eq('house_id', _houseId)
+            .eq('project_id', projectId)
+            .isFilter('deleted_at', null)
+            .order('due_date', ascending: false);
+      }
 
       return rows.map((r) => _mapRowToHouseExpense(r)).toList();
     } catch (e) {
@@ -158,19 +311,31 @@ class SupabaseFinanceDataSource implements FinanceDataSource {
   @override
   Future<List<Contribution>> getContributionsForCycle(FinancialCycle cycle) async {
     try {
-      final rows = await client
-          .from('contributions')
-          .select('*, profile:profiles(full_name)')
-          .eq('house_id', _houseId)
-          .gte('date', cycle.startDate.toIso8601String().split('T')[0])
-          .lte('date', cycle.endDate.toIso8601String().split('T')[0]);
+      List<Map<String, dynamic>> rows;
+      try {
+        rows = await client
+            .from('contributions')
+            .select('*, profile:profiles(full_name)')
+            .eq('house_id', _houseId)
+            .gte('cycle_start_date', cycle.startDate.toIso8601String().split('T')[0])
+            .lte('cycle_start_date', cycle.endDate.toIso8601String().split('T')[0]);
+      } catch (_) {
+        rows = await client
+            .from('contributions')
+            .select()
+            .eq('house_id', _houseId)
+            .gte('cycle_start_date', cycle.startDate.toIso8601String().split('T')[0])
+            .lte('cycle_start_date', cycle.endDate.toIso8601String().split('T')[0]);
+      }
 
       return rows.map((r) {
+        final dateStr = (r['created_at'] ?? r['cycle_start_date']) as String?;
+        final date = dateStr != null ? (DateTime.tryParse(dateStr) ?? DateTime.now()) : DateTime.now();
         return Contribution(
           id: r['id'] as String,
           memberId: r['member_id'] as String,
           amount: Money((r['amount_cents'] as num).toInt()),
-          date: DateTime.parse(r['date'] as String),
+          date: date,
           paymentMethodId: r['payment_method_id'] as String?,
           proofAttachmentId: r['proof_attachment_id'] as String?,
         );
@@ -228,13 +393,15 @@ class SupabaseFinanceDataSource implements FinanceDataSource {
   Future<void> addExpense(HouseExpense expense) async {
     try {
       final expenseRow = {
-        'id': expense.id,
+        if (_isUuid(expense.id)) 'id': expense.id,
         'house_id': _houseId,
         'title': expense.title,
         'amount_cents': expense.amount.cents,
-        'category_id': expense.categoryId,
-        'payment_method_id': expense.paymentMethodId,
-        'paid_by_id': expense.paidByMemberId,
+        if (_isUuid(expense.categoryId)) 'category_id': expense.categoryId,
+        if (_isUuid(expense.paymentMethodId)) 'payment_method_id': expense.paymentMethodId,
+        'paid_by_id': _isUuid(expense.paidByMemberId)
+            ? expense.paidByMemberId
+            : (client.auth.currentUser?.id ?? expense.paidByMemberId),
         'paid_out_of_pocket': expense.paidOutOfPocket,
         'due_date': (expense.dueDate ?? expense.date).toIso8601String().split('T')[0],
         'date': expense.date.toIso8601String(),
@@ -251,22 +418,55 @@ class SupabaseFinanceDataSource implements FinanceDataSource {
         'created_by': client.auth.currentUser?.id ?? expense.paidByMemberId,
       };
 
-      await client.from('house_expenses').insert(expenseRow);
+      Map<String, dynamic> insertedRow;
+      try {
+        insertedRow = await client.from('house_expenses').insert(expenseRow).select().single();
+      } catch (insertErr) {
+        if (insertErr.toString().contains('PGRST204') ||
+            insertErr.toString().contains('column') ||
+            insertErr.toString().contains('schema cache')) {
+          final fallbackRow = Map<String, dynamic>.from(expenseRow);
+          fallbackRow.remove('date');
+          fallbackRow.remove('cycle_start_date');
+          fallbackRow.remove('split_type');
+          fallbackRow.remove('project_id');
+          insertedRow = await client.from('house_expenses').insert(fallbackRow).select().single();
+        } else {
+          rethrow;
+        }
+      }
+
+      final insertedExpenseId = insertedRow['id'] as String;
 
       if (expense.items.isNotEmpty) {
         final itemRows = expense.items.map((item) {
           return {
-            'id': item.id,
-            'expense_id': expense.id,
+            if (_isUuid(item.id)) 'id': item.id,
+            'expense_id': insertedExpenseId,
             'title': item.title,
             'amount_cents': item.amount.cents,
-            'category_id': item.categoryId,
-            'responsible_member_id': item.responsibleMemberId,
+            if (_isUuid(item.categoryId)) 'category_id': item.categoryId,
+            if (_isUuid(item.responsibleMemberId))
+              'responsible_member_id': item.responsibleMemberId,
             'split_type': item.splitRule != null ? _splitTypeToString(item.splitRule!.type) : null,
           };
         }).toList();
 
-        await client.from('house_expense_items').insert(itemRows);
+        try {
+          await client.from('house_expense_items').insert(itemRows);
+        } catch (itemErr) {
+          if (itemErr.toString().contains('PGRST204') ||
+              itemErr.toString().contains('split_type')) {
+            final fallbackItems = itemRows.map((r) {
+              final copy = Map<String, dynamic>.from(r);
+              copy.remove('split_type');
+              return copy;
+            }).toList();
+            await client.from('house_expense_items').insert(fallbackItems);
+          } else {
+            rethrow;
+          }
+        }
       }
     } catch (e) {
       throw ServerFailure('Erro ao adicionar despesa: $e');
@@ -279,17 +479,115 @@ class SupabaseFinanceDataSource implements FinanceDataSource {
     RecurrenceScope scope = RecurrenceScope.thisInstanceOnly,
   }) async {
     try {
-      await client.from('house_expenses').update({
+      final dueDateStr = (expense.dueDate ?? expense.date).toIso8601String().split('T')[0];
+      final updateData = <String, dynamic>{
         'title': expense.title,
         'amount_cents': expense.amount.cents,
-        'category_id': expense.categoryId,
-        'payment_method_id': expense.paymentMethodId,
-        'paid_by_id': expense.paidByMemberId,
+        if (_isUuid(expense.categoryId)) 'category_id': expense.categoryId,
+        if (_isUuid(expense.paymentMethodId)) 'payment_method_id': expense.paymentMethodId,
+        'paid_by_id': _isUuid(expense.paidByMemberId)
+            ? expense.paidByMemberId
+            : (client.auth.currentUser?.id ?? expense.paidByMemberId),
         'paid_out_of_pocket': expense.paidOutOfPocket,
-        'due_date': (expense.dueDate ?? expense.date).toIso8601String().split('T')[0],
+        'due_date': dueDateStr,
+        'date': expense.date.toIso8601String(),
+        'split_type': _splitTypeToString(expense.splitRule.type),
         'status': expense.isPaid ? 'paid' : 'pending',
+        'is_recurring': expense.isRecurring,
+        'is_variable': expense.isVariable,
+        'due_day': expense.dueDay,
+        'is_active': expense.isActive,
         'notes': expense.notes,
-      }).eq('id', expense.id);
+        if (expense.projectId != null) 'project_id': expense.projectId,
+      };
+
+      await client.from('house_expenses').update(updateData).eq('id', expense.id);
+
+      // Sincroniza sub-itens (house_expense_items)
+      try {
+        await client.from('house_expense_items').delete().eq('expense_id', expense.id);
+      } catch (_) {}
+
+      if (expense.items.isNotEmpty) {
+        final itemRows = expense.items.map((item) {
+          return {
+            if (_isUuid(item.id)) 'id': item.id,
+            'expense_id': expense.id,
+            'title': item.title,
+            'amount_cents': item.amount.cents,
+            if (_isUuid(item.categoryId)) 'category_id': item.categoryId,
+            if (_isUuid(item.responsibleMemberId))
+              'responsible_member_id': item.responsibleMemberId,
+            'split_type': item.splitRule != null ? _splitTypeToString(item.splitRule!.type) : null,
+          };
+        }).toList();
+
+        try {
+          await client.from('house_expense_items').insert(itemRows);
+        } catch (_) {}
+      }
+
+      // Sincroniza regras de rateio (split_rules)
+      try {
+        await client.from('split_rules').delete().eq('expense_id', expense.id);
+      } catch (_) {}
+
+      if (expense.splitRule.type == SplitType.percentage && expense.splitRule.percentages != null) {
+        final splitRows = expense.splitRule.percentages!.entries.map((entry) {
+          return {
+            'expense_id': expense.id,
+            'member_id': entry.key,
+            'percentage_basis_points': (entry.value * 100).round(),
+            'calculated_cents': (expense.amount.cents * (entry.value / 100.0)).round(),
+          };
+        }).toList();
+        if (splitRows.isNotEmpty) {
+          try {
+            await client.from('split_rules').insert(splitRows);
+          } catch (_) {}
+        }
+      } else if (expense.splitRule.type == SplitType.fixed && expense.splitRule.fixedAmounts != null) {
+        final splitRows = expense.splitRule.fixedAmounts!.entries.map((entry) {
+          return {
+            'expense_id': expense.id,
+            'member_id': entry.key,
+            'fixed_amount_cents': entry.value.cents,
+            'calculated_cents': entry.value.cents,
+          };
+        }).toList();
+        if (splitRows.isNotEmpty) {
+          try {
+            await client.from('split_rules').insert(splitRows);
+          } catch (_) {}
+        }
+      }
+
+      // Tratamento de escopo para recorrências
+      if (expense.isRecurring && scope != RecurrenceScope.thisInstanceOnly) {
+        final seriesId = expense.recurringSeriesId ?? expense.id;
+        final recurringUpdate = <String, dynamic>{
+          'title': expense.title,
+          'amount_cents': expense.amount.cents,
+          if (_isUuid(expense.categoryId)) 'category_id': expense.categoryId,
+          if (_isUuid(expense.paymentMethodId)) 'payment_method_id': expense.paymentMethodId,
+          'split_type': _splitTypeToString(expense.splitRule.type),
+          'is_variable': expense.isVariable,
+          'due_day': expense.dueDay,
+        };
+
+        if (scope == RecurrenceScope.allInstances) {
+          await client
+              .from('house_expenses')
+              .update(recurringUpdate)
+              .or('recurring_series_id.eq.$seriesId,id.eq.$seriesId');
+        } else if (scope == RecurrenceScope.thisAndFuture) {
+          await client
+              .from('house_expenses')
+              .update(recurringUpdate)
+              .or('recurring_series_id.eq.$seriesId,id.eq.$seriesId')
+              .gte('due_date', dueDateStr);
+        }
+      }
     } catch (e) {
       throw ServerFailure('Erro ao atualizar despesa: $e');
     }
@@ -301,7 +599,118 @@ class SupabaseFinanceDataSource implements FinanceDataSource {
     RecurrenceScope scope = RecurrenceScope.thisInstanceOnly,
   }) async {
     try {
-      await client.from('house_expenses').delete().eq('id', expenseId);
+      final nowIso = DateTime.now().toUtc().toIso8601String();
+
+      // 1. Tenta RPC com security definer no Supabase passando o escopo
+      try {
+        final res = await client.rpc('delete_house_expense', params: {
+          'p_expense_id': expenseId,
+          'p_scope': scope.name,
+        });
+        if (res == true) return;
+      } catch (_) {
+        // Se a RPC não aceitar 2 parâmetros ainda (versão anterior), tenta com 1 param
+        if (scope == RecurrenceScope.thisInstanceOnly) {
+          try {
+            final resLegacy = await client.rpc('delete_house_expense', params: {
+              'p_expense_id': expenseId,
+            });
+            if (resLegacy == true) return;
+          } catch (_) {}
+        }
+      }
+
+      // 2. Busca dados da despesa atual para guiar a exclusão direta caso a RPC falhe
+      final current = await client
+          .from('house_expenses')
+          .select('id, recurring_series_id, is_recurring, due_date, date, title')
+          .eq('id', expenseId)
+          .maybeSingle();
+
+      final seriesId = current != null
+          ? (current['recurring_series_id'] as String? ??
+              ((current['is_recurring'] == true) ? current['id'] as String? : null))
+          : null;
+      final expenseDateStr = current != null
+          ? ((current['due_date'] ?? current['date']) as String?)
+          : null;
+      final title = current?['title'] as String?;
+
+      if (scope == RecurrenceScope.allInstances) {
+        // Soft delete na própria despesa imediatamente
+        await client
+            .from('house_expenses')
+            .update({'deleted_at': nowIso, 'is_active': false})
+            .eq('id', expenseId);
+
+        // Se houver série vinculada, desativa e deleta a matriz e ocorrências
+        if (seriesId != null) {
+          if (seriesId != expenseId) {
+            await client
+                .from('house_expenses')
+                .update({'deleted_at': nowIso, 'is_active': false})
+                .eq('id', seriesId);
+          }
+          await client
+              .from('house_expenses')
+              .update({'deleted_at': nowIso, 'is_active': false})
+              .eq('recurring_series_id', seriesId);
+        }
+
+        // Se for recorrente com mesmo título na mesma casa, limpa também
+        if (title != null && current?['is_recurring'] == true) {
+          await client
+              .from('house_expenses')
+              .update({'deleted_at': nowIso, 'is_active': false})
+              .eq('house_id', _houseId)
+              .eq('title', title)
+              .eq('is_recurring', true);
+        }
+        return;
+      } else if (scope == RecurrenceScope.thisAndFuture) {
+        if (seriesId != null) {
+          await client
+              .from('house_expenses')
+              .update({'is_active': false})
+              .eq('id', seriesId);
+
+          if (expenseDateStr != null) {
+            await client
+                .from('house_expenses')
+                .update({'deleted_at': nowIso})
+                .eq('recurring_series_id', seriesId)
+                .gte('due_date', expenseDateStr);
+          }
+        }
+        await client
+            .from('house_expenses')
+            .update({'deleted_at': nowIso})
+            .eq('id', expenseId);
+        return;
+      } else {
+        // RecurrenceScope.thisInstanceOnly
+        final updated = await client
+            .from('house_expenses')
+            .update({'deleted_at': nowIso})
+            .eq('id', expenseId)
+            .select('id');
+
+        if (updated.isNotEmpty) return;
+
+        // Se soft delete não alterou linhas, tenta delete físico
+        final deleted = await client
+            .from('house_expenses')
+            .delete()
+            .eq('id', expenseId)
+            .select('id');
+
+        if (deleted.isEmpty) {
+          throw ServerFailure(
+            'Não foi possível excluir a despesa. Permissão negada pelo Supabase (RLS). Execute a migration 0016 no SQL Editor.',
+          );
+        }
+        return;
+      }
     } catch (e) {
       throw ServerFailure('Erro ao excluir despesa: $e');
     }
@@ -315,7 +724,8 @@ class SupabaseFinanceDataSource implements FinanceDataSource {
           .select('*, house_expense_items(*), split_rules(*)')
           .eq('house_id', _houseId)
           .eq('is_recurring', true)
-          .eq('is_active', true);
+          .eq('is_active', true)
+          .isFilter('deleted_at', null);
 
       return rows.map((r) => _mapRowToHouseExpense(r)).toList();
     } catch (e) {
@@ -326,13 +736,15 @@ class SupabaseFinanceDataSource implements FinanceDataSource {
   @override
   Future<void> addContribution(Contribution contribution) async {
     try {
+      final currentUserId = client.auth.currentUser?.id ?? contribution.memberId;
       await client.from('contributions').insert({
         'id': contribution.id,
         'house_id': _houseId,
         'member_id': contribution.memberId,
         'amount_cents': contribution.amount.cents,
-        'date': contribution.date.toIso8601String().split('T')[0],
         'cycle_start_date': contribution.date.toIso8601String().split('T')[0],
+        'paid_at': contribution.date.toIso8601String(),
+        'created_by': currentUserId,
       });
     } catch (e) {
       throw ServerFailure('Erro ao adicionar aporte: $e');
@@ -358,18 +770,63 @@ class SupabaseFinanceDataSource implements FinanceDataSource {
   @override
   Future<void> addPaymentMethod(PaymentMethod paymentMethod) async {
     try {
-      await client.from('payment_methods').insert({
-        'id': paymentMethod.id,
+      final payload = <String, dynamic>{
         'house_id': _houseId,
         'name': paymentMethod.name,
         'type': paymentMethod.type.name,
-        'owner_member_id': paymentMethod.ownerMemberId,
         'closing_day': paymentMethod.closingDay,
         'due_day': paymentMethod.dueDay,
         'color_hex': paymentMethod.colorHex,
-      });
+        'is_active': true,
+      };
+      if (_isUuid(paymentMethod.id)) {
+        payload['id'] = paymentMethod.id;
+      }
+      if (_isUuid(paymentMethod.ownerMemberId)) {
+        payload['owner_id'] = paymentMethod.ownerMemberId;
+        payload['owner_member_id'] = paymentMethod.ownerMemberId;
+      }
+      await client.from('payment_methods').insert(payload);
     } catch (e) {
       throw ServerFailure('Erro ao criar método de pagamento: $e');
+    }
+  }
+
+  @override
+  Future<void> updatePaymentMethod(PaymentMethod paymentMethod) async {
+    try {
+      if (!_isUuid(paymentMethod.id)) return;
+      final ownerId = _isUuid(paymentMethod.ownerMemberId) ? paymentMethod.ownerMemberId : null;
+      final payload = <String, dynamic>{
+        'name': paymentMethod.name,
+        'type': paymentMethod.type.name,
+        'owner_id': ownerId,
+        'owner_member_id': ownerId,
+        'closing_day': paymentMethod.closingDay,
+        'due_day': paymentMethod.dueDay,
+        'color_hex': paymentMethod.colorHex,
+      };
+      await client
+          .from('payment_methods')
+          .update(payload)
+          .eq('id', paymentMethod.id)
+          .eq('house_id', _houseId);
+    } catch (e) {
+      throw ServerFailure('Erro ao atualizar método de pagamento: $e');
+    }
+  }
+
+  @override
+  Future<void> deletePaymentMethod(String paymentMethodId) async {
+    try {
+      if (!_isUuid(paymentMethodId)) return;
+      await client
+          .from('payment_methods')
+          .update({'is_active': false})
+          .eq('id', paymentMethodId)
+          .eq('house_id', _houseId);
+    } catch (e) {
+      throw ServerFailure('Erro ao excluir método de pagamento: $e');
     }
   }
 
@@ -425,11 +882,10 @@ class SupabaseFinanceDataSource implements FinanceDataSource {
     try {
       await client.from('savings_transactions').insert({
         'vault_id': vaultId,
-        'house_id': _houseId,
         'member_id': memberId,
         'type': 'deposit',
         'amount_cents': amount.cents,
-        'notes': description,
+        'description': description,
       });
 
       final vault = await client.from('savings_vaults').select('current_balance_cents').eq('id', vaultId).single();
@@ -452,11 +908,10 @@ class SupabaseFinanceDataSource implements FinanceDataSource {
     try {
       await client.from('savings_transactions').insert({
         'vault_id': vaultId,
-        'house_id': _houseId,
         'member_id': memberId,
         'type': 'withdraw',
         'amount_cents': amount.cents,
-        'notes': description,
+        'description': description,
       });
 
       final vault = await client.from('savings_vaults').select('current_balance_cents').eq('id', vaultId).single();
@@ -469,22 +924,96 @@ class SupabaseFinanceDataSource implements FinanceDataSource {
     }
   }
 
+  @override
+  Future<void> updateHouseSplitModel({
+    required String splitModel,
+    required Map<String, double> percentages,
+    required Map<String, int> fixedAmountsCents,
+  }) async {
+    try {
+      // 1. Atualiza os percentuais e montantes fixos em house_members
+      for (final entry in percentages.entries) {
+        final memberId = entry.key;
+        final pct = entry.value;
+        final fixedCents = fixedAmountsCents[memberId];
+
+        try {
+          await client
+              .from('house_members')
+              .update({
+                'default_split_percent': pct,
+                'default_fixed_amount_cents': ?fixedCents,
+              })
+              .eq('house_id', _houseId)
+              .eq('user_id', memberId);
+        } catch (_) {
+          // Fallback resiliente caso default_fixed_amount_cents ainda não exista no schema cache
+          await client
+              .from('house_members')
+              .update({'default_split_percent': pct})
+              .eq('house_id', _houseId)
+              .eq('user_id', memberId);
+        }
+      }
+
+      // 2. Se a tabela houses suportar default_split_model, atualiza
+      try {
+        await client
+            .from('houses')
+            .update({'default_split_model': splitModel})
+            .eq('id', _houseId);
+      } catch (_) {
+        // Ignora silenciosamente caso a coluna opcional não exista no schema remoto
+      }
+    } catch (e) {
+      throw ServerFailure('Erro ao atualizar modelo de rateio da casa: $e');
+    }
+  }
+
   // --- Helpers de Mapeamento ---
   HouseExpense _mapRowToHouseExpense(Map<String, dynamic> r) {
     final rawItems = r['house_expense_items'] as List<dynamic>? ?? [];
     final items = rawItems.map((item) {
+      final respId = item['responsible_member_id'] as String?;
       return HouseExpenseItem(
         id: item['id'] as String,
         expenseId: item['expense_id'] as String,
         title: item['title'] as String,
         amount: Money((item['amount_cents'] as num).toInt()),
         categoryId: item['category_id'] as String?,
-        responsibleMemberId: item['responsible_member_id'] as String?,
+        responsibleMemberId: respId,
+        splitRule: respId != null ? SplitRule.singleResponsible(respId) : null,
       );
     }).toList();
 
     final statusStr = r['status'] as String? ?? 'paid';
     final status = statusStr == 'pending' ? ExpenseStatus.pending : ExpenseStatus.paid;
+
+    final splitTypeStr = r['split_type'] as String? ?? 'percentage';
+    final rawSplitRules = r['split_rules'] as List<dynamic>? ?? [];
+
+    SplitRule splitRule;
+    if (splitTypeStr == 'category_owner') {
+      splitRule = SplitRule.singleResponsible(r['paid_by_id'] as String?);
+    } else if (splitTypeStr == 'fixed') {
+      final fixedMap = <String, Money>{};
+      for (final sr in rawSplitRules) {
+        final mId = sr['member_id'] as String?;
+        final fixedCents = (sr['fixed_amount_cents'] as num?)?.toInt() ?? 0;
+        if (mId != null && fixedCents > 0) fixedMap[mId] = Money(fixedCents);
+      }
+      splitRule = SplitRule.fixed(fixedMap.isNotEmpty ? fixedMap : null);
+    } else {
+      final pctMap = <String, double>{};
+      for (final sr in rawSplitRules) {
+        final mId = sr['member_id'] as String?;
+        final basisPoints = (sr['percentage_basis_points'] as num?)?.toInt();
+        if (mId != null && basisPoints != null) {
+          pctMap[mId] = basisPoints / 100.0;
+        }
+      }
+      splitRule = SplitRule.percentage(pctMap.isNotEmpty ? pctMap : null);
+    }
 
     return HouseExpense(
       id: r['id'] as String,
@@ -495,7 +1024,7 @@ class SupabaseFinanceDataSource implements FinanceDataSource {
       categoryId: r['category_id'] as String? ?? 'cat_geral',
       paidByMemberId: r['paid_by_id'] as String,
       paymentMethodId: r['payment_method_id'] as String? ?? 'pm_pix',
-      splitRule: const SplitRule.percentage(null),
+      splitRule: splitRule,
       status: status,
       isRecurring: r['is_recurring'] as bool? ?? false,
       isVariable: r['is_variable'] as bool? ?? false,
@@ -517,6 +1046,66 @@ class SupabaseFinanceDataSource implements FinanceDataSource {
         return 'fixed';
       case SplitType.categoryOwner:
         return 'category_owner';
+    }
+  }
+
+  @override
+  Future<List<AuditEntry>> getAuditLog({String? entityId, int limit = 50}) async {
+    try {
+      var query = client
+          .from('v_audit_timeline')
+          .select()
+          .eq('house_id', _houseId);
+
+      if (entityId != null) {
+        query = query.eq('entity_id', entityId);
+      }
+
+      final rows = await query.order('created_at', ascending: false).limit(limit);
+
+      return (rows as List<dynamic>).map((r) {
+        return AuditEntry(
+          id: r['id'] as String,
+          houseId: r['house_id'] as String?,
+          actorId: r['actor_id'] as String?,
+          actorName: r['actor_name'] as String?,
+          actorAvatarUrl: r['actor_avatar_url'] as String?,
+          entityType: r['entity_type'] as String,
+          entityId: r['entity_id'] as String,
+          action: r['action'] as String,
+          diff: r['diff'] as Map<String, dynamic>?,
+          createdAt: DateTime.parse(r['created_at'] as String),
+        );
+      }).toList();
+    } catch (e) {
+      // Fallback para tabela direta audit_log se a view v_audit_timeline ainda não estiver em cache
+      try {
+        var query = client
+            .from('audit_log')
+            .select()
+            .eq('house_id', _houseId);
+
+        if (entityId != null) {
+          query = query.eq('entity_id', entityId);
+        }
+
+        final rows = await query.order('created_at', ascending: false).limit(limit);
+
+        return (rows as List<dynamic>).map((r) {
+          return AuditEntry(
+            id: r['id'] as String,
+            houseId: r['house_id'] as String?,
+            actorId: r['actor_id'] as String?,
+            entityType: r['entity_type'] as String,
+            entityId: r['entity_id'] as String,
+            action: r['action'] as String,
+            diff: r['diff'] as Map<String, dynamic>?,
+            createdAt: DateTime.parse(r['created_at'] as String),
+          );
+        }).toList();
+      } catch (_) {
+        return [];
+      }
     }
   }
 }

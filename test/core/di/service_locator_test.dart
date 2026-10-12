@@ -16,6 +16,8 @@ import 'package:omni_lar/features/settlement/domain/repositories/settlement_repo
 import 'package:omni_lar/features/shopping/data/datasources/mock_shopping_datasource.dart';
 import 'package:omni_lar/features/shopping/data/datasources/shopping_datasource.dart';
 import 'package:omni_lar/features/shopping/domain/repositories/shopping_repository.dart';
+import 'package:omni_lar/features/assistant/domain/services/assistant_interpreter_service.dart';
+import 'package:omni_lar/features/assistant/presentation/cubit/assistant_cubit.dart';
 
 void main() {
   group('ServiceLocator DI Architecture & Fallback', () {
@@ -31,6 +33,8 @@ void main() {
       expect(sl.isRegistered<CalendarRepository>(), isTrue);
       expect(sl.isRegistered<SettlementRepository>(), isTrue);
       expect(sl.isRegistered<ProjectsRepository>(), isTrue);
+      expect(sl.isRegistered<AssistantInterpreterService>(), isTrue);
+      expect(sl.isRegistered<AssistantCubit>(), isTrue);
     });
 
     test('DataSources resolvem para as instâncias de mock em ambiente offline/demo', () {

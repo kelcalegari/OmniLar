@@ -1,5 +1,7 @@
 import 'dart:async';
+import 'dart:convert';
 import 'package:equatable/equatable.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 enum OfflineActionType {
   addExpense,
@@ -62,14 +64,49 @@ class OfflineQueuedAction extends Equatable {
   List<Object?> get props => [id, type, payload, createdAt, retryCount];
 }
 
-/// Fila offline resiliente em memória e storage
-/// Garante que criações locais sem internet sejam enfileiradas com idempotency_key
+/// Fila offline resiliente em memória e storage seguro (criptografado)
+/// Garante que mutações locais sem internet sejam persistidas entre reinicializações
 class OfflineQueueManager {
+  static const String storageKey = 'omnilar_secure_offline_queue';
+
+  final FlutterSecureStorage? _secureStorage;
   final List<OfflineQueuedAction> _queue = [];
   final _controller = StreamController<List<OfflineQueuedAction>>.broadcast();
 
+  OfflineQueueManager([this._secureStorage]);
+
   Stream<List<OfflineQueuedAction>> get queueStream => _controller.stream;
   List<OfflineQueuedAction> get pendingActions => List.unmodifiable(_queue);
+
+  /// Inicializa e restaura a fila a partir do armazenamento criptografado
+  Future<void> init() async {
+    if (_secureStorage == null) return;
+    try {
+      final raw = await _secureStorage.read(key: storageKey);
+      if (raw != null && raw.isNotEmpty) {
+        final decoded = jsonDecode(raw);
+        if (decoded is List) {
+          restoreFromJson(decoded);
+        }
+      }
+    } catch (_) {
+      // Degradação elegante caso o keystore/keychain da plataforma não esteja disponível
+    }
+  }
+
+  Future<void> _persist() async {
+    if (_secureStorage == null) return;
+    try {
+      if (_queue.isEmpty) {
+        await _secureStorage.delete(key: storageKey);
+      } else {
+        final raw = jsonEncode(dumpToJson());
+        await _secureStorage.write(key: storageKey, value: raw);
+      }
+    } catch (_) {
+      // Degradação resiliente
+    }
+  }
 
   void enqueue(OfflineActionType type, Map<String, dynamic> payload) {
     final action = OfflineQueuedAction(
@@ -80,16 +117,19 @@ class OfflineQueueManager {
     );
     _queue.add(action);
     _controller.add(List.unmodifiable(_queue));
+    unawaited(_persist());
   }
 
   void remove(String actionId) {
     _queue.removeWhere((a) => a.id == actionId);
     _controller.add(List.unmodifiable(_queue));
+    unawaited(_persist());
   }
 
   void clear() {
     _queue.clear();
     _controller.add(List.unmodifiable(_queue));
+    unawaited(_persist());
   }
 
   List<Map<String, dynamic>> dumpToJson() {

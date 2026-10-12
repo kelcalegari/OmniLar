@@ -7,6 +7,7 @@ import '../../domain/entities/financial_cycle_summary.dart';
 import '../../domain/repositories/finance_repository.dart';
 import '../datasources/finance_datasource.dart';
 import '../../domain/entities/savings_vault.dart';
+import '../../domain/entities/audit_entry.dart';
 import '../../../../core/domain/enums/recurrence.dart';
 import '../../../../core/domain/value_objects/money.dart';
 import '../../../../core/domain/value_objects/financial_cycle.dart';
@@ -74,6 +75,26 @@ class FinanceRepositoryImpl implements FinanceRepository {
       _dataSource.addPaymentMethod(paymentMethod);
 
   @override
+  Future<void> updatePaymentMethod(PaymentMethod paymentMethod) =>
+      _dataSource.updatePaymentMethod(paymentMethod);
+
+  @override
+  Future<void> deletePaymentMethod(String paymentMethodId) =>
+      _dataSource.deletePaymentMethod(paymentMethodId);
+
+  @override
+  Future<void> updateHouseSplitModel({
+    required String splitModel,
+    required Map<String, double> percentages,
+    required Map<String, int> fixedAmountsCents,
+  }) =>
+      _dataSource.updateHouseSplitModel(
+        splitModel: splitModel,
+        percentages: percentages,
+        fixedAmountsCents: fixedAmountsCents,
+      );
+
+  @override
   Future<List<SavingsVault>> getSavingsVaults() => _dataSource.getSavingsVaults();
 
   @override
@@ -106,4 +127,8 @@ class FinanceRepositoryImpl implements FinanceRepository {
         amount: amount,
         description: description,
       );
+
+  @override
+  Future<List<AuditEntry>> getAuditLog({String? entityId, int limit = 50}) =>
+      _dataSource.getAuditLog(entityId: entityId, limit: limit);
 }

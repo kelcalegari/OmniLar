@@ -5,6 +5,8 @@ import '../../../../core/domain/value_objects/money.dart';
 import '../../../../core/widgets/money_input_field.dart';
 import '../../../../core/widgets/privacy_toggle.dart';
 import '../../../../core/widgets/responsive_container.dart';
+import '../../../../core/di/service_locator.dart';
+import '../../../auth/domain/repositories/auth_repository.dart';
 import '../../domain/entities/savings_vault.dart';
 import '../cubit/finance_cubit.dart';
 import '../cubit/finance_state.dart';
@@ -147,7 +149,9 @@ class SavingsVaultsPage extends StatelessWidget {
 
   void _showDepositDialog(BuildContext context, FinanceCubit cubit, SavingsVault vault, List<dynamic> members) {
     int depositCents = 10000; // R$ 100,00 padrão
-    String selectedMemberId = members.isNotEmpty ? members.first.id : 'member_carlos';
+    final authRepo = sl<AuthRepository>();
+    final defaultId = authRepo.isDemoMode ? 'member_carlos' : (authRepo.currentUser?.id ?? '');
+    String selectedMemberId = members.isNotEmpty ? members.first.id : defaultId;
     final descController = TextEditingController(text: 'Aporte para ${vault.name}');
 
     showDialog(

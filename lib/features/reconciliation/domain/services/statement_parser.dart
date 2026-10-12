@@ -42,6 +42,66 @@ class StatementParser {
     return result;
   }
 
+  /// Parser para arquivos OFX (Open Financial Exchange) padrão de bancos e cartões brasileiros
+  static List<ImportedStatementLine> parseOfx(String ofxContent) {
+    final result = <ImportedStatementLine>[];
+
+    // Localiza blocos <STMTTRN>...</STMTTRN>
+    final trnMatches = RegExp(r'<STMTTRN>([\s\S]*?)<\/STMTTRN>', caseSensitive: false).allMatches(ofxContent);
+    int index = 0;
+
+    for (final match in trnMatches) {
+      final block = match.group(1) ?? '';
+
+      // Extrai DTPOSTED (ex: 20261010120000 ou 20261010)
+      final dtMatch = RegExp(r'<DTPOSTED>(\d{8})', caseSensitive: false).firstMatch(block);
+      DateTime date = DateTime.now();
+      if (dtMatch != null) {
+        final dStr = dtMatch.group(1)!;
+        final year = int.tryParse(dStr.substring(0, 4)) ?? 2026;
+        final month = int.tryParse(dStr.substring(4, 6)) ?? 1;
+        final day = int.tryParse(dStr.substring(6, 8)) ?? 1;
+        date = DateTime(year, month, day);
+      }
+
+      // Extrai TRNAMT (ex: -180.50 ou 180.50)
+      final amtMatch = RegExp(r'<TRNAMT>([-\d.,]+)', caseSensitive: false).firstMatch(block);
+      int cents = 0;
+      if (amtMatch != null) {
+        final rawAmt = amtMatch.group(1)!.replaceAll(',', '.');
+        final doubleVal = double.tryParse(rawAmt) ?? 0.0;
+        cents = (doubleVal.abs() * 100).round();
+      }
+
+      // Extrai MEMO ou NAME
+      final memoMatch = RegExp(r'<(?:MEMO|NAME)>([^\r\n<]+)', caseSensitive: false).firstMatch(block);
+      final desc = memoMatch?.group(1)?.trim() ?? 'Lançamento Fatura';
+
+      result.add(
+        ImportedStatementLine(
+          id: 'ofx_${DateTime.now().millisecondsSinceEpoch}_$index',
+          date: date,
+          description: desc,
+          amount: Money(cents),
+          destination: _inferDestination(desc),
+          assignedMemberId: _inferAssignedMember(desc),
+        ),
+      );
+      index++;
+    }
+
+    return result;
+  }
+
+  /// Detecta automaticamente se o arquivo é OFX ou CSV e processa as linhas
+  static List<ImportedStatementLine> parseFile(String content, {String? filename}) {
+    final lowerName = filename?.toLowerCase() ?? '';
+    if (lowerName.endsWith('.ofx') || content.contains('<OFX>') || content.contains('<STMTTRN>')) {
+      return parseOfx(content);
+    }
+    return parseCsv(content);
+  }
+
   /// Calcula o fechamento da fatura com divisão matemática por destino (RN09)
   static InvoiceSplitResult calculateSplit(List<ImportedStatementLine> lines) {
     int totalCents = 0;

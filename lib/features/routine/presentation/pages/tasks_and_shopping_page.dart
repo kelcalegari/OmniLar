@@ -6,11 +6,14 @@ import '../../../../core/theme/app_colors.dart';
 import '../../../../core/utils/responsive.dart';
 import '../../../../core/widgets/money_input_field.dart';
 import '../../../../core/widgets/responsive_container.dart';
+import '../../../../core/di/service_locator.dart';
+import '../../../auth/domain/repositories/auth_repository.dart';
 import '../../../calendar/domain/entities/task_item.dart';
 import '../../../calendar/presentation/cubit/calendar_cubit.dart';
 import '../../../calendar/presentation/cubit/calendar_state.dart';
 import '../../../calendar/presentation/widgets/add_task_sheet.dart';
 import '../../../finance/presentation/cubit/finance_cubit.dart';
+import '../../../p2p/presentation/cubit/p2p_cubit.dart';
 import '../../../shopping/domain/entities/shopping_item.dart';
 import '../../../shopping/presentation/cubit/shopping_cubit.dart';
 import '../../../shopping/presentation/cubit/shopping_state.dart';
@@ -29,7 +32,7 @@ class TasksAndShoppingPage extends StatefulWidget {
 
 class _TasksAndShoppingPageState extends State<TasksAndShoppingPage> with SingleTickerProviderStateMixin {
   late TabController _tabController;
-  String _taskFilter = 'all'; // 'all', 'pending', 'completed'
+  String _taskFilter = 'pending'; // 'pending', 'completed', 'all'
   final _addShoppingController = TextEditingController();
   bool _isPersonalShoppingItem = false;
 
@@ -359,16 +362,10 @@ class _TasksAndShoppingPageState extends State<TasksAndShoppingPage> with Single
     required bool isDesktop,
   }) {
     final cubit = context.read<CalendarCubit>();
-    List<TaskItem> filteredTasks = state.tasks;
-
-    if (_taskFilter == 'pending') {
-      filteredTasks = filteredTasks.where((t) => !t.isCompleted).toList();
-    } else if (_taskFilter == 'completed') {
-      filteredTasks = filteredTasks.where((t) => t.isCompleted).toList();
-    }
-
-    final pendingCount = state.tasks.where((t) => !t.isCompleted).length;
-    final completedCount = state.tasks.where((t) => t.isCompleted).length;
+    final pendingTasks = state.tasks.where((t) => !t.isCompleted).toList();
+    final completedTasks = state.tasks.where((t) => t.isCompleted).toList();
+    final pendingCount = pendingTasks.length;
+    final completedCount = completedTasks.length;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -420,12 +417,6 @@ class _TasksAndShoppingPageState extends State<TasksAndShoppingPage> with Single
             child: Row(
               children: [
                 ChoiceChip(
-                  label: Text('Todas (${state.tasks.length})'),
-                  selected: _taskFilter == 'all',
-                  onSelected: (_) => setState(() => _taskFilter = 'all'),
-                ),
-                const SizedBox(width: 8),
-                ChoiceChip(
                   label: Text('Pendentes ($pendingCount)'),
                   selected: _taskFilter == 'pending',
                   onSelected: (_) => setState(() => _taskFilter = 'pending'),
@@ -435,6 +426,12 @@ class _TasksAndShoppingPageState extends State<TasksAndShoppingPage> with Single
                   label: Text('Concluídas ($completedCount)'),
                   selected: _taskFilter == 'completed',
                   onSelected: (_) => setState(() => _taskFilter = 'completed'),
+                ),
+                const SizedBox(width: 8),
+                ChoiceChip(
+                  label: Text('Todas (${state.tasks.length})'),
+                  selected: _taskFilter == 'all',
+                  onSelected: (_) => setState(() => _taskFilter = 'all'),
                 ),
                 if (!isDesktop) ...[
                   const SizedBox(width: 16),
@@ -455,23 +452,185 @@ class _TasksAndShoppingPageState extends State<TasksAndShoppingPage> with Single
 
         // Lista de Tarefas
         Expanded(
-          child: filteredTasks.isEmpty
-              ? _buildEmptyTasksWidget(context, _taskFilter, state.activeMemberId)
-              : ListView.builder(
-                  padding: EdgeInsets.fromLTRB(
-                    isDesktop ? 0 : 16,
-                    4,
-                    isDesktop ? 0 : 16,
-                    isDesktop ? 16 : 80,
-                  ),
-                  itemCount: filteredTasks.length,
-                  itemBuilder: (context, index) {
-                    final task = filteredTasks[index];
-                    return _buildTaskCard(context, task, cubit, theme);
-                  },
-                ),
+          child: _buildTasksList(
+            context,
+            state,
+            pendingTasks,
+            completedTasks,
+            cubit,
+            theme,
+            isDesktop: isDesktop,
+          ),
         ),
       ],
+    );
+  }
+
+  Widget _buildTasksList(
+    BuildContext context,
+    CalendarState state,
+    List<TaskItem> pendingTasks,
+    List<TaskItem> completedTasks,
+    CalendarCubit cubit,
+    ThemeData theme, {
+    required bool isDesktop,
+  }) {
+    final padding = EdgeInsets.fromLTRB(
+      isDesktop ? 0 : 16,
+      4,
+      isDesktop ? 0 : 16,
+      isDesktop ? 16 : 80,
+    );
+
+    if (_taskFilter == 'pending') {
+      if (pendingTasks.isEmpty) {
+        return _buildEmptyTasksWidget(context, 'pending', state.activeMemberId);
+      }
+      return ListView.builder(
+        padding: padding,
+        itemCount: pendingTasks.length,
+        itemBuilder: (context, index) => _buildTaskCard(context, pendingTasks[index], cubit, theme),
+      );
+    }
+
+    if (_taskFilter == 'completed') {
+      if (completedTasks.isEmpty) {
+        return _buildEmptyTasksWidget(context, 'completed', state.activeMemberId);
+      }
+      return ListView(
+        padding: padding,
+        children: [
+          ...completedTasks.map((t) => _buildTaskCard(context, t, cubit, theme)),
+          _buildHistoryBanner(context, state, cubit, theme),
+        ],
+      );
+    }
+
+    // Modo 'all' (Todas)
+    if (pendingTasks.isEmpty && completedTasks.isEmpty) {
+      return _buildEmptyTasksWidget(context, 'all', state.activeMemberId);
+    }
+
+    return ListView(
+      padding: padding,
+      children: [
+        if (pendingTasks.isNotEmpty) ...[
+          if (completedTasks.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.only(left: 4, bottom: 8, top: 2),
+              child: Text(
+                'Pendentes (${pendingTasks.length})',
+                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.grey),
+              ),
+            ),
+          ...pendingTasks.map((t) => _buildTaskCard(context, t, cubit, theme)),
+        ] else if (completedTasks.isNotEmpty) ...[
+          Container(
+            margin: const EdgeInsets.only(bottom: 12),
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: AppColors.creditGreen.withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: const Row(
+              children: [
+                Icon(Icons.done_all_rounded, color: AppColors.creditGreen, size: 20),
+                SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    'Todas as tarefas estão em dia! Nenhuma pendência no lar.',
+                    style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.creditGreen),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+        if (completedTasks.isNotEmpty) ...[
+          Card(
+            elevation: 0,
+            margin: const EdgeInsets.only(top: 6, bottom: 10),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
+              side: BorderSide(color: Colors.grey.withValues(alpha: 0.15)),
+            ),
+            color: theme.cardColor,
+            clipBehavior: Clip.antiAlias,
+            child: Theme(
+              data: theme.copyWith(dividerColor: Colors.transparent),
+              child: ExpansionTile(
+                initiallyExpanded: false,
+                leading: const Icon(
+                  Icons.check_circle_outline_rounded,
+                  color: AppColors.creditGreen,
+                  size: 22,
+                ),
+                title: Text(
+                  'Concluídas (${completedTasks.length})',
+                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                ),
+                subtitle: Text(
+                  state.isShowingHistory
+                      ? 'Exibindo histórico completo'
+                      : 'Concluídas nos últimos 15 dias',
+                  style: const TextStyle(fontSize: 11, color: Colors.grey),
+                ),
+                childrenPadding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
+                children: [
+                  ...completedTasks.map((t) => _buildTaskCard(context, t, cubit, theme)),
+                  _buildHistoryBanner(context, state, cubit, theme),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+
+  Widget _buildHistoryBanner(
+    BuildContext context,
+    CalendarState state,
+    CalendarCubit cubit,
+    ThemeData theme,
+  ) {
+    return Container(
+      margin: const EdgeInsets.only(top: 8, bottom: 4),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.4),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.grey.withValues(alpha: 0.15)),
+      ),
+      child: Row(
+        children: [
+          Icon(
+            state.isShowingHistory ? Icons.history_toggle_off_rounded : Icons.history_rounded,
+            size: 18,
+            color: Colors.grey,
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              state.isShowingHistory
+                  ? 'Exibindo todo o histórico de tarefas concluídas'
+                  : 'Tarefas concluídas há mais de 15 dias estão no histórico',
+              style: const TextStyle(fontSize: 11, color: Colors.grey),
+            ),
+          ),
+          TextButton(
+            onPressed: () => cubit.toggleShowHistory(),
+            style: TextButton.styleFrom(
+              visualDensity: VisualDensity.compact,
+              padding: const EdgeInsets.symmetric(horizontal: 8),
+            ),
+            child: Text(
+              state.isShowingHistory ? 'Ocultar antigas' : 'Ver histórico',
+              style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
+            ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -814,6 +973,52 @@ class _TasksAndShoppingPageState extends State<TasksAndShoppingPage> with Single
                     ],
                     if (boughtItems.isNotEmpty) ...[
                       const SizedBox(height: 12),
+                      Container(
+                        margin: const EdgeInsets.only(bottom: 12),
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: AppColors.creditGreen.withValues(alpha: 0.1),
+                          borderRadius: BorderRadius.circular(14),
+                          border: Border.all(color: AppColors.creditGreen.withValues(alpha: 0.3)),
+                        ),
+                        child: Row(
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.all(8),
+                              decoration: BoxDecoration(
+                                color: AppColors.creditGreen,
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                              child: const Icon(Icons.shopping_cart_checkout_rounded, color: Colors.white, size: 20),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    '${boughtItems.length} item(ns) no carrinho',
+                                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                                  ),
+                                  const Text(
+                                    'Lançar valor no Caixa da Casa e quitar lista',
+                                    style: TextStyle(fontSize: 11, color: Colors.grey),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            FilledButton(
+                              onPressed: () => _showFinishTripDialog(context, state),
+                              style: FilledButton.styleFrom(
+                                backgroundColor: AppColors.creditGreen,
+                                visualDensity: VisualDensity.compact,
+                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                              ),
+                              child: const Text('Lançar Caixa', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                            ),
+                          ],
+                        ),
+                      ),
                       Padding(
                         padding: const EdgeInsets.only(left: 4, bottom: 8),
                         child: Text(
@@ -855,10 +1060,15 @@ class _TasksAndShoppingPageState extends State<TasksAndShoppingPage> with Single
     final text = _addShoppingController.text.trim();
     if (text.isEmpty) return;
 
+    final authRepo = sl<AuthRepository>();
+    final currentUserId = authRepo.currentUser?.id;
+    final isDemo = authRepo.isDemoMode;
+    final defaultMemberId = isDemo ? 'member_marina' : currentUserId;
+
     context.read<ShoppingCubit>().addItem(
           name: text,
           isPersonal: _isPersonalShoppingItem,
-          assignedMemberId: _isPersonalShoppingItem ? 'member_marina' : null,
+          assignedMemberId: _isPersonalShoppingItem ? defaultMemberId : null,
         );
 
     _addShoppingController.clear();
@@ -924,8 +1134,9 @@ class _TasksAndShoppingPageState extends State<TasksAndShoppingPage> with Single
     final amountController = MoneyTextEditingController(allowEmpty: false);
     final personalAmountController = MoneyTextEditingController(allowEmpty: true);
     String? selectedPmId = paymentMethods.isNotEmpty ? paymentMethods.first.id : null;
-    String selectedPayerId = 'member_carlos';
-    String selectedDebtorId = 'member_marina';
+    final currentUserId = sl<AuthRepository>().currentUser?.id ?? 'member_carlos';
+    String selectedPayerId = members.isNotEmpty ? members.first.id : currentUserId;
+    String selectedDebtorId = members.length > 1 ? members[1].id : currentUserId;
 
     final personalItems = state.items.where((i) => i.isBought && i.isPersonal).toList();
     final hasPersonal = personalItems.isNotEmpty;
@@ -1046,7 +1257,12 @@ class _TasksAndShoppingPageState extends State<TasksAndShoppingPage> with Single
                           paidByMemberId: selectedPayerId,
                           personalItemsAmount: personalMoney,
                           personalDebtorMemberId: selectedDebtorId,
-                        );
+                        ).then((_) {
+                      if (context.mounted) {
+                        context.read<FinanceCubit>().loadCycleData();
+                        context.read<P2PCubit>().loadLoans();
+                      }
+                    });
 
                     ScaffoldMessenger.of(context).showSnackBar(
                       SnackBar(

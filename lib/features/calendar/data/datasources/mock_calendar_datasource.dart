@@ -1,3 +1,4 @@
+import 'dart:async';
 import '../../../../core/domain/value_objects/money.dart';
 import '../../../../core/domain/enums/recurrence.dart';
 import '../../domain/entities/calendar_event.dart';
@@ -130,6 +131,20 @@ class MockCalendarDataSource implements CalendarDataSource {
       cost: const Money(2200), // R$ 22,00
       createdByMemberId: 'member_marina',
       createdAt: DateTime.now().subtract(const Duration(days: 3)),
+    ),
+    TaskItem(
+      id: 'task_archived_1',
+      title: 'Consertar torneira do jardim',
+      description: 'Troca de vedação e fita veda-rosca',
+      dueDate: DateTime.now().subtract(const Duration(days: 20)),
+      assignedToMemberId: 'member_carlos',
+      assignedToMemberName: 'Carlos',
+      isCompleted: true,
+      completedAt: DateTime.now().subtract(const Duration(days: 18)),
+      completedByMemberId: 'member_carlos',
+      priority: TaskPriority.low,
+      createdByMemberId: 'member_carlos',
+      createdAt: DateTime.now().subtract(const Duration(days: 25)),
     ),
   ];
 
@@ -369,12 +384,47 @@ class MockCalendarDataSource implements CalendarDataSource {
     }
   }
 
+  final StreamController<List<TaskItem>> _tasksController =
+      StreamController<List<TaskItem>>.broadcast();
+
+  void _notifyTasks() {
+    if (!_tasksController.isClosed) {
+      _tasksController.add(List.unmodifiable(_tasks));
+    }
+  }
+
   @override
-  Future<List<TaskItem>> getTasks() async => List.unmodifiable(_tasks);
+  Future<List<TaskItem>> getTasks({bool includeArchived = false}) async {
+    if (includeArchived) {
+      return List.unmodifiable(_tasks);
+    }
+    final cutoff = DateTime.now().subtract(const Duration(days: 15));
+    final filtered = _tasks.where((t) {
+      if (!t.isCompleted) return true;
+      final completedTime = t.completedAt ?? t.createdAt;
+      return completedTime.isAfter(cutoff);
+    }).toList();
+    return List.unmodifiable(filtered);
+  }
+
+  @override
+  Stream<List<TaskItem>> watchTasks({bool includeArchived = false}) async* {
+    yield await getTasks(includeArchived: includeArchived);
+    yield* _tasksController.stream.map((tasks) {
+      if (includeArchived) return tasks;
+      final cutoff = DateTime.now().subtract(const Duration(days: 15));
+      return tasks.where((t) {
+        if (!t.isCompleted) return true;
+        final completedTime = t.completedAt ?? t.createdAt;
+        return completedTime.isAfter(cutoff);
+      }).toList();
+    });
+  }
 
   @override
   Future<void> addTask(TaskItem task) async {
     _tasks.insert(0, task);
+    _notifyTasks();
   }
 
   @override
@@ -393,10 +443,12 @@ class MockCalendarDataSource implements CalendarDataSource {
       completedAt: isDone ? DateTime.now() : null,
       completedByMemberId: isDone ? completedByMemberId : null,
     );
+    _notifyTasks();
   }
 
   @override
   Future<void> deleteTask(String taskId) async {
     _tasks.removeWhere((t) => t.id == taskId);
+    _notifyTasks();
   }
 }

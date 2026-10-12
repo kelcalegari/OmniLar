@@ -46,7 +46,12 @@ class CalendarRepositoryImpl implements CalendarRepository {
   Future<void> cancelEvent(String eventId) => _dataSource.cancelEvent(eventId);
 
   @override
-  Future<List<TaskItem>> getTasks() => _dataSource.getTasks();
+  Future<List<TaskItem>> getTasks({bool includeArchived = false}) =>
+      _dataSource.getTasks(includeArchived: includeArchived);
+
+  @override
+  Stream<List<TaskItem>> watchTasks({bool includeArchived = false}) =>
+      _dataSource.watchTasks(includeArchived: includeArchived);
 
   @override
   Future<void> addTask(TaskItem task) => _dataSource.addTask(task);

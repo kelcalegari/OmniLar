@@ -119,6 +119,37 @@ class SupabaseShoppingDataSource implements ShoppingDataSource {
   }
 
   @override
+  Stream<List<ShoppingItem>> watchItems(String listId) {
+    return client
+        .from('shopping_items')
+        .stream(primaryKey: ['id'])
+        .eq('list_id', listId)
+        .order('created_at', ascending: false)
+        .map((rows) {
+          return rows.map((r) {
+            final estCents = r['estimated_cents'] as int?;
+            final actCents = r['actual_cents'] as int?;
+
+            return ShoppingItem(
+              id: r['id'] as String,
+              listId: r['list_id'] as String,
+              name: r['name'] as String,
+              quantity: (r['quantity'] as num?)?.toDouble() ?? 1.0,
+              unit: r['unit'] as String? ?? 'un',
+              category: (r['category_name'] as String?) ?? 'Geral',
+              isPersonal: (r['is_personal'] as bool?) ?? false,
+              assignedMemberId: r['assigned_member_id'] as String?,
+              isBought: (r['is_bought'] as bool?) ?? false,
+              estimatedPrice: estCents != null ? Money(estCents) : null,
+              actualPrice: actCents != null ? Money(actCents) : null,
+              boughtBy: r['bought_by'] as String?,
+              boughtAt: r['bought_at'] != null ? DateTime.tryParse(r['bought_at'] as String) : null,
+            );
+          }).toList();
+        });
+  }
+
+  @override
   Future<void> addItem(ShoppingItem item) async {
     try {
       // RN03: Se o item já existir como pendente, soma a quantidade

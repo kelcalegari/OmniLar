@@ -1,10 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:intl/intl.dart';
+import '../../../../core/domain/enums/recurrence.dart';
 import '../../../../core/domain/value_objects/money.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/utils/responsive.dart';
 import '../../../../core/widgets/money_input_field.dart';
+import '../../../../core/di/service_locator.dart';
+import '../../../auth/domain/repositories/auth_repository.dart';
+import '../../../finance/domain/repositories/finance_repository.dart';
+import '../../../finance/presentation/cubit/finance_cubit.dart';
 import '../../domain/entities/task_item.dart';
 import '../cubit/calendar_cubit.dart';
 
@@ -36,12 +41,116 @@ class _AddTaskSheetState extends State<AddTaskSheet> {
 
   DateTime? _dueDate = DateTime.now().add(const Duration(days: 1));
   TaskPriority _priority = TaskPriority.medium;
-  String? _assignedMemberId = 'member_carlos';
+  String? _assignedMemberId;
 
-  final Map<String, String> _members = {
-    'member_carlos': 'Carlos',
-    'member_marina': 'Marina',
-  };
+  final Map<String, String> _members = {};
+
+  RecurrenceFrequency _recurrence = RecurrenceFrequency.none;
+
+  @override
+  void initState() {
+    super.initState();
+    _initLocalMembers();
+    _loadHouseMembers();
+  }
+
+  void _initLocalMembers() {
+    final authRepo = sl<AuthRepository>();
+    if (authRepo.isDemoMode) {
+      _members['member_carlos'] = 'Carlos';
+      _members['member_marina'] = 'Marina';
+      _assignedMemberId = widget.activeMemberId.isNotEmpty ? widget.activeMemberId : 'member_carlos';
+    } else {
+      final user = authRepo.currentUser;
+      if (user != null) {
+        final name = user.fullName.trim();
+        final myName = name.isNotEmpty ? name : 'Eu';
+        _members[user.id] = myName;
+        _assignedMemberId = user.id;
+      } else {
+        _assignedMemberId = widget.activeMemberId.isNotEmpty ? widget.activeMemberId : null;
+      }
+    }
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _syncMembersFromFinanceCubit();
+  }
+
+  void _syncMembersFromFinanceCubit() {
+    final authRepo = sl<AuthRepository>();
+    if (authRepo.isDemoMode) return;
+
+    try {
+      final financeMembers = context.read<FinanceCubit>().state.members;
+      if (financeMembers.isNotEmpty) {
+        bool changed = false;
+        for (final m in financeMembers) {
+          if (m.id.isNotEmpty && (!_members.containsKey(m.id) || _members[m.id] == 'Membro')) {
+            _members[m.id] = m.name;
+            changed = true;
+          }
+        }
+        if (changed && mounted) {
+          setState(() {});
+        }
+      }
+    } catch (_) {}
+  }
+
+  Future<void> _loadHouseMembers() async {
+    final authRepo = sl<AuthRepository>();
+    if (authRepo.isDemoMode) return;
+
+    try {
+      final houseId = authRepo.currentHouse?.id;
+      final Map<String, String> membersMap = {};
+
+      if (houseId != null) {
+        try {
+          final houseMembers = await authRepo.getHouseMembers(houseId);
+          for (final m in houseMembers) {
+            final name = m.profile?.fullName.trim();
+            final displayName = (name != null && name.isNotEmpty) ? name : 'Membro';
+            membersMap[m.userId] = displayName;
+          }
+        } catch (e) {
+          debugPrint('[AddTaskSheet] Falha ao carregar membros via authRepo: $e');
+        }
+      }
+
+      if (membersMap.length <= 1 && sl.isRegistered<FinanceRepository>()) {
+        try {
+          final finMembers = await sl<FinanceRepository>().getMembers();
+          for (final m in finMembers) {
+            if (m.id.isNotEmpty && m.name.isNotEmpty) {
+              membersMap[m.id] = m.name;
+            }
+          }
+        } catch (e) {
+          debugPrint('[AddTaskSheet] Falha ao carregar membros via financeRepo: $e');
+        }
+      }
+
+      final currentUser = authRepo.currentUser;
+      if (currentUser != null && !membersMap.containsKey(currentUser.id)) {
+        final name = currentUser.fullName.trim();
+        membersMap[currentUser.id] = name.isNotEmpty ? name : 'Eu';
+      }
+
+      if (mounted && membersMap.isNotEmpty) {
+        setState(() {
+          for (final entry in membersMap.entries) {
+            _members[entry.key] = entry.value;
+          }
+        });
+      }
+    } catch (e) {
+      debugPrint('[AddTaskSheet] Erro ao carregar membros da casa: $e');
+    }
+  }
 
   @override
   void dispose() {
@@ -72,27 +181,62 @@ class _AddTaskSheetState extends State<AddTaskSheet> {
     }
 
     final now = DateTime.now();
-    final taskId = 'task_${now.millisecondsSinceEpoch}';
+    final calendarCubit = context.read<CalendarCubit>();
+    final baseDueDate = _dueDate ?? now;
 
-    final newTask = TaskItem(
-      id: taskId,
-      title: _titleController.text.trim(),
-      description: _descriptionController.text.trim().isEmpty ? null : _descriptionController.text.trim(),
-      dueDate: _dueDate,
-      priority: _priority,
-      assignedToMemberId: _assignedMemberId,
-      assignedToMemberName: _assignedMemberId != null ? _members[_assignedMemberId] : null,
-      cost: cost,
-      createdByMemberId: widget.activeMemberId,
-      createdAt: now,
-    );
+    // Se houver repetição, cria a primeira e as próximas ocorrências programadas
+    int repeatCount = 1;
+    Duration stepDuration = Duration.zero;
+    if (_recurrence == RecurrenceFrequency.daily) {
+      repeatCount = 7; // Próximos 7 dias
+      stepDuration = const Duration(days: 1);
+    } else if (_recurrence == RecurrenceFrequency.weekly) {
+      repeatCount = 4; // Próximas 4 semanas
+      stepDuration = const Duration(days: 7);
+    } else if (_recurrence == RecurrenceFrequency.biweekly) {
+      repeatCount = 3; // Próximas 3 quinzenas
+      stepDuration = const Duration(days: 14);
+    } else if (_recurrence == RecurrenceFrequency.monthly) {
+      repeatCount = 3; // Próximos 3 meses
+    }
 
-    context.read<CalendarCubit>().addTask(newTask);
+    for (int i = 0; i < repeatCount; i++) {
+      DateTime occurrenceDate;
+      if (_recurrence == RecurrenceFrequency.monthly) {
+        occurrenceDate = DateTime(baseDueDate.year, baseDueDate.month + i, baseDueDate.day);
+      } else {
+        occurrenceDate = baseDueDate.add(stepDuration * i);
+      }
+
+      final taskId = 'task_${now.millisecondsSinceEpoch}_$i';
+      final taskTitle = _titleController.text.trim();
+
+      final newTask = TaskItem(
+        id: taskId,
+        title: taskTitle,
+        description: _descriptionController.text.trim().isEmpty ? null : _descriptionController.text.trim(),
+        dueDate: occurrenceDate,
+        priority: _priority,
+        assignedToMemberId: _assignedMemberId,
+        assignedToMemberName: _assignedMemberId != null ? _members[_assignedMemberId] : null,
+        cost: cost,
+        createdByMemberId: widget.activeMemberId,
+        createdAt: now,
+      );
+
+      calendarCubit.addTask(newTask);
+    }
+
     Navigator.pop(context);
+
+    final title = _titleController.text.trim();
+    final message = _recurrence != RecurrenceFrequency.none
+        ? 'Tarefa "$title" criada com repetição (${_recurrence.shortLabel})!'
+        : 'Tarefa "$title" adicionada com sucesso!';
 
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text('Tarefa "${newTask.title}" adicionada com sucesso!'),
+        content: Text(message),
         backgroundColor: AppColors.primary,
       ),
     );
@@ -190,6 +334,55 @@ class _AddTaskSheetState extends State<AddTaskSheet> {
               ),
               const SizedBox(height: 16),
 
+              // Repetição / Recorrência da Tarefa
+              const Text(
+                'Repetição da Tarefa:',
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+              ),
+              const SizedBox(height: 8),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  ChoiceChip(
+                    label: const Text('Única'),
+                    selected: _recurrence == RecurrenceFrequency.none,
+                    onSelected: (val) {
+                      if (val) setState(() => _recurrence = RecurrenceFrequency.none);
+                    },
+                  ),
+                  ChoiceChip(
+                    label: const Text('Diária'),
+                    selected: _recurrence == RecurrenceFrequency.daily,
+                    onSelected: (val) {
+                      if (val) setState(() => _recurrence = RecurrenceFrequency.daily);
+                    },
+                  ),
+                  ChoiceChip(
+                    label: const Text('Semanal'),
+                    selected: _recurrence == RecurrenceFrequency.weekly,
+                    onSelected: (val) {
+                      if (val) setState(() => _recurrence = RecurrenceFrequency.weekly);
+                    },
+                  ),
+                  ChoiceChip(
+                    label: const Text('Quinzenal'),
+                    selected: _recurrence == RecurrenceFrequency.biweekly,
+                    onSelected: (val) {
+                      if (val) setState(() => _recurrence = RecurrenceFrequency.biweekly);
+                    },
+                  ),
+                  ChoiceChip(
+                    label: const Text('Mensal'),
+                    selected: _recurrence == RecurrenceFrequency.monthly,
+                    onSelected: (val) {
+                      if (val) setState(() => _recurrence = RecurrenceFrequency.monthly);
+                    },
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+
               // Responsável
               const Text(
                 'Responsável pela Tarefa:',
@@ -200,20 +393,33 @@ class _AddTaskSheetState extends State<AddTaskSheet> {
                 spacing: 8,
                 runSpacing: 8,
                 children: [
-                  ..._members.entries.map((entry) {
-                    final isSelected = _assignedMemberId == entry.key;
-                    return ChoiceChip(
-                      avatar: CircleAvatar(
-                        backgroundColor: entry.key == 'member_carlos' ? AppColors.primary : AppColors.accent,
-                        child: Text(entry.value[0], style: const TextStyle(color: Colors.white, fontSize: 11)),
-                      ),
-                      label: Text(entry.value),
-                      selected: isSelected,
-                      onSelected: (val) {
-                        setState(() => _assignedMemberId = val ? entry.key : null);
-                      },
-                    );
-                  }),
+                  ...(() {
+                    final sortedEntries = _members.entries.toList()
+                      ..sort((a, b) {
+                        if (a.key == widget.activeMemberId) return -1;
+                        if (b.key == widget.activeMemberId) return 1;
+                        return a.value.toLowerCase().compareTo(b.value.toLowerCase());
+                      });
+
+                    return sortedEntries.map((entry) {
+                      final isSelected = _assignedMemberId == entry.key;
+                      final memberName = entry.value;
+                      final initial = memberName.isNotEmpty ? memberName[0].toUpperCase() : '?';
+                      final isPrimary = entry.key == widget.activeMemberId || entry.key == 'member_carlos';
+
+                      return ChoiceChip(
+                        avatar: CircleAvatar(
+                          backgroundColor: isPrimary ? AppColors.primary : AppColors.accent,
+                          child: Text(initial, style: const TextStyle(color: Colors.white, fontSize: 11)),
+                        ),
+                        label: Text(memberName),
+                        selected: isSelected,
+                        onSelected: (val) {
+                          setState(() => _assignedMemberId = val ? entry.key : null);
+                        },
+                      );
+                    });
+                  })(),
                   ChoiceChip(
                     label: const Text('Qualquer um'),
                     selected: _assignedMemberId == null,
