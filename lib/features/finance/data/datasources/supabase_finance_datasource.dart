@@ -332,7 +332,7 @@ class SupabaseFinanceDataSource implements FinanceDataSource {
 
       return rows.map((r) {
         final dateStr = (r['created_at'] ?? r['cycle_start_date']) as String?;
-        final date = dateStr != null ? (DateTime.tryParse(dateStr) ?? DateTime.now()) : DateTime.now();
+        final date = dateStr != null ? (DateTime.tryParse(dateStr)?.toLocal() ?? DateTime.now()) : DateTime.now();
         return Contribution(
           id: r['id'] as String,
           memberId: r['member_id'] as String,
@@ -406,7 +406,7 @@ class SupabaseFinanceDataSource implements FinanceDataSource {
             : (client.auth.currentUser?.id ?? expense.paidByMemberId),
         'paid_out_of_pocket': expense.paidOutOfPocket,
         'due_date': (expense.dueDate ?? expense.date).toIso8601String().split('T')[0],
-        'date': expense.date.toIso8601String(),
+        'date': expense.date.toUtc().toIso8601String(),
         'cycle_start_date': expense.date.toIso8601String().split('T')[0],
         'split_type': _splitTypeToString(expense.splitRule.type),
         'status': expense.isPaid ? 'paid' : 'pending',
@@ -470,8 +470,64 @@ class SupabaseFinanceDataSource implements FinanceDataSource {
           }
         }
       }
+
+      try {
+        await _syncSplitRules(insertedExpenseId, expense);
+      } catch (splitErr) {
+        throw ServerFailure(
+          'A despesa foi salva, mas o rateio personalizado não foi gravado. Edite a despesa para definir o rateio de novo. ($splitErr)',
+        );
+      }
     } catch (e) {
+      if (e is Failure) rethrow;
       throw ServerFailure('Erro ao adicionar despesa: $e');
+    }
+  }
+
+  /// Substitui as regras de rateio gravadas para a despesa.
+  Future<void> _syncSplitRules(String expenseId, HouseExpense expense) async {
+    await client.from('split_rules').delete().eq('expense_id', expenseId);
+
+    final rule = expense.splitRule;
+    final rows = <Map<String, dynamic>>[];
+
+    if (rule.type == SplitType.percentage && rule.percentages != null) {
+      final memberIds = rule.percentages!.keys.where(_isUuid).toList();
+      final allocations = rule.calculateAllocations(
+        totalAmount: expense.amount,
+        memberIds: memberIds,
+      );
+      for (final memberId in memberIds) {
+        rows.add({
+          'expense_id': expenseId,
+          'member_id': memberId,
+          'percentage_basis_points':
+              (rule.percentages![memberId]! * 100).round().clamp(0, 10000),
+          'calculated_cents': allocations[memberId]?.cents ?? 0,
+        });
+      }
+    } else if (rule.type == SplitType.fixed && rule.fixedAmounts != null) {
+      for (final entry in rule.fixedAmounts!.entries) {
+        if (!_isUuid(entry.key)) continue;
+        rows.add({
+          'expense_id': expenseId,
+          'member_id': entry.key,
+          'fixed_amount_cents': entry.value.cents,
+          'calculated_cents': entry.value.cents,
+        });
+      }
+    } else if (rule.type == SplitType.categoryOwner &&
+        _isUuid(rule.singleResponsibleMemberId)) {
+      rows.add({
+        'expense_id': expenseId,
+        'member_id': rule.singleResponsibleMemberId,
+        'percentage_basis_points': 10000,
+        'calculated_cents': expense.amount.cents,
+      });
+    }
+
+    if (rows.isNotEmpty) {
+      await client.from('split_rules').insert(rows);
     }
   }
 
@@ -492,7 +548,7 @@ class SupabaseFinanceDataSource implements FinanceDataSource {
             : (client.auth.currentUser?.id ?? expense.paidByMemberId),
         'paid_out_of_pocket': expense.paidOutOfPocket,
         'due_date': dueDateStr,
-        'date': expense.date.toIso8601String(),
+        'date': expense.date.toUtc().toIso8601String(),
         'split_type': _splitTypeToString(expense.splitRule.type),
         'status': expense.isPaid ? 'paid' : 'pending',
         'is_recurring': expense.isRecurring,
@@ -530,39 +586,7 @@ class SupabaseFinanceDataSource implements FinanceDataSource {
       }
 
       // Sincroniza regras de rateio (split_rules)
-      try {
-        await client.from('split_rules').delete().eq('expense_id', expense.id);
-      } catch (_) {}
-
-      if (expense.splitRule.type == SplitType.percentage && expense.splitRule.percentages != null) {
-        final splitRows = expense.splitRule.percentages!.entries.map((entry) {
-          return {
-            'expense_id': expense.id,
-            'member_id': entry.key,
-            'percentage_basis_points': (entry.value * 100).round(),
-            'calculated_cents': (expense.amount.cents * (entry.value / 100.0)).round(),
-          };
-        }).toList();
-        if (splitRows.isNotEmpty) {
-          try {
-            await client.from('split_rules').insert(splitRows);
-          } catch (_) {}
-        }
-      } else if (expense.splitRule.type == SplitType.fixed && expense.splitRule.fixedAmounts != null) {
-        final splitRows = expense.splitRule.fixedAmounts!.entries.map((entry) {
-          return {
-            'expense_id': expense.id,
-            'member_id': entry.key,
-            'fixed_amount_cents': entry.value.cents,
-            'calculated_cents': entry.value.cents,
-          };
-        }).toList();
-        if (splitRows.isNotEmpty) {
-          try {
-            await client.from('split_rules').insert(splitRows);
-          } catch (_) {}
-        }
-      }
+      await _syncSplitRules(expense.id, expense);
 
       // Tratamento de escopo para recorrências
       if (expense.isRecurring && scope != RecurrenceScope.thisInstanceOnly) {
@@ -745,7 +769,7 @@ class SupabaseFinanceDataSource implements FinanceDataSource {
         'member_id': contribution.memberId,
         'amount_cents': contribution.amount.cents,
         'cycle_start_date': contribution.date.toIso8601String().split('T')[0],
-        'paid_at': contribution.date.toIso8601String(),
+        'paid_at': contribution.date.toUtc().toIso8601String(),
         'created_by': currentUserId,
       });
     } catch (e) {
@@ -849,7 +873,7 @@ class SupabaseFinanceDataSource implements FinanceDataSource {
           currentBalance: Money((r['current_balance_cents'] as num).toInt()),
           icon: r['icon'] as String? ?? 'savings',
           colorHex: r['color_hex'] as String? ?? '#10B981',
-          createdAt: DateTime.parse(r['created_at'] as String),
+          createdAt: DateTime.parse(r['created_at'] as String).toLocal(),
         );
       }).toList();
     } catch (e) {
@@ -997,7 +1021,11 @@ class SupabaseFinanceDataSource implements FinanceDataSource {
 
     SplitRule splitRule;
     if (splitTypeStr == 'category_owner') {
-      splitRule = SplitRule.singleResponsible(r['paid_by_id'] as String?);
+      final responsibleId = rawSplitRules.isNotEmpty
+          ? rawSplitRules.first['member_id'] as String?
+          : null;
+      // Despesas antigas não têm a regra gravada: assume quem pagou
+      splitRule = SplitRule.singleResponsible(responsibleId ?? r['paid_by_id'] as String?);
     } else if (splitTypeStr == 'fixed') {
       final fixedMap = <String, Money>{};
       for (final sr in rawSplitRules) {
@@ -1022,7 +1050,7 @@ class SupabaseFinanceDataSource implements FinanceDataSource {
       id: r['id'] as String,
       title: r['title'] as String,
       amount: Money((r['amount_cents'] as num).toInt()),
-      date: DateTime.parse(r['date'] as String? ?? r['created_at'] as String),
+      date: DateTime.parse(r['date'] as String? ?? r['created_at'] as String).toLocal(),
       dueDate: r['due_date'] != null ? DateTime.tryParse(r['due_date'] as String) : null,
       categoryId: r['category_id'] as String? ?? 'cat_geral',
       paidByMemberId: r['paid_by_id'] as String,
@@ -1077,7 +1105,7 @@ class SupabaseFinanceDataSource implements FinanceDataSource {
           entityId: r['entity_id'] as String,
           action: r['action'] as String,
           diff: r['diff'] as Map<String, dynamic>?,
-          createdAt: DateTime.parse(r['created_at'] as String),
+          createdAt: DateTime.parse(r['created_at'] as String).toLocal(),
         );
       }).toList();
     } catch (e) {
@@ -1103,7 +1131,7 @@ class SupabaseFinanceDataSource implements FinanceDataSource {
             entityId: r['entity_id'] as String,
             action: r['action'] as String,
             diff: r['diff'] as Map<String, dynamic>?,
-            createdAt: DateTime.parse(r['created_at'] as String),
+            createdAt: DateTime.parse(r['created_at'] as String).toLocal(),
           );
         }).toList();
       } catch (_) {

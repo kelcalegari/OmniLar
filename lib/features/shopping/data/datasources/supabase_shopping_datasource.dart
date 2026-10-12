@@ -110,7 +110,7 @@ class SupabaseShoppingDataSource implements ShoppingDataSource {
           estimatedPrice: estCents != null ? Money(estCents) : null,
           actualPrice: actCents != null ? Money(actCents) : null,
           boughtBy: r['bought_by'] as String?,
-          boughtAt: r['bought_at'] != null ? DateTime.tryParse(r['bought_at'] as String) : null,
+          boughtAt: r['bought_at'] != null ? DateTime.tryParse(r['bought_at'] as String)?.toLocal() : null,
         );
       }).toList();
     } catch (e) {
@@ -143,7 +143,7 @@ class SupabaseShoppingDataSource implements ShoppingDataSource {
               estimatedPrice: estCents != null ? Money(estCents) : null,
               actualPrice: actCents != null ? Money(actCents) : null,
               boughtBy: r['bought_by'] as String?,
-              boughtAt: r['bought_at'] != null ? DateTime.tryParse(r['bought_at'] as String) : null,
+              boughtAt: r['bought_at'] != null ? DateTime.tryParse(r['bought_at'] as String)?.toLocal() : null,
             );
           }).toList();
         });
@@ -183,7 +183,7 @@ class SupabaseShoppingDataSource implements ShoppingDataSource {
           'actual_cents': item.actualPrice?.cents,
           'is_bought': item.isBought,
           'bought_by': item.boughtBy,
-          'bought_at': item.boughtAt?.toIso8601String(),
+          'bought_at': item.boughtAt?.toUtc().toIso8601String(),
           'created_by': ?userId,
         };
 
@@ -210,7 +210,7 @@ class SupabaseShoppingDataSource implements ShoppingDataSource {
       await client.from('shopping_items').update({
         'is_bought': newBought,
         'bought_by': newBought ? userId : null,
-        'bought_at': newBought ? DateTime.now().toIso8601String() : null,
+        'bought_at': newBought ? DateTime.now().toUtc().toIso8601String() : null,
       }).eq('id', itemId);
     } catch (e) {
       throw ServerFailure('Erro ao alternar status do item de compras: $e');
@@ -305,7 +305,7 @@ class SupabaseShoppingDataSource implements ShoppingDataSource {
         'total_spent_cents': totalAmount.cents,
         'expense_id': (createdExpenseId != null && _isUuid(createdExpenseId)) ? createdExpenseId : null,
         'created_by': ?userId,
-        'completed_at': now.toIso8601String(),
+        'completed_at': now.toUtc().toIso8601String(),
       };
 
       final insertedTrip = await client

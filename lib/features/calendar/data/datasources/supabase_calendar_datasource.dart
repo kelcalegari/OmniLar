@@ -105,7 +105,7 @@ class SupabaseCalendarDataSource implements CalendarDataSource {
             memberName: profileNames[userId] ?? 'Membro',
             role: isEssential ? ParticipantRole.required : ParticipantRole.optional,
             rsvpStatus: rsvpStatus,
-            respondedAt: respondedAtStr != null ? DateTime.tryParse(respondedAtStr) : null,
+            respondedAt: respondedAtStr != null ? DateTime.tryParse(respondedAtStr)?.toLocal() : null,
           );
         }).toList();
 
@@ -127,8 +127,8 @@ class SupabaseCalendarDataSource implements CalendarDataSource {
           title: r['title'] as String,
           description: r['description'] as String?,
           location: r['location'] as String?,
-          startTime: DateTime.parse(r['start_time'] as String),
-          endTime: DateTime.parse(r['end_time'] as String),
+          startTime: DateTime.parse(r['start_time'] as String).toLocal(),
+          endTime: DateTime.parse(r['end_time'] as String).toLocal(),
           isAllDay: (r['is_all_day'] as bool?) ?? false,
           createdByMemberId: r['created_by'] as String? ?? '',
           visibility: visibility,
@@ -164,8 +164,8 @@ class SupabaseCalendarDataSource implements CalendarDataSource {
         'title': event.title,
         'description': event.description,
         'location': event.location,
-        'start_time': event.startTime.toIso8601String(),
-        'end_time': event.endTime.toIso8601String(),
+        'start_time': event.startTime.toUtc().toIso8601String(),
+        'end_time': event.endTime.toUtc().toIso8601String(),
         'is_all_day': event.isAllDay,
         'visibility': event.visibility.name,
         'created_by': creatorId,
@@ -187,7 +187,7 @@ class SupabaseCalendarDataSource implements CalendarDataSource {
             'house_id': houseId,
             'is_essential': p.isEssential,
             'rsvp_status': p.rsvpStatus.name,
-            'responded_at': p.respondedAt?.toIso8601String(),
+            'responded_at': p.respondedAt?.toUtc().toIso8601String(),
           };
         }).toList();
 
@@ -209,8 +209,8 @@ class SupabaseCalendarDataSource implements CalendarDataSource {
         'title': event.title,
         'description': event.description,
         'location': event.location,
-        'start_time': event.startTime.toIso8601String(),
-        'end_time': event.endTime.toIso8601String(),
+        'start_time': event.startTime.toUtc().toIso8601String(),
+        'end_time': event.endTime.toUtc().toIso8601String(),
         'is_all_day': event.isAllDay,
         'visibility': event.visibility.name,
       }).eq('id', event.id);
@@ -224,7 +224,7 @@ class SupabaseCalendarDataSource implements CalendarDataSource {
             'house_id': _houseId,
             'is_essential': p.isEssential,
             'rsvp_status': p.rsvpStatus.name,
-            'responded_at': p.respondedAt?.toIso8601String(),
+            'responded_at': p.respondedAt?.toUtc().toIso8601String(),
           };
           await client.from('event_participants').upsert(
             participantRow,
@@ -261,7 +261,7 @@ class SupabaseCalendarDataSource implements CalendarDataSource {
           .from('event_participants')
           .update({
             'rsvp_status': status.name,
-            'responded_at': DateTime.now().toIso8601String(),
+            'responded_at': DateTime.now().toUtc().toIso8601String(),
           })
           .eq('event_id', eventId)
           .eq('user_id', memberId);
@@ -288,7 +288,7 @@ class SupabaseCalendarDataSource implements CalendarDataSource {
           .eq('house_id', _houseId);
 
       if (!includeArchived) {
-        final cutoff = DateTime.now().subtract(const Duration(days: 15)).toIso8601String();
+        final cutoff = DateTime.now().subtract(const Duration(days: 15)).toUtc().toIso8601String();
         query = query.or('is_completed.eq.false,completed_at.gte.$cutoff');
       }
 
@@ -346,12 +346,12 @@ class SupabaseCalendarDataSource implements CalendarDataSource {
           assignedToMemberId: assignedTo,
           assignedToMemberName: assignedTo != null ? profileNames[assignedTo] : null,
           isCompleted: (r['is_completed'] as bool?) ?? false,
-          completedAt: r['completed_at'] != null ? DateTime.tryParse(r['completed_at'] as String) : null,
+          completedAt: r['completed_at'] != null ? DateTime.tryParse(r['completed_at'] as String)?.toLocal() : null,
           completedByMemberId: r['completed_by'] as String?,
           priority: priority,
           cost: costCents != null ? Money(costCents) : null,
           createdByMemberId: r['created_by'] as String? ?? '',
-          createdAt: DateTime.parse(r['created_at'] as String),
+          createdAt: DateTime.parse(r['created_at'] as String).toLocal(),
         );
       }).toList();
     } catch (e) {
@@ -399,12 +399,12 @@ class SupabaseCalendarDataSource implements CalendarDataSource {
               dueDate: r['due_date'] != null ? DateTime.tryParse(r['due_date'] as String) : null,
               assignedToMemberId: assignedTo,
               isCompleted: (r['is_completed'] as bool?) ?? false,
-              completedAt: r['completed_at'] != null ? DateTime.tryParse(r['completed_at'] as String) : null,
+              completedAt: r['completed_at'] != null ? DateTime.tryParse(r['completed_at'] as String)?.toLocal() : null,
               completedByMemberId: r['completed_by'] as String?,
               priority: priority,
               cost: costCents != null ? Money(costCents) : null,
               createdByMemberId: r['created_by'] as String? ?? '',
-              createdAt: DateTime.tryParse(r['created_at'] as String? ?? '') ?? DateTime.now(),
+              createdAt: DateTime.tryParse(r['created_at'] as String? ?? '')?.toLocal() ?? DateTime.now(),
             );
           }).toList();
         });
@@ -449,7 +449,7 @@ class SupabaseCalendarDataSource implements CalendarDataSource {
 
       await client.from('tasks').update({
         'is_completed': isDone,
-        'completed_at': isDone ? DateTime.now().toIso8601String() : null,
+        'completed_at': isDone ? DateTime.now().toUtc().toIso8601String() : null,
         'completed_by': isDone ? completedByMemberId : null,
       }).eq('id', taskId);
     } catch (e) {

@@ -478,11 +478,10 @@ class GlobalClearingEngine {
       final toName = nameMap[maxCreditorId] ?? 'Membro';
 
       final memberPixKey = pixKeys[maxCreditorId];
+      // Sem chave cadastrada não há Pix para copiar: nunca inventar uma chave.
       final effectivePixKey = (memberPixKey != null && memberPixKey.isNotEmpty)
           ? memberPixKey
-          : (maxCreditorId == 'entity_caixa'
-                ? null
-                : 'pix_${maxCreditorId.replaceAll('member_', '')}@banco.com');
+          : null;
 
       String explanation;
       if (maxDebtorId == 'entity_caixa') {

@@ -83,7 +83,7 @@ class SupabaseProjectsRepository implements ProjectsRepository {
         userId: pMap['user_id'] as String?,
         externalName: pMap['external_name'] as String?,
         defaultSplitPercent: (pMap['default_split_percent'] as num?)?.toDouble(),
-        createdAt: DateTime.parse(pMap['created_at'] as String),
+        createdAt: DateTime.parse(pMap['created_at'] as String).toLocal(),
       );
     }).toList();
 
@@ -102,8 +102,8 @@ class SupabaseProjectsRepository implements ProjectsRepository {
       currency: r['currency'] as String? ?? 'BRL',
       participants: participants,
       createdBy: r['created_by'] as String? ?? '',
-      createdAt: DateTime.parse(r['created_at'] as String),
-      updatedAt: DateTime.parse(r['updated_at'] as String),
+      createdAt: DateTime.parse(r['created_at'] as String).toLocal(),
+      updatedAt: DateTime.parse(r['updated_at'] as String).toLocal(),
     );
   }
 
@@ -206,7 +206,7 @@ class SupabaseProjectsRepository implements ProjectsRepository {
     try {
       await client
           .from('shared_projects')
-          .update({'deleted_at': DateTime.now().toIso8601String()})
+          .update({'deleted_at': DateTime.now().toUtc().toIso8601String()})
           .eq('id', id);
     } catch (e) {
       throw ServerFailure('Erro ao excluir projeto compartilhado: $e');

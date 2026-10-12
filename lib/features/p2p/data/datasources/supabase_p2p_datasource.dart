@@ -92,7 +92,7 @@ class SupabaseP2PDataSource implements P2PDataSource {
             ? P2PLoan.houseLenderId
             : r['lender_id'] as String;
 
-        final createdAt = DateTime.parse(r['created_at'] as String);
+        final createdAt = DateTime.parse(r['created_at'] as String).toLocal();
         final firstDueDate = installments.isNotEmpty
             ? installments.first.dueDate
             : createdAt;
@@ -143,7 +143,7 @@ class SupabaseP2PDataSource implements P2PDataSource {
                     ? 'renegotiated'
                     : 'active',
         'created_by': currentUserId ?? (loan.isHouseLender ? loan.borrowerMemberId : loan.lenderMemberId),
-        'created_at': loan.createdAt.toIso8601String(),
+        'created_at': loan.createdAt.toUtc().toIso8601String(),
       };
 
       final insertedLoan = await client
@@ -185,7 +185,7 @@ class SupabaseP2PDataSource implements P2PDataSource {
                       : inst.paidAmount.isPositive
                           ? 'partial'
                           : 'pending',
-          'paid_at': inst.paidAt?.toIso8601String(),
+          'paid_at': inst.paidAt?.toUtc().toIso8601String(),
         };
       }).toList();
 

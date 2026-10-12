@@ -75,7 +75,7 @@ class SupabaseSettlementDataSource implements SettlementDataSource {
                 ? TransferStatus.confirmed
                 : TransferStatus.pending,
             paidAt: r['paid_at'] != null
-                ? DateTime.tryParse(r['paid_at'] as String)
+                ? DateTime.tryParse(r['paid_at'] as String)?.toLocal()
                 : null,
           );
         }).toList();
@@ -99,7 +99,7 @@ class SupabaseSettlementDataSource implements SettlementDataSource {
           houseTreasuryBalance: const Money.zero(),
           status: SettlementStatus.settled,
           settledAt: existingSettlement['settled_at'] != null
-              ? DateTime.tryParse(existingSettlement['settled_at'] as String)
+              ? DateTime.tryParse(existingSettlement['settled_at'] as String)?.toLocal()
               : null,
         );
       }

@@ -276,7 +276,7 @@ class SupabaseAuthDataSource implements AuthDataSource {
 
       final updateData = <String, dynamic>{
         'full_name': trimmedName,
-        'updated_at': DateTime.now().toIso8601String(),
+        'updated_at': DateTime.now().toUtc().toIso8601String(),
       };
       if (emailChanged && activeEmail == trimmedEmail) {
         updateData['email'] = trimmedEmail;
@@ -368,7 +368,7 @@ class SupabaseAuthDataSource implements AuthDataSource {
         if (pixKeyType != null) 'pix_key_type': pixKeyType,
         if (pixKeyHolderName != null) 'pix_key_holder_name': pixKeyHolderName.trim().isEmpty ? null : pixKeyHolderName.trim(),
         if (pixKeyBank != null) 'pix_key_bank': pixKeyBank.trim().isEmpty ? null : pixKeyBank.trim(),
-        'updated_at': DateTime.now().toIso8601String(),
+        'updated_at': DateTime.now().toUtc().toIso8601String(),
       };
 
       final updatedRow = await _client
@@ -678,7 +678,7 @@ class SupabaseAuthDataSource implements AuthDataSource {
           userId: r['user_id'] as String,
           role: r['role'] as String? ?? 'member',
           joinedAt:
-              DateTime.tryParse(r['joined_at'] as String? ?? '') ??
+              DateTime.tryParse(r['joined_at'] as String? ?? '')?.toLocal() ??
               DateTime.now(),
           profile: UserProfile(
             id: r['user_id'] as String,
@@ -715,7 +715,7 @@ class SupabaseAuthDataSource implements AuthDataSource {
             userId: uId,
             role: r['role'] as String? ?? 'member',
             joinedAt:
-                DateTime.tryParse(r['joined_at'] as String? ?? '') ??
+                DateTime.tryParse(r['joined_at'] as String? ?? '')?.toLocal() ??
                 DateTime.now(),
             profile: UserProfile(
               id: uId,
