@@ -327,7 +327,11 @@ class SettingsPage extends StatelessWidget {
         };
       }
       try {
-        final code = await authRepo.createHouseInvite(houseId);
+        // Só admins geram convite; os demais continuam vendo a lista de moradores.
+        var code = '---';
+        try {
+          code = await authRepo.createHouseInvite(houseId);
+        } catch (_) {}
         final membersInfo = await authRepo.getHouseMembers(houseId);
         final list = membersInfo.map((m) {
           final name = m.profile?.fullName ?? 'Membro';

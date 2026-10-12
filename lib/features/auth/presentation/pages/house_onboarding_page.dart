@@ -395,7 +395,7 @@ class _HouseOnboardingPageState extends State<HouseOnboardingPage> {
                               ),
                               const SizedBox(height: 12),
                               Text(
-                                'Peça ao administrador da casa o código de 6 caracteres disponível na aba Ajustes.',
+                                'Peça ao administrador da casa o código de convite disponível na aba Ajustes.',
                                 style: TextStyle(
                                   fontSize: 12,
                                   color: Colors.grey.shade600,

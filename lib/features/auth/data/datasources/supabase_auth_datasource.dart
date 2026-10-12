@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math';
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../../core/errors/failures.dart';
@@ -465,7 +466,7 @@ class SupabaseAuthDataSource implements AuthDataSource {
           'house_id': houseId,
           'user_id': userId,
           'role': 'owner',
-          'default_split_percent': 50.0,
+          'default_split_percent': 100.0,
         });
       } catch (errMember) {
         // Se a coluna default_split_percent não existir no schema cache, insere sem ela
@@ -614,44 +615,22 @@ class SupabaseAuthDataSource implements AuthDataSource {
     }
 
     try {
-      // Procura convite ativo
-      final invite = await _client
-          .from('house_invites')
-          .select()
-          .eq('code', inviteCode.trim().toUpperCase())
-          .maybeSingle();
-
-      if (invite == null) {
-        throw const AuthFailure('Código de convite inválido ou expirado.');
-      }
-
-      final houseId = invite['house_id'] as String;
-
+      // A RPC valida o convite (validade e uso único) e registra a entrada na casa.
+      final Map<String, dynamic> houseRow;
       try {
-        await _client.from('house_members').insert({
-          'house_id': houseId,
-          'user_id': userId,
-          'role': 'member',
-          'default_split_percent': 50.0,
-        });
-      } catch (errMember) {
-        if (errMember.toString().contains('default_split_percent') ||
-            (errMember is PostgrestException && errMember.code == 'PGRST204')) {
-          await _client.from('house_members').insert({
-            'house_id': houseId,
-            'user_id': userId,
-            'role': 'member',
-          });
-        } else {
-          rethrow;
+        houseRow = Map<String, dynamic>.from(
+          await _client.rpc(
+            'join_house_with_invite',
+            params: {'p_code': inviteCode.trim().toUpperCase()},
+          ) as Map,
+        );
+      } on PostgrestException catch (e) {
+        if (e.message.contains('convite')) {
+          throw const AuthFailure('Código de convite inválido ou expirado.');
         }
+        rethrow;
       }
 
-      final houseRow = await _client
-          .from('houses')
-          .select()
-          .eq('id', houseId)
-          .single();
       final house = House(
         id: houseRow['id'] as String,
         name: houseRow['name'] as String,
@@ -757,20 +736,28 @@ class SupabaseAuthDataSource implements AuthDataSource {
   @override
   Future<String> createHouseInvite(String houseId) async {
     try {
-      final code =
-          'LAR${DateTime.now().millisecondsSinceEpoch.toString().substring(7)}';
       final currentUserId = _currentUser?.id ?? _client.auth.currentUser?.id;
+      final code = _generateInviteCode();
       await _client.from('house_invites').insert({
         'house_id': houseId,
         'code': code,
         'created_by': ?currentUserId,
         'expires_at': DateTime.now()
+            .toUtc()
             .add(const Duration(days: 7))
             .toIso8601String(),
       });
       return code;
     } catch (e) {
-      return 'LAR${houseId.hashCode.abs().toString().padLeft(6, '0').substring(0, 6)}';
+      throw ServerFailure('Erro ao gerar convite: $e');
     }
+  }
+
+  /// Código de convite imprevisível (sem caracteres ambíguos como 0/O e 1/I).
+  String _generateInviteCode() {
+    const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+    final random = Random.secure();
+    final chars = List.generate(8, (_) => alphabet[random.nextInt(alphabet.length)]);
+    return 'LAR${chars.join()}';
   }
 }

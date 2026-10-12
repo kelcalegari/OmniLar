@@ -40,7 +40,9 @@ class SupabaseFinanceDataSource implements FinanceDataSource {
       final rows = await client
           .from('house_members')
           .select('id, user_id, role, default_split_percent, default_fixed_amount_cents, profile:profiles(full_name, avatar_url, pix_key)')
-          .eq('house_id', _houseId);
+          .eq('house_id', _houseId)
+          .filter('left_at', 'is', null)
+          .order('joined_at', ascending: true);
 
       if (rows.isEmpty) {
         final current = client.auth.currentUser;
@@ -738,7 +740,7 @@ class SupabaseFinanceDataSource implements FinanceDataSource {
     try {
       final currentUserId = client.auth.currentUser?.id ?? contribution.memberId;
       await client.from('contributions').insert({
-        'id': contribution.id,
+        if (_isUuid(contribution.id)) 'id': contribution.id,
         'house_id': _houseId,
         'member_id': contribution.memberId,
         'amount_cents': contribution.amount.cents,
@@ -755,7 +757,7 @@ class SupabaseFinanceDataSource implements FinanceDataSource {
   Future<void> addCategory(ExpenseCategory category) async {
     try {
       await client.from('categories').insert({
-        'id': category.id,
+        if (_isUuid(category.id)) 'id': category.id,
         'house_id': _houseId,
         'name': category.name,
         'icon': category.icon,
@@ -843,7 +845,7 @@ class SupabaseFinanceDataSource implements FinanceDataSource {
         return SavingsVault(
           id: r['id'] as String,
           name: r['name'] as String,
-          targetAmount: Money((r['target_amount_cents'] as num).toInt()),
+          targetAmount: Money((r['target_amount_cents'] as num?)?.toInt() ?? 0),
           currentBalance: Money((r['current_balance_cents'] as num).toInt()),
           icon: r['icon'] as String? ?? 'savings',
           colorHex: r['color_hex'] as String? ?? '#10B981',
@@ -859,10 +861,11 @@ class SupabaseFinanceDataSource implements FinanceDataSource {
   Future<void> createSavingsVault(SavingsVault vault) async {
     try {
       await client.from('savings_vaults').insert({
-        'id': vault.id,
+        if (_isUuid(vault.id)) 'id': vault.id,
         'house_id': _houseId,
         'name': vault.name,
-        'target_amount_cents': vault.targetAmount.cents,
+        // Caixinha sem meta: a coluna só aceita nulo ou valor positivo
+        'target_amount_cents': vault.targetAmount.cents > 0 ? vault.targetAmount.cents : null,
         'current_balance_cents': vault.currentBalance.cents,
         'icon': vault.icon,
         'color_hex': vault.colorHex,

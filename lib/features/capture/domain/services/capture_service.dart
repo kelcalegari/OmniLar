@@ -8,8 +8,9 @@ import 'boleto_parser.dart';
 
 class CaptureService {
   final AiConfigService aiConfigService;
+  final String? Function()? getCurrentHouseId;
 
-  CaptureService({required this.aiConfigService});
+  CaptureService({required this.aiConfigService, this.getCurrentHouseId});
 
   /// Processa arquivo de imagem ou documento PDF via Edge Function e Gemini Vision OCR.
   /// Aplica a regra "Código Primeiro": tenta identificar linha digitável de boleto antes da IA.
@@ -43,6 +44,7 @@ class CaptureService {
             'imageBase64': base64Content,
             'mimeType': mimeType,
             'fileName': fileName,
+            'houseId': ?getCurrentHouseId?.call(),
             if (userApiKey != null && userApiKey.isNotEmpty) 'userApiKey': userApiKey,
             'userModel': userModel,
           },

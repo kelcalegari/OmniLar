@@ -200,32 +200,12 @@ class SupabaseP2PDataSource implements P2PDataSource {
   @override
   Future<void> payInstallment(String installmentId, Money amount) async {
     try {
-      // 1. Invoca a RPC de pagamento seguro no Supabase
+      // A RPC grava o ledger, baixa a parcela e marca o empréstimo como
+      // 'completed' quando não sobra nada em aberto.
       await client.rpc('pay_p2p_installment', params: {
         'p_installment_id': installmentId,
         'p_amount_cents': amount.cents,
       });
-
-      // 2. Verifica se todas as parcelas deste empréstimo foram quitadas para atualizar o status do empréstimo para 'completed'
-      final instRow = await client
-          .from('p2p_installments')
-          .select('loan_id')
-          .eq('id', installmentId)
-          .single();
-      final loanId = instRow['loan_id'] as String;
-
-      final remainingInstallments = await client
-          .from('p2p_installments')
-          .select('id, status')
-          .eq('loan_id', loanId)
-          .inFilter('status', ['pending', 'partial']);
-
-      if (remainingInstallments.isEmpty) {
-        await client
-            .from('p2p_loans')
-            .update({'status': 'completed'})
-            .eq('id', loanId);
-      }
     } catch (e) {
       throw ServerFailure('Erro ao registrar pagamento de parcela P2P: $e');
     }
@@ -234,16 +214,8 @@ class SupabaseP2PDataSource implements P2PDataSource {
   @override
   Future<void> forgiveLoan(String loanId) async {
     try {
-      await client
-          .from('p2p_loans')
-          .update({'status': 'forgiven'})
-          .eq('id', loanId);
-
-      await client
-          .from('p2p_installments')
-          .update({'status': 'forgiven'})
-          .eq('loan_id', loanId)
-          .neq('status', 'paid');
+      // Só o credor (ou o admin, no Caixa da Casa) pode perdoar: validado na RPC.
+      await client.rpc('forgive_p2p_loan', params: {'p_loan_id': loanId});
     } catch (e) {
       throw ServerFailure('Erro ao perdoar empréstimo P2P: $e');
     }
@@ -256,80 +228,12 @@ class SupabaseP2PDataSource implements P2PDataSource {
     DateTime newFirstDueDate,
   ) async {
     try {
-      final rows = await client
-          .from('p2p_installments')
-          .select()
-          .eq('loan_id', loanId)
-          .order('installment_number', ascending: true);
-
-      int remainingCents = 0;
-      int paidCount = 0;
-      // Números de parcelas que continuam vigentes (pagas/perdoadas) e não podem ser reutilizados.
-      final keptNumbers = <int>{};
-
-      for (final r in rows) {
-        final amountCents = r['amount_cents'] as int;
-        final paidCents = r['paid_cents'] as int? ?? 0;
-        final status = r['status'] as String? ?? 'pending';
-
-        if (status == 'paid' || paidCents >= amountCents) {
-          paidCount++;
-          keptNumbers.add(r['installment_number'] as int);
-        } else if (status == 'forgiven') {
-          keptNumbers.add(r['installment_number'] as int);
-        } else if (status != 'renegotiated') {
-          remainingCents += (amountCents - paidCents);
-        }
-      }
-
-      if (remainingCents <= 0) {
-        throw const ServerFailure('Não há saldo remanescente a ser renegociado.');
-      }
-
-      // Marca parcelas pendentes como 'renegotiated'
-      await client
-          .from('p2p_installments')
-          .update({'status': 'renegotiated'})
-          .eq('loan_id', loanId)
-          .neq('status', 'paid')
-          .neq('status', 'forgiven');
-
-      final remainingMoney = Money(remainingCents);
-      final splitAmounts = remainingMoney.splitEqually(newInstallmentsCount);
-      final totalCombinedCount = paidCount + newInstallmentsCount;
-
-      final newRows = <Map<String, dynamic>>[];
-      int nextNumber = 0;
-      for (int i = 0; i < newInstallmentsCount; i++) {
-        do {
-          nextNumber++;
-        } while (keptNumbers.contains(nextNumber));
-
-        final dueMonth = newFirstDueDate.month + i;
-        final dueYear = newFirstDueDate.year + ((dueMonth - 1) ~/ 12);
-        final normalizedMonth = ((dueMonth - 1) % 12) + 1;
-        final maxDayInMonth = DateTime(dueYear, normalizedMonth + 1, 0).day;
-        final safeDay = newFirstDueDate.day > maxDayInMonth ? maxDayInMonth : newFirstDueDate.day;
-        final dueDate = DateTime(dueYear, normalizedMonth, safeDay);
-
-        newRows.add({
-          'loan_id': loanId,
-          'installment_number': nextNumber,
-          'amount_cents': splitAmounts[i].cents,
-          'paid_cents': 0,
-          'due_date': dueDate.toIso8601String().split('T')[0],
-          'status': 'pending',
-        });
-      }
-
-      await client.from('p2p_installments').insert(newRows);
-
-      // Ao definir um parcelamento, um empréstimo sem prazo passa a ser parcelado.
-      await client.from('p2p_loans').update({
-        'status': 'renegotiated',
-        'installments_count': totalCombinedCount,
-        'repayment_mode': 'installments',
-      }).eq('id', loanId);
+      // A RPC reparcela o saldo em aberto em uma única transação.
+      await client.rpc('renegotiate_p2p_loan', params: {
+        'p_loan_id': loanId,
+        'p_installments_count': newInstallmentsCount,
+        'p_first_due_date': newFirstDueDate.toIso8601String().split('T')[0],
+      });
     } catch (e) {
       if (e is Failure) rethrow;
       throw ServerFailure('Erro ao renegociar empréstimo P2P: $e');

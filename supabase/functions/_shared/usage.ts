@@ -42,8 +42,8 @@ export async function checkAiDailyQuota(
 
   if (error) {
     console.warn('Erro ao verificar ai_usage:', error.message);
-    // Em caso de falha de consulta na cota, não bloqueia o usuário (fallback gracioso)
-    return { allowed: true, currentCount: 0, limit: quotaLimit };
+    // Sem conseguir contar o uso, não libera a chave do sistema
+    return { allowed: false, currentCount: 0, limit: quotaLimit };
   }
 
   const currentCount = count || 0;

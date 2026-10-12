@@ -1,9 +1,9 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.8';
 import { corsHeaders } from '../_shared/cors.ts';
 import { GeminiProvider, ChatMessagePart } from '../_shared/ai_provider.ts';
 import { maskSensitiveData } from '../_shared/mask.ts';
 import { checkAiDailyQuota, recordAiUsage } from '../_shared/usage.ts';
+import { HttpError, requireHouseMember } from '../_shared/auth.ts';
 
 interface AssistantActionProposalPayload {
   id: string;
@@ -86,24 +86,11 @@ serve(async (req) => {
   }
 
   try {
-    const supabaseUrl = Deno.env.get('SUPABASE_URL') || '';
-    const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY') || '';
-    const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || supabaseAnonKey;
-
-    const authHeader = req.headers.get('Authorization') || '';
-    const supabaseClient = createClient(supabaseUrl, supabaseServiceKey, {
-      auth: {
-        persistSession: false,
-        autoRefreshToken: false,
-      },
-    });
-
     const body = await req.json();
     const {
       message,
       conversationId,
-      houseId = 'house_default',
-      memberId = 'member_default',
+      houseId: requestedHouseId,
       userApiKey,
       userModel,
       contextSummary,
@@ -116,6 +103,12 @@ serve(async (req) => {
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
       );
     }
+
+    // Identidade e casa vêm do JWT e do banco, nunca do corpo da requisição
+    const { userId: memberId, houseId, supabaseClient } = await requireHouseMember(
+      req,
+      requestedHouseId,
+    );
 
     // 1. Chave customizada (BYOK) via corpo ou cabeçalho HTTP
     const headerKey = req.headers.get('x-user-gemini-key') || undefined;
@@ -222,6 +215,13 @@ serve(async (req) => {
       { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
     );
   } catch (error: any) {
+    if (error instanceof HttpError) {
+      return new Response(
+        JSON.stringify({ success: false, error: error.message }),
+        { status: error.status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+      );
+    }
+
     const isQuota =
       error?.name === 'GeminiQuotaExhaustedError' ||
       error?.message?.includes('RESOURCE_EXHAUSTED') ||

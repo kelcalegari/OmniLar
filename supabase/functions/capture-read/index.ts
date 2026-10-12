@@ -2,6 +2,11 @@ import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { corsHeaders } from '../_shared/cors.ts';
 import { GeminiProvider } from '../_shared/ai_provider.ts';
 import { maskSensitiveData } from '../_shared/mask.ts';
+import { checkAiDailyQuota, recordAiUsage } from '../_shared/usage.ts';
+import { HttpError, requireHouseMember } from '../_shared/auth.ts';
+
+// ~7,5 MB de arquivo em base64
+const MAX_IMAGE_BASE64_CHARS = 10_000_000;
 
 export interface DocumentItemProposal {
   title: string;
@@ -81,7 +86,10 @@ serve(async (req) => {
       ocrRawText,
       userApiKey,
       userModel,
+      houseId: requestedHouseId,
     } = body;
+
+    const { userId, houseId, supabaseClient } = await requireHouseMember(req, requestedHouseId);
 
     if (!imageBase64 && !ocrRawText) {
       return new Response(
@@ -90,11 +98,42 @@ serve(async (req) => {
       );
     }
 
+    if (typeof imageBase64 === 'string' && imageBase64.length > MAX_IMAGE_BASE64_CHARS) {
+      return new Response(
+        JSON.stringify({ error: 'Arquivo grande demais para leitura. Envie uma imagem menor.' }),
+        { status: 413, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+      );
+    }
+
     // Chave ou modelo podem vir no corpo JSON ou nos cabeçalhos HTTP
     const headerKey = req.headers.get('x-user-gemini-key') || undefined;
     const headerModel = req.headers.get('x-user-gemini-model') || undefined;
     const effectiveApiKey = userApiKey || headerKey;
     const effectiveModel = userModel || headerModel;
+
+    const hasCustomKey = Boolean(effectiveApiKey && effectiveApiKey.trim().length > 0);
+
+    // Cota diária da casa (só quando usa a chave do sistema)
+    const quotaCheck = await checkAiDailyQuota(supabaseClient, houseId, userId, hasCustomKey);
+    if (!quotaCheck.allowed) {
+      await recordAiUsage(supabaseClient, {
+        houseId,
+        memberId: userId,
+        feature: 'capture',
+        model: effectiveModel || 'system-quota',
+        status: 'rate_limited',
+      });
+
+      return new Response(
+        JSON.stringify({
+          error:
+            'A cota diária gratuita de leitura de documentos desta casa foi atingida. ' +
+            'Adicione sua chave gratuita do Google AI Studio em Ajustes > Assistente IA para continuar.',
+          rateLimited: true,
+        }),
+        { status: 429, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+      );
+    }
 
     const provider = new GeminiProvider(effectiveApiKey, effectiveModel);
 
@@ -112,6 +151,16 @@ serve(async (req) => {
 
     const result = response.data;
 
+    await recordAiUsage(supabaseClient, {
+      houseId,
+      memberId: userId,
+      feature: 'capture',
+      model: provider.effectiveModel,
+      tokensIn: 0,
+      tokensOut: response.tokensUsed || 0,
+      status: 'success',
+    });
+
     // Validação de consistência de centavos: se itemized, verifica o balanço dos sub-itens
     if (result.is_itemized && result.items && result.items.length > 0) {
       const itemsSum = result.items.reduce((sum, it) => sum + (it.amount_cents || 0), 0);
@@ -126,6 +175,13 @@ serve(async (req) => {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
   } catch (error: any) {
+    if (error instanceof HttpError) {
+      return new Response(
+        JSON.stringify({ success: false, error: error.message }),
+        { status: error.status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+      );
+    }
+
     return new Response(
       JSON.stringify({ success: false, error: error?.message || 'Erro inesperado no OCR/IA.' }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },

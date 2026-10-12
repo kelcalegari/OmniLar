@@ -255,5 +255,6 @@ Future<void> initServiceLocator() async {
   // Capture Feature
   sl.registerLazySingleton<CaptureService>(() => CaptureService(
         aiConfigService: sl(),
+        getCurrentHouseId: () => sl<AuthRepository>().currentHouse?.id,
       ));
 }
