@@ -227,7 +227,7 @@ class _SettlementHubContent extends StatelessWidget {
                     ),
                     icon: const Icon(Icons.refresh_rounded, size: 18),
                     label: const Text(
-                      'Reabrir / Recalcular com novos lançamentos',
+                      'Reabrir o ciclo para novos lançamentos',
                       style: TextStyle(
                         fontWeight: FontWeight.w600,
                         fontSize: 13,
@@ -237,9 +237,10 @@ class _SettlementHubContent extends StatelessWidget {
                       final confirmed = await showDialog<bool>(
                         context: context,
                         builder: (ctx) => AlertDialog(
-                          title: const Text('Recalcular Fechamento?'),
+                          title: const Text('Reabrir o ciclo?'),
                           content: const Text(
-                            'Deseja reabrir este ciclo para que o saldo e parcelas sejam recalculados dinamicamente com as despesas atuais?',
+                            'O ciclo volta a aceitar lançamentos. O que já foi acertado continua valendo: '
+                            'ao fechar de novo, só a diferença dos novos lançamentos entra no Super Pix.',
                           ),
                           actions: [
                             TextButton(
@@ -248,7 +249,7 @@ class _SettlementHubContent extends StatelessWidget {
                             ),
                             FilledButton(
                               onPressed: () => Navigator.pop(ctx, true),
-                              child: const Text('Recalcular'),
+                              child: const Text('Reabrir'),
                             ),
                           ],
                         ),
@@ -558,6 +559,31 @@ class _SettlementHubContent extends StatelessWidget {
                 ),
               ],
             ),
+            if (!isSettled && summary.isReopened) ...[
+              const SizedBox(height: 12),
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: AppColors.accent.withValues(alpha: 0.08),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: AppColors.accent.withValues(alpha: 0.25)),
+                ),
+                child: const Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Icon(Icons.lock_open_rounded, size: 18, color: AppColors.accent),
+                    SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        'Ciclo reaberto. O que já foi acertado no fechamento anterior continua valendo: '
+                        'o Super Pix abaixo mostra só a diferença dos novos lançamentos.',
+                        style: TextStyle(fontSize: 12),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
             if (!isSettled && summary.bucketDeficit.cents > 0)
               _buildDeficitCard(context, summary, state),
             if (isSettled) ...[

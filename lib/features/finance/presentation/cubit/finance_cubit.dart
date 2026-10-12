@@ -362,6 +362,27 @@ class FinanceCubit extends Cubit<FinanceState> {
     }
   }
 
+  /// Desfaz o registro de pagamento de uma fatura. Retorna false em caso de erro.
+  Future<bool> undoCardInvoicePayment({
+    required String paymentMethodId,
+    required DateTime invoiceDueDate,
+  }) async {
+    try {
+      await _repository.undoCardInvoicePayment(
+        paymentMethodId: paymentMethodId,
+        invoiceDueDate: invoiceDueDate,
+      );
+      await loadCycleData(cycle: state.currentCycle);
+      return true;
+    } catch (e) {
+      emit(state.copyWith(
+        status: FinanceStatus.failure,
+        errorMessage: 'Erro ao desfazer pagamento da fatura: $e',
+      ));
+      return false;
+    }
+  }
+
   // --- Ações de Caixinhas & Metas da Casa (Dinheiro Blindado) ---
   Future<void> createSavingsVault(SavingsVault vault) async {
     try {

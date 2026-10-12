@@ -74,4 +74,13 @@ abstract class FinanceDataSource {
     required DateTime invoiceDueDate,
     required DateTime paidAt,
   });
+
+  /// Faturas do cartão com pagamento registrado (recentes).
+  Future<List<CardInvoice>> getPaidCardInvoices(String paymentMethodId);
+
+  /// Desfaz o registro de pagamento da fatura que vence em [invoiceDueDate].
+  Future<void> undoCardInvoicePayment({
+    required String paymentMethodId,
+    required DateTime invoiceDueDate,
+  });
 }

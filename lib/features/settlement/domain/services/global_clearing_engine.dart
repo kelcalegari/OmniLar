@@ -32,6 +32,8 @@ class GlobalClearingEngine {
     String? housePixKeyHolderName,
     DeficitSplit deficitSplit = DeficitSplit.proportional,
     Money deficitVaultBalance = const Money.zero(),
+    Money surplusAlreadyVaulted = const Money.zero(),
+    Money deficitAlreadyCovered = const Money.zero(),
   }) {
     // 0. Despesas de projetos compartilhados são liquidadas apenas no próprio projeto
     // (ProjectSettlementService). Filtramos aqui por defesa em profundidade para
@@ -62,6 +64,7 @@ class GlobalClearingEngine {
     };
     int bucketDeficitCents = 0;
     int deficitCoveredCents = 0;
+    int deficitAlreadyCoveredCents = 0;
 
     if (customContributionTargets != null) {
       contributionTargets.addAll(customContributionTargets);
@@ -87,6 +90,10 @@ class GlobalClearingEngine {
       if (totalExpensesCents > bucketCents) {
         bucketDeficitCents = totalExpensesCents - bucketCents;
       }
+      // Ciclo reaberto: o que a Caixinha já cobriu no fechamento anterior não volta a ser cobrado
+      deficitAlreadyCoveredCents = deficitAlreadyCovered.cents.clamp(0, bucketDeficitCents).toInt();
+      bucketDeficitCents -= deficitAlreadyCoveredCents;
+
       final vaultCents = deficitVaultBalance.cents > 0 ? deficitVaultBalance.cents : 0;
       deficitCoveredCents = vaultCents < bucketDeficitCents ? vaultCents : bucketDeficitCents;
 
@@ -275,6 +282,8 @@ class GlobalClearingEngine {
             (e) =>
                 e.paidByMemberId == member.id &&
                 e.paidOutOfPocket &&
+                // Já reembolsada em um fechamento anterior deste ciclo
+                e.settledAt == null &&
                 e.paymentMethodId != 'pm_caixa',
           )
           .toList();
@@ -389,7 +398,11 @@ class GlobalClearingEngine {
 
     // 6. Saldo do Caixa da Casa
     final houseTreasuryCents =
-        totalContributionsCents - totalExpensesCents + deficitCoveredCents;
+        totalContributionsCents -
+        totalExpensesCents +
+        deficitCoveredCents +
+        deficitAlreadyCoveredCents -
+        surplusAlreadyVaulted.cents;
 
     return SettlementSummary(
       cycle: cycle,

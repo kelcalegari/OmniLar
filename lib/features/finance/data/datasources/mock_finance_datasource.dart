@@ -709,4 +709,27 @@ class MockFinanceDataSource implements FinanceDataSource {
       }
     }
   }
+
+  @override
+  Future<List<CardInvoice>> getPaidCardInvoices(String paymentMethodId) async =>
+      CardInvoice.groupPaidInvoices(paymentMethodId, _expenses);
+
+  @override
+  Future<void> undoCardInvoicePayment({
+    required String paymentMethodId,
+    required DateTime invoiceDueDate,
+  }) async {
+    for (int i = 0; i < _expenses.length; i++) {
+      final e = _expenses[i];
+      final due = e.dueDate;
+      if (e.paymentMethodId == paymentMethodId &&
+          e.paidAt != null &&
+          due != null &&
+          due.year == invoiceDueDate.year &&
+          due.month == invoiceDueDate.month &&
+          due.day == invoiceDueDate.day) {
+        _expenses[i] = e.copyWith(clearPaidAt: true);
+      }
+    }
+  }
 }

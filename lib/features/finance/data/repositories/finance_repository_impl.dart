@@ -164,4 +164,18 @@ class FinanceRepositoryImpl implements FinanceRepository {
         invoiceDueDate: invoiceDueDate,
         paidAt: paidAt,
       );
+
+  @override
+  Future<List<CardInvoice>> getPaidCardInvoices(String paymentMethodId) =>
+      _dataSource.getPaidCardInvoices(paymentMethodId);
+
+  @override
+  Future<void> undoCardInvoicePayment({
+    required String paymentMethodId,
+    required DateTime invoiceDueDate,
+  }) =>
+      _dataSource.undoCardInvoicePayment(
+        paymentMethodId: paymentMethodId,
+        invoiceDueDate: invoiceDueDate,
+      );
 }

@@ -22,6 +22,13 @@ class _FakeFinanceRepository implements FinanceRepository {
   @override
   Future<List<CardInvoice>> getOpenCardInvoices(String paymentMethodId) async => [];
   @override
+  Future<List<CardInvoice>> getPaidCardInvoices(String paymentMethodId) async => [];
+  @override
+  Future<void> undoCardInvoicePayment({
+    required String paymentMethodId,
+    required DateTime invoiceDueDate,
+  }) async {}
+  @override
   Future<void> payCardInvoice({
     required String paymentMethodId,
     required DateTime invoiceDueDate,

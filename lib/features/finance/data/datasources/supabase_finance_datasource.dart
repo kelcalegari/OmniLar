@@ -1114,6 +1114,7 @@ class SupabaseFinanceDataSource implements FinanceDataSource {
       isVariable: r['is_variable'] as bool? ?? false,
       dueDay: (r['due_day'] as num?)?.toInt(),
       isActive: r['is_active'] as bool? ?? true,
+      settledAt: r['settled_at'] != null ? DateTime.tryParse(r['settled_at'] as String)?.toLocal() : null,
       paidAt: r['paid_at'] != null ? DateTime.tryParse(r['paid_at'] as String)?.toLocal() : null,
       paidOutOfPocket: r['paid_out_of_pocket'] as bool? ?? false,
       notes: r['notes'] as String?,
@@ -1237,6 +1238,50 @@ class SupabaseFinanceDataSource implements FinanceDataSource {
           .isFilter('paid_at', null);
     } catch (e) {
       throw ServerFailure('Erro ao registrar pagamento da fatura: $e');
+    }
+  }
+
+  @override
+  Future<List<CardInvoice>> getPaidCardInvoices(String paymentMethodId) async {
+    try {
+      if (!_isUuid(paymentMethodId)) return const [];
+
+      final since = DateTime.now().subtract(const Duration(days: 62));
+      final rows = await client
+          .from('house_expenses')
+          .select('*, house_expense_items(*), split_rules(*)')
+          .eq('house_id', _houseId)
+          .eq('payment_method_id', paymentMethodId)
+          .isFilter('project_id', null)
+          .isFilter('deleted_at', null)
+          .not('paid_at', 'is', null)
+          .gte('due_date', since.toIso8601String().split('T')[0]);
+
+      return CardInvoice.groupPaidInvoices(
+        paymentMethodId,
+        rows.map((r) => _mapRowToHouseExpense(r)),
+      );
+    } catch (e) {
+      throw ServerFailure('Erro ao buscar faturas pagas do cartão: $e');
+    }
+  }
+
+  @override
+  Future<void> undoCardInvoicePayment({
+    required String paymentMethodId,
+    required DateTime invoiceDueDate,
+  }) async {
+    try {
+      await client
+          .from('house_expenses')
+          .update({'paid_at': null})
+          .eq('house_id', _houseId)
+          .eq('payment_method_id', paymentMethodId)
+          .eq('due_date', invoiceDueDate.toIso8601String().split('T')[0])
+          .isFilter('deleted_at', null)
+          .not('paid_at', 'is', null);
+    } catch (e) {
+      throw ServerFailure('Erro ao desfazer pagamento da fatura: $e');
     }
   }
 }

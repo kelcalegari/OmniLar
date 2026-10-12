@@ -15,6 +15,8 @@ import '../../../finance/domain/entities/category.dart';
 import '../../../finance/domain/entities/house_member.dart';
 import '../../../finance/domain/repositories/finance_repository.dart';
 import '../../../finance/presentation/widgets/card_invoice_payment_sheet.dart';
+import '../../../settlement/domain/entities/settlement_summary.dart';
+import '../../../settlement/domain/repositories/settlement_repository.dart';
 import '../../../finance/domain/entities/payment_method.dart';
 import '../../../finance/presentation/cubit/finance_state.dart';
 import '../../../finance/presentation/pages/add_expense_page.dart';
@@ -1983,6 +1985,11 @@ class SettingsPage extends StatelessWidget {
                                             financeCubit: financeCubit,
                                             cycleStartDay:
                                                 sl<AuthRepository>().currentHouse?.cycleStartDay ?? 5,
+                                            isCycleClosed: (cycle) async =>
+                                                (await sl<SettlementRepository>()
+                                                        .getSettlementSummary(cycle))
+                                                    .status ==
+                                                SettlementStatus.settled,
                                           ),
                                         );
                                       } else if (action == 'edit') {

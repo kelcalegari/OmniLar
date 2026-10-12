@@ -1,3 +1,4 @@
+import '../../../finance/domain/entities/split_rule.dart';
 import 'package:flutter/foundation.dart' show debugPrint;
 import '../../../../core/domain/value_objects/financial_cycle.dart';
 import '../../../../core/domain/value_objects/money.dart';
@@ -22,6 +23,11 @@ class MockSettlementDataSource implements SettlementDataSource {
   final GlobalClearingEngine engine;
 
   SettlementSummary? _cachedSettlement;
+
+  // Ciclos reabertos: o que o fechamento anterior já registrou
+  final _reopenedTransfers = <FinancialCycle, List<SuperPixTransfer>>{};
+  final _surplusVaulted = <FinancialCycle, int>{};
+  final _deficitCovered = <FinancialCycle, int>{};
 
   MockSettlementDataSource({
     required this.financeDataSource,
@@ -85,9 +91,14 @@ class MockSettlementDataSource implements SettlementDataSource {
       housePixKeyHolderName: house?.pixKeyHolderName,
       deficitSplit: options?.deficitSplit ?? DeficitSplit.proportional,
       deficitVaultBalance: deficitVaultBalance,
-    );
+      surplusAlreadyVaulted: Money(_surplusVaulted[cycle] ?? 0),
+      deficitAlreadyCovered: Money(_deficitCovered[cycle] ?? 0),
+    ).copyWith(isReopened: _reopenedTransfers.containsKey(cycle));
 
-    _cachedSettlement = summary;
+    // Consultar outro ciclo não pode apagar um fechamento já arquivado
+    if (_cachedSettlement?.status != SettlementStatus.settled) {
+      _cachedSettlement = summary;
+    }
     return summary;
   }
 
@@ -98,6 +109,8 @@ class MockSettlementDataSource implements SettlementDataSource {
   }) async {
     // 0. Excedente do balde coberto pela Caixinha escolhida
     if (summary.deficitCoveredByVault.cents > 0 && options?.deficitVaultId != null) {
+      _deficitCovered[summary.cycle] =
+          (_deficitCovered[summary.cycle] ?? 0) + summary.deficitCoveredByVault.cents;
       await financeDataSource.withdrawFromVault(
         vaultId: options!.deficitVaultId!,
         memberId: summary.memberBalances.firstOrNull?.memberId ?? 'user',
@@ -240,6 +253,8 @@ class MockSettlementDataSource implements SettlementDataSource {
         summary.houseTreasuryBalance.cents > 0) {
       final actorId =
           summary.memberBalances.firstOrNull?.memberId ?? 'member_carlos';
+      _surplusVaulted[summary.cycle] =
+          (_surplusVaulted[summary.cycle] ?? 0) + summary.houseTreasuryBalance.cents;
       await financeDataSource.depositToVault(
         vaultId: options!.targetVaultId!,
         memberId: actorId,
@@ -268,11 +283,30 @@ class MockSettlementDataSource implements SettlementDataSource {
 
     // 4. Baixa as despesas do ciclo que estavam pendentes
     final expenses = await financeDataSource.getExpensesForCycle(summary.cycle);
-    for (final exp in expenses) {
+    // Congela o rateio: despesas que usaram o padrão da casa passam a carregar os
+    // percentuais deste fechamento.
+    final members = await financeDataSource.getMembers();
+    final defaultSplit = SplitRule.percentage({
+      for (final m in members) m.id: m.defaultSplitPercent,
+    });
+    HouseExpense frozen(HouseExpense exp) =>
+        exp.settledAt == null &&
+            exp.splitRule.type == SplitType.percentage &&
+            (exp.splitRule.percentages == null || exp.splitRule.percentages!.isEmpty)
+        ? exp.copyWith(splitRule: defaultSplit)
+        : exp;
+
+    for (final original in expenses) {
+      final exp = frozen(original);
+      // Tudo o que entra neste acerto: se o ciclo for reaberto, não é reembolsado de novo
+      if (exp.isPaid && exp.settledAt == null) {
+        await financeDataSource.updateExpense(exp.copyWith(settledAt: DateTime.now()));
+      }
       if (exp.isPending) {
         await financeDataSource.updateExpense(
           exp.copyWith(
             status: ExpenseStatus.paid,
+            settledAt: DateTime.now(),
             // A baixa pertence ao ciclo fechado, mesmo que o fechamento seja feito depois
             paidAt: DateTime.now().isAfter(summary.cycle.endDate)
                 ? summary.cycle.endDate
@@ -294,7 +328,8 @@ class MockSettlementDataSource implements SettlementDataSource {
     // 6. Atualiza estado de liquidação arquivado
     _cachedSettlement = summary.copyWith(
       status: SettlementStatus.settled,
-      transfers: confirmedTransfers,
+      // Ciclo reaberto: o histórico do fechamento anterior continua visível
+      transfers: [...?_reopenedTransfers.remove(summary.cycle), ...confirmedTransfers],
       settledAt: DateTime.now(),
     );
   }
@@ -302,6 +337,8 @@ class MockSettlementDataSource implements SettlementDataSource {
   @override
   Future<void> reopenSettlement(FinancialCycle cycle) async {
     if (_cachedSettlement != null && _cachedSettlement!.cycle == cycle) {
+      // O que já foi acertado fica registrado; o novo fechamento cobra só a diferença
+      _reopenedTransfers[cycle] = _cachedSettlement!.transfers;
       _cachedSettlement = null;
     }
   }

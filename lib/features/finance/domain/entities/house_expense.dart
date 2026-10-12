@@ -29,6 +29,7 @@ class HouseExpense extends Equatable {
   final String? recurringSeriesId; // Vincula esta despesa à série/assinatura recorrente matriz
   final String? projectId; // Vincula esta despesa a um projeto compartilhado (ex: viagem, reforma, meta)
   final DateTime? paidAt; // Quando uma conta que estava pendente recebeu baixa (define o ciclo em que ela conta)
+  final DateTime? settledAt; // Quando entrou em um fechamento de ciclo (o reembolso de quem pagou do bolso já foi acertado)
 
   const HouseExpense({
     required this.id,
@@ -51,6 +52,7 @@ class HouseExpense extends Equatable {
     this.recurringSeriesId,
     this.projectId,
     this.paidAt,
+    this.settledAt,
   });
 
   bool get isPaid => status == ExpenseStatus.paid;
@@ -113,6 +115,7 @@ class HouseExpense extends Equatable {
     String? projectId,
     DateTime? paidAt,
     bool clearPaidAt = false,
+    DateTime? settledAt,
   }) {
     return HouseExpense(
       id: id ?? this.id,
@@ -135,6 +138,7 @@ class HouseExpense extends Equatable {
       recurringSeriesId: recurringSeriesId ?? this.recurringSeriesId,
       projectId: projectId ?? this.projectId,
       paidAt: clearPaidAt ? null : (paidAt ?? this.paidAt),
+      settledAt: settledAt ?? this.settledAt,
     );
   }
 
@@ -160,5 +164,6 @@ class HouseExpense extends Equatable {
         recurringSeriesId,
         projectId,
         paidAt,
+        settledAt,
       ];
 }

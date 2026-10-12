@@ -3,6 +3,7 @@ import '../../../../core/domain/value_objects/financial_cycle.dart';
 import '../../../../core/domain/value_objects/money.dart';
 import '../../../../core/errors/failures.dart';
 import '../../../finance/data/datasources/finance_datasource.dart';
+import '../../../finance/domain/entities/split_rule.dart';
 import '../../../p2p/data/datasources/p2p_datasource.dart';
 import '../../../p2p/domain/entities/p2p_loan.dart';
 import '../../../p2p/domain/services/p2p_calculator.dart';
@@ -47,6 +48,10 @@ class SupabaseSettlementDataSource implements SettlementDataSource {
     SettlementOptions? options,
   }) async {
     final cycleStartStr = cycle.startDate.toIso8601String().split('T')[0];
+    // Ciclo reaberto: o que o fechamento anterior já movimentou nas caixinhas
+    var isReopened = false;
+    var surplusAlreadyVaulted = const Money.zero();
+    var deficitAlreadyCovered = const Money.zero();
 
     // 1. Verifica se já existe um fechamento gravado no Supabase para este ciclo
     try {
@@ -103,6 +108,16 @@ class SupabaseSettlementDataSource implements SettlementDataSource {
               : null,
         );
       }
+
+      if (existingSettlement != null && existingSettlement['status'] == 'draft') {
+        isReopened = true;
+        surplusAlreadyVaulted = Money(
+          (existingSettlement['surplus_vaulted_cents'] as num?)?.toInt() ?? 0,
+        );
+        deficitAlreadyCovered = Money(
+          (existingSettlement['deficit_covered_cents'] as num?)?.toInt() ?? 0,
+        );
+      }
     } catch (_) {
       // Continua para apuração dinâmica
     }
@@ -139,7 +154,7 @@ class SupabaseSettlementDataSource implements SettlementDataSource {
           const Money.zero();
     }
 
-    return engine.computeSettlement(
+    final summary = engine.computeSettlement(
       cycle: cycle,
       members: members,
       expenses: expenses,
@@ -150,7 +165,10 @@ class SupabaseSettlementDataSource implements SettlementDataSource {
       housePixKeyHolderName: house?.pixKeyHolderName,
       deficitSplit: options?.deficitSplit ?? DeficitSplit.proportional,
       deficitVaultBalance: deficitVaultBalance,
+      surplusAlreadyVaulted: surplusAlreadyVaulted,
+      deficitAlreadyCovered: deficitAlreadyCovered,
     );
+    return summary.copyWith(isReopened: isReopened);
   }
 
   @override
@@ -206,6 +224,42 @@ class SupabaseSettlementDataSource implements SettlementDataSource {
     final expenseIds = [
       for (final exp in expenses)
         if (exp.isPending && _isUuid(exp.id)) exp.id,
+    ];
+    // Tudo o que entra neste acerto: se o ciclo for reaberto, não é reembolsado de novo
+    final settledExpenseIds = [
+      for (final exp in expenses)
+        if (exp.settledAt == null && _isUuid(exp.id)) exp.id,
+    ];
+
+    // Congela o rateio: despesas que usaram o padrão da casa passam a carregar os
+    // percentuais deste fechamento. Mudar o padrão ou entrar um morador novo
+    // depois não altera o que já foi acertado.
+    final members = await financeDataSource.getMembers();
+    final defaultSplit = SplitRule.percentage({
+      for (final m in members)
+        if (_isUuid(m.id)) m.id: m.defaultSplitPercent,
+    });
+    final memberIds = defaultSplit.percentages!.keys.toList();
+    final splitSnapshots = [
+      for (final exp in expenses)
+        if (exp.settledAt == null &&
+            _isUuid(exp.id) &&
+            exp.splitRule.type == SplitType.percentage &&
+            (exp.splitRule.percentages == null || exp.splitRule.percentages!.isEmpty))
+          {
+            'expense_id': exp.id,
+            'rules': [
+              for (final entry in defaultSplit
+                  .calculateAllocations(totalAmount: exp.amount, memberIds: memberIds)
+                  .entries)
+                {
+                  'member_id': entry.key,
+                  'percentage_basis_points':
+                      (defaultSplit.percentages![entry.key]! * 100).round().clamp(0, 10000),
+                  'calculated_cents': entry.value.cents,
+                },
+            ],
+          },
     ];
 
     // 4. Parcelas P2P cobradas neste fechamento (mesma regra do motor)
@@ -348,6 +402,14 @@ class SupabaseSettlementDataSource implements SettlementDataSource {
           'vault_operations': vaultOperations,
           'contributions': contributions,
           'expense_ids': expenseIds,
+          'settled_expense_ids': settledExpenseIds,
+          'split_snapshots': splitSnapshots,
+          'surplus_vaulted_cents': [
+            for (final op in vaultOperations)
+              if (op['type'] == 'deposit') op['amount_cents'] as int,
+          ].fold<int>(0, (acc, cents) => acc + cents),
+          'deficit_covered_cents':
+              options?.deficitVaultId != null ? summary.deficitCoveredByVault.cents : 0,
           // A baixa pertence ao ciclo fechado, mesmo que o fechamento seja feito depois
           'expenses_paid_at': _paidAtWithin(cycle).toUtc().toIso8601String(),
           'installment_payments': installmentPayments,

@@ -156,4 +156,18 @@ class DynamicFinanceDataSource implements FinanceDataSource {
         invoiceDueDate: invoiceDueDate,
         paidAt: paidAt,
       );
+
+  @override
+  Future<List<CardInvoice>> getPaidCardInvoices(String paymentMethodId) =>
+      _active.getPaidCardInvoices(paymentMethodId);
+
+  @override
+  Future<void> undoCardInvoicePayment({
+    required String paymentMethodId,
+    required DateTime invoiceDueDate,
+  }) =>
+      _active.undoCardInvoicePayment(
+        paymentMethodId: paymentMethodId,
+        invoiceDueDate: invoiceDueDate,
+      );
 }
