@@ -43,6 +43,7 @@ class _SmartScannerPageState extends State<SmartScannerPage> {
   bool _isProcessing = false;
   String _processingMessage = 'Processando documento...';
   bool _isSubmitting = false;
+  String? _selectedPaymentMethodId;
 
   MobileScannerController? _scannerController;
   bool _isCameraActive = false;
@@ -715,7 +716,16 @@ class _SmartScannerPageState extends State<SmartScannerPage> {
       final financeCubit = context.read<FinanceCubit>();
       final state = financeCubit.state;
       final currentUserId = sl<AuthRepository>().currentUser?.id;
-      final paidByMemberId = currentUserId ?? (state.members.isNotEmpty ? state.members.first.id : 'member_carlos');
+      final selectedPm = state.paymentMethods
+          .where((p) => p.id == _selectedPaymentMethodId)
+          .firstOrNull ?? state.paymentMethods.firstOrNull;
+      // Meio de pagamento pessoal: quem pagou é o dono dele e a Casa reembolsa
+      final paidByMemberId = selectedPm?.ownerMemberId ??
+          currentUserId ??
+          (state.members.isNotEmpty ? state.members.first.id : 'member_carlos');
+      final paidOutOfPocket = selectedPm != null &&
+          selectedPm.ownerMemberId != null &&
+          selectedPm.id != 'pm_caixa';
 
       // 1. Resolução dinâmica de Categoria compatível com Supabase e Mock
       String? matchedCategoryId;
@@ -728,11 +738,8 @@ class _SmartScannerPageState extends State<SmartScannerPage> {
         matchedCategoryId = found.id;
       }
 
-      // 2. Resolução dinâmica da Forma de Pagamento
-      String? matchedPaymentMethodId;
-      if (state.paymentMethods.isNotEmpty) {
-        matchedPaymentMethodId = state.paymentMethods.first.id;
-      }
+      // 2. Forma de Pagamento escolhida na revisão
+      final matchedPaymentMethodId = selectedPm?.id;
 
       // 3. Regra de rateio entre membros
       final splitPercentages = {
@@ -774,6 +781,7 @@ class _SmartScannerPageState extends State<SmartScannerPage> {
         paidByMemberId: paidByMemberId,
         paymentMethodId: finalPaymentMethodId,
         splitRule: splitRule,
+        paidOutOfPocket: paidOutOfPocket,
         status: ExpenseStatus.paid,
         notes: proposal.merchantOrBeneficiary,
         items: expenseItems,
@@ -1291,6 +1299,36 @@ class _SmartScannerPageState extends State<SmartScannerPage> {
               ),
             ),
           ],
+          const SizedBox(height: 16),
+
+          // Forma de Pagamento
+          Builder(
+            builder: (context) {
+              final paymentMethods = context.watch<FinanceCubit>().state.paymentMethods;
+              if (paymentMethods.isEmpty) return const SizedBox.shrink();
+              final currentPm = paymentMethods
+                      .where((p) => p.id == _selectedPaymentMethodId)
+                      .firstOrNull ??
+                  paymentMethods.first;
+              final isHouse = currentPm.ownerMemberId == null || currentPm.id == 'pm_caixa';
+
+              return DropdownButtonFormField<String>(
+                initialValue: currentPm.id,
+                decoration: InputDecoration(
+                  labelText: 'Forma de Pagamento',
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                  prefixIcon: const Icon(Icons.credit_card_rounded),
+                  helperText: isHouse
+                      ? 'Meio da Casa: despesa conjunta (sem reembolso pessoal)'
+                      : 'Meio pessoal: a Casa reembolsa quem pagou',
+                ),
+                items: paymentMethods.map((pm) {
+                  return DropdownMenuItem(value: pm.id, child: Text(pm.name));
+                }).toList(),
+                onChanged: (val) => setState(() => _selectedPaymentMethodId = val),
+              );
+            },
+          ),
           const SizedBox(height: 20),
 
           // Botões de Confirmação
