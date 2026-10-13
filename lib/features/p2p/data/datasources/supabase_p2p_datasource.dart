@@ -98,6 +98,7 @@ class SupabaseP2PDataSource implements P2PDataSource {
             : createdAt;
 
         return P2PLoan(
+          repayToVaultId: r['repay_to_vault_id'] as String?,
           id: r['id'] as String,
           title: r['title'] as String,
           description: r['description'] as String?,
@@ -198,8 +199,17 @@ class SupabaseP2PDataSource implements P2PDataSource {
   }
 
   @override
-  Future<void> payInstallment(String installmentId, Money amount) async {
+  Future<void> payInstallment(String installmentId, Money amount, {String? vaultId}) async {
     try {
+      // Acordo com o Lar pago para uma Caixinha: a baixa e o depósito vão juntos
+      if (vaultId != null) {
+        await client.rpc('pay_house_loan_to_vault', params: {
+          'p_vault_id': vaultId,
+          'p_amount_cents': amount.cents,
+          'p_installment_id': installmentId,
+        });
+        return;
+      }
       // A RPC grava o ledger, baixa a parcela e marca o empréstimo como
       // 'completed' quando não sobra nada em aberto.
       await client.rpc('pay_p2p_installment', params: {
@@ -271,8 +281,16 @@ class SupabaseP2PDataSource implements P2PDataSource {
   }
 
   @override
-  Future<void> payLoan(String loanId, Money amount) async {
+  Future<void> payLoan(String loanId, Money amount, {String? vaultId}) async {
     try {
+      if (vaultId != null) {
+        await client.rpc('pay_house_loan_to_vault', params: {
+          'p_vault_id': vaultId,
+          'p_amount_cents': amount.cents,
+          'p_loan_id': loanId,
+        });
+        return;
+      }
       // A RPC distribui o valor das parcelas mais antigas para as mais novas
       // e marca o empréstimo como 'completed' quando o saldo zera.
       await client.rpc('pay_p2p_loan', params: {

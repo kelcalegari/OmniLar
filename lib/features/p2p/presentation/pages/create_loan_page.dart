@@ -1151,7 +1151,7 @@ class _CreateLoanPageState extends State<CreateLoanPage> {
               itemBuilder: (context, index) {
                 final inst = _installments[index];
                 final isPaid = inst.isFullyPaid;
-                final isOverdue = !isPaid && DateTime.now().isAfter(inst.dueDate);
+                final isOverdue = !isPaid && inst.isPastDue;
 
                 return Container(
                   padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),

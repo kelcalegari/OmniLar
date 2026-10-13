@@ -12,6 +12,7 @@ import '../../domain/entities/p2p_payment_record.dart';
 import '../../domain/repositories/p2p_repository.dart';
 import '../../../auth/domain/repositories/auth_repository.dart';
 import '../../../finance/domain/entities/house_member.dart';
+import '../../../finance/domain/entities/savings_vault.dart';
 import '../../../finance/presentation/cubit/finance_cubit.dart';
 import '../cubit/p2p_cubit.dart';
 import 'loan_payment_dialog.dart';
@@ -168,15 +169,93 @@ class LoanDetailsSheet extends StatelessWidget {
     );
   }
 
-  void _openPaymentDialog(BuildContext context, P2PInstallment installment) {
+  /// Acordo com o Lar pago fora do fechamento: o valor é guardado em uma
+  /// Caixinha. Devolve a escolhida, null quando não se aplica (credor é um
+  /// morador, reposição que já tem Caixinha de origem ou casa sem Caixinhas).
+  /// [proceed] é false quando o usuário desistiu.
+  Future<({bool proceed, String? vaultId})> _pickDestinationVault(BuildContext context) async {
+    if (!loan.isHouseLender || loan.repayToVaultId != null) {
+      return (proceed: true, vaultId: null);
+    }
+    var vaults = <SavingsVault>[];
+    try {
+      vaults = context.read<FinanceCubit>().state.savingsVaults;
+    } catch (_) {}
+    if (vaults.isEmpty) return (proceed: true, vaultId: null);
+
+    var selectedId = vaults
+            .where((v) => v.name == 'Reserva da Casa')
+            .firstOrNull
+            ?.id ??
+        vaults.first.id;
+    final chosen = await showDialog<String>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialogState) => AlertDialog(
+          title: const Text('Guardar em qual Caixinha?'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'Este acordo é com o Caixa da Casa. O valor pago agora, fora do fechamento, fica guardado na Caixinha escolhida.',
+                style: TextStyle(fontSize: 13),
+              ),
+              const SizedBox(height: 12),
+              DropdownButtonFormField<String>(
+                initialValue: selectedId,
+                decoration: const InputDecoration(
+                  labelText: 'Caixinha',
+                  border: OutlineInputBorder(),
+                ),
+                items: [
+                  for (final v in vaults)
+                    DropdownMenuItem(value: v.id, child: Text(v.name)),
+                ],
+                onChanged: (val) {
+                  if (val != null) setDialogState(() => selectedId = val);
+                },
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('Cancelar'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(ctx, selectedId),
+              child: const Text('Continuar'),
+            ),
+          ],
+        ),
+      ),
+    );
+    return (proceed: chosen != null, vaultId: chosen);
+  }
+
+  /// O saldo da Caixinha mudou junto com o pagamento: atualiza o painel financeiro.
+  void _refreshFinance(BuildContext context) {
+    try {
+      context.read<FinanceCubit>().loadCycleData();
+    } catch (_) {}
+  }
+
+  Future<void> _openPaymentDialog(BuildContext context, P2PInstallment installment) async {
+    final destination = await _pickDestinationVault(context);
+    if (!destination.proceed || !context.mounted) return;
     PartialPaymentDialog.show(
       context: context,
       installment: installment,
       isOpenEnded: loan.isOpenEnded,
-      onConfirm: (amount) {
-        _runAction(
+      onConfirm: (amount) async {
+        await _runAction(
           context,
-          (cubit) => cubit.payInstallment(installment.id, amount),
+          (cubit) => cubit.payInstallment(
+            installment.id,
+            amount,
+            vaultId: destination.vaultId,
+          ),
           successMessage: loan.isOpenEnded
               ? (amount.cents == installment.remainingAmount.cents
                   ? 'Empréstimo quitado! ✅'
@@ -185,23 +264,27 @@ class LoanDetailsSheet extends StatelessWidget {
                   ? 'Parcela ${installment.number}/${installment.totalCount} quitada com sucesso! ✅'
                   : 'Pagamento parcial de ${amount.format()} registrado! Saldo atualizado. 🪙',
         );
+        if (context.mounted) _refreshFinance(context);
       },
     );
   }
 
   /// Abatimento livre no empréstimo parcelado (antecipa das parcelas mais antigas para as mais novas).
-  void _openLoanPaymentDialog(BuildContext context) {
+  Future<void> _openLoanPaymentDialog(BuildContext context) async {
+    final destination = await _pickDestinationVault(context);
+    if (!destination.proceed || !context.mounted) return;
     LoanPaymentDialog.show(
       context: context,
       loan: loan,
-      onConfirm: (amount) {
-        _runAction(
+      onConfirm: (amount) async {
+        await _runAction(
           context,
-          (cubit) => cubit.payLoan(loan.id, amount),
+          (cubit) => cubit.payLoan(loan.id, amount, vaultId: destination.vaultId),
           successMessage: amount.cents == loan.remainingAmount.cents
               ? 'Empréstimo quitado! ✅'
               : 'Pagamento de ${amount.format()} registrado! Saldo atualizado. 🪙',
         );
+        if (context.mounted) _refreshFinance(context);
       },
     );
   }

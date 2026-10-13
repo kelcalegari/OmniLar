@@ -690,17 +690,26 @@ class SupabaseFinanceDataSource implements FinanceDataSource {
           'due_day': expense.dueDay,
         };
 
+        List<Map<String, dynamic>> updatedRows = const [];
         if (scope == RecurrenceScope.allInstances) {
-          await client
-              .from('house_expenses')
-              .update(recurringUpdate)
-              .or('recurring_series_id.eq.$seriesId,id.eq.$seriesId');
-        } else if (scope == RecurrenceScope.thisAndFuture) {
-          await client
+          updatedRows = await client
               .from('house_expenses')
               .update(recurringUpdate)
               .or('recurring_series_id.eq.$seriesId,id.eq.$seriesId')
-              .gte('due_date', dueDateStr);
+              .select('id');
+        } else if (scope == RecurrenceScope.thisAndFuture) {
+          updatedRows = await client
+              .from('house_expenses')
+              .update(recurringUpdate)
+              .or('recurring_series_id.eq.$seriesId,id.eq.$seriesId')
+              .gte('due_date', dueDateStr)
+              .select('id');
+        }
+        // O valor e o tipo de rateio mudaram nas outras ocorrências: as regras
+        // de rateio delas acompanham
+        for (final row in updatedRows) {
+          final otherId = row['id'] as String;
+          if (otherId != expense.id) await _syncSplitRules(otherId, expense);
         }
       }
     } catch (e) {

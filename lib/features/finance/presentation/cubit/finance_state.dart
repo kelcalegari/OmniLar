@@ -25,6 +25,9 @@ class FinanceState extends Equatable {
   final List<ExpenseCategory> categories;
   final List<PaymentMethod> paymentMethods;
   final List<SavingsVault> savingsVaults;
+
+  /// Séries recorrentes ativas da casa (a ocorrência mais recente de cada uma).
+  final List<HouseExpense> recurringSeries;
   final String splitModel; // 'percentage', 'fixed' ou 'category'
   final String? errorMessage;
 
@@ -41,6 +44,7 @@ class FinanceState extends Equatable {
     this.categories = const [],
     this.paymentMethods = const [],
     this.savingsVaults = const [],
+    this.recurringSeries = const [],
     this.splitModel = 'percentage',
     this.errorMessage,
   });
@@ -61,6 +65,7 @@ class FinanceState extends Equatable {
     List<ExpenseCategory>? categories,
     List<PaymentMethod>? paymentMethods,
     List<SavingsVault>? savingsVaults,
+    List<HouseExpense>? recurringSeries,
     String? splitModel,
     String? errorMessage,
   }) {
@@ -77,6 +82,7 @@ class FinanceState extends Equatable {
       categories: categories ?? this.categories,
       paymentMethods: paymentMethods ?? this.paymentMethods,
       savingsVaults: savingsVaults ?? this.savingsVaults,
+      recurringSeries: recurringSeries ?? this.recurringSeries,
       splitModel: splitModel ?? this.splitModel,
       errorMessage: errorMessage ?? this.errorMessage,
     );
@@ -96,6 +102,7 @@ class FinanceState extends Equatable {
         categories,
         paymentMethods,
         savingsVaults,
+        recurringSeries,
         splitModel,
         errorMessage,
       ];

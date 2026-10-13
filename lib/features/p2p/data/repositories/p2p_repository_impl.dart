@@ -16,8 +16,8 @@ class P2PRepositoryImpl implements P2PRepository {
   Future<void> createLoan(P2PLoan loan) => _dataSource.createLoan(loan);
 
   @override
-  Future<void> payInstallment(String installmentId, Money amount) =>
-      _dataSource.payInstallment(installmentId, amount);
+  Future<void> payInstallment(String installmentId, Money amount, {String? vaultId}) =>
+      _dataSource.payInstallment(installmentId, amount, vaultId: vaultId);
 
   @override
   Future<void> forgiveLoan(String loanId) => _dataSource.forgiveLoan(loanId);
@@ -33,7 +33,8 @@ class P2PRepositoryImpl implements P2PRepository {
   Future<List<P2PPaymentRecord>> getLoanPayments(String loanId) => _dataSource.getLoanPayments(loanId);
 
   @override
-  Future<void> payLoan(String loanId, Money amount) => _dataSource.payLoan(loanId, amount);
+  Future<void> payLoan(String loanId, Money amount, {String? vaultId}) =>
+      _dataSource.payLoan(loanId, amount, vaultId: vaultId);
 
   @override
   Future<void> setSettleInCycle(String loanId, bool settleInCycle) =>

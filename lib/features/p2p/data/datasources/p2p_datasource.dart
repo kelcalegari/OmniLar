@@ -5,10 +5,11 @@ import '../../../../core/domain/value_objects/money.dart';
 abstract class P2PDataSource {
   Future<List<P2PLoan>> getLoans();
   Future<void> createLoan(P2PLoan loan);
-  Future<void> payInstallment(String installmentId, Money amount);
+  /// [vaultId]: Caixinha que recebe o pagamento de um acordo com o Lar.
+  Future<void> payInstallment(String installmentId, Money amount, {String? vaultId});
 
   /// Abate [amount] do empréstimo, distribuindo das parcelas mais antigas para as mais novas.
-  Future<void> payLoan(String loanId, Money amount);
+  Future<void> payLoan(String loanId, Money amount, {String? vaultId});
 
   /// Define se as parcelas são cobradas no Fechamento do Ciclo.
   Future<void> setSettleInCycle(String loanId, bool settleInCycle);

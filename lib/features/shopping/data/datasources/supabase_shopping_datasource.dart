@@ -1,3 +1,4 @@
+import '../../../../core/utils/uuid.dart';
 import '../../../finance/domain/services/expense_launch_defaults.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../../core/domain/value_objects/money.dart';
@@ -245,7 +246,8 @@ class SupabaseShoppingDataSource implements ShoppingDataSource {
 
       String? createdExpenseId;
       if (houseExpenseAmount.cents > 0) {
-        createdExpenseId = 'exp_shop_${now.millisecondsSinceEpoch}';
+        // Id real desde já, para a viagem de compras apontar para a despesa
+        createdExpenseId = generateUuidV4();
         final members = await financeRepository.getMembers();
         final category = ExpenseLaunchDefaults.matchCategory(
           await financeRepository.getCategories(),

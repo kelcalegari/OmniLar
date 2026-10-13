@@ -358,6 +358,7 @@ class SupabaseSettlementDataSource implements SettlementDataSource {
       required bool noDueDate,
       required int installmentsCount,
       DateTime? dueDate,
+      String? repayToVaultId,
     }) {
       // Sem data definida, vence no dia 10 seguinte ao fim do ciclo (nunca dentro
       // do ciclo que está sendo fechado).
@@ -386,6 +387,7 @@ class SupabaseSettlementDataSource implements SettlementDataSource {
         'description': description,
         'total_amount_cents': total.cents,
         'repayment_mode': noDueDate ? 'open_ended' : 'installments',
+        'repay_to_vault_id': ?repayToVaultId,
         'installments': [
           for (final inst in installments)
             {
@@ -468,6 +470,8 @@ class SupabaseSettlementDataSource implements SettlementDataSource {
               total: resolution.shortfall,
               noDueDate: noDueDate,
               installmentsCount: count,
+              // Os pagamentos deste acordo voltam para a Caixinha que cobriu
+              repayToVaultId: resolution.vaultId,
             ),
           );
         }

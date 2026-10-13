@@ -78,6 +78,23 @@ void main() {
       );
     }
 
+    test('Reposição de Caixinha é cobrada do morador, mas não entra na sobra do Caixa', () {
+      final plain = compute(loans: [pendingFromBia()]);
+      final repayment = compute(
+        loans: [pendingFromBia().copyWith(repayToVaultId: 'vault-1')],
+      );
+
+      // O morador deve o mesmo nos dois casos
+      final bia = repayment.memberBalances.firstWhere((b) => b.memberId == 'bia');
+      expect(bia.netBalance.cents, -(130000 + 30000));
+      // O pagamento volta para a Caixinha: não é entrada do Caixa nem vira sobra
+      expect(repayment.houseLoanReceipts.cents, 0);
+      expect(
+        repayment.houseTreasuryBalance.cents,
+        plain.houseTreasuryBalance.cents - 30000,
+      );
+    });
+
     test('Pendência com o Lar é cobrada do morador e entra na sobra do ciclo', () {
       final summary = compute(loans: [pendingFromBia()]);
 

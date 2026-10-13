@@ -325,6 +325,8 @@ class GlobalClearingEngine {
     final memberIdSet = members.map((m) => m.id).toSet();
     for (final loan in loans) {
       if (!loan.isHouseLender || !memberIdSet.contains(loan.borrowerMemberId)) continue;
+      // Reposição de Caixinha volta para a Caixinha, não para o Caixa
+      if (loan.repayToVaultId != null) continue;
       for (final installment in loan.installmentsChargedIn(cycle)) {
         houseLoanReceiptsCents += installment.remainingAmount.cents;
       }

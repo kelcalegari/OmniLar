@@ -23,8 +23,8 @@ class DynamicP2PDataSource implements P2PDataSource {
   Future<void> createLoan(P2PLoan loan) => _active.createLoan(loan);
 
   @override
-  Future<void> payInstallment(String installmentId, Money amount) =>
-      _active.payInstallment(installmentId, amount);
+  Future<void> payInstallment(String installmentId, Money amount, {String? vaultId}) =>
+      _active.payInstallment(installmentId, amount, vaultId: vaultId);
 
   @override
   Future<void> forgiveLoan(String loanId) => _active.forgiveLoan(loanId);
@@ -40,7 +40,8 @@ class DynamicP2PDataSource implements P2PDataSource {
   Future<List<P2PPaymentRecord>> getLoanPayments(String loanId) => _active.getLoanPayments(loanId);
 
   @override
-  Future<void> payLoan(String loanId, Money amount) => _active.payLoan(loanId, amount);
+  Future<void> payLoan(String loanId, Money amount, {String? vaultId}) =>
+      _active.payLoan(loanId, amount, vaultId: vaultId);
 
   @override
   Future<void> setSettleInCycle(String loanId, bool settleInCycle) =>

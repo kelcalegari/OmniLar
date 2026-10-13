@@ -85,9 +85,9 @@ class P2PCubit extends Cubit<P2PState> {
     }
   }
 
-  Future<bool> payInstallment(String installmentId, Money amount) async {
+  Future<bool> payInstallment(String installmentId, Money amount, {String? vaultId}) async {
     try {
-      await _repository.payInstallment(installmentId, amount);
+      await _repository.payInstallment(installmentId, amount, vaultId: vaultId);
       await loadLoans();
       return true;
     } catch (e) {
@@ -99,9 +99,9 @@ class P2PCubit extends Cubit<P2PState> {
     }
   }
 
-  Future<bool> payLoan(String loanId, Money amount) async {
+  Future<bool> payLoan(String loanId, Money amount, {String? vaultId}) async {
     try {
-      await _repository.payLoan(loanId, amount);
+      await _repository.payLoan(loanId, amount, vaultId: vaultId);
       await loadLoans();
       return true;
     } catch (e) {

@@ -43,12 +43,20 @@ class P2PInstallment extends Equatable {
 
   bool get isFullyPaid => paidAmount.cents >= amount.cents;
 
+  /// Vencida: o dia do vencimento já passou (no próprio dia ainda está em dia,
+  /// a mesma regra das contas da casa).
+  bool get isPastDue {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    return DateTime(dueDate.year, dueDate.month, dueDate.day).isBefore(today);
+  }
+
   InstallmentStatus get status {
     if (isCancelled) return InstallmentStatus.cancelled;
     if (isForgiven) return InstallmentStatus.forgiven;
     if (isFullyPaid) return InstallmentStatus.paid;
     if (paidAmount.isPositive) return InstallmentStatus.partiallyPaid;
-    if (DateTime.now().isAfter(dueDate)) return InstallmentStatus.overdue;
+    if (isPastDue) return InstallmentStatus.overdue;
     return InstallmentStatus.pending;
   }
 

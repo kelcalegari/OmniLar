@@ -267,6 +267,7 @@ class MockSettlementDataSource implements SettlementDataSource {
                 repaymentMode: isNoDueDate
                     ? LoanRepaymentMode.openEnded
                     : LoanRepaymentMode.installments,
+                repayToVaultId: resolution.vaultId,
               );
               await p2pDataSource.createLoan(vaultLoan);
             }

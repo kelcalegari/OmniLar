@@ -25,7 +25,7 @@ class MockP2PRepoForTest implements P2PRepository {
   Future<void> forgiveLoan(String loanId) async {}
 
   @override
-  Future<void> payLoan(String loanId, Money amount) async {}
+  Future<void> payLoan(String loanId, Money amount, {String? vaultId}) async {}
 
   @override
   Future<void> setSettleInCycle(String loanId, bool settleInCycle) async {}
@@ -34,7 +34,7 @@ class MockP2PRepoForTest implements P2PRepository {
   Future<List<P2PPaymentRecord>> getLoanPayments(String loanId) async => const [];
 
   @override
-  Future<void> payInstallment(String installmentId, Money amount) async {}
+  Future<void> payInstallment(String installmentId, Money amount, {String? vaultId}) async {}
 
   @override
   Future<void> renegotiateLoan(String loanId, int newInstallmentsCount, DateTime newFirstDueDate) async {}

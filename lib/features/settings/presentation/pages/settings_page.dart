@@ -2539,9 +2539,7 @@ class SettingsPage extends StatelessWidget {
       child: SafeArea(
         child: BlocBuilder<FinanceCubit, FinanceState>(
           builder: (context, financeState) {
-            final recurring = financeState.expenses
-                .where((e) => e.isRecurring)
-                .toList();
+            final recurring = financeState.recurringSeries;
             final totalCents = recurring.fold(
               0,
               (sum, e) => sum + e.amount.cents,

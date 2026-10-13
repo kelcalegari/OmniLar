@@ -1,3 +1,4 @@
+import '../../../../core/errors/failures.dart';
 import '../../domain/entities/card_invoice.dart';
 import '../../domain/entities/house_member.dart';
 import '../../domain/entities/category.dart';
@@ -427,11 +428,12 @@ class MockFinanceDataSource implements FinanceDataSource {
       case RecurrenceScope.thisAndFuture:
         final seriesId = current.recurringSeriesId ?? (current.isRecurring ? current.id : null);
         if (seriesId != null) {
-          final fromDate = current.date;
+          // Como no banco: "esta e as próximas" vale a partir do vencimento
+          final fromDate = current.dueDate ?? current.date;
           for (int i = 0; i < _expenses.length; i++) {
             final e = _expenses[i];
             final matches = e.recurringSeriesId == seriesId || e.id == seriesId;
-            if (matches && !e.date.isBefore(fromDate)) {
+            if (matches && !(e.dueDate ?? e.date).isBefore(fromDate)) {
               _expenses[i] = e.copyWith(
                 title: expense.title,
                 amount: expense.amount,
@@ -500,7 +502,8 @@ class MockFinanceDataSource implements FinanceDataSource {
       case RecurrenceScope.thisAndFuture:
         final seriesId = current.recurringSeriesId ?? (current.isRecurring ? current.id : null);
         if (seriesId != null) {
-          final fromDate = current.date;
+          // Como no banco: "esta e as próximas" vale a partir do vencimento
+          final fromDate = current.dueDate ?? current.date;
           for (int i = 0; i < _expenses.length; i++) {
             if (_expenses[i].id == seriesId) {
               _expenses[i] = _expenses[i].copyWith(isActive: false);
@@ -508,7 +511,7 @@ class MockFinanceDataSource implements FinanceDataSource {
           }
           _expenses.removeWhere((e) {
             final matches = e.recurringSeriesId == seriesId || e.id == seriesId;
-            return matches && !e.date.isBefore(fromDate);
+            return matches && !(e.dueDate ?? e.date).isBefore(fromDate);
           });
         } else {
           _expenses.removeAt(index);
@@ -660,9 +663,12 @@ class MockFinanceDataSource implements FinanceDataSource {
     final index = _savingsVaults.indexWhere((v) => v.id == vaultId);
     if (index != -1) {
       final current = _savingsVaults[index];
-      final newBalance = current.currentBalance - amount;
+      // Como no banco: resgate acima do saldo é recusado, não zera a caixinha
+      if (amount.cents > current.currentBalance.cents) {
+        throw const ServerFailure('Saldo insuficiente na caixinha.');
+      }
       _savingsVaults[index] = current.copyWith(
-        currentBalance: newBalance.cents < 0 ? const Money.zero() : newBalance,
+        currentBalance: current.currentBalance - amount,
       );
       _savingsTransactions.add(SavingsTransaction(
         id: 'tx_${DateTime.now().millisecondsSinceEpoch}',

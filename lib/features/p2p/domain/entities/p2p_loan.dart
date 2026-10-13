@@ -62,7 +62,12 @@ class P2PLoan extends Equatable {
     this.attachmentUrl,
     this.repaymentMode = LoanRepaymentMode.installments,
     this.settleInCycle = true,
+    this.repayToVaultId,
   });
+
+  /// Acordo com o Lar criado quando uma Caixinha cobriu quem pagou a menos:
+  /// cada pagamento dele volta para essa Caixinha, e não para o Caixa.
+  final String? repayToVaultId;
 
   /// Empréstimo livre, sem vencimento (paga quando puder).
   bool get isOpenEnded => repaymentMode == LoanRepaymentMode.openEnded;
@@ -137,6 +142,7 @@ class P2PLoan extends Equatable {
     String? attachmentUrl,
     LoanRepaymentMode? repaymentMode,
     bool? settleInCycle,
+    String? repayToVaultId,
   }) {
     return P2PLoan(
       id: id,
@@ -153,6 +159,7 @@ class P2PLoan extends Equatable {
       attachmentUrl: attachmentUrl ?? this.attachmentUrl,
       repaymentMode: repaymentMode ?? this.repaymentMode,
       settleInCycle: settleInCycle ?? this.settleInCycle,
+      repayToVaultId: repayToVaultId ?? this.repayToVaultId,
     );
   }
 
@@ -172,5 +179,6 @@ class P2PLoan extends Equatable {
         attachmentUrl,
         repaymentMode,
         settleInCycle,
+        repayToVaultId,
       ];
 }

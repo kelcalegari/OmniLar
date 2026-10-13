@@ -1,3 +1,4 @@
+import '../../domain/services/recurring_series.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../domain/repositories/finance_repository.dart';
 import '../../domain/entities/house_expense.dart';
@@ -79,6 +80,19 @@ class FinanceCubit extends Cubit<FinanceState> {
       try {
         splitModel = await _repository.getHouseSplitModel();
       } catch (_) {}
+      // Sem a lista da casa, valem as recorrentes do ciclo aberto
+      var recurringSeries = expenses.where((e) => e.isRecurring).toList();
+      try {
+        // Série ativa: a primeira despesa dela (a matriz) continua ativa
+        final rows = await _repository.getRecurringExpenses();
+        recurringSeries = latestOccurrencePerSeries(
+          rows,
+          activeSeriesIds: {
+            for (final e in rows)
+              if (e.recurringSeriesId == null) e.id,
+          },
+        );
+      } catch (_) {}
 
       // Busca histórico de despesas do ciclo anterior para cálculo de médias de variáveis (ex: Mercado)
       List<HouseExpense> historicalExpenses = [];
@@ -114,6 +128,7 @@ class FinanceCubit extends Cubit<FinanceState> {
         paymentMethods: paymentMethods,
         savingsVaults: vaults,
         splitModel: splitModel,
+        recurringSeries: recurringSeries,
       ));
     } catch (e) {
       emit(state.copyWith(

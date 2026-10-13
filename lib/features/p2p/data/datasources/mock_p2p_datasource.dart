@@ -110,7 +110,19 @@ class MockP2PDataSource implements P2PDataSource {
 
   @override
   Future<void> createLoan(P2PLoan loan) async {
-    _loans.insert(0, loan);
+    // Como no banco: empréstimo criado sem parcelas ganha as parcelas aqui
+    // (sem elas apareceria como quitado)
+    final withInstallments = loan.installments.isEmpty && loan.installmentsCount > 0
+        ? loan.copyWith(
+            installments: P2PCalculator.generateInstallments(
+              loanId: loan.id,
+              totalAmount: loan.totalAmount,
+              installmentsCount: loan.installmentsCount,
+              firstDueDate: loan.firstDueDate,
+            ),
+          )
+        : loan;
+    _loans.insert(0, withInstallments);
   }
 
   Future<void> registerPayment({
@@ -121,7 +133,7 @@ class MockP2PDataSource implements P2PDataSource {
       payInstallment(installmentId, amount);
 
   @override
-  Future<void> payInstallment(String installmentId, Money amount) async {
+  Future<void> payInstallment(String installmentId, Money amount, {String? vaultId}) async {
     for (int i = 0; i < _loans.length; i++) {
       final loan = _loans[i];
       final instIndex = loan.installments.indexWhere((inst) => inst.id == installmentId);
@@ -234,7 +246,7 @@ class MockP2PDataSource implements P2PDataSource {
   }
 
   @override
-  Future<void> payLoan(String loanId, Money amount) async {
+  Future<void> payLoan(String loanId, Money amount, {String? vaultId}) async {
     final loan = _loans.where((l) => l.id == loanId).firstOrNull;
     if (loan == null) return;
     if (amount.cents <= 0 || amount.cents > loan.remainingAmount.cents) {
