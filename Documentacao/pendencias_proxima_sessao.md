@@ -8,7 +8,7 @@ Reescrito em 13/10/2026, no fim de uma sessão longa de correções. Substitui a
 - **Banco (Supabase `rygxmpwzofgieodvhpcy`, acessível pelo conector do Supabase):** migrations 0001 a 0048 aplicadas. No histórico de migrations do Supabase constam só as 0022 a 0027 e as 0030 a 0048; as 0001 a 0021, a 0028 e a 0029 foram aplicadas à mão pelo SQL Editor. A próxima migration é a 0049.
 - **Edge Functions:** `capture-read` versão 8 e `assistant` versão 5, ambas com `verify_jwt=true` e exigindo usuário logado que more na casa.
 - **Qualidade:** `flutter analyze` com 0 erros (4 warnings antigos de import não usado) e 339 testes passando. Os testes automatizados rodam só contra os datasources mock (modo demo); nenhum roda contra o Supabase.
-- **Dados no banco:** uma casa ("Nossa Casa") com 3 moradores (kelvynn, dono; Cristiano e Joao, membros), no modelo de aportes fixos (R$ 700, R$ 1.300 e R$ 1.000), dia de início do ciclo 9, e 3 empréstimos ativos. Existe uma segunda casa de teste. O único fechamento gravado está em rascunho (ciclo de 09/10/2026): nunca houve um fechamento de ciclo confirmado com sessão real.
+- **Dados no banco:** em 13/10/2026 o dono apagou todos os dados de teste (todas as tabelas de `public` e as contas de login) e recomeçou do zero; a estrutura, as funções e o histórico de migrations não mudaram. Logo depois foi criada de novo a casa "Nossa Casa", com as contas novas de kelvynn e Cristiano, sem nenhum lançamento. Nunca houve um fechamento de ciclo confirmado com sessão real.
 
 ## O ponto mais importante
 
@@ -103,7 +103,6 @@ Resumo dos mecanismos que mudaram nesta sessão, para localizar as coisas.
 - **Participantes removidos de um evento** não são apagados ao editar (a edição só acrescenta ou atualiza).
 - **Conferência do banco contra as migrations:** gatilhos e funções foram conferidos e batem (só faltava um gatilho da 0017, criado na 0046), e todas as tabelas têm RLS ligado. Não foi conferido o conteúdo das regras de acesso nem os índices; como as migrations 0001 a 0021 foram aplicadas à mão, pode haver outra diferença.
 - **Telas novas sem teste automatizado:** diálogo de participantes de projeto, "repetir até" do evento, diálogo do dia de início do ciclo, histórico da caixinha e diálogo de fechar compra. A regra de cada uma tem teste; a tela não.
-- **Dado:** a despesa "Maçãs" (R$ 10,00, de 12/10/2026) está sem categoria; o dono pode categorizar pelo app.
 
 ## Testes manuais pendentes
 
