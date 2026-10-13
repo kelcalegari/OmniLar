@@ -237,7 +237,8 @@ class ExpenseTimelineItem extends StatelessWidget {
                               child: Row(
                                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                 children: [
-                                  Text(it.title, style: const TextStyle(fontSize: 12)),
+                                  Expanded(child: Text(it.title, style: const TextStyle(fontSize: 12))),
+                                  const SizedBox(width: 8),
                                   Text(it.amount.format(), style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
                                 ],
                               ),
@@ -647,13 +648,14 @@ class ExpenseTimelineItem extends StatelessWidget {
                         children: [
                           Text(
                             expense.title,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
                             style: const TextStyle(
                               fontSize: 15,
                               fontWeight: FontWeight.w600,
                             ),
                           ),
                           if (expense.isRecurring) ...[
-                            const SizedBox(width: 6),
                             Container(
                               padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
                               decoration: BoxDecoration(
@@ -665,12 +667,16 @@ class ExpenseTimelineItem extends StatelessWidget {
                                 children: [
                                   const Icon(Icons.repeat_rounded, size: 10, color: AppColors.primary),
                                   const SizedBox(width: 2),
-                                  Text(
-                                    expense.isVariable ? 'Variável' : 'Fixa',
-                                    style: const TextStyle(
-                                      fontSize: 9,
-                                      fontWeight: FontWeight.bold,
-                                      color: AppColors.primary,
+                                  Flexible(
+                                    child: Text(
+                                      expense.isVariable ? 'Variável' : 'Fixa',
+                                      style: const TextStyle(
+                                        fontSize: 9,
+                                        fontWeight: FontWeight.bold,
+                                        color: AppColors.primary,
+                                      ),
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
                                     ),
                                   ),
                                 ],
@@ -678,7 +684,6 @@ class ExpenseTimelineItem extends StatelessWidget {
                             ),
                           ],
                           if (expense.isItemized) ...[
-                            const SizedBox(width: 6),
                             Container(
                               padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
                               decoration: BoxDecoration(
@@ -690,12 +695,16 @@ class ExpenseTimelineItem extends StatelessWidget {
                                 children: [
                                   const Icon(Icons.account_tree_outlined, size: 10, color: AppColors.accent),
                                   const SizedBox(width: 2),
-                                  Text(
-                                    '${expense.items.length} itens',
-                                    style: const TextStyle(
-                                      fontSize: 9,
-                                      fontWeight: FontWeight.bold,
-                                      color: AppColors.accent,
+                                  Flexible(
+                                    child: Text(
+                                      '${expense.items.length} itens',
+                                      style: const TextStyle(
+                                        fontSize: 9,
+                                        fontWeight: FontWeight.bold,
+                                        color: AppColors.accent,
+                                      ),
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
                                     ),
                                   ),
                                 ],
@@ -703,7 +712,6 @@ class ExpenseTimelineItem extends StatelessWidget {
                             ),
                           ],
                           if (isPending) ...[
-                            const SizedBox(width: 6),
                             Container(
                               padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                               decoration: BoxDecoration(
@@ -719,12 +727,16 @@ class ExpenseTimelineItem extends StatelessWidget {
                                     const Icon(Icons.warning_amber_rounded, size: 10, color: AppColors.debtRed),
                                     const SizedBox(width: 2),
                                   ],
-                                  Text(
-                                    isOverdue ? 'Atrasada (${expense.daysOverdue}d)' : 'A vencer',
-                                    style: TextStyle(
-                                      fontSize: 10,
-                                      fontWeight: FontWeight.bold,
-                                      color: isOverdue ? AppColors.debtRed : AppColors.folegoWarning,
+                                  Flexible(
+                                    child: Text(
+                                      isOverdue ? 'Atrasada (${expense.daysOverdue}d)' : 'A vencer',
+                                      style: TextStyle(
+                                        fontSize: 10,
+                                        fontWeight: FontWeight.bold,
+                                        color: isOverdue ? AppColors.debtRed : AppColors.folegoWarning,
+                                      ),
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
                                     ),
                                   ),
                                 ],
