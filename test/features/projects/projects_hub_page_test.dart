@@ -67,6 +67,8 @@ class _FakeFinanceRepository implements FinanceRepository {
   @override
   Future<void> deletePaymentMethod(String paymentMethodId) async {}
   @override
+  Future<String> getHouseSplitModel() async => 'percentage';
+  @override
   Future<void> updateHouseSplitModel({
     required String splitModel,
     required Map<String, double> percentages,

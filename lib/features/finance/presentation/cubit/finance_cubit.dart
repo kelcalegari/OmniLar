@@ -75,6 +75,10 @@ class FinanceCubit extends Cubit<FinanceState> {
       final expenses = await _repository.getExpensesForCycle(targetCycle);
       final contributions = await _repository.getContributionsForCycle(targetCycle);
       final vaults = await _repository.getSavingsVaults();
+      var splitModel = state.splitModel;
+      try {
+        splitModel = await _repository.getHouseSplitModel();
+      } catch (_) {}
 
       // Busca histórico de despesas do ciclo anterior para cálculo de médias de variáveis (ex: Mercado)
       List<HouseExpense> historicalExpenses = [];
@@ -107,6 +111,7 @@ class FinanceCubit extends Cubit<FinanceState> {
         categories: categories,
         paymentMethods: paymentMethods,
         savingsVaults: vaults,
+        splitModel: splitModel,
       ));
     } catch (e) {
       emit(state.copyWith(

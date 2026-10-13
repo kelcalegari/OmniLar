@@ -42,6 +42,8 @@ abstract class FinanceDataSource {
   Future<void> deletePaymentMethod(String paymentMethodId);
 
   /// Atualiza o modelo de rateio da casa e os percentuais/aportes nominais de cada membro
+  /// Modelo de rateio da casa: 'percentage', 'fixed' ou 'category'
+  Future<String> getHouseSplitModel();
   Future<void> updateHouseSplitModel({
     required String splitModel, // 'percentage', 'fixed', 'category'
     required Map<String, double> percentages,

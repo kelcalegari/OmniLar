@@ -1065,9 +1065,12 @@ class SettingsPage extends StatelessWidget {
               ? members[1].name.split(' ').first
               : 'Parceiro(a)');
 
-    // Determina o modelo ativo baseado nos dados dos membros
+    // Modelo ativo: aportes fixos pelos valores dos membros; senão, o gravado na casa
     final hasFixedActive = members.any((m) => (m.defaultFixedAmountCents ?? 0) > 0);
-    String selectedModel = hasFixedActive ? 'fixed' : 'percentage';
+    final categories = financeCubit.state.categories;
+    String selectedModel = hasFixedActive
+        ? 'fixed'
+        : (financeCubit.state.splitModel == 'category' ? 'category' : 'percentage');
 
     double percent1 = members.isNotEmpty
         ? members[0].defaultSplitPercent
@@ -1105,6 +1108,9 @@ class SettingsPage extends StatelessWidget {
       final m = members[i];
       if ((m.defaultFixedAmountCents ?? 0) > 0) {
         fixedAmountsByMember[m.id] = m.defaultFixedAmountCents!;
+      } else if (hasFixedActive) {
+        // Casa já usa aportes fixos: quem entrou depois aparece sem aporte até alguém definir
+        fixedAmountsByMember[m.id] = 0;
       } else if (i == 0) {
         fixedAmountsByMember[m.id] = 70000; // R$ 700,00 padrão
       } else if (i == 1) {
@@ -1352,7 +1358,7 @@ class SettingsPage extends StatelessWidget {
                           children: [
                             ...members.map((m) {
                               final currentCents =
-                                  fixedAmountsByMember[m.id] ?? 100000;
+                                  fixedAmountsByMember[m.id] ?? 0;
                               return Container(
                                 margin: const EdgeInsets.only(bottom: 12),
                                 padding: const EdgeInsets.all(12),
@@ -1432,7 +1438,7 @@ class SettingsPage extends StatelessWidget {
                                                                 ),
                                                           );
                                                       if (val != null &&
-                                                          val > 0) {
+                                                          val >= 0) {
                                                         setModalState(() {
                                                           fixedAmountsByMember[m
                                                               .id] = (val * 100)
@@ -1483,6 +1489,16 @@ class SettingsPage extends StatelessWidget {
                                         ),
                                       ],
                                     ),
+                                    if (currentCents == 0) ...[
+                                      const SizedBox(height: 4),
+                                      const Text(
+                                        'Sem aporte definido: não é cobrado no fechamento.',
+                                        style: TextStyle(
+                                          fontSize: 11,
+                                          color: AppColors.debtRed,
+                                        ),
+                                      ),
+                                    ],
                                     const SizedBox(height: 8),
                                     SingleChildScrollView(
                                       scrollDirection: Axis.horizontal,
@@ -1695,13 +1711,54 @@ class SettingsPage extends StatelessWidget {
                           setModalState(() => selectedModel = val!),
                       contentPadding: EdgeInsets.zero,
                     ),
+                    if (selectedModel == 'category')
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 8),
+                        child: Builder(
+                          builder: (ctx) {
+                            final owned = categories.where((c) => c.hasOwner).toList();
+                            String ownerName(ExpenseCategory c) => members
+                                .where((m) => m.id == c.ownerMemberId)
+                                .map(firstName)
+                                .firstOrNull ?? 'morador que saiu';
+                            return Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                if (owned.isEmpty)
+                                  const Text(
+                                    'Nenhuma categoria tem dono ainda. Defina o dono em Ajustes > Categorias; até lá tudo é dividido igualmente.',
+                                    style: TextStyle(fontSize: 12, color: AppColors.debtRed),
+                                  )
+                                else
+                                  for (final c in owned)
+                                    Padding(
+                                      padding: const EdgeInsets.only(bottom: 2),
+                                      child: Text(
+                                        '${c.name}: 100% ${ownerName(c)}',
+                                        style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+                                      ),
+                                    ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  members.isEmpty
+                                      ? 'Demais categorias: divididas igualmente.'
+                                      : 'Demais categorias: divididas igualmente entre ${members.length} (${(100 / members.length).toStringAsFixed(100 % members.length == 0 ? 0 : 2)}% cada).',
+                                  style: const TextStyle(fontSize: 12, color: Colors.grey),
+                                ),
+                              ],
+                            );
+                          },
+                        ),
+                      ),
 
                     const SizedBox(height: 20),
                     FilledButton(
                       onPressed:
-                          (selectedModel == 'percentage' &&
-                              isMultiMember &&
-                              percentTotal() != 100)
+                          ((selectedModel == 'percentage' &&
+                                  isMultiMember &&
+                                  percentTotal() != 100) ||
+                              (selectedModel == 'fixed' &&
+                                  fixedAmountsByMember.values.every((v) => v <= 0)))
                           ? null
                           : () {
                         Navigator.pop(context);

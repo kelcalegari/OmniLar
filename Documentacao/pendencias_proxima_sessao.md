@@ -17,8 +17,8 @@ Atualizado em 13/10/2026. Este arquivo resume onde o trabalho parou, o que falta
 3. **Correções de dados:** IDs não-uuid, rateio gravado ao criar despesa, Pix inventado removido, fuso horário (0024).
 4. **Itens 14, 15 e 16 da análise:** recorrência de eventos no Supabase, contas atrasadas e competência de cartão, fila offline (4 ações).
 5. **Regra de ciclo único e data da baixa (0025):** cada despesa conta em um ciclo só; `paid_at` define o ciclo de uma conta que estava pendente.
-6. **Fatura de cartão:** registrar e desfazer o dia do pagamento; bloqueio quando o ciclo está fechado.
-7. **Reabrir ciclo (0026):** fechar de novo cobra só a diferença; rateio congelado no fechamento.
+6. **Modelo de rateio "Por categoria" (corrigido em 13/10/2026, falta testar no app).** Decisão do dono: implementar. O modelo gravado em `houses.default_split_model` passou a ser lido e a tela reabre em "Por Categoria de Gasto", mostrando as categorias com dono (100% para o dono) e a divisão igual das demais. A regra em si já era aplicada pelo formulário de despesa; os outros caminhos de lançamento continuam ignorando o dono da categoria (item 5). No modelo de aportes fixos a categoria com dono não tem efeito.
+7. **Aportes fixos: quem entra depois não paga nada (corrigido em 13/10/2026, falta testar no app).** Decisão do dono: o valor é ajustado à mão. O novo morador continua nascendo com valor fixo 0, mas a tela de Modelos de Rateio passou a mostrar esse 0 (antes exibia R$ 1.000 que não valiam) com o aviso "Sem aporte definido", aceita gravar 0 de propósito e o fechamento avisa quem está sem aporte antes de fechar o ciclo. Só dono ou admin consegue gravar (regra do banco); para os demais a tela não avisa que não salvou.
 8. **Telas:** rateio padrão para 3+ moradores; escolha de como cobrir o excedente do balde no fechamento.
 
 ## Pendente: testes manuais no app
@@ -58,7 +58,7 @@ Nada disto foi exercitado com usuário logado; só passou por teste automatizado
 
 ## Pendente: inconsistências de funcionalidades já implementadas
 
-Análise feita em 12/10/2026 por leitura do código e das migrations, e reavaliada em 13/10/2026 contra o código da `main` (commit `e4ff129`), de novo só por leitura: nenhum item foi reproduzido no app. Resultado da reavaliação: o item 3 foi corrigido (com pontas em aberto), o item 5 foi corrigido em parte (scanner) e os outros 13 continuam como descritos. Não repete o que já está em "limites conhecidos".
+Análise feita em 12/10/2026 por leitura do código e das migrations, e reavaliada em 13/10/2026 contra o código da `main` (commit `e4ff129`), de novo só por leitura: nenhum item foi reproduzido no app. Resultado da reavaliação: o item 3 foi corrigido (com pontas em aberto), o item 5 foi corrigido em parte (scanner) e os outros 13 continuavam como descritos; os itens 6, 7 e 11 foram corrigidos em seguida, no mesmo dia. Não repete o que já está em "limites conhecidos".
 
 ### Graves: o recurso existe na tela mas não funciona com sessão real
 
@@ -85,7 +85,7 @@ Análise feita em 12/10/2026 por leitura do código e das migrations, e reavalia
 8. **O planejador de aportes da Home não bate com o fechamento.** Soma as contas pendentes e depois abate o fôlego, que já as descontou; abate os aportes de novo por morador; ignora o rateio por despesa. Trocar o modo (econômico/confortável) muda o histórico do ciclo anterior para o atual (`finance_cubit.dart:125`).
 9. **Relatórios: totais que não fecham.** O gráfico por categoria soma pagas e pendentes, mas divide só pelo total pago, e pode passar de 100% (`reports_page.dart:213`). O CSV lista todas as despesas e o "Total gasto" conta só as pagas.
 10. **Ciclo fechado aparece empobrecido em produção.** As transferências mostram "Membro transfere para Membro" (`supabase_settlement_datasource.dart:74`), as que envolvem o Caixa não são gravadas, e saldos por morador e memória de cálculo vêm vazios. No modo demo tudo aparece completo.
-11. **Dia de início do ciclo entre 29 e 31** (o onboarding permite até 31). `FinancialCycle.fromDate` devolve um ciclo que não contém a própria data no último dia de meses curtos (dia 31, data 30/04: resultado 31/03 a 29/04). O banco define ciclo fechado como "início + 1 mês", o que deixa dias finais destravados. Os acordos gerados no fechamento vencem sempre no dia 10 do mês final do ciclo; com início depois do dia 10, a parcela cai dentro do ciclo que acabou de fechar.
+11. **Dia de início do ciclo entre 29 e 31 (corrigido em 13/10/2026; depende da migration 0034).** Decisão do dono: em mês que não tem o dia, o ciclo começa no último dia do mês. `FinancialCycle.fromDate` foi corrigido (dia 31, data 30/04: ciclo de 30/04 a 30/05) e a migration 0034 faz o banco usar o mesmo fim de ciclo na trava de ciclo fechado. Os acordos gerados no fechamento passam a vencer no dia 10 seguinte ao fim do ciclo, nunca dentro dele. Não cobre: trocar o dia de início da casa depois de já ter ciclos fechados.
 
 ### Menores
 
@@ -97,7 +97,7 @@ Análise feita em 12/10/2026 por leitura do código e das migrations, e reavalia
 **Ordem sugerida (reavaliada em 13/10/2026).** Critério: primeiro o que grava dinheiro errado sem avisar, depois o que quebra à vista, deixando por último o que exige decisão do dono ou muito esforço.
 
 1. **Sem migration e sem decisão:** 4 (edição de compra no cartão corrompe a fatura em silêncio), 5 (reembolso e categoria errados no assistente, no mercado e na importação), 1 (projetos só no demo), 9 (relatórios).
-2. **Dependem de uma decisão curta do dono:** 11 (limitar o dia de início a 28 ou corrigir o cálculo), 7 (quanto paga quem entra depois nos aportes fixos), 6 (remover a opção "Por categoria" ou implementá-la).
+2. **Decididos e corrigidos em 13/10/2026:** 11, 7 e 6 (falta teste no app).
 3. **Maiores:** 10 (ciclo fechado empobrecido; deve exigir migration para guardar saldos e transferências com o Caixa), pontas do item 3, 8 (planejador da Home), 2 (recorrência; o maior em esforço e pede decisão de onde gerar as ocorrências).
 4. **Limpeza:** 15, 13, 12, 14.
 

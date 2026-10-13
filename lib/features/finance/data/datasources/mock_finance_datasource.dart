@@ -591,12 +591,18 @@ class MockFinanceDataSource implements FinanceDataSource {
     _paymentMethods.removeWhere((p) => p.id == paymentMethodId);
   }
 
+  String _splitModel = 'percentage';
+
+  @override
+  Future<String> getHouseSplitModel() async => _splitModel;
+
   @override
   Future<void> updateHouseSplitModel({
     required String splitModel,
     required Map<String, double> percentages,
     required Map<String, int> fixedAmountsCents,
   }) async {
+    _splitModel = splitModel;
     for (int i = 0; i < _members.length; i++) {
       final m = _members[i];
       final newPercent = percentages[m.id] ?? m.defaultSplitPercent;

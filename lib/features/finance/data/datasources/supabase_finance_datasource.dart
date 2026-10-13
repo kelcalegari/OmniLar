@@ -1002,6 +1002,21 @@ class SupabaseFinanceDataSource implements FinanceDataSource {
   }
 
   @override
+  Future<String> getHouseSplitModel() async {
+    try {
+      final row = await client
+          .from('houses')
+          .select('default_split_model')
+          .eq('id', _houseId)
+          .maybeSingle();
+      return row?['default_split_model'] as String? ?? 'percentage';
+    } catch (_) {
+      // Coluna opcional ausente no schema remoto: assume o modelo percentual
+      return 'percentage';
+    }
+  }
+
+  @override
   Future<void> updateHouseSplitModel({
     required String splitModel,
     required Map<String, double> percentages,

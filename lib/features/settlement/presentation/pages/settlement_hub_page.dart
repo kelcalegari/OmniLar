@@ -64,6 +64,56 @@ class _SettlementHubContent extends StatelessWidget {
     }
   }
 
+  /// No modelo de aportes fixos, quem entrou depois fica sem aporte até alguém
+  /// definir o valor nos Ajustes: avisa antes de fechar o ciclo.
+  Widget _buildMissingFixedContributionWarning(BuildContext context) {
+    List<String> names;
+    try {
+      final members = context.read<FinanceCubit>().state.members;
+      final usesFixed = members.any((m) => (m.defaultFixedAmountCents ?? 0) > 0);
+      names = usesFixed
+          ? members
+                .where((m) => (m.defaultFixedAmountCents ?? 0) <= 0)
+                .map((m) => m.name.split(' ').first)
+                .toList()
+          : const [];
+    } catch (_) {
+      names = const [];
+    }
+    if (names.isEmpty) return const SizedBox.shrink();
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 16),
+      child: Container(
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: AppColors.debtRed.withValues(alpha: 0.05),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: AppColors.debtRed.withValues(alpha: 0.25)),
+        ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Icon(
+              Icons.warning_amber_rounded,
+              color: AppColors.debtRed,
+              size: 18,
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                '${names.join(', ')} ${names.length == 1 ? 'está' : 'estão'} sem aporte fixo definido e '
+                'não ${names.length == 1 ? 'será cobrado(a)' : 'serão cobrados'} neste fechamento. '
+                'Ajuste o valor em Ajustes > Modelos de Rateio.',
+                style: const TextStyle(fontSize: 12),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   /// Só dono ou admin fecha e reabre o ciclo (o banco recusa os demais).
   /// Sem conseguir identificar o morador (ex: modo demo), nada é escondido.
   bool _canManageCycle(BuildContext context) {
@@ -175,6 +225,9 @@ class _SettlementHubContent extends StatelessWidget {
               // Cabeçalho do Ciclo
               _buildCycleHeader(context, summary, state),
               const SizedBox(height: 16),
+
+              if (summary.status != SettlementStatus.settled)
+                _buildMissingFixedContributionWarning(context),
 
               // PASSO 1: Resumo do Caixa da Casa
               _buildStep1HouseSummary(context, summary, state),

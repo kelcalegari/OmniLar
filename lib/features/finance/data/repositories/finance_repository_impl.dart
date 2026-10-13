@@ -100,6 +100,9 @@ class FinanceRepositoryImpl implements FinanceRepository {
       _dataSource.deletePaymentMethod(paymentMethodId);
 
   @override
+  Future<String> getHouseSplitModel() => _dataSource.getHouseSplitModel();
+
+  @override
   Future<void> updateHouseSplitModel({
     required String splitModel,
     required Map<String, double> percentages,

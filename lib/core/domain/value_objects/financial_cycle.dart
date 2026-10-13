@@ -21,8 +21,9 @@ class FinancialCycle extends Equatable implements Comparable<FinancialCycle> {
     int startYear = date.year;
     int startMonth = date.month;
 
-    // Se o dia da data for anterior ao dia de início do ciclo, o ciclo começou no mês anterior
-    if (day < cycleStartDay) {
+    // Se o dia da data for anterior ao dia de início do ciclo, o ciclo começou no mês anterior.
+    // Em mês mais curto que o dia configurado (ex.: dia 31 em abril), o ciclo começa no último dia do mês.
+    if (day < _clampDayToMonth(date.year, date.month, cycleStartDay)) {
       if (startMonth == 1) {
         startMonth = 12;
         startYear -= 1;

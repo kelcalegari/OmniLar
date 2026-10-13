@@ -40,6 +40,8 @@ abstract class FinanceRepository {
   Future<void> addPaymentMethod(PaymentMethod paymentMethod);
   Future<void> updatePaymentMethod(PaymentMethod paymentMethod);
   Future<void> deletePaymentMethod(String paymentMethodId);
+  /// Modelo de rateio da casa: 'percentage', 'fixed' ou 'category'
+  Future<String> getHouseSplitModel();
   Future<void> updateHouseSplitModel({
     required String splitModel,
     required Map<String, double> percentages,

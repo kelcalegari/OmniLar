@@ -341,9 +341,15 @@ class SupabaseSettlementDataSource implements SettlementDataSource {
       required int installmentsCount,
       DateTime? dueDate,
     }) {
+      // Sem data definida, vence no dia 10 seguinte ao fim do ciclo (nunca dentro
+      // do ciclo que está sendo fechado).
+      var defaultDueDate = DateTime(cycle.endDate.year, cycle.endDate.month, 10);
+      if (!defaultDueDate.isAfter(cycle.endDate)) {
+        defaultDueDate = DateTime(cycle.endDate.year, cycle.endDate.month + 1, 10);
+      }
       final firstDueDate = noDueDate
           ? P2PLoan.openEndedPlaceholderDueDate
-          : (dueDate ?? DateTime(cycle.endDate.year, cycle.endDate.month, 10));
+          : (dueDate ?? defaultDueDate);
       final installments = noDueDate
           ? P2PCalculator.buildOpenEndedInstallment(
               loanId: 'settlement',

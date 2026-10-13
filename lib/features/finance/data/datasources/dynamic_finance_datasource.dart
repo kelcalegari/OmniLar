@@ -94,6 +94,9 @@ class DynamicFinanceDataSource implements FinanceDataSource {
       _active.deletePaymentMethod(paymentMethodId);
 
   @override
+  Future<String> getHouseSplitModel() => _active.getHouseSplitModel();
+
+  @override
   Future<void> updateHouseSplitModel({
     required String splitModel,
     required Map<String, double> percentages,
