@@ -1,3 +1,4 @@
+import 'house_expense_payload.dart';
 import '../../domain/entities/card_invoice.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../../core/domain/enums/recurrence.dart';
@@ -424,92 +425,15 @@ class SupabaseFinanceDataSource implements FinanceDataSource {
         }
       }
 
-      final expenseRow = {
-        if (_isUuid(expense.id)) 'id': expense.id,
-        'house_id': _houseId,
-        'title': expense.title,
-        'amount_cents': expense.amount.cents,
-        if (_isUuid(expense.categoryId)) 'category_id': expense.categoryId,
-        if (_isUuid(expense.paymentMethodId)) 'payment_method_id': expense.paymentMethodId,
-        'paid_by_id': _isUuid(expense.paidByMemberId)
-            ? expense.paidByMemberId
-            : (client.auth.currentUser?.id ?? expense.paidByMemberId),
-        'paid_out_of_pocket': expense.paidOutOfPocket,
-        'due_date': (dueDate ?? expense.date).toIso8601String().split('T')[0],
-        'date': expense.date.toUtc().toIso8601String(),
-        'cycle_start_date': expense.date.toIso8601String().split('T')[0],
-        'split_type': _splitTypeToString(expense.splitRule.type),
-        'status': expense.isPaid ? 'paid' : 'pending',
-        'paid_at': expense.isPaid ? expense.paidAt?.toUtc().toIso8601String() : null,
-        'is_recurring': expense.isRecurring,
-        'is_variable': expense.isVariable,
-        'due_day': expense.dueDay,
-        'is_active': expense.isActive,
-        'recurring_series_id': expense.recurringSeriesId,
-        'project_id': expense.projectId,
-        'notes': expense.notes,
-        'created_by': client.auth.currentUser?.id ?? expense.paidByMemberId,
-      };
-
-      Map<String, dynamic> insertedRow;
-      try {
-        insertedRow = await client.from('house_expenses').insert(expenseRow).select().single();
-      } catch (insertErr) {
-        if (insertErr.toString().contains('PGRST204') ||
-            insertErr.toString().contains('column') ||
-            insertErr.toString().contains('schema cache')) {
-          final fallbackRow = Map<String, dynamic>.from(expenseRow);
-          fallbackRow.remove('date');
-          fallbackRow.remove('cycle_start_date');
-          fallbackRow.remove('split_type');
-          fallbackRow.remove('project_id');
-          fallbackRow.remove('paid_at');
-          insertedRow = await client.from('house_expenses').insert(fallbackRow).select().single();
-        } else {
-          rethrow;
-        }
-      }
-
-      final insertedExpenseId = insertedRow['id'] as String;
-
-      if (expense.items.isNotEmpty) {
-        final itemRows = expense.items.map((item) {
-          return {
-            if (_isUuid(item.id)) 'id': item.id,
-            'expense_id': insertedExpenseId,
-            'title': item.title,
-            'amount_cents': item.amount.cents,
-            if (_isUuid(item.categoryId)) 'category_id': item.categoryId,
-            if (_isUuid(item.responsibleMemberId))
-              'responsible_member_id': item.responsibleMemberId,
-            'split_type': item.splitRule != null ? _splitTypeToString(item.splitRule!.type) : null,
-          };
-        }).toList();
-
-        try {
-          await client.from('house_expense_items').insert(itemRows);
-        } catch (itemErr) {
-          if (itemErr.toString().contains('PGRST204') ||
-              itemErr.toString().contains('split_type')) {
-            final fallbackItems = itemRows.map((r) {
-              final copy = Map<String, dynamic>.from(r);
-              copy.remove('split_type');
-              return copy;
-            }).toList();
-            await client.from('house_expense_items').insert(fallbackItems);
-          } else {
-            rethrow;
-          }
-        }
-      }
-
-      try {
-        await _syncSplitRules(insertedExpenseId, expense);
-      } catch (splitErr) {
-        throw ServerFailure(
-          'A despesa foi salva, mas o rateio personalizado não foi gravado. Edite a despesa para definir o rateio de novo. ($splitErr)',
-        );
-      }
+      // Despesa, sub-itens e rateio entram juntos: ou tudo, ou nada
+      await client.rpc('create_house_expense', params: {
+        'p_expense': houseExpensePayload(
+          expense,
+          houseId: _houseId,
+          currentUserId: client.auth.currentUser?.id,
+          dueDate: dueDate,
+        ),
+      });
     } catch (e) {
       if (e is Failure) rethrow;
       throw ServerFailure('Erro ao adicionar despesa: $e');
@@ -520,43 +444,9 @@ class SupabaseFinanceDataSource implements FinanceDataSource {
   Future<void> _syncSplitRules(String expenseId, HouseExpense expense) async {
     await client.from('split_rules').delete().eq('expense_id', expenseId);
 
-    final rule = expense.splitRule;
-    final rows = <Map<String, dynamic>>[];
-
-    if (rule.type == SplitType.percentage && rule.percentages != null) {
-      final memberIds = rule.percentages!.keys.where(_isUuid).toList();
-      final allocations = rule.calculateAllocations(
-        totalAmount: expense.amount,
-        memberIds: memberIds,
-      );
-      for (final memberId in memberIds) {
-        rows.add({
-          'expense_id': expenseId,
-          'member_id': memberId,
-          'percentage_basis_points':
-              (rule.percentages![memberId]! * 100).round().clamp(0, 10000),
-          'calculated_cents': allocations[memberId]?.cents ?? 0,
-        });
-      }
-    } else if (rule.type == SplitType.fixed && rule.fixedAmounts != null) {
-      for (final entry in rule.fixedAmounts!.entries) {
-        if (!_isUuid(entry.key)) continue;
-        rows.add({
-          'expense_id': expenseId,
-          'member_id': entry.key,
-          'fixed_amount_cents': entry.value.cents,
-          'calculated_cents': entry.value.cents,
-        });
-      }
-    } else if (rule.type == SplitType.categoryOwner &&
-        _isUuid(rule.singleResponsibleMemberId)) {
-      rows.add({
-        'expense_id': expenseId,
-        'member_id': rule.singleResponsibleMemberId,
-        'percentage_basis_points': 10000,
-        'calculated_cents': expense.amount.cents,
-      });
-    }
+    final rows = [
+      for (final row in splitRuleRows(expense)) {...row, 'expense_id': expenseId},
+    ];
 
     if (rows.isNotEmpty) {
       await client.from('split_rules').insert(rows);

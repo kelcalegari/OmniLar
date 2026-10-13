@@ -1,3 +1,6 @@
+import '../../../finance/data/datasources/house_expense_payload.dart';
+import '../../../finance/domain/services/credit_card_invoice_calculator.dart';
+import '../../../p2p/data/datasources/p2p_loan_payload.dart';
 import '../../../../core/utils/uuid.dart';
 import '../../../finance/domain/services/expense_launch_defaults.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -7,7 +10,6 @@ import '../../../finance/domain/entities/house_expense.dart';
 import '../../../finance/domain/repositories/finance_repository.dart';
 import '../../../p2p/domain/entities/p2p_loan.dart';
 import '../../../p2p/domain/repositories/p2p_repository.dart';
-import '../../../p2p/domain/services/p2p_calculator.dart';
 import '../../domain/entities/shopping_item.dart';
 import '../../domain/entities/shopping_list.dart';
 import '../../domain/entities/shopping_trip.dart';
@@ -257,6 +259,7 @@ class SupabaseShoppingDataSource implements ShoppingDataSource {
       final houseExpensesCents = (totalAmount.cents - personalCents).clamp(0, totalAmount.cents);
       final houseExpenseAmount = Money(houseExpensesCents);
 
+      Map<String, dynamic>? expensePayload;
       String? createdExpenseId;
       if (houseExpenseAmount.cents > 0) {
         // Id real desde já, para a viagem de compras apontar para a despesa
@@ -270,7 +273,20 @@ class SupabaseShoppingDataSource implements ShoppingDataSource {
             .where((pm) => pm.id == paymentMethodId)
             .firstOrNull;
 
-        await financeRepository.addExpense(
+        // Compra no cartão vence com a fatura, como em qualquer outro lançamento
+        DateTime? dueDate;
+        if (paymentMethod != null &&
+            paymentMethod.isCreditCard &&
+            paymentMethod.closingDay != null &&
+            paymentMethod.dueDay != null) {
+          dueDate = CreditCardInvoiceCalculator.calculateInvoiceDueDate(
+            purchaseDate: now,
+            closingDay: paymentMethod.closingDay!,
+            dueDay: paymentMethod.dueDay!,
+          );
+        }
+
+        expensePayload = houseExpensePayload(
           HouseExpense(
             id: createdExpenseId,
             title: 'Compras de Mercado',
@@ -286,24 +302,22 @@ class SupabaseShoppingDataSource implements ShoppingDataSource {
               paidByMemberId: paidByMemberId,
             ),
           ),
+          houseId: _houseId,
+          currentUserId: client.auth.currentUser?.id,
+          dueDate: dueDate,
         );
       }
 
-      // 2. Cria empréstimo P2P para itens pessoais de outro membro
+      // Itens pessoais de outro morador: empréstimo dele para quem pagou
+      Map<String, dynamic>? loanPayload;
       String? createdLoanId;
       if (personalCents > 0 &&
           personalDebtorMemberId != null &&
           personalDebtorMemberId != paidByMemberId) {
-        createdLoanId = 'loan_shop_${now.millisecondsSinceEpoch}';
+        createdLoanId = generateUuidV4();
         final personalTotal = Money(personalCents);
-        final installments = P2PCalculator.generateInstallments(
-          loanId: createdLoanId,
-          totalAmount: personalTotal,
-          installmentsCount: 1,
-          firstDueDate: now.add(const Duration(days: 30)),
-        );
-
-        await p2pRepository.createLoan(
+        final firstDueDate = now.add(const Duration(days: 30));
+        loanPayload = p2pLoanPayload(
           P2PLoan(
             id: createdLoanId,
             title: 'Item Pessoal na Compra de Mercado',
@@ -313,37 +327,25 @@ class SupabaseShoppingDataSource implements ShoppingDataSource {
             borrowerMemberId: personalDebtorMemberId,
             installmentsCount: 1,
             createdAt: now,
-            firstDueDate: installments.first.dueDate,
-            installments: installments,
+            firstDueDate: firstDueDate,
           ),
+          houseId: _houseId,
         );
       }
 
-      // 3. Registra a viagem de compras na tabela shopping_trips
-      final userId = client.auth.currentUser?.id;
-      final tripRow = {
-        'house_id': _houseId,
-        'list_id': listId,
-        'total_spent_cents': totalAmount.cents,
-        'expense_id': (createdExpenseId != null && _isUuid(createdExpenseId)) ? createdExpenseId : null,
-        'created_by': ?userId,
-        'completed_at': now.toUtc().toIso8601String(),
-      };
-
-      final insertedTrip = await client
-          .from('shopping_trips')
-          .insert(tripRow)
-          .select('id')
-          .single();
-
-      final tripId = insertedTrip['id'] as String;
-
-      // 4. Remove os itens comprados desta lista para a próxima compra
-      await client
-          .from('shopping_items')
-          .delete()
-          .eq('list_id', listId)
-          .eq('is_bought', true);
+      // Despesa, empréstimo, registro da viagem e limpeza dos itens comprados
+      // entram juntos: ou tudo, ou nada
+      final result = await client.rpc('complete_shopping_trip', params: {
+        'p_plan': {
+          'house_id': _houseId,
+          'list_id': listId,
+          'total_spent_cents': totalAmount.cents,
+          'completed_at': now.toUtc().toIso8601String(),
+          'expense': ?expensePayload,
+          'loan': ?loanPayload,
+        },
+      }) as Map<String, dynamic>;
+      final tripId = result['trip_id'] as String;
 
       return ShoppingTrip(
         id: tripId,

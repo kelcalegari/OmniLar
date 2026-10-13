@@ -1,10 +1,10 @@
+import 'p2p_loan_payload.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../../core/domain/value_objects/money.dart';
 import '../../../../core/errors/failures.dart';
 import '../../domain/entities/p2p_loan.dart';
 import '../../domain/entities/p2p_installment.dart';
 import '../../domain/entities/p2p_payment_record.dart';
-import '../../domain/services/p2p_calculator.dart';
 import 'p2p_datasource.dart';
 
 class SupabaseP2PDataSource implements P2PDataSource {
@@ -17,13 +17,6 @@ class SupabaseP2PDataSource implements P2PDataSource {
   });
 
   String get _houseId => getCurrentHouseId();
-
-  bool _isUuid(String id) {
-    final uuidRegex = RegExp(
-      r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$',
-    );
-    return uuidRegex.hasMatch(id);
-  }
 
   @override
   Future<List<P2PLoan>> getLoans() async {
@@ -123,76 +116,10 @@ class SupabaseP2PDataSource implements P2PDataSource {
   @override
   Future<void> createLoan(P2PLoan loan) async {
     try {
-      final currentUserId = client.auth.currentUser?.id;
-      final loanData = {
-        if (_isUuid(loan.id)) 'id': loan.id,
-        'house_id': _houseId,
-        'lender_id': loan.isHouseLender ? null : loan.lenderMemberId,
-        'lender_is_house': loan.isHouseLender,
-        'repayment_mode': loan.isOpenEnded ? 'open_ended' : 'installments',
-        'settle_in_cycle': loan.settleInCycle,
-        'borrower_id': loan.borrowerMemberId,
-        'title': loan.title,
-        'description': loan.description,
-        'total_amount_cents': loan.totalAmount.cents,
-        'installments_count': loan.installmentsCount,
-        'status': loan.status == LoanStatus.paid
-            ? 'completed'
-            : loan.status == LoanStatus.forgiven
-                ? 'forgiven'
-                : loan.status == LoanStatus.renegotiated
-                    ? 'renegotiated'
-                    : 'active',
-        'created_by': currentUserId ?? (loan.isHouseLender ? loan.borrowerMemberId : loan.lenderMemberId),
-        'created_at': loan.createdAt.toUtc().toIso8601String(),
-      };
-
-      final insertedLoan = await client
-          .from('p2p_loans')
-          .insert(loanData)
-          .select('id')
-          .single();
-
-      final realLoanId = insertedLoan['id'] as String;
-
-      final installmentsToInsert = loan.installments.isNotEmpty
-          ? loan.installments
-          : loan.isOpenEnded
-              ? P2PCalculator.buildOpenEndedInstallment(
-                  loanId: realLoanId,
-                  totalAmount: loan.totalAmount,
-                )
-              : P2PCalculator.generateInstallments(
-                  loanId: realLoanId,
-                  totalAmount: loan.totalAmount,
-                  installmentsCount: loan.installmentsCount,
-                  firstDueDate: loan.firstDueDate,
-                );
-
-      final installmentRows = installmentsToInsert.map((inst) {
-        return {
-          if (_isUuid(inst.id)) 'id': inst.id,
-          'loan_id': realLoanId,
-          'installment_number': inst.number,
-          'amount_cents': inst.amount.cents,
-          'paid_cents': inst.paidAmount.cents,
-          'due_date': inst.dueDate.toIso8601String().split('T')[0],
-          'status': inst.isForgiven
-              ? 'forgiven'
-              : inst.isCancelled
-                  ? 'renegotiated'
-                  : inst.isFullyPaid
-                      ? 'paid'
-                      : inst.paidAmount.isPositive
-                          ? 'partial'
-                          : 'pending',
-          'paid_at': inst.paidAt?.toUtc().toIso8601String(),
-        };
-      }).toList();
-
-      if (installmentRows.isNotEmpty) {
-        await client.from('p2p_installments').insert(installmentRows);
-      }
+      // Empréstimo e parcelas entram juntos: ou tudo, ou nada
+      await client.rpc('create_p2p_loan', params: {
+        'p_loan': p2pLoanPayload(loan, houseId: _houseId),
+      });
     } catch (e) {
       throw ServerFailure('Erro ao criar empréstimo P2P: $e');
     }
