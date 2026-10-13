@@ -56,6 +56,46 @@ Nada disto foi exercitado com usuário logado; só passou por teste automatizado
 - **Itens médios da análise ainda abertos:** caixinha pode ser criada pelo cliente já com saldo inicial; a sobrecarga antiga `delete_house_expense(uuid)` continua no banco; categorias e formas de pagamento padrão duplicadas; `category_id` de compras nunca gravado; participantes removidos de evento não são apagados; "testar chave" de IA usa `dart:io` (não deve funcionar na web); colunas duplicadas no schema.
 - **Documentação:** `o_que_falta_fazer.md` precisa ser reescrito.
 
+## Pendente: inconsistências de funcionalidades já implementadas
+
+Análise feita em 12/10/2026 por leitura do código e das migrations. Nada foi executado (app, testes ou banco), então cada item precisa ser confirmado antes da correção. Não repete o que já está em "limites conhecidos".
+
+### Graves: o recurso existe na tela mas não funciona com sessão real
+
+1. **Projetos compartilhados só funcionam no modo demo.** A casa está fixa como `'house_demo'` e o usuário como `'user_1'` ao carregar e ao criar projeto (`projects_cubit.dart:19`, `projects_hub_page.dart:453`). No Supabase isso vira erro de uuid inválido. O seletor de projeto do formulário de despesa tem o mesmo problema e fica vazio em silêncio (`add_expense_page.dart:113`).
+2. **Despesa recorrente é só uma marcação.** Nada gera a ocorrência do ciclo seguinte: `getRecurringExpenses` nunca é chamado e `recurringSeriesId` nunca é preenchido na criação. O `modulo_despesas_de_casa.md` diz que contas fixas "são geradas sozinhas". "Esta e as próximas" e "todas" agem sobre uma série de um item só, e a tela "Recorrentes" dos Ajustes lista apenas as do ciclo carregado (`settings_page.dart:2485`). Falta decidir: gerar as ocorrências no app ao abrir o ciclo ou no banco.
+3. **Pagamento parcial no fechamento: três das quatro opções não fazem o que dizem.** O aporte do morador é registrado integral em qualquer caso (`supabase_settlement_datasource.dart:221`), então a diferença some. "Manter como pendência no próximo ciclo" e "Perdoar" não são tratadas por nenhum datasource (as duas se comportam como perdão). "Financiar via P2P", a opção padrão, é pulada quando o credor é o Caixa da Casa (`supabase_settlement_datasource.dart:335`), que é o caso mais comum.
+4. **Editar uma compra no cartão a empurra para a fatura seguinte.** O formulário abre com a data igual ao vencimento da fatura e, ao salvar, usa essa data como data da compra e recalcula o vencimento (`add_expense_page.dart:87` e `:247`). Em recorrentes, editar uma ocorrência antiga traz o vencimento para o mês atual (`add_expense_page.dart:241`).
+
+### A mesma regra implementada de formas diferentes
+
+5. **"Pago do próprio bolso", categoria e forma de pagamento dependem de onde a despesa foi lançada.** O campo "pago do bolso" é o que gera reembolso no fechamento.
+
+   | Caminho | Pago do bolso | Categoria gravada no Supabase |
+   |---|---|---|
+   | Formulário | conforme o dono da forma de pagamento | a escolhida |
+   | Assistente | sempre sim | nenhuma |
+   | Fechar compra do mercado | sempre sim | nenhuma |
+   | Scanner | sempre não | por nome ("mercado"/"conta") |
+   | Importar fatura | sempre não | nenhuma |
+
+   Os caminhos "nenhuma" usam ids de demonstração (`cat_mercado`, `cat_contas`, `cat_groceries`), que o Supabase descarta; o assistente ainda recebe `categoryHint` da Edge Function e lê `categoryId` no app. Scanner e importação usam a primeira forma de pagamento da lista, não a real. Só o formulário respeita o dono da categoria.
+6. **Modelo de rateio "Por categoria" não existe de fato.** O valor é gravado em `houses.default_split_model` e nunca lido. Ao reabrir a tela ele aparece como "Porcentagem", porque o modelo ativo é deduzido dos valores fixos (`settings_page.dart:1069`).
+7. **Aportes fixos: quem entra depois não paga nada.** O novo morador nasce com valor fixo 0 e o motor só cria meta para quem tem valor maior que zero (`global_clearing_engine.dart:69`). No modelo percentual o mesmo morador recebe 1/n automaticamente.
+8. **O planejador de aportes da Home não bate com o fechamento.** Soma as contas pendentes e depois abate o fôlego, que já as descontou; abate os aportes de novo por morador; ignora o rateio por despesa. Trocar o modo (econômico/confortável) muda o histórico do ciclo anterior para o atual (`finance_cubit.dart:125`).
+9. **Relatórios: totais que não fecham.** O gráfico por categoria soma pagas e pendentes, mas divide só pelo total pago, e pode passar de 100% (`reports_page.dart:213`). O CSV lista todas as despesas e o "Total gasto" conta só as pagas.
+10. **Ciclo fechado aparece empobrecido em produção.** As transferências mostram "Membro transfere para Membro" (`supabase_settlement_datasource.dart:74`), as que envolvem o Caixa não são gravadas, e saldos por morador e memória de cálculo vêm vazios. No modo demo tudo aparece completo.
+11. **Dia de início do ciclo entre 29 e 31** (o onboarding permite até 31). `FinancialCycle.fromDate` devolve um ciclo que não contém a própria data no último dia de meses curtos (dia 31, data 30/04: resultado 31/03 a 29/04). O banco define ciclo fechado como "início + 1 mês", o que deixa dias finais destravados. Os acordos gerados no fechamento vencem sempre no dia 10 do mês final do ciclo; com início depois do dia 10, a parcela cai dentro do ciclo que acabou de fechar.
+
+### Menores
+
+12. **Mock e Supabase divergem, e os testes rodam só no mock.** Resgate acima do saldo da caixinha zera no mock e dá erro no banco; empréstimo criado sem parcelas (importação de fatura) aparece como quitado no demo; "esta e as próximas" filtra por data no mock e por vencimento no banco; atualizar uma série no Supabase troca o tipo de rateio sem copiar as regras.
+13. **"Atrasado" tem duas definições.** Parcela P2P fica atrasada no próprio dia do vencimento; conta da casa, só no dia seguinte.
+14. **Código morto e fluxos incompletos.** `ShoppingListPage` (532 linhas) não é usada (a tela viva é a de Tarefas & Compras); tarefas e itens de compra não têm edição; o prompt do assistente menciona perdão, renegociação e exclusão, mas o app não executa essas ações; o selo de "exceção da série" na agenda nunca aparece em produção.
+15. **Fechar compra no mercado não liga a viagem à despesa.** O id gerado não é uuid, então `shopping_trips.expense_id` fica sempre nulo. Despesa, empréstimo, viagem e limpeza da lista são quatro gravações separadas, sem transação.
+
+**Ordem sugerida:** 1, 4, 3, 5 (erro visível ou dinheiro calculado errado com usuário real; nenhum exige migration). O item 2 é o maior em esforço.
+
 ## Como trabalhar neste projeto
 
 - **Fluxo de git:** criar uma branch a partir da `main`, commitar nela e, quando o dono pedir, fazer merge fast-forward na `main` e push. Commit e push só a pedido.
