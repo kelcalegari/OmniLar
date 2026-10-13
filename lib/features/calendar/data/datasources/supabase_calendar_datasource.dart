@@ -139,6 +139,9 @@ class SupabaseCalendarDataSource implements CalendarDataSource {
             orElse: () => RecurrenceFrequency.none,
           ),
           seriesId: r['recurring_series_id'] as String?,
+          recurrenceEndDate: r['recurrence_end_date'] != null
+              ? DateTime.tryParse(r['recurrence_end_date'] as String)
+              : null,
         );
       }).toList();
     } catch (e) {
@@ -210,6 +213,8 @@ class SupabaseCalendarDataSource implements CalendarDataSource {
             'is_all_day': event.isAllDay,
             'visibility': event.visibility.name,
             'recurrence_frequency': event.recurrenceFrequency.name,
+            if (isRecurring && event.recurrenceEndDate != null)
+              'recurrence_end_date': event.recurrenceEndDate!.toIso8601String().split('T')[0],
           },
           'occurrences': [
             if (isRecurring)

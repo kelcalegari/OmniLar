@@ -1,7 +1,12 @@
 import '../../../../core/domain/enums/recurrence.dart';
 import '../entities/calendar_event.dart';
 
-/// Quantas ocorrências futuras são criadas para cada frequência de repetição.
+/// Limite de ocorrências de uma série com data final (um ano de evento diário
+/// já são 365): protege contra uma data final muito distante.
+const int maxOccurrencesWithEndDate = 200;
+
+/// Quantas ocorrências futuras são criadas, sem data final, para cada
+/// frequência de repetição.
 int _futureOccurrencesCount(RecurrenceFrequency frequency) {
   switch (frequency) {
     case RecurrenceFrequency.daily:
@@ -28,12 +33,24 @@ DateTime _sameDayOfMonth(DateTime start, int year, int month) {
 }
 
 /// Inícios das próximas ocorrências de um evento recorrente, sem contar a
-/// primeira (o próprio [event]). Respeita [CalendarEvent.recurrenceEndDate].
+/// primeira (o próprio [event]). Com [CalendarEvent.recurrenceEndDate] a série
+/// vai até essa data (inclusive), limitada a [maxOccurrencesWithEndDate]; sem
+/// ela, cria o horizonte padrão de cada frequência.
 List<DateTime> futureOccurrenceStarts(CalendarEvent event) {
   final start = event.startTime;
   final starts = <DateTime>[];
+  if (event.recurrenceFrequency == RecurrenceFrequency.none) return starts;
 
-  for (int i = 1; i <= _futureOccurrencesCount(event.recurrenceFrequency); i++) {
+  final endDate = event.recurrenceEndDate;
+  // A data final vale o dia inteiro
+  final lastMoment = endDate == null
+      ? null
+      : DateTime(endDate.year, endDate.month, endDate.day, 23, 59, 59);
+  final limit = endDate == null
+      ? _futureOccurrencesCount(event.recurrenceFrequency)
+      : maxOccurrencesWithEndDate;
+
+  for (int i = 1; i <= limit; i++) {
     final DateTime nextStart;
     switch (event.recurrenceFrequency) {
       case RecurrenceFrequency.daily:
@@ -56,7 +73,7 @@ List<DateTime> futureOccurrenceStarts(CalendarEvent event) {
         break;
     }
 
-    if (event.recurrenceEndDate != null && nextStart.isAfter(event.recurrenceEndDate!)) {
+    if (lastMoment != null && nextStart.isAfter(lastMoment)) {
       break;
     }
     starts.add(nextStart);

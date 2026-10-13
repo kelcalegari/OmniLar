@@ -48,5 +48,30 @@ void main() {
         DateTime(2026, 2, 3, 19, 30),
       ]);
     });
+
+    test('A data final vale o dia inteiro, mesmo informada sem hora', () {
+      final starts = futureOccurrenceStarts(
+        event(RecurrenceFrequency.daily, until: DateTime(2026, 2, 3)),
+      );
+      expect(starts.last, DateTime(2026, 2, 3, 19, 30));
+      expect(starts.length, 3);
+    });
+
+    test('Com data final a série passa do horizonte padrão', () {
+      // Semanal sem data final: 8 ocorrências; até 30/06 são 21 semanas
+      expect(futureOccurrenceStarts(event(RecurrenceFrequency.weekly)).length, 8);
+      final starts = futureOccurrenceStarts(
+        event(RecurrenceFrequency.weekly, until: DateTime(2026, 6, 30)),
+      );
+      expect(starts.length, 21);
+      expect(starts.last, DateTime(2026, 6, 27, 19, 30));
+    });
+
+    test('Data final muito distante é limitada', () {
+      final starts = futureOccurrenceStarts(
+        event(RecurrenceFrequency.daily, until: DateTime(2030, 1, 1)),
+      );
+      expect(starts.length, maxOccurrencesWithEndDate);
+    });
   });
 }

@@ -60,6 +60,9 @@ class _AddEventSheetState extends State<AddEventSheet> {
   late EventVisibility _visibility;
   late RecurrenceFrequency _recurrenceFrequency;
 
+  /// Último dia da repetição (null = sem data final: cria o horizonte padrão).
+  DateTime? _recurrenceEndDate;
+
   // Participantes e seus papéis selecionados
   // null = não convidado
   final Map<String, ParticipantRole?> _selectedRoles = {};
@@ -96,6 +99,7 @@ class _AddEventSheetState extends State<AddEventSheet> {
       _isAllDay = ev.isAllDay;
       _visibility = ev.visibility;
       _recurrenceFrequency = ev.recurrenceFrequency;
+      _recurrenceEndDate = ev.recurrenceEndDate;
 
       for (final p in ev.participants) {
         _selectedRoles[p.memberId] = p.role;
@@ -398,6 +402,8 @@ class _AddEventSheetState extends State<AddEventSheet> {
           visibility: _visibility,
           participants: participants,
           recurrenceFrequency: _recurrenceFrequency,
+          recurrenceEndDate:
+              _recurrenceFrequency == RecurrenceFrequency.none ? null : _recurrenceEndDate,
         );
 
         await cubit.addEvent(newEvent);
@@ -618,6 +624,42 @@ class _AddEventSheetState extends State<AddEventSheet> {
                   ],
                 ),
               ),
+              // Data final da repetição: só ao criar a série
+              if (_recurrenceFrequency != RecurrenceFrequency.none && widget.initialEvent == null) ...[
+                const SizedBox(height: 8),
+                Row(
+                  children: [
+                    const Icon(Icons.event_busy_outlined, color: AppColors.primary, size: 20),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        _recurrenceEndDate == null
+                            ? 'Repete sem data final (cria as próximas ocorrências)'
+                            : 'Repete até ${_recurrenceEndDate!.day.toString().padLeft(2, '0')}/${_recurrenceEndDate!.month.toString().padLeft(2, '0')}/${_recurrenceEndDate!.year}',
+                        style: const TextStyle(fontSize: 13),
+                      ),
+                    ),
+                    if (_recurrenceEndDate != null)
+                      IconButton(
+                        icon: const Icon(Icons.close_rounded, size: 18),
+                        tooltip: 'Tirar a data final',
+                        onPressed: () => setState(() => _recurrenceEndDate = null),
+                      ),
+                    TextButton(
+                      onPressed: () async {
+                        final picked = await showDatePicker(
+                          context: context,
+                          initialDate: _recurrenceEndDate ?? _startDate.add(const Duration(days: 30)),
+                          firstDate: _startDate,
+                          lastDate: _startDate.add(const Duration(days: 365 * 3)),
+                        );
+                        if (picked != null) setState(() => _recurrenceEndDate = picked);
+                      },
+                      child: Text(_recurrenceEndDate == null ? 'Definir' : 'Alterar'),
+                    ),
+                  ],
+                ),
+              ],
               const SizedBox(height: 16),
 
               // Participantes e Papel (RN01 e RN02)
