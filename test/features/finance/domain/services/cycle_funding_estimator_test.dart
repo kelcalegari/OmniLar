@@ -255,5 +255,140 @@ void main() {
       // Total: 2.120 + 1.200 = R$ 3.320,00
       expect(estimate.totalProjectedExpenses.cents, equals(332000));
     });
+
+    HouseExpense expense({
+      required String id,
+      required int cents,
+      required String categoryId,
+      ExpenseStatus status = ExpenseStatus.paid,
+      String paidBy = 'm_kelvynn',
+      bool outOfPocket = false,
+      String paymentMethodId = 'pm_caixa',
+      SplitRule rule = defaultSplit,
+    }) => HouseExpense(
+          id: id,
+          title: id,
+          amount: Money(cents),
+          date: DateTime(2026, 10, 12),
+          paidByMemberId: paidBy,
+          paidOutOfPocket: outOfPocket,
+          paymentMethodId: paymentMethodId,
+          categoryId: categoryId,
+          splitRule: rule,
+          status: status,
+        );
+
+    test('conta já paga com os aportes do ciclo não é cobrada de novo', () {
+      // Aluguel de R$ 2.000 já pago com R$ 1.000 de cada um; resta a internet (R$ 120) a vencer
+      final estimate = estimator.calculateEstimate(
+        cycle: currentCycle,
+        members: members,
+        categories: categories,
+        currentCycleExpenses: [
+          expense(id: 'aluguel', cents: 200000, categoryId: 'cat_moradia'),
+          expense(
+            id: 'internet',
+            cents: 12000,
+            categoryId: 'cat_moradia',
+            status: ExpenseStatus.pending,
+          ),
+        ],
+        historicalExpenses: const [],
+        currentCycleContributions: [
+          for (final id in ['m_kelvynn', 'm_cris'])
+            Contribution(
+              id: 'c_$id',
+              memberId: id,
+              amount: const Money(100000),
+              date: DateTime(2026, 10, 6),
+            ),
+        ],
+      );
+
+      // O ciclo custa R$ 2.120; cada um deve R$ 1.060 e já aportou R$ 1.000
+      expect(estimate.totalProjectedExpenses.cents, 212000);
+      expect(estimate.netFundingRequired.cents, 212000);
+      for (final q in estimate.memberQuotes) {
+        expect(q.recommendedAmount.cents, 106000);
+        expect(q.pendingAmount.cents, 6000);
+      }
+    });
+
+    test('compra de mercado já lançada conta dentro da estimativa, não por cima', () {
+      final estimate = estimator.calculateEstimate(
+        cycle: currentCycle,
+        members: members,
+        categories: categories,
+        currentCycleExpenses: [
+          expense(id: 'feira', cents: 40000, categoryId: 'cat_mercado'),
+        ],
+        historicalExpenses: historicalExpenses, // média de R$ 1.500
+        currentCycleContributions: [],
+      );
+      expect(estimate.totalProjectedExpenses.cents, 150000);
+
+      // Gastou mais do que a média: vale o que foi lançado
+      final over = estimator.calculateEstimate(
+        cycle: currentCycle,
+        members: members,
+        categories: categories,
+        currentCycleExpenses: [
+          expense(id: 'feira', cents: 180000, categoryId: 'cat_mercado'),
+        ],
+        historicalExpenses: historicalExpenses,
+        currentCycleContributions: [],
+      );
+      expect(over.totalProjectedExpenses.cents, 180000);
+    });
+
+    test('cada despesa entra na cota pelo rateio dela', () {
+      final estimate = estimator.calculateEstimate(
+        cycle: currentCycle,
+        members: members,
+        categories: categories,
+        currentCycleExpenses: [
+          expense(id: 'aluguel', cents: 200000, categoryId: 'cat_moradia'),
+          expense(
+            id: 'carro',
+            cents: 30000,
+            categoryId: 'cat_moradia',
+            rule: const SplitRule.singleResponsible('m_cris'),
+          ),
+        ],
+        historicalExpenses: const [],
+        currentCycleContributions: [],
+      );
+
+      final kelvynn = estimate.memberQuotes.firstWhere((q) => q.memberId == 'm_kelvynn');
+      final cris = estimate.memberQuotes.firstWhere((q) => q.memberId == 'm_cris');
+      expect(kelvynn.recommendedAmount.cents, 100000);
+      expect(cris.recommendedAmount.cents, 130000);
+    });
+
+    test('conta da casa paga do próprio bolso abate a cota de quem pagou', () {
+      final estimate = estimator.calculateEstimate(
+        cycle: currentCycle,
+        members: members,
+        categories: categories,
+        currentCycleExpenses: [
+          expense(
+            id: 'aluguel',
+            cents: 200000,
+            categoryId: 'cat_moradia',
+            paidBy: 'm_cris',
+            outOfPocket: true,
+            paymentMethodId: 'pm_card_cris',
+          ),
+        ],
+        historicalExpenses: const [],
+        currentCycleContributions: [],
+      );
+
+      final kelvynn = estimate.memberQuotes.firstWhere((q) => q.memberId == 'm_kelvynn');
+      final cris = estimate.memberQuotes.firstWhere((q) => q.memberId == 'm_cris');
+      expect(cris.paidOutOfPocket.cents, 200000);
+      expect(cris.pendingAmount.cents, 0);
+      expect(kelvynn.pendingAmount.cents, 100000);
+    });
   });
 }

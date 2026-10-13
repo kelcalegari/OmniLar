@@ -23,34 +23,64 @@ class CycleFundingEstimator {
     FundingEstimateMode mode = FundingEstimateMode.historicalAverage,
     Map<String, Money>? customCategoryOverrides,
   }) {
-    // 1. Contas provisionadas a vencer no ciclo atual (excluindo despesas já pagas ou despesas de projetos)
+    // A conta é a do ciclo inteiro, como no fechamento: tudo o que o ciclo custa
+    // (o que já foi pago e o que ainda vence), menos a sobra que veio do ciclo
+    // anterior. O que cada um já aportou só é abatido da cota dele, no fim.
     final houseExpenses = currentCycleExpenses
         .where((e) => !e.isProjectExpense)
         .toList();
-    final committedCents = houseExpenses
-        .where((e) => e.isPending || !e.isPaid)
-        .fold<int>(0, (acc, e) => acc + e.amount.cents);
-    final fixedCommittedExpenses = Money(committedCents);
 
-    // 2. Estimativa de categorias variáveis (Mercado, Luz, etc.)
-    final variableCategoryEstimates = _computeVariableCategoryEstimates(
+    // 1. Estimativa das categorias variáveis (Mercado, Luz, etc.). O que já foi
+    // lançado nelas neste ciclo conta dentro da estimativa, não por cima dela.
+    final historicalEstimates = _computeVariableCategoryEstimates(
       categories: categories,
       historicalExpenses: historicalExpenses,
       mode: mode,
       customOverrides: customCategoryOverrides,
     );
+    final variableCategoryIds = historicalEstimates.map((v) => v.categoryId).toSet();
+    final launchedByCategory = <String, int>{};
+    for (final e in houseExpenses) {
+      if (variableCategoryIds.contains(e.categoryId)) {
+        launchedByCategory[e.categoryId] =
+            (launchedByCategory[e.categoryId] ?? 0) + e.amount.cents;
+      }
+    }
+    int variableRemainderCents = 0;
+    final variableCategoryEstimates = <CategoryFundingEstimate>[];
+    for (final v in historicalEstimates) {
+      final launched = launchedByCategory[v.categoryId] ?? 0;
+      final projected = launched > v.adjustedAmount.cents ? launched : v.adjustedAmount.cents;
+      variableRemainderCents += projected - launched;
+      variableCategoryEstimates.add(
+        CategoryFundingEstimate(
+          categoryId: v.categoryId,
+          categoryName: v.categoryName,
+          averageMonthlyAmount: v.averageMonthlyAmount,
+          adjustedAmount: Money(projected),
+          sampleCyclesCount: v.sampleCyclesCount,
+          isOverridden: v.isOverridden,
+        ),
+      );
+    }
 
+    // 2. Contas do ciclo fora das categorias variáveis (pagas e a vencer)
+    final fixedCommittedExpenses = Money(
+      houseExpenses
+          .where((e) => !variableCategoryIds.contains(e.categoryId))
+          .fold<int>(0, (acc, e) => acc + e.amount.cents),
+    );
+
+    // 3. Total projetado para o ciclo
     final totalVariablesCents = variableCategoryEstimates.fold<int>(
       0,
       (acc, v) => acc + v.adjustedAmount.cents,
     );
-
-    // 3. Total projetado para o ciclo
     final totalProjectedCents =
         fixedCommittedExpenses.cents + totalVariablesCents;
     final totalProjectedExpenses = Money(totalProjectedCents);
 
-    // 4. Necessidade líquida de novos aportes (abatendo sobra em caixa existente)
+    // 4. Necessidade de aportes no ciclo (abatendo a sobra do ciclo anterior)
     final netFundingCents = (totalProjectedCents - currentHouseBalance.cents)
         .clamp(0, totalProjectedCents);
     final netFundingRequired = Money(netFundingCents);
@@ -58,7 +88,9 @@ class CycleFundingEstimator {
     // 5. Repartição das cotas recomendadas entre os membros
     final memberQuotes = _calculateMemberQuotes(
       members: members,
-      netFundingRequired: netFundingRequired,
+      houseExpenses: houseExpenses,
+      variableRemainder: Money(variableRemainderCents),
+      openingBalance: currentHouseBalance,
       contributions: currentCycleContributions,
     );
 
@@ -166,7 +198,9 @@ class CycleFundingEstimator {
   /// Calcula a cota sugerida para cada membro com base no modelo de rateio configurado
   List<MemberFundingQuote> _calculateMemberQuotes({
     required List<HouseMember> members,
-    required Money netFundingRequired,
+    required List<HouseExpense> houseExpenses,
+    required Money variableRemainder,
+    required Money openingBalance,
     required List<Contribution> contributions,
   }) {
     if (members.isEmpty) return const [];
@@ -190,15 +224,56 @@ class CycleFundingEstimator {
         ruleDescMap[m.id] = 'Valor fixo definido no perfil';
       }
     } else {
-      // Divisão proporcional por maior resto sem perda de centavos
-      final splitRule = SplitRule.percentage(defaultPercentages);
-      final allocations = splitRule.calculateAllocations(
-        totalAmount: netFundingRequired,
+      // Cada despesa lançada entra pelo rateio dela (como no fechamento); o que
+      // ainda é só estimativa e a sobra do ciclo anterior, pelo percentual padrão.
+      final defaultRule = SplitRule.percentage(defaultPercentages);
+      final grossCents = <String, int>{for (final id in memberIds) id: 0};
+      void add(Map<String, Money> allocations) {
+        for (final entry in allocations.entries) {
+          grossCents[entry.key] = (grossCents[entry.key] ?? 0) + entry.value.cents;
+        }
+      }
+
+      SplitRule effective(SplitRule rule) =>
+          rule.type == SplitType.percentage &&
+              (rule.percentages == null || rule.percentages!.isEmpty)
+          ? defaultRule
+          : rule;
+
+      for (final expense in houseExpenses) {
+        if (expense.items.isEmpty) {
+          add(effective(expense.splitRule).calculateAllocations(
+            totalAmount: expense.amount,
+            memberIds: memberIds,
+          ));
+          continue;
+        }
+        for (final item in expense.items) {
+          final itemRule = item.splitRule ??
+              (item.responsibleMemberId != null
+                  ? SplitRule.singleResponsible(item.responsibleMemberId)
+                  : effective(expense.splitRule));
+          add(itemRule.calculateAllocations(
+            totalAmount: item.amount,
+            memberIds: memberIds,
+          ));
+        }
+      }
+      add(defaultRule.calculateAllocations(
+        totalAmount: variableRemainder,
+        memberIds: memberIds,
+      ));
+      final openingShares = defaultRule.calculateAllocations(
+        totalAmount: openingBalance.isPositive ? openingBalance : const Money.zero(),
         memberIds: memberIds,
       );
 
-      for (final entry in allocations.entries) {
-        recommendedMap[entry.key] = entry.value;
+      for (final id in memberIds) {
+        final cents = (grossCents[id] ?? 0) - (openingShares[id]?.cents ?? 0);
+        recommendedMap[id] = Money(cents > 0 ? cents : 0);
+      }
+
+      for (final entry in recommendedMap.entries.toList()) {
         final pct = defaultPercentages[entry.key] ?? 50.0;
         final pctFormatted = pct.truncateToDouble() == pct
             ? pct.toInt().toString()
@@ -214,7 +289,21 @@ class CycleFundingEstimator {
           .fold<int>(0, (acc, c) => acc + c.amount.cents);
       final alreadyContributed = Money(alreadyContributedCents);
 
-      final pendingCents = (recommended.cents - alreadyContributedCents).clamp(
+      // Conta da casa paga do próprio bolso vale como aporte: o fechamento
+      // reembolsa esse valor abatendo do que o morador deve.
+      final outOfPocketCents = houseExpenses
+          .where(
+            (e) =>
+                e.paidByMemberId == member.id &&
+                e.isPaid &&
+                e.paidOutOfPocket &&
+                e.settledAt == null &&
+                e.paymentMethodId != 'pm_caixa',
+          )
+          .fold<int>(0, (acc, e) => acc + e.amount.cents);
+
+      final pendingCents =
+          (recommended.cents - alreadyContributedCents - outOfPocketCents).clamp(
         0,
         recommended.cents,
       );
@@ -225,6 +314,7 @@ class CycleFundingEstimator {
         memberName: member.name,
         recommendedAmount: recommended,
         alreadyContributed: alreadyContributed,
+        paidOutOfPocket: Money(outOfPocketCents),
         pendingAmount: pendingAmount,
         ruleDescription: ruleDescMap[member.id] ?? 'Cota do ciclo',
       );

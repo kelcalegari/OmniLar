@@ -274,6 +274,17 @@ class SupabaseFinanceDataSource implements FinanceDataSource {
       final startInstant = cycle.startDate.toUtc().toIso8601String();
       final endInstant = cycle.endDate.toUtc().toIso8601String();
 
+      // Ciclo atual ou futuro: o banco cria as contas recorrentes que ainda
+      // não existem até o fim dele. Falhar aqui não impede a leitura.
+      if (!cycle.endDate.isBefore(DateTime.now())) {
+        try {
+          await client.rpc('generate_recurring_expenses', params: {
+            'p_house_id': _houseId,
+            'p_until': endDate,
+          });
+        } catch (_) {}
+      }
+
       // Candidatas: vencem no ciclo, estão pendentes desde antes dele ou foram
       // lançadas ou baixadas nele. A regra de competência decide quais realmente entram.
       final rows = await client

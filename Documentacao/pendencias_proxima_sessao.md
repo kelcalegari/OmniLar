@@ -4,10 +4,10 @@ Atualizado em 13/10/2026. Este arquivo resume onde o trabalho parou, o que falta
 
 ## Estado atual
 
-- **Código:** `main` local e `origin/main` no commit `51294bc`, sincronizadas. O código depende das migrations até a 0035, todas já no banco.
-- **Banco (Supabase `rygxmpwzofgieodvhpcy`):** migrations 0001 a 0035 aplicadas. Só as 0022 a 0027 e as 0030 a 0035 constam no histórico de migrations do Supabase; as 0001 a 0021, a 0028 e a 0029 foram aplicadas à mão pelo SQL Editor (o conector recusou a aplicação da 0028 pelo assistente).
+- **Código:** `main` local e `origin/main` no commit `5d8e9b8`, sincronizadas. O código depende das migrations até a 0036, todas já no banco.
+- **Banco (Supabase `rygxmpwzofgieodvhpcy`):** migrations 0001 a 0036 aplicadas. Só as 0022 a 0027 e as 0030 a 0036 constam no histórico de migrations do Supabase; as 0001 a 0021, a 0028 e a 0029 foram aplicadas à mão pelo SQL Editor (o conector recusou a aplicação da 0028 pelo assistente).
 - **Edge Functions:** `capture-read` versão 8 e `assistant` versão 4, ambas com `verify_jwt=true` e exigindo usuário logado que more na casa.
-- **Qualidade:** `flutter analyze` com 0 erros (4 warnings antigos) e 302 testes passando (conferido em 13/10/2026). Os testes rodam só contra os datasources mock.
+- **Qualidade:** `flutter analyze` com 0 erros (4 warnings antigos) e 306 testes passando (conferido em 13/10/2026). Os testes rodam só contra os datasources mock.
 - **Dados de teste no banco:** uma casa ("Nossa Casa") com 3 moradores (kelvynn, dono; Cristiano e Joao, membros), rateio 23,33 / 43,34 / 33,33, e 3 empréstimos ativos. Existe uma segunda casa no banco. Desde a migration 0033 toda casa tem ao menos uma caixinha: as novas nascem com a "Reserva da Casa" e a que não tinha nenhuma recebeu uma.
 
 ## O que foi feito nesta sessão
@@ -19,7 +19,7 @@ Atualizado em 13/10/2026. Este arquivo resume onde o trabalho parou, o que falta
 5. **Regra de ciclo único e data da baixa (0025):** cada despesa conta em um ciclo só; `paid_at` define o ciclo de uma conta que estava pendente.
 6. **Modelo de rateio "Por categoria" (corrigido em 13/10/2026, falta testar no app).** Decisão do dono: implementar. O modelo gravado em `houses.default_split_model` passou a ser lido e a tela reabre em "Por Categoria de Gasto", mostrando as categorias com dono (100% para o dono) e a divisão igual das demais. A regra em si já era aplicada pelo formulário de despesa; os outros caminhos de lançamento continuam ignorando o dono da categoria (item 5). No modelo de aportes fixos a categoria com dono não tem efeito.
 7. **Aportes fixos: quem entra depois não paga nada (corrigido em 13/10/2026, falta testar no app).** Decisão do dono: o valor é ajustado à mão. O novo morador continua nascendo com valor fixo 0, mas a tela de Modelos de Rateio passou a mostrar esse 0 (antes exibia R$ 1.000 que não valiam) com o aviso "Sem aporte definido", aceita gravar 0 de propósito e o fechamento avisa quem está sem aporte antes de fechar o ciclo. Só dono ou admin consegue gravar (regra do banco); para os demais a tela não avisa que não salvou.
-8. **Telas:** rateio padrão para 3+ moradores; escolha de como cobrir o excedente do balde no fechamento.
+8. **O planejador de aportes da Home não batia com o fechamento (corrigido em 13/10/2026, falta testar no app).** A conta passou a ser a do ciclo inteiro: tudo o que o ciclo custa (pago e a vencer), menos a sobra do ciclo anterior, e só então o que cada um já aportou é abatido da cota dele. Antes as contas pendentes entravam duas vezes e os aportes eram abatidos duas vezes. Cada despesa lançada entra pelo rateio dela, conta paga do próprio bolso abate a cota de quem pagou, e compra já lançada em categoria variável conta dentro da estimativa. Trocar o modo (econômico/confortável) mantém o histórico do ciclo anterior. No modelo de aportes fixos a cota continua sendo o valor fixo.
 
 ## Pendente: testes manuais no app
 
@@ -63,7 +63,7 @@ Análise feita em 12/10/2026 por leitura do código e das migrations, e reavalia
 ### Graves: o recurso existe na tela mas não funciona com sessão real
 
 1. **Projetos compartilhados só funcionam no modo demo.** A casa está fixa como `'house_demo'` e o usuário como `'user_1'` ao carregar e ao criar projeto (`projects_cubit.dart:19`, `projects_hub_page.dart:453`). No Supabase isso vira erro de uuid inválido. O seletor de projeto do formulário de despesa tem o mesmo problema e fica vazio em silêncio (`add_expense_page.dart:113`).
-2. **Despesa recorrente é só uma marcação.** Nada gera a ocorrência do ciclo seguinte: `getRecurringExpenses` nunca é chamado e `recurringSeriesId` nunca é preenchido na criação. O `modulo_despesas_de_casa.md` diz que contas fixas "são geradas sozinhas". "Esta e as próximas" e "todas" agem sobre uma série de um item só, e a tela "Recorrentes" dos Ajustes lista apenas as do ciclo carregado (`settings_page.dart:2485`). Falta decidir: gerar as ocorrências no app ao abrir o ciclo ou no banco.
+2. **Despesa recorrente era só uma marcação (corrigido em 13/10/2026, migration 0036; falta testar no app).** O banco passa a criar a ocorrência de cada mês (RPC `generate_recurring_expenses`, chamada ao abrir o ciclo atual ou um futuro, no máximo dois meses à frente), como conta pendente, copiando valor, categoria, forma de pagamento, rateio e sub-itens da ocorrência mais recente. A série é a primeira despesa (matriz) mais as ocorrências ligadas por `recurring_series_id`; excluir "só esta" não recria a ocorrência, e "esta e as próximas" ou "todas" encerram a série. Conta variável nasce com o valor do mês anterior, para ser ajustada. Em aberto: o modo demo não gera ocorrências; a tela "Recorrentes" dos Ajustes continua listando só as do ciclo carregado; editar com "esta e as próximas" troca o tipo de rateio sem copiar as regras.
 3. **Pagamento parcial no fechamento (corrigido em 13/10/2026, migration 0032).** "Financiar via P2P" e "Manter como pendência" criam o acordo também quando o credor é o Caixa da Casa (a pendência vence no início do ciclo seguinte), o que deixou de entrar no Caixa sai da sobra, e o fechamento grava quanto ficou a receber, quanto foi perdoado e quanto entrou de acordos com o Lar, de modo que reabrir o ciclo não recria sobra. Continua em aberto: (a) acordo com o Lar quitado fora do fechamento (aba Pessoal, no meio do ciclo) não entra na sobra de nenhum ciclo; (b) o pagamento de uma "Reposição da Caixinha" aparece como sobra do Caixa e não volta sozinho para a caixinha; (c) "Devolver a sobra aos membros" é recusado quando há pagamento parcial ao Caixa; (d) o app assume que todo Super Pix não marcado como parcial foi pago.
 4. **Editar uma compra no cartão a empurra para a fatura seguinte.** O formulário abre com a data igual ao vencimento da fatura e, ao salvar, usa essa data como data da compra e recalcula o vencimento (`add_expense_page.dart:87` e `:247`). Em recorrentes, editar uma ocorrência antiga traz o vencimento para o mês atual (`add_expense_page.dart:241`).
 
@@ -98,7 +98,7 @@ Análise feita em 12/10/2026 por leitura do código e das migrations, e reavalia
 
 1. **Corrigidos em 13/10/2026 (falta teste no app):** 4, 5, 1 e 9.
 2. **Decididos e corrigidos em 13/10/2026:** 11, 7 e 6 (falta teste no app).
-3. **Maiores:** 10 (corrigido em 13/10/2026), pontas do item 3, 8 (planejador da Home), 2 (recorrência; o maior em esforço e pede decisão de onde gerar as ocorrências).
+3. **Maiores:** 10 (corrigido em 13/10/2026), pontas do item 3, 8 (corrigido em 13/10/2026), 2 (corrigido em 13/10/2026, gerando no banco).
 4. **Limpeza:** 15, 13, 12, 14.
 
 ## Como trabalhar neste projeto

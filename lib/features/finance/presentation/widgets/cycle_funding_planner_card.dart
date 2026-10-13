@@ -277,7 +277,7 @@ class CycleFundingPlannerCard extends StatelessWidget {
                         fontWeight: FontWeight.bold,
                       ),
                     )
-                  else if (quote.alreadyContributed.cents > 0)
+                  else if (quote.alreadyContributed.cents > 0 || quote.paidOutOfPocket.cents > 0)
                     Text(
                       'Falta: ${quote.pendingAmount.formatted}',
                       style: const TextStyle(

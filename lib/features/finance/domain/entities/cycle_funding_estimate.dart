@@ -33,6 +33,9 @@ class MemberFundingQuote {
   final String memberName;
   final Money recommendedAmount;
   final Money alreadyContributed;
+
+  /// Contas da casa que o morador pagou do próprio bolso neste ciclo (abatem a cota).
+  final Money paidOutOfPocket;
   final Money pendingAmount;
   final String ruleDescription;
 
@@ -41,6 +44,7 @@ class MemberFundingQuote {
     required this.memberName,
     required this.recommendedAmount,
     required this.alreadyContributed,
+    this.paidOutOfPocket = const Money.zero(),
     required this.pendingAmount,
     required this.ruleDescription,
   });
@@ -52,11 +56,11 @@ class MemberFundingQuote {
 class CycleFundingEstimate {
   final FinancialCycle cycle;
   final FundingEstimateMode mode;
-  final Money fixedCommittedExpenses; // Contas a vencer/fixas do ciclo
+  final Money fixedCommittedExpenses; // Contas do ciclo fora das variáveis (pagas e a vencer)
   final List<CategoryFundingEstimate>
   variableCategoryEstimates; // Mercado, etc.
   final Money currentHouseBalance; // Saldo em caixa do ciclo anterior
-  final Money totalProjectedExpenses; // Fixas + Estimativas variáveis
+  final Money totalProjectedExpenses; // Contas do ciclo + variáveis (o maior entre estimado e lançado)
   final Money netFundingRequired; // max(0, totalProjected - currentBalance)
   final List<MemberFundingQuote> memberQuotes;
 

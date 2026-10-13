@@ -88,14 +88,16 @@ class FinanceCubit extends Cubit<FinanceState> {
         historicalExpenses.addAll(prevExpenses);
       } catch (_) {}
 
+      _historicalExpenses = historicalExpenses.isNotEmpty ? historicalExpenses : expenses;
+
       final fundingEstimate = _fundingEstimator.calculateEstimate(
         cycle: targetCycle,
         members: members,
         categories: categories,
         currentCycleExpenses: expenses,
-        historicalExpenses: historicalExpenses.isNotEmpty ? historicalExpenses : expenses,
+        historicalExpenses: _historicalExpenses,
         currentCycleContributions: contributions,
-        currentHouseBalance: summary.folego.isPositive ? summary.folego : const Money.zero(),
+        currentHouseBalance: _openingBalanceOf(summary),
         mode: state.fundingEstimateMode,
         customCategoryOverrides: state.customCategoryOverrides,
       );
@@ -121,15 +123,29 @@ class FinanceCubit extends Cubit<FinanceState> {
     }
   }
 
+  /// Histórico usado nas médias do planejador (ciclo anterior, quando existe).
+  List<HouseExpense> _historicalExpenses = const [];
+
+  /// Sobra que o ciclo anterior deixou no Caixa. O fôlego já desconta as
+  /// contas e soma os aportes do ciclo, então não serve de saldo inicial.
+  Money _openingBalanceOf(FinancialCycleSummary? summary) {
+    if (summary == null) return const Money.zero();
+    final cents = summary.folego.cents +
+        summary.totalExpensesPaid.cents +
+        summary.committedFutureExpenses.cents -
+        summary.totalContributions.cents;
+    return Money(cents > 0 ? cents : 0);
+  }
+
   void updateFundingEstimateMode(FundingEstimateMode mode) {
     final updated = _fundingEstimator.calculateEstimate(
       cycle: state.currentCycle,
       members: state.members,
       categories: state.categories,
       currentCycleExpenses: state.expenses,
-      historicalExpenses: state.expenses,
+      historicalExpenses: _historicalExpenses,
       currentCycleContributions: state.contributions,
-      currentHouseBalance: state.summary?.folego.isPositive == true ? state.summary!.folego : const Money.zero(),
+      currentHouseBalance: _openingBalanceOf(state.summary),
       mode: mode,
       customCategoryOverrides: state.customCategoryOverrides,
     );
@@ -147,9 +163,9 @@ class FinanceCubit extends Cubit<FinanceState> {
       members: state.members,
       categories: state.categories,
       currentCycleExpenses: state.expenses,
-      historicalExpenses: state.expenses,
+      historicalExpenses: _historicalExpenses,
       currentCycleContributions: state.contributions,
-      currentHouseBalance: state.summary?.folego.isPositive == true ? state.summary!.folego : const Money.zero(),
+      currentHouseBalance: _openingBalanceOf(state.summary),
       mode: state.fundingEstimateMode,
       customCategoryOverrides: newOverrides,
     );
