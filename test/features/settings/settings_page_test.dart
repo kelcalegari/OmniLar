@@ -330,4 +330,62 @@ void main() {
     expect(find.text('Gerar outro código'), findsOneWidget);
     expect(find.byTooltip('Copiar Código'), findsOneWidget);
   });
+
+  group('Busca nos ajustes', () {
+    Future<void> search(WidgetTester tester, String text) async {
+      await tester.enterText(find.widgetWithText(TextField, 'Buscar nos ajustes'), text);
+      await tester.pumpAndSettle();
+    }
+
+    testWidgets('Acha uma opção sem acento e leva ao grupo dela', (tester) async {
+      await sl<FinanceCubit>().loadCycleData();
+      await tester.pumpWidget(buildTestableWidget());
+      await tester.pumpAndSettle();
+
+      await search(tester, 'cartao');
+
+      // Os resultados tomam o lugar da lista de grupos
+      expect(find.text('Cartões e Formas de Pagamento'), findsOneWidget);
+      expect(find.text('Aplicativo'), findsNothing);
+
+      await tester.tap(find.text('Cartões e Formas de Pagamento'));
+      await tester.pumpAndSettle();
+
+      // Abriu a página do grupo
+      expect(find.text('Cadastrar Cartão ou VR'), findsOneWidget);
+      expect(find.text('Assinaturas & Contas Fixas'), findsOneWidget);
+    });
+
+    testWidgets('Acha pelo sinônimo e pelo que a casa cadastrou', (tester) async {
+      final cubit = sl<FinanceCubit>();
+      await cubit.loadCycleData();
+      await tester.pumpWidget(buildTestableWidget());
+      await tester.pumpAndSettle();
+
+      // "balde" não está no título, só nas palavras-chave do rateio
+      await search(tester, 'balde');
+      expect(find.text('Modelos de Rateio'), findsOneWidget);
+
+      // Nome de uma forma de pagamento cadastrada
+      await search(tester, 'nubank');
+      expect(find.text('Nubank Carlos'), findsOneWidget);
+      expect(find.textContaining('Forma de pagamento'), findsWidgets);
+    });
+
+    testWidgets('Sem resultado avisa, e limpar a busca devolve os grupos', (tester) async {
+      await sl<FinanceCubit>().loadCycleData();
+      await tester.pumpWidget(buildTestableWidget());
+      await tester.pumpAndSettle();
+
+      await search(tester, 'xyzxyz');
+      expect(find.textContaining('Nada encontrado'), findsOneWidget);
+      expect(find.text('Casa'), findsNothing);
+
+      await tester.tap(find.byTooltip('Limpar busca'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Casa'), findsOneWidget);
+      expect(find.text('Aplicativo'), findsOneWidget);
+    });
+  });
 }

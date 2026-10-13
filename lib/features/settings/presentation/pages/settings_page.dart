@@ -63,6 +63,53 @@ class _SettingsPageState extends State<SettingsPage> {
   /// Grupo aberto na coluna da direita (só no PC).
   _SettingsGroup _selectedGroup = _SettingsGroup.house;
 
+  final _searchController = TextEditingController();
+  String _searchQuery = '';
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  void _clearSearch() {
+    _searchController.clear();
+    setState(() => _searchQuery = '');
+  }
+
+  Widget _searchField() {
+    return TextField(
+      controller: _searchController,
+      onChanged: (value) => setState(() => _searchQuery = value),
+      textInputAction: TextInputAction.search,
+      decoration: InputDecoration(
+        hintText: 'Buscar nos ajustes',
+        prefixIcon: const Icon(Icons.search_rounded),
+        suffixIcon: _searchQuery.isEmpty
+            ? null
+            : IconButton(
+                icon: const Icon(Icons.close_rounded),
+                tooltip: 'Limpar busca',
+                onPressed: _clearSearch,
+              ),
+        isDense: true,
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
+      ),
+    );
+  }
+
+  /// Resultado escolhido: abre o que ele indica e limpa a busca.
+  void _pickSearchEntry(_SearchEntry entry, ValueChanged<_SettingsGroup> openGroup) {
+    _clearSearch();
+    FocusManager.instance.primaryFocus?.unfocus();
+    final group = entry.group;
+    if (group != null) {
+      openGroup(group);
+    } else {
+      entry.action?.call();
+    }
+  }
+
   void _showEditProfileModal(BuildContext context, UserProfile? user) {
     if (user == null) return;
     final nameController = TextEditingController(text: user.fullName);
@@ -2493,6 +2540,17 @@ class _SettingsPageState extends State<SettingsPage> {
                       authState,
                       selected: null,
                       onSelect: (group) => _openGroupPage(context, group),
+                      searchField: _searchField(),
+                      searchResults: _searchResults(
+                        context,
+                        _searchQuery,
+                        authState,
+                        financeState,
+                        onPick: (entry) => _pickSearchEntry(
+                          entry,
+                          (group) => _openGroupPage(context, group),
+                        ),
+                      ),
                     ),
                   ),
                 );
@@ -2516,6 +2574,17 @@ class _SettingsPageState extends State<SettingsPage> {
                               authState,
                               selected: _selectedGroup,
                               onSelect: (group) => setState(() => _selectedGroup = group),
+                              searchField: _searchField(),
+                              searchResults: _searchResults(
+                                context,
+                                _searchQuery,
+                                authState,
+                                financeState,
+                                onPick: (entry) => _pickSearchEntry(
+                                  entry,
+                                  (group) => setState(() => _selectedGroup = group),
+                                ),
+                              ),
                             ),
                           ),
                         ),

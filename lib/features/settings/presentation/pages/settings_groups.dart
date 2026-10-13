@@ -44,13 +44,21 @@ extension _SettingsGroupViews on _SettingsPageState {
     AuthState authState, {
     required _SettingsGroup? selected,
     required ValueChanged<_SettingsGroup> onSelect,
+    required Widget searchField,
+    Widget? searchResults,
   }) {
     final theme = Theme.of(context);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         _profileCard(context, authState),
-        const SizedBox(height: 16),
+        const SizedBox(height: 12),
+        searchField,
+        const SizedBox(height: 12),
+        // Com algo digitado, os resultados tomam o lugar da lista de grupos
+        if (searchResults != null)
+          searchResults
+        else
         Container(
           decoration: BoxDecoration(
             color: theme.cardColor,
@@ -866,5 +874,178 @@ class _HouseMembersBlockState extends State<_HouseMembersBlock> {
         ],
       ),
     );
+  }
+}
+
+
+/// Um resultado da busca dos Ajustes: leva a um grupo ou abre algo direto.
+class _SearchEntry {
+  final String title;
+  final String where;
+  final IconData icon;
+  final List<String> keywords;
+  final _SettingsGroup? group;
+  final VoidCallback? action;
+
+  const _SearchEntry({
+    required this.title,
+    required this.where,
+    required this.icon,
+    this.keywords = const [],
+    this.group,
+    this.action,
+  });
+}
+
+/// Minúsculas e sem acento, para "cartao" achar "Cartão".
+String _searchable(String text) {
+  const from = 'áàâãäéèêëíìîïóòôõöúùûüçñ';
+  const to = 'aaaaaeeeeiiiiooooouuuucn';
+  final buffer = StringBuffer();
+  for (final char in text.toLowerCase().split('')) {
+    final i = from.indexOf(char);
+    buffer.write(i >= 0 ? to[i] : char);
+  }
+  return buffer.toString();
+}
+
+extension _SettingsSearch on _SettingsPageState {
+  /// Tudo o que a busca encontra: as opções fixas de cada grupo e o que a casa
+  /// cadastrou (moradores, categorias, formas de pagamento, contas fixas).
+  List<_SearchEntry> _searchEntries(
+    BuildContext context,
+    AuthState authState,
+    FinanceState financeState,
+  ) {
+    _SearchEntry option(
+      _SettingsGroup group,
+      String title,
+      IconData icon,
+      List<String> keywords,
+    ) => _SearchEntry(
+      title: title,
+      where: group.title,
+      icon: icon,
+      keywords: keywords,
+      group: group,
+    );
+
+    return [
+      _SearchEntry(
+        title: 'Meu perfil',
+        where: 'Conta',
+        icon: Icons.person_outline_rounded,
+        keywords: const ['nome', 'email', 'e-mail', 'pix pessoal', 'conta', 'perfil'],
+        action: () => _showEditProfileModal(context, authState.user),
+      ),
+      _SearchEntry(
+        title: 'Sair da Conta',
+        where: 'Conta',
+        icon: Icons.logout_rounded,
+        keywords: const ['logout', 'deslogar', 'trocar de conta'],
+        action: () => _confirmSignOut(context),
+      ),
+      option(_SettingsGroup.house, 'Membros da Casa e Convites', Icons.people_outline_rounded, const [
+        'moradores', 'pessoas', 'convidar', 'codigo', 'convite', 'administrador', 'dono',
+      ]),
+      option(_SettingsGroup.house, 'Ciclo Financeiro', Icons.calendar_today_outlined, const [
+        'dia de inicio', 'fechamento', 'mes', 'periodo',
+      ]),
+      option(_SettingsGroup.house, 'Chave Pix da Casa', Icons.pix_rounded, const [
+        'caixa', 'titular', 'aporte',
+      ]),
+      option(_SettingsGroup.split, 'Modelos de Rateio', Icons.tune_rounded, const [
+        'divisao', 'porcentagem', 'percentual', 'aportes fixos', 'balde', 'por categoria', 'dividir',
+      ]),
+      option(_SettingsGroup.split, 'Categorias de Gastos', Icons.category_outlined, const [
+        'categoria', 'dono', 'responsavel',
+      ]),
+      option(_SettingsGroup.payments, 'Cartões e Formas de Pagamento', Icons.credit_card_rounded, const [
+        'cartao', 'credito', 'vale', 'vr', 'va', 'fatura', 'vencimento', 'dinheiro', 'debito',
+      ]),
+      option(_SettingsGroup.payments, 'Assinaturas & Contas Fixas', Icons.repeat_rounded, const [
+        'recorrente', 'conta fixa', 'mensalidade', 'aluguel', 'internet',
+      ]),
+      option(_SettingsGroup.payments, 'Rachar Fatura e Extratos', Icons.call_split_rounded, const [
+        'importar', 'extrato', 'conciliacao', 'dividir fatura',
+      ]),
+      option(_SettingsGroup.app, 'Assistente IA', Icons.auto_awesome_rounded, const [
+        'inteligencia artificial', 'chave', 'gemini', 'privacidade',
+      ]),
+      option(_SettingsGroup.app, 'Aparência & Tema', Icons.palette_outlined, const [
+        'escuro', 'claro', 'modo noturno', 'cores',
+      ]),
+      option(_SettingsGroup.app, 'Auditoria e Histórico da Casa', Icons.history_edu_rounded, const [
+        'registro', 'quem alterou', 'log',
+      ]),
+      for (final m in financeState.members)
+        _SearchEntry(
+          title: m.name,
+          where: 'Morador • ${_SettingsGroup.house.title}',
+          icon: Icons.person_outline_rounded,
+          group: _SettingsGroup.house,
+        ),
+      for (final c in financeState.categories)
+        _SearchEntry(
+          title: c.name,
+          where: 'Categoria • ${_SettingsGroup.split.title}',
+          icon: Icons.label_outline_rounded,
+          group: _SettingsGroup.split,
+        ),
+      for (final pm in financeState.paymentMethods)
+        _SearchEntry(
+          title: pm.name,
+          where: 'Forma de pagamento • ${_SettingsGroup.payments.title}',
+          icon: Icons.credit_card_rounded,
+          group: _SettingsGroup.payments,
+        ),
+      for (final e in financeState.recurringSeries)
+        _SearchEntry(
+          title: e.title,
+          where: 'Conta fixa • ${_SettingsGroup.payments.title}',
+          icon: Icons.repeat_rounded,
+          group: _SettingsGroup.payments,
+        ),
+    ];
+  }
+
+  /// Resultados da busca; null quando não há nada digitado.
+  Widget? _searchResults(
+    BuildContext context,
+    String query,
+    AuthState authState,
+    FinanceState financeState, {
+    required ValueChanged<_SearchEntry> onPick,
+  }) {
+    final wanted = _searchable(query.trim());
+    if (wanted.isEmpty) return null;
+
+    final matches = _searchEntries(context, authState, financeState).where((entry) {
+      if (_searchable(entry.title).contains(wanted)) return true;
+      return entry.keywords.any((k) => _searchable(k).contains(wanted));
+    }).toList();
+
+    if (matches.isEmpty) {
+      return Container(
+        padding: const EdgeInsets.all(16),
+        decoration: _cardDecoration(context),
+        child: Text(
+          'Nada encontrado para "${query.trim()}".',
+          style: const TextStyle(color: Colors.grey),
+        ),
+      );
+    }
+
+    return _tileCard(context, [
+      for (final entry in matches)
+        ListTile(
+          dense: true,
+          leading: Icon(entry.icon, color: AppColors.primary),
+          title: Text(entry.title, style: const TextStyle(fontWeight: FontWeight.w600)),
+          subtitle: Text(entry.where, style: const TextStyle(fontSize: 12)),
+          trailing: const Icon(Icons.chevron_right_rounded),
+          onTap: () => onPick(entry),
+        ),
+    ]);
   }
 }
