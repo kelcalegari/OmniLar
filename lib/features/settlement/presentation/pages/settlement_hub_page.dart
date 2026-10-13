@@ -10,6 +10,7 @@ import '../../../../core/utils/responsive.dart';
 import '../../../../core/widgets/responsive_container.dart';
 import '../../../../core/widgets/privacy_toggle.dart';
 import '../../domain/entities/settlement_options.dart';
+import '../../domain/services/settlement_shortfall.dart';
 import '../../domain/entities/settlement_summary.dart';
 import '../../domain/entities/super_pix_transfer.dart';
 import '../../domain/entities/transfer_settlement_resolution.dart';
@@ -1229,11 +1230,12 @@ class _SettlementHubContent extends StatelessWidget {
                         switch (state.options.surplusAction) {
                           SurplusAction.refund =>
                             'Sobra de ${summary.surplusRefunded.formatted} devolvida aos moradores: já está abatida dos valores acima.',
+                          // Já desconta o que algum morador deixou de pagar ao Caixa
                           SurplusAction.rollover =>
-                            'Sobra de ${summary.houseTreasuryBalance.formatted} fica no Caixa como folga do próximo ciclo.',
+                            'Sobra de ${availableSurplus(summary, state.options).formatted} fica no Caixa como folga do próximo ciclo.',
                           SurplusAction.toVault => targetVault != null
-                              ? 'Sobra de ${summary.houseTreasuryBalance.formatted} será guardada na caixinha "${targetVault.name}".'
-                              : 'Sobra de ${summary.houseTreasuryBalance.formatted} não será movimentada: crie uma caixinha para guardá-la.',
+                              ? 'Sobra de ${availableSurplus(summary, state.options).formatted} será guardada na caixinha "${targetVault.name}".'
+                              : 'Sobra de ${availableSurplus(summary, state.options).formatted} não será movimentada: crie uma caixinha para guardá-la.',
                         },
                         style: const TextStyle(
                           fontSize: 12,
