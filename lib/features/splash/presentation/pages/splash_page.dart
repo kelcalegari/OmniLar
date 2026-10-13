@@ -130,19 +130,7 @@ class _SplashPageState extends State<SplashPage>
                   width: 140,
                   height: 140,
                 ),
-                const SizedBox(height: 24),
-                Text(
-                  'Omni Lar',
-                  style: TextStyle(
-                    fontSize: 26,
-                    fontWeight: FontWeight.bold,
-                    letterSpacing: -0.5,
-                    color: isDark
-                        ? AppColors.textPrimaryDark
-                        : AppColors.textPrimaryLight,
-                  ),
-                ),
-                const SizedBox(height: 6),
+                const SizedBox(height: 16),
                 Text(
                   'Gestão Financeira & Harmonia do Lar',
                   style: TextStyle(
