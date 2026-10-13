@@ -599,6 +599,20 @@ class SupabaseAuthDataSource implements AuthDataSource {
         );
       }
 
+      // 6. Inicializa a caixinha padrão (sem meta, saldo zero)
+      try {
+        await _client.from('savings_vaults').insert({
+          'house_id': houseId,
+          'name': 'Reserva da Casa',
+          'icon': 'savings',
+          'color_hex': '#10B981',
+        });
+      } catch (errVault) {
+        debugPrint(
+          '[createHouse] Falha não impeditiva ao criar caixinha padrão: $errVault',
+        );
+      }
+
       final house = House(
         id: houseId,
         name: houseRow['name'] as String,
