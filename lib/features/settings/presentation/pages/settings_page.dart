@@ -1907,44 +1907,23 @@ class SettingsPage extends StatelessWidget {
                       ),
                     ),
                     const SizedBox(height: 16),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    const Row(
                       children: [
-                        const Expanded(
-                          child: Row(
-                            children: [
-                              Icon(
-                                Icons.credit_card_rounded,
-                                color: Colors.orange,
-                                size: 24,
-                              ),
-                              SizedBox(width: 8),
-                              Flexible(
-                                child: Text(
-                                  'Formas de Pagamento',
-                                  style: TextStyle(
-                                    fontSize: 18,
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                              ),
-                            ],
-                          ),
+                        Icon(
+                          Icons.credit_card_rounded,
+                          color: Colors.orange,
+                          size: 24,
                         ),
-                        IconButton(
-                          icon: const Icon(
-                            Icons.add_circle_outline_rounded,
-                            color: AppColors.primary,
+                        SizedBox(width: 8),
+                        Flexible(
+                          child: Text(
+                            'Formas de Pagamento',
+                            style: TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.bold,
+                            ),
+                            overflow: TextOverflow.ellipsis,
                           ),
-                          tooltip: 'Adicionar Cartão/Método',
-                          onPressed: () {
-                            _showAddPaymentMethodDialog(
-                              context,
-                              financeCubit,
-                              members,
-                            );
-                          },
                         ),
                       ],
                     ),
