@@ -1,14 +1,14 @@
 # Omni Lar — pendências para a próxima sessão
 
-Atualizado em 12/10/2026. Este arquivo resume onde o trabalho parou, o que falta e como trabalhar no projeto. Ele substitui, para fins de continuidade, o `o_que_falta_fazer.md`, que está desatualizado e marca como concluído o que não está.
+Atualizado em 13/10/2026. Este arquivo resume onde o trabalho parou, o que falta e como trabalhar no projeto. Ele substitui, para fins de continuidade, o `o_que_falta_fazer.md`, que está desatualizado e marca como concluído o que não está.
 
 ## Estado atual
 
-- **Código:** `main` local e `origin/main` no commit `3789193`, sincronizadas. O código depende das migrations 0027 a 0030, todas já no banco.
-- **Banco (Supabase `rygxmpwzofgieodvhpcy`):** migrations 0001 a 0030 aplicadas. Só as 0022 a 0027 e a 0030 constam no histórico de migrations do Supabase; as 0001 a 0021, a 0028 e a 0029 foram aplicadas à mão pelo SQL Editor (o conector recusou a aplicação da 0028 pelo assistente).
+- **Código:** `main` local e `origin/main` no commit `e4ff129`, sincronizadas. A branch `feat/default-vault-on-house-creation` (commit `cfb3bf5`, caixinha padrão ao criar a casa) ainda não foi mesclada. O código depende das migrations até a 0033, todas já no banco.
+- **Banco (Supabase `rygxmpwzofgieodvhpcy`):** migrations 0001 a 0033 aplicadas. Só as 0022 a 0027 e as 0030 a 0033 constam no histórico de migrations do Supabase; as 0001 a 0021, a 0028 e a 0029 foram aplicadas à mão pelo SQL Editor (o conector recusou a aplicação da 0028 pelo assistente).
 - **Edge Functions:** `capture-read` versão 8 e `assistant` versão 4, ambas com `verify_jwt=true` e exigindo usuário logado que more na casa.
-- **Qualidade:** `flutter analyze` com 0 erros (4 warnings antigos de import não usado) e 264 testes passando. Os testes rodam só contra os datasources mock.
-- **Dados de teste no banco:** uma casa ("Nossa Casa") com 3 moradores (kelvynn, dono; Cristiano e Joao, membros), rateio 23,33 / 43,34 / 33,33, e 3 empréstimos ativos. Existe uma segunda casa órfã, sem moradores.
+- **Qualidade:** `flutter analyze` com 0 erros (4 warnings antigos) e 285 testes passando (conferido em 13/10/2026). Os testes rodam só contra os datasources mock.
+- **Dados de teste no banco:** uma casa ("Nossa Casa") com 3 moradores (kelvynn, dono; Cristiano e Joao, membros), rateio 23,33 / 43,34 / 33,33, e 3 empréstimos ativos. Existe uma segunda casa no banco. Desde a migration 0033 toda casa tem ao menos uma caixinha: as novas nascem com a "Reserva da Casa" e a que não tinha nenhuma recebeu uma.
 
 ## O que foi feito nesta sessão
 
@@ -58,7 +58,7 @@ Nada disto foi exercitado com usuário logado; só passou por teste automatizado
 
 ## Pendente: inconsistências de funcionalidades já implementadas
 
-Análise feita em 12/10/2026 por leitura do código e das migrations. Nada foi executado (app, testes ou banco), então cada item precisa ser confirmado antes da correção. Não repete o que já está em "limites conhecidos".
+Análise feita em 12/10/2026 por leitura do código e das migrations, e reavaliada em 13/10/2026 contra o código da `main` (commit `e4ff129`), de novo só por leitura: nenhum item foi reproduzido no app. Resultado da reavaliação: o item 3 foi corrigido (com pontas em aberto), o item 5 foi corrigido em parte (scanner) e os outros 13 continuam como descritos. Não repete o que já está em "limites conhecidos".
 
 ### Graves: o recurso existe na tela mas não funciona com sessão real
 
@@ -76,12 +76,12 @@ Análise feita em 12/10/2026 por leitura do código e das migrations. Nada foi e
    | Formulário | conforme o dono da forma de pagamento | a escolhida |
    | Assistente | sempre sim | nenhuma |
    | Fechar compra do mercado | sempre sim | nenhuma |
-   | Scanner | sempre não | por nome ("mercado"/"conta") |
+   | Scanner | conforme o dono da forma de pagamento (corrigido em 13/10/2026) | por nome ("mercado"/"conta") |
    | Importar fatura | sempre não | nenhuma |
 
-   Os caminhos "nenhuma" usam ids de demonstração (`cat_mercado`, `cat_contas`, `cat_groceries`), que o Supabase descarta; o assistente ainda recebe `categoryHint` da Edge Function e lê `categoryId` no app. Scanner e importação usam a primeira forma de pagamento da lista, não a real. Só o formulário respeita o dono da categoria.
+   Os caminhos "nenhuma" usam ids de demonstração (`cat_mercado`, `cat_contas`, `cat_groceries`), que o Supabase descarta; o assistente ainda recebe `categoryHint` da Edge Function e lê `categoryId` no app. O scanner passou a pedir a forma de pagamento na revisão e a usar o dono dela como pagador; a importação de fatura continua usando a primeira forma de pagamento da lista, não a real. Só o formulário respeita o dono da categoria.
 6. **Modelo de rateio "Por categoria" não existe de fato.** O valor é gravado em `houses.default_split_model` e nunca lido. Ao reabrir a tela ele aparece como "Porcentagem", porque o modelo ativo é deduzido dos valores fixos (`settings_page.dart:1069`).
-7. **Aportes fixos: quem entra depois não paga nada.** O novo morador nasce com valor fixo 0 e o motor só cria meta para quem tem valor maior que zero (`global_clearing_engine.dart:69`). No modelo percentual o mesmo morador recebe 1/n automaticamente.
+7. **Aportes fixos: quem entra depois não paga nada.** O novo morador nasce com valor fixo 0 e só entra na lista de metas quem tem valor maior que zero (`supabase_settlement_datasource.dart:161`, usada em `global_clearing_engine.dart:75`). No modelo percentual o mesmo morador recebe 1/n automaticamente.
 8. **O planejador de aportes da Home não bate com o fechamento.** Soma as contas pendentes e depois abate o fôlego, que já as descontou; abate os aportes de novo por morador; ignora o rateio por despesa. Trocar o modo (econômico/confortável) muda o histórico do ciclo anterior para o atual (`finance_cubit.dart:125`).
 9. **Relatórios: totais que não fecham.** O gráfico por categoria soma pagas e pendentes, mas divide só pelo total pago, e pode passar de 100% (`reports_page.dart:213`). O CSV lista todas as despesas e o "Total gasto" conta só as pagas.
 10. **Ciclo fechado aparece empobrecido em produção.** As transferências mostram "Membro transfere para Membro" (`supabase_settlement_datasource.dart:74`), as que envolvem o Caixa não são gravadas, e saldos por morador e memória de cálculo vêm vazios. No modo demo tudo aparece completo.
@@ -94,7 +94,12 @@ Análise feita em 12/10/2026 por leitura do código e das migrations. Nada foi e
 14. **Código morto e fluxos incompletos.** `ShoppingListPage` (532 linhas) não é usada (a tela viva é a de Tarefas & Compras); tarefas e itens de compra não têm edição; o prompt do assistente menciona perdão, renegociação e exclusão, mas o app não executa essas ações; o selo de "exceção da série" na agenda nunca aparece em produção.
 15. **Fechar compra no mercado não liga a viagem à despesa.** O id gerado não é uuid, então `shopping_trips.expense_id` fica sempre nulo. Despesa, empréstimo, viagem e limpeza da lista são quatro gravações separadas, sem transação.
 
-**Ordem sugerida:** 1, 4, 3, 5 (erro visível ou dinheiro calculado errado com usuário real; nenhum exige migration). O item 2 é o maior em esforço.
+**Ordem sugerida (reavaliada em 13/10/2026).** Critério: primeiro o que grava dinheiro errado sem avisar, depois o que quebra à vista, deixando por último o que exige decisão do dono ou muito esforço.
+
+1. **Sem migration e sem decisão:** 4 (edição de compra no cartão corrompe a fatura em silêncio), 5 (reembolso e categoria errados no assistente, no mercado e na importação), 1 (projetos só no demo), 9 (relatórios).
+2. **Dependem de uma decisão curta do dono:** 11 (limitar o dia de início a 28 ou corrigir o cálculo), 7 (quanto paga quem entra depois nos aportes fixos), 6 (remover a opção "Por categoria" ou implementá-la).
+3. **Maiores:** 10 (ciclo fechado empobrecido; deve exigir migration para guardar saldos e transferências com o Caixa), pontas do item 3, 8 (planejador da Home), 2 (recorrência; o maior em esforço e pede decisão de onde gerar as ocorrências).
+4. **Limpeza:** 15, 13, 12, 14.
 
 ## Como trabalhar neste projeto
 
