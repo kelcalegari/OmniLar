@@ -13,6 +13,7 @@ import '../../domain/entities/super_pix_transfer.dart';
 import '../../domain/entities/transfer_settlement_resolution.dart';
 import '../../../auth/domain/entities/house.dart';
 import '../../domain/services/global_clearing_engine.dart';
+import '../../domain/services/settlement_shortfall.dart';
 import 'settlement_datasource.dart';
 
 class SupabaseSettlementDataSource implements SettlementDataSource {
@@ -205,25 +206,30 @@ class SupabaseSettlementDataSource implements SettlementDataSource {
     final vaultOperations = <Map<String, dynamic>>[];
     final newLoans = <Map<String, dynamic>>[];
 
+    // Quem pagou a menos ao Caixa: esse dinheiro não entrou, então não é sobra
+    final surplus = availableSurplus(summary, options);
+    if (summary.surplusRefunded.cents > 0 && unpaidToHouse(summary, options).cents > 0) {
+      throw const ServerFailure(
+        'A sobra devolvida aos moradores conta com o aporte de todos. Com pagamento parcial ao Caixa, escolha guardar a sobra na Caixinha ou deixá-la no Caixa.',
+      );
+    }
+
     // 1. Sobra do Caixa guardada na Caixinha
     if (options?.surplusAction == SurplusAction.toVault &&
         options?.targetVaultId != null &&
-        summary.houseTreasuryBalance.cents > 0) {
+        surplus.cents > 0) {
       vaultOperations.add({
         'vault_id': options!.targetVaultId,
         'member_id': actorId,
         'type': 'deposit',
-        'amount_cents': summary.houseTreasuryBalance.cents,
+        'amount_cents': surplus.cents,
         'description': 'Sobra do Fechamento do Ciclo ${cycle.formattedPeriod}',
       });
     }
 
     // Sobra deixada no Caixa como folga do próximo ciclo
     final surplusRolledCents =
-        options?.surplusAction == SurplusAction.rollover &&
-            summary.houseTreasuryBalance.cents > 0
-        ? summary.houseTreasuryBalance.cents
-        : 0;
+        options?.surplusAction == SurplusAction.rollover ? surplus.cents : 0;
 
     // Excedente do balde coberto pela Caixinha escolhida
     if (summary.deficitCoveredByVault.cents > 0 && options?.deficitVaultId != null) {
@@ -322,10 +328,11 @@ class SupabaseSettlementDataSource implements SettlementDataSource {
       required Money total,
       required bool noDueDate,
       required int installmentsCount,
+      DateTime? dueDate,
     }) {
       final firstDueDate = noDueDate
           ? P2PLoan.openEndedPlaceholderDueDate
-          : DateTime(cycle.endDate.year, cycle.endDate.month, 10);
+          : (dueDate ?? DateTime(cycle.endDate.year, cycle.endDate.month, 10));
       final installments = noDueDate
           ? P2PCalculator.buildOpenEndedInstallment(
               loanId: 'settlement',
@@ -360,12 +367,32 @@ class SupabaseSettlementDataSource implements SettlementDataSource {
       if (resolution == null || !resolution.isPartialPayment) continue;
       if (!_isUuid(t.fromMemberId)) continue;
 
-      if (resolution.shortfallAction == ShortfallAction.createP2PLoan) {
-        if (!_isUuid(t.toMemberId)) continue;
+      // Credor é o Caixa da Casa: o acordo fica com o Lar como credor
+      final toHouse = t.toMemberId == P2PLoan.houseLenderId;
+      final lenderId = toHouse ? null : t.toMemberId;
+
+      if (resolution.shortfallAction == ShortfallAction.rolloverPending) {
+        if (!toHouse && !_isUuid(t.toMemberId)) continue;
+        // Cobrado inteiro no próximo fechamento
+        newLoans.add(
+          loanPlan(
+            lenderId: lenderId,
+            borrowerId: t.fromMemberId,
+            title: 'Pendência do Ciclo ${cycle.formattedPeriod}',
+            description:
+                'Saldo que ficou para o próximo fechamento: ${t.fromMemberName} pagou ${resolution.amountPaid.formatted} de ${t.amount.formatted}',
+            total: resolution.shortfall,
+            noDueDate: false,
+            installmentsCount: 1,
+            dueDate: cycle.endDate.add(const Duration(days: 1)),
+          ),
+        );
+      } else if (resolution.shortfallAction == ShortfallAction.createP2PLoan) {
+        if (!toHouse && !_isUuid(t.toMemberId)) continue;
         final noDueDate = resolution.loanHasNoDueDate;
         newLoans.add(
           loanPlan(
-            lenderId: t.toMemberId,
+            lenderId: lenderId,
             borrowerId: t.fromMemberId,
             title: noDueDate
                 ? 'Acordo Livre: Saldo do Ciclo ${cycle.formattedPeriod}'

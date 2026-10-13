@@ -14,6 +14,7 @@ import '../../domain/entities/super_pix_transfer.dart';
 import '../../domain/entities/transfer_settlement_resolution.dart';
 import '../../../auth/domain/entities/house.dart';
 import '../../domain/services/global_clearing_engine.dart';
+import '../../domain/services/settlement_shortfall.dart';
 import 'settlement_datasource.dart';
 
 class MockSettlementDataSource implements SettlementDataSource {
@@ -142,7 +143,32 @@ class MockSettlementDataSource implements SettlementDataSource {
 
       if (resolution != null && resolution.isPartialPayment) {
         // Trata o shortfall (a diferença restante não coberta)
-        if (resolution.shortfallAction == ShortfallAction.createP2PLoan) {
+        if (resolution.shortfallAction == ShortfallAction.rolloverPending) {
+          // Cobrado inteiro no próximo fechamento
+          final newLoanId =
+              'loan_pending_${summary.cycle.startDate.millisecondsSinceEpoch}_${t.fromMemberId}';
+          final newDueDate = summary.cycle.endDate.add(const Duration(days: 1));
+          await p2pDataSource.createLoan(
+            P2PLoan(
+              id: newLoanId,
+              title: 'Pendência do Ciclo ${summary.cycle.formattedPeriod}',
+              description:
+                  'Saldo que ficou para o próximo fechamento: ${t.fromMemberName} pagou ${resolution.amountPaid.formatted} de ${t.amount.formatted}',
+              totalAmount: resolution.shortfall,
+              lenderMemberId: t.toMemberId,
+              borrowerMemberId: t.fromMemberId,
+              installmentsCount: 1,
+              createdAt: DateTime.now(),
+              firstDueDate: newDueDate,
+              installments: P2PCalculator.generateInstallments(
+                loanId: newLoanId,
+                totalAmount: resolution.shortfall,
+                installmentsCount: 1,
+                firstDueDate: newDueDate,
+              ),
+            ),
+          );
+        } else if (resolution.shortfallAction == ShortfallAction.createP2PLoan) {
           final newLoanId =
               'loan_settle_${summary.cycle.startDate.millisecondsSinceEpoch}_${t.fromMemberId}';
           final isNoDueDate = resolution.loanHasNoDueDate;
@@ -263,27 +289,28 @@ class MockSettlementDataSource implements SettlementDataSource {
     }
 
     // 2. Se houver sobra no Caixa e a opção for guardar na Caixinha, efetua o depósito
+    // Quem pagou a menos ao Caixa: esse dinheiro não entrou, então não é sobra
+    final surplus = availableSurplus(summary, options);
     if (options?.surplusAction == SurplusAction.toVault &&
         options?.targetVaultId != null &&
-        summary.houseTreasuryBalance.cents > 0) {
+        surplus.cents > 0) {
       final actorId =
           summary.memberBalances.firstOrNull?.memberId ?? 'member_carlos';
       _surplusVaulted[summary.cycle] =
-          (_surplusVaulted[summary.cycle] ?? 0) + summary.houseTreasuryBalance.cents;
+          (_surplusVaulted[summary.cycle] ?? 0) + surplus.cents;
       await financeDataSource.depositToVault(
         vaultId: options!.targetVaultId!,
         memberId: actorId,
-        amount: summary.houseTreasuryBalance,
+        amount: surplus,
         description:
             'Sobra do Fechamento do Ciclo ${summary.cycle.formattedPeriod}',
       );
     }
 
     // Sobra deixada no Caixa como folga do próximo ciclo ou devolvida aos moradores
-    if (options?.surplusAction == SurplusAction.rollover &&
-        summary.houseTreasuryBalance.cents > 0) {
+    if (options?.surplusAction == SurplusAction.rollover && surplus.cents > 0) {
       _surplusRolled[summary.cycle] =
-          (_surplusRolled[summary.cycle] ?? 0) + summary.houseTreasuryBalance.cents;
+          (_surplusRolled[summary.cycle] ?? 0) + surplus.cents;
     }
     if (summary.surplusRefunded.cents > 0) {
       _surplusRefunded[summary.cycle] =
