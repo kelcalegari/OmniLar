@@ -30,6 +30,9 @@ class SettlementSummary {
   /// Sobra deste fechamento devolvida aos moradores (já abatida dos aportes devidos).
   final Money surplusRefunded;
 
+  /// Parcelas de acordos com o Lar que entram no Caixa neste ciclo.
+  final Money houseLoanReceipts;
+
   /// O ciclo já foi fechado antes e está reaberto: só entra no acerto o que
   /// mudou desde o último fechamento.
   final bool isReopened;
@@ -53,6 +56,7 @@ class SettlementSummary {
     this.deficitCoveredByVault = const Money.zero(),
     this.openingBalance = const Money.zero(),
     this.surplusRefunded = const Money.zero(),
+    this.houseLoanReceipts = const Money.zero(),
     this.isReopened = false,
     this.dataVersion,
   });
@@ -96,6 +100,7 @@ class SettlementSummary {
     Money? deficitCoveredByVault,
     Money? openingBalance,
     Money? surplusRefunded,
+    Money? houseLoanReceipts,
     bool? isReopened,
     String? dataVersion,
   }) {
@@ -114,6 +119,7 @@ class SettlementSummary {
       deficitCoveredByVault: deficitCoveredByVault ?? this.deficitCoveredByVault,
       openingBalance: openingBalance ?? this.openingBalance,
       surplusRefunded: surplusRefunded ?? this.surplusRefunded,
+      houseLoanReceipts: houseLoanReceipts ?? this.houseLoanReceipts,
       isReopened: isReopened ?? this.isReopened,
       dataVersion: dataVersion ?? this.dataVersion,
     );

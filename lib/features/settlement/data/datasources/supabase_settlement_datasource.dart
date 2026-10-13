@@ -55,6 +55,8 @@ class SupabaseSettlementDataSource implements SettlementDataSource {
     var deficitAlreadyCovered = const Money.zero();
     var surplusAlreadyRolled = const Money.zero();
     var surplusAlreadyRefunded = const Money.zero();
+    var houseShortfallAlreadySettled = const Money.zero();
+    var houseLoansAlreadyReceived = const Money.zero();
 
     // 1. Verifica se já existe um fechamento gravado no Supabase para este ciclo
     try {
@@ -126,6 +128,13 @@ class SupabaseSettlementDataSource implements SettlementDataSource {
         surplusAlreadyRefunded = Money(
           (existingSettlement['surplus_refunded_cents'] as num?)?.toInt() ?? 0,
         );
+        houseShortfallAlreadySettled = Money(
+          ((existingSettlement['house_receivable_cents'] as num?)?.toInt() ?? 0) +
+              ((existingSettlement['house_forgiven_cents'] as num?)?.toInt() ?? 0),
+        );
+        houseLoansAlreadyReceived = Money(
+          (existingSettlement['house_loans_received_cents'] as num?)?.toInt() ?? 0,
+        );
       }
     } catch (_) {
       // Continua para apuração dinâmica
@@ -190,6 +199,8 @@ class SupabaseSettlementDataSource implements SettlementDataSource {
       surplusAlreadyRolled: surplusAlreadyRolled,
       surplusAlreadyRefunded: surplusAlreadyRefunded,
       refundSurplus: options?.surplusAction == SurplusAction.refund,
+      houseShortfallAlreadySettled: houseShortfallAlreadySettled,
+      houseLoansAlreadyReceived: houseLoansAlreadyReceived,
     );
     return summary.copyWith(isReopened: isReopened, dataVersion: dataVersion);
   }
@@ -471,6 +482,8 @@ class SupabaseSettlementDataSource implements SettlementDataSource {
           'contribution_refunds': contributionRefunds,
           'surplus_rolled_cents': surplusRolledCents,
           'surplus_refunded_cents': summary.surplusRefunded.cents,
+          'house_receivable_cents': houseShortfallFinanced(summary, options).cents,
+          'house_forgiven_cents': houseShortfallForgiven(summary, options).cents,
           'expense_ids': expenseIds,
           'settled_expense_ids': settledExpenseIds,
           'split_snapshots': splitSnapshots,

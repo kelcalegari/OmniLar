@@ -8,15 +8,33 @@ import '../entities/transfer_settlement_resolution.dart';
 /// Pix que um morador não pagou e que não foi coberta por uma Caixinha.
 /// Esse dinheiro não está no Caixa, então não pode entrar na sobra.
 Money unpaidToHouse(SettlementSummary summary, SettlementOptions? options) {
+  return Money(
+    houseShortfallFinanced(summary, options).cents +
+        houseShortfallForgiven(summary, options).cents,
+  );
+}
+
+/// Parte não paga ao Caixa que virou acordo com o Lar (financiada ou pendente).
+Money houseShortfallFinanced(SettlementSummary summary, SettlementOptions? options) =>
+    _houseShortfall(summary, options, forgiven: false);
+
+/// Parte não paga ao Caixa que a casa perdoou.
+Money houseShortfallForgiven(SettlementSummary summary, SettlementOptions? options) =>
+    _houseShortfall(summary, options, forgiven: true);
+
+Money _houseShortfall(
+  SettlementSummary summary,
+  SettlementOptions? options, {
+  required bool forgiven,
+}) {
   int cents = 0;
   for (final t in summary.transfers) {
     if (t.toMemberId != P2PLoan.houseLenderId) continue;
     final resolution = options?.transferResolutions[t.id];
     if (resolution == null || !resolution.isPartialPayment) continue;
-    if (resolution.shortfallAction == ShortfallAction.deductFromVault &&
-        resolution.vaultId != null) {
-      continue;
-    }
+    final action = resolution.shortfallAction;
+    if (action == ShortfallAction.deductFromVault && resolution.vaultId != null) continue;
+    if ((action == ShortfallAction.forgiveRemainder) != forgiven) continue;
     cents += resolution.shortfall.cents;
   }
   return Money(cents);
