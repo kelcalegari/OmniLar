@@ -5,7 +5,7 @@ Reescrito em 13/10/2026, no fim de uma sessão longa de correções. Substitui a
 ## Estado atual
 
 - **Código:** `main` local e `origin/main` sincronizadas, diretório de trabalho limpo. Confira com `git log --oneline -5` e `git status`.
-- **Banco (Supabase `rygxmpwzofgieodvhpcy`, acessível pelo conector do Supabase):** migrations 0001 a 0048 aplicadas. No histórico de migrations do Supabase constam só as 0022 a 0027 e as 0030 a 0048; as 0001 a 0021, a 0028 e a 0029 foram aplicadas à mão pelo SQL Editor. A próxima migration é a 0049.
+- **Banco (Supabase `rygxmpwzofgieodvhpcy`, acessível pelo conector do Supabase):** migrations 0001 a 0049 aplicadas. No histórico de migrations do Supabase constam só as 0022 a 0027 e as 0030 a 0049; as 0001 a 0021, a 0028 e a 0029 foram aplicadas à mão pelo SQL Editor. A próxima migration é a 0050.
 - **Edge Functions:** `capture-read` versão 8 e `assistant` versão 5, ambas com `verify_jwt=true` e exigindo usuário logado que more na casa.
 - **Qualidade:** `flutter analyze` com 0 erros (4 warnings antigos de import não usado) e 339 testes passando. Os testes automatizados rodam só contra os datasources mock (modo demo); nenhum roda contra o Supabase.
 - **Dados no banco:** em 13/10/2026 o dono apagou todos os dados de teste (todas as tabelas de `public` e as contas de login) e recomeçou do zero; a estrutura, as funções e o histórico de migrations não mudaram. Logo depois foi criada de novo a casa "Nossa Casa", com as contas novas de kelvynn e Cristiano, sem nenhum lançamento. Nunca houve um fechamento de ciclo confirmado com sessão real.
@@ -76,7 +76,7 @@ Resumo dos mecanismos que mudaram nesta sessão, para localizar as coisas.
 ### Lançamentos
 - **Regra única de lançamento:** `lib/features/finance/domain/services/expense_launch_defaults.dart` (pago do bolso, categoria e rateio), usada por assistente, mercado, importação de fatura e scanner. O formulário tem lógica própria com o mesmo resultado.
 - **Gravações em uma transação:** `create_house_expense`, `create_p2p_loan`, `complete_shopping_trip`, `create_calendar_event` e `set_project_participants`. Todas rodam com as permissões de quem chama. Os dados são montados em `house_expense_payload.dart` e `p2p_loan_payload.dart`.
-- **Despesa recorrente:** RPC `generate_recurring_expenses`, chamada ao abrir o ciclo atual ou um futuro, no máximo dois meses à frente. A série é a primeira despesa (matriz) mais as ocorrências ligadas por `recurring_series_id`; `is_active = false` na matriz encerra a série.
+- **Despesa recorrente:** RPC `generate_recurring_expenses`, chamada ao abrir o ciclo atual ou um futuro, no máximo três meses à frente (migration 0049). A série é a primeira despesa (matriz) mais as ocorrências ligadas por `recurring_series_id`; `is_active = false` na matriz encerra a série.
 - **Planejador de aportes da Home:** `cycle_funding_estimator.dart`, com a mesma conta do fechamento.
 
 ### Demais
@@ -185,6 +185,7 @@ Uma linha por migration, para saber onde está cada regra.
 | 0046 | Colunas de dono da forma de pagamento sempre iguais |
 | 0047 | Troca dos participantes de um projeto |
 | 0048 | Data final da repetição de um evento |
+| 0049 | Contas recorrentes geradas até três meses à frente |
 
 ## Documentos relacionados
 

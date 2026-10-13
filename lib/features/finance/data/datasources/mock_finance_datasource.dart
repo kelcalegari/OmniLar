@@ -322,11 +322,11 @@ class MockFinanceDataSource implements FinanceDataSource {
   final Map<String, DateTime> _lastGeneratedDue = {};
 
   /// Cria a ocorrência de cada mês das séries ativas até [until], no máximo
-  /// dois meses à frente. A série é a primeira despesa (matriz) mais as
+  /// três meses à frente. A série é a primeira despesa (matriz) mais as
   /// ocorrências ligadas a ela por `recurringSeriesId`.
   void _generateRecurringExpenses(DateTime until) {
     final now = DateTime.now();
-    final cap = DateTime(now.year, now.month + 2, now.day);
+    final cap = DateTime(now.year, now.month + 3, now.day);
     final limit = until.isAfter(cap) ? cap : until;
 
     final seriesHeads = _expenses
