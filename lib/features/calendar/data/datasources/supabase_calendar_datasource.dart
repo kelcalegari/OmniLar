@@ -192,60 +192,45 @@ class SupabaseCalendarDataSource implements CalendarDataSource {
         throw const ServerFailure('Usuário não autenticado.');
       }
 
-      Map<String, dynamic> eventRow(DateTime start, DateTime end, {String? seriesId}) => {
-        'house_id': houseId,
-        'title': event.title,
-        'description': event.description,
-        'location': event.location,
-        'start_time': start.toUtc().toIso8601String(),
-        'end_time': end.toUtc().toIso8601String(),
-        'is_all_day': event.isAllDay,
-        'visibility': event.visibility.name,
-        'created_by': creatorId,
-        'recurrence_frequency': event.recurrenceFrequency.name,
-        'recurring_series_id': ?seriesId,
-      };
-
-      final inserted = await client
-          .from('events')
-          .insert({
+      // Evento, ocorrências da série e participantes entram juntos: ou tudo, ou
+      // nada. Num evento recorrente a primeira ocorrência identifica a série e
+      // as próximas são eventos próprios, para poderem ser editadas uma a uma.
+      final duration = event.endTime.difference(event.startTime);
+      final isRecurring = event.recurrenceFrequency != RecurrenceFrequency.none;
+      await client.rpc('create_calendar_event', params: {
+        'p_plan': {
+          'event': {
             if (_isUuid(event.id)) 'id': event.id,
-            ...eventRow(event.startTime, event.endTime),
-          })
-          .select('id')
-          .single();
-      final firstEventId = inserted['id'] as String;
-      final eventIds = [firstEventId];
-
-      // Evento recorrente: a primeira ocorrência identifica a série e as próximas
-      // são gravadas como eventos próprios, para poderem ser editadas uma a uma.
-      if (event.recurrenceFrequency != RecurrenceFrequency.none) {
-        await client
-            .from('events')
-            .update({'recurring_series_id': firstEventId})
-            .eq('id', firstEventId);
-
-        final duration = event.endTime.difference(event.startTime);
-        final occurrenceRows = [
-          for (final start in futureOccurrenceStarts(event))
-            eventRow(start, start.add(duration), seriesId: firstEventId),
-        ];
-        if (occurrenceRows.isNotEmpty) {
-          final created = await client
-              .from('events')
-              .insert(occurrenceRows)
-              .select('id');
-          eventIds.addAll(created.map((r) => r['id'] as String));
-        }
-      }
-
-      final participantRows = [
-        for (final id in eventIds)
-          ..._participantRows(id, houseId, event.participants),
-      ];
-      if (participantRows.isNotEmpty) {
-        await client.from('event_participants').insert(participantRows);
-      }
+            'house_id': houseId,
+            'title': event.title,
+            'description': event.description,
+            'location': event.location,
+            'start_time': event.startTime.toUtc().toIso8601String(),
+            'end_time': event.endTime.toUtc().toIso8601String(),
+            'is_all_day': event.isAllDay,
+            'visibility': event.visibility.name,
+            'recurrence_frequency': event.recurrenceFrequency.name,
+          },
+          'occurrences': [
+            if (isRecurring)
+              for (final start in futureOccurrenceStarts(event))
+                {
+                  'start_time': start.toUtc().toIso8601String(),
+                  'end_time': start.add(duration).toUtc().toIso8601String(),
+                },
+          ],
+          'participants': [
+            for (final p in event.participants)
+              if (_isUuid(p.memberId))
+                {
+                  'user_id': p.memberId,
+                  'is_essential': p.isEssential,
+                  'rsvp_status': p.rsvpStatus.name,
+                  'responded_at': p.respondedAt?.toUtc().toIso8601String(),
+                },
+          ],
+        },
+      });
     } catch (e) {
       if (e is Failure) rethrow;
       throw ServerFailure('Erro ao adicionar evento na agenda: $e');
