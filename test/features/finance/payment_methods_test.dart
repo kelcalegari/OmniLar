@@ -71,21 +71,14 @@ void main() {
     // Os ajustes ficam em grupos: abre o grupo antes de procurar a opção
     await tester.tap(find.text('Pagamentos e contas'));
     await tester.pumpAndSettle();
-    final tileFinder = find.text('Cartões e Formas de Pagamento');
-    await tester.ensureVisible(tileFinder);
-    await tester.tap(tileFinder);
-    await tester.pumpAndSettle();
+    // As formas de pagamento ficam à vista no grupo, sem janela por cima
+    expect(find.text('Cartões e Formas de Pagamento'), findsOneWidget);
+    final firstMethod = find.text(cubit.state.paymentMethods.first.name);
+    expect(firstMethod, findsOneWidget);
 
-    // Verify modal header and at least one item rendered
-    expect(find.text('Formas de Pagamento'), findsOneWidget);
-    expect(find.byType(ListTile), findsWidgets);
-
-    // Tap on the first payment method in the modal list view
-    final modalListTile = find.descendant(
-      of: find.byType(ListView),
-      matching: find.byType(ListTile),
-    ).first;
-    await tester.tap(modalListTile);
+    // Tocar em uma forma de pagamento abre a edição dela
+    await tester.ensureVisible(firstMethod);
+    await tester.tap(firstMethod);
     await tester.pumpAndSettle();
 
     expect(find.text('Editar Forma de Pagamento'), findsOneWidget);
@@ -107,12 +100,8 @@ void main() {
     // Os ajustes ficam em grupos: abre o grupo antes de procurar a opção
     await tester.tap(find.text('Pagamentos e contas'));
     await tester.pumpAndSettle();
-    final tileFinder = find.text('Cartões e Formas de Pagamento');
-    await tester.ensureVisible(tileFinder);
-    await tester.tap(tileFinder);
-    await tester.pumpAndSettle();
 
-    // Tap button to add
+    // O botão de cadastrar fica no próprio grupo
     final addBtn = find.text('Cadastrar Cartão ou VR');
     await tester.ensureVisible(addBtn);
     await tester.tap(addBtn);
@@ -142,10 +131,10 @@ void main() {
       isTrue,
     );
 
-    // Aparece na janela e no resumo do grupo, atrás dela
+    // A forma nova aparece na lista do grupo
     expect(
       find.text('Cartão Alimentação Pluxee', skipOffstage: false),
-      findsWidgets,
+      findsOneWidget,
     );
   });
 }

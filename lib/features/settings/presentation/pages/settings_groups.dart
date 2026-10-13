@@ -199,36 +199,23 @@ extension _SettingsGroupViews on _SettingsPageState {
     final financeCubit = context.read<FinanceCubit>();
     final members = financeState.members;
     final categories = financeState.categories;
-    final usesFixed = members.any((m) => (m.defaultFixedAmountCents ?? 0) > 0);
-    final modelName = usesFixed
-        ? 'Aportes fixos (balde comum)'
-        : (financeState.splitModel == 'category'
-              ? 'Por categoria de gasto'
-              : 'Porcentagem personalizada');
-
-    String percent(double value) =>
-        value.truncateToDouble() == value ? '${value.toInt()}%' : '${value.toStringAsFixed(1)}%';
+    // O editor é recriado (com os valores novos) quando algo que ele mostra muda
+    final editorVersion = [
+      financeState.splitModel,
+      for (final m in members)
+        '${m.id}:${m.name}:${m.role}:${m.defaultSplitPercent}:${m.defaultFixedAmountCents}',
+      for (final c in categories) '${c.id}:${c.name}:${c.ownerMemberId}',
+    ].join('|');
 
     return [
       _panel(
         context,
         title: 'Modelos de Rateio',
-        actionLabel: 'Alterar',
-        onAction: () async {
-          // Quem entrou na casa depois de o app abrir precisa aparecer aqui
-          await financeCubit.refreshMembers();
-          if (!context.mounted) return;
-          _showSplitModelsModal(context);
-        },
         children: [
-          _line(title: 'Modelo em uso', value: modelName),
-          for (final m in members)
-            _line(
-              title: m.name,
-              value: usesFixed
-                  ? Money(m.defaultFixedAmountCents ?? 0).format()
-                  : percent(m.defaultSplitPercent),
-            ),
+          _KeptEditor(
+            key: ValueKey(editorVersion),
+            create: _splitModelsEditor,
+          ),
         ],
       ),
       _panel(
@@ -336,36 +323,42 @@ extension _SettingsGroupViews on _SettingsPageState {
       };
     }
 
+    final financeCubit = context.read<FinanceCubit>();
+    final methods = financeState.paymentMethods;
+
     return [
       _panel(
         context,
         title: 'Cartões e Formas de Pagamento',
-        actionLabel: 'Gerenciar',
-        onAction: () => _showPaymentMethodsModal(context),
+        actionLabel: 'Cadastrar Cartão ou VR',
+        onAction: () => _showAddPaymentMethodDialog(context, financeCubit, members),
         children: [
-          if (financeState.paymentMethods.isEmpty)
+          const Padding(
+            padding: EdgeInsets.fromLTRB(16, 0, 16, 8),
+            child: Text(
+              'Cartões de crédito e vales da casa, com fechamento e vencimento da fatura. Toque em uma forma para editar.',
+              style: TextStyle(color: Colors.grey, fontSize: 12),
+            ),
+          ),
+          if (methods.isEmpty)
             _emptyLine('Nenhuma forma de pagamento cadastrada.')
           else
-            for (final pm in financeState.paymentMethods)
-              _line(title: pm.name, subtitle: detail(pm), value: ownerLabel(pm)),
+            for (final pm in methods)
+              _paymentMethodLine(
+                context,
+                financeCubit,
+                pm,
+                members,
+                detail: detail(pm),
+                ownerLabel: ownerLabel(pm),
+                totalMethods: methods.length,
+              ),
         ],
       ),
       _panel(
         context,
         title: 'Assinaturas & Contas Fixas',
-        actionLabel: 'Gerenciar',
-        onAction: () => _showRecurringExpensesModal(context),
-        children: [
-          if (financeState.recurringSeries.isEmpty)
-            _emptyLine('Nenhuma conta fixa cadastrada.')
-          else
-            for (final e in financeState.recurringSeries)
-              _line(
-                title: e.title,
-                subtitle: 'Todo dia ${e.dueDay ?? e.effectiveDueDate.day}',
-                value: e.amount.format(),
-              ),
-        ],
+        children: [_recurringExpensesEditor(context)],
       ),
       _tileCard(context, [
         _settingsTile(
@@ -377,6 +370,121 @@ extension _SettingsGroupViews on _SettingsPageState {
         ),
       ]),
     ];
+  }
+
+  Widget _paymentMethodLine(
+    BuildContext context,
+    FinanceCubit financeCubit,
+    PaymentMethod pm,
+    List<HouseMember> members, {
+    required String detail,
+    required String ownerLabel,
+    required int totalMethods,
+  }) {
+    final (IconData icon, Color color) = pm.isCreditCard
+        ? (Icons.credit_card_rounded, Colors.orange)
+        : (pm.isBenefit
+              ? (Icons.restaurant_rounded, Colors.green)
+              : (Icons.account_balance_wallet_rounded, AppColors.primary));
+
+    void edit() => _showPaymentMethodFormDialog(
+      context: context,
+      financeCubit: financeCubit,
+      members: members,
+      existingPm: pm,
+    );
+
+    return ListTile(
+      dense: true,
+      contentPadding: const EdgeInsets.only(left: 16, right: 4),
+      leading: CircleAvatar(
+        radius: 14,
+        backgroundColor: color.withValues(alpha: 0.15),
+        child: Icon(icon, size: 14, color: color),
+      ),
+      title: Text(pm.name, style: const TextStyle(fontWeight: FontWeight.w600)),
+      subtitle: Text(detail, style: const TextStyle(fontSize: 12, color: Colors.grey)),
+      onTap: edit,
+      trailing: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+            decoration: BoxDecoration(
+              color: (pm.ownerMemberId != null ? AppColors.primary : Colors.grey)
+                  .withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Text(
+              ownerLabel,
+              style: TextStyle(
+                color: pm.ownerMemberId != null ? AppColors.primary : Colors.grey,
+                fontSize: 11,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ),
+          PopupMenuButton<String>(
+            icon: const Icon(Icons.more_vert, size: 20, color: Colors.grey),
+            tooltip: 'Opções',
+            onSelected: (action) {
+              if (action == 'invoice') {
+                showAdaptiveModal(
+                  context: context,
+                  maxWidth: 480,
+                  child: CardInvoicePaymentSheet(
+                    card: pm,
+                    repository: sl<FinanceRepository>(),
+                    financeCubit: financeCubit,
+                    cycleSchedule: financeCubit.cycleSchedule,
+                    isCycleClosed: (cycle) async =>
+                        (await sl<SettlementRepository>().getSettlementSummary(cycle)).status ==
+                        SettlementStatus.settled,
+                  ),
+                );
+              } else if (action == 'edit') {
+                edit();
+              } else if (action == 'delete') {
+                _confirmDeletePaymentMethod(context, financeCubit, pm, totalMethods);
+              }
+            },
+            itemBuilder: (context) => [
+              if (pm.type == PaymentMethodType.card)
+                const PopupMenuItem(
+                  value: 'invoice',
+                  child: Row(
+                    children: [
+                      Icon(Icons.receipt_long_outlined, size: 18, color: AppColors.primary),
+                      SizedBox(width: 8),
+                      Text('Registrar pagamento da fatura'),
+                    ],
+                  ),
+                ),
+              const PopupMenuItem(
+                value: 'edit',
+                child: Row(
+                  children: [
+                    Icon(Icons.edit_outlined, size: 18, color: AppColors.primary),
+                    SizedBox(width: 8),
+                    Text('Editar'),
+                  ],
+                ),
+              ),
+              const PopupMenuItem(
+                value: 'delete',
+                child: Row(
+                  children: [
+                    Icon(Icons.delete_outline_rounded, size: 18, color: AppColors.debtRed),
+                    SizedBox(width: 8),
+                    Text('Excluir', style: TextStyle(color: AppColors.debtRed)),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
   }
 
   // --- Aplicativo ---
@@ -429,8 +537,8 @@ extension _SettingsGroupViews on _SettingsPageState {
   Widget _panel(
     BuildContext context, {
     required String title,
-    required String actionLabel,
-    required VoidCallback onAction,
+    String? actionLabel,
+    VoidCallback? onAction,
     required List<Widget> children,
   }) {
     return Container(
@@ -453,7 +561,10 @@ extension _SettingsGroupViews on _SettingsPageState {
                         style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
                       ),
                     ),
-                    TextButton(onPressed: onAction, child: Text(actionLabel)),
+                    if (actionLabel != null)
+                      TextButton(onPressed: onAction, child: Text(actionLabel))
+                    else
+                      const SizedBox(height: 40),
                   ],
                 ),
               ),

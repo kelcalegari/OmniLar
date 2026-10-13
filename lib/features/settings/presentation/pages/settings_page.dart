@@ -32,6 +32,26 @@ import '../widgets/ai_key_config_sheet.dart';
 
 part 'settings_groups.dart';
 
+/// Mantém o mesmo widget de editor entre reconstruções da página. O editor do
+/// modelo de rateio guarda o que está sendo editado em variáveis do método que
+/// o cria; recriá-lo a cada reconstrução apagaria a edição. Trocar a [key]
+/// (quando os dados da casa mudam) é o que o recria com os valores novos.
+class _KeptEditor extends StatefulWidget {
+  final Widget Function(BuildContext context) create;
+
+  const _KeptEditor({super.key, required this.create});
+
+  @override
+  State<_KeptEditor> createState() => _KeptEditorState();
+}
+
+class _KeptEditorState extends State<_KeptEditor> {
+  Widget? _editor;
+
+  @override
+  Widget build(BuildContext context) => _editor ??= widget.create(context);
+}
+
 class SettingsPage extends StatefulWidget {
   const SettingsPage({super.key});
 
@@ -972,7 +992,10 @@ class _SettingsPageState extends State<SettingsPage> {
     );
   }
 
-  void _showSplitModelsModal(BuildContext context) {
+  /// Editor do modelo de rateio, mostrado dentro do grupo "Divisão das despesas".
+  /// Os valores em edição vivem nas variáveis abaixo: o widget devolvido precisa
+  /// ser criado uma vez e guardado (ver [_KeptEditor]).
+  Widget _splitModelsEditor(BuildContext context) {
     final financeCubit = context.read<FinanceCubit>();
     final members = financeCubit.state.members;
     final authRepo = sl<AuthRepository>();
@@ -1057,53 +1080,21 @@ class _SettingsPageState extends State<SettingsPage> {
       }
     }
 
-    showAdaptiveModal(
-      context: context,
-      maxWidth: 500,
-      child: StatefulBuilder(
+    return StatefulBuilder(
         builder: (context, setModalState) {
-          return SafeArea(
+          return SizedBox(
             child: Padding(
-              padding: const EdgeInsets.all(20),
-              child: SingleChildScrollView(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: SizedBox(
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    Center(
-                      child: Container(
-                        width: 40,
-                        height: 4,
-                        decoration: BoxDecoration(
-                          color: Colors.grey.withValues(alpha: 0.3),
-                          borderRadius: BorderRadius.circular(2),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                    const Row(
-                      children: [
-                        Icon(
-                          Icons.tune_rounded,
-                          color: AppColors.accent,
-                          size: 24,
-                        ),
-                        SizedBox(width: 8),
-                        Text(
-                          'Modelos de Rateio',
-                          style: TextStyle(
-                            fontSize: 20,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 8),
                     const Text(
                       'Defina como as despesas gerais da casa serão divididas entre os membros.',
                       style: TextStyle(color: Colors.grey, fontSize: 13),
                     ),
-                    const SizedBox(height: 16),
+                    const SizedBox(height: 8),
 
                     // 1. Porcentagem Personalizada
                     RadioListTile<String>(
@@ -1716,8 +1707,6 @@ class _SettingsPageState extends State<SettingsPage> {
                                   fixedAmountsByMember.values.every((v) => v <= 0)))
                           ? null
                           : () {
-                        Navigator.pop(context);
-
                         // Monta os percentuais e quantias nominais para persistência
                         final percentages = <String, double>{};
                         final fixedAmounts = <String, int>{};
@@ -1799,297 +1788,6 @@ class _SettingsPageState extends State<SettingsPage> {
             ),
           );
         },
-      ),
-    );
-  }
-
-  void _showPaymentMethodsModal(BuildContext context) {
-    final financeCubit = context.read<FinanceCubit>();
-
-    showAdaptiveModal(
-      context: context,
-      maxWidth: 500,
-      child: BlocBuilder<FinanceCubit, FinanceState>(
-        builder: (context, financeState) {
-          final methods = financeState.paymentMethods;
-          final members = financeState.members;
-
-          return SafeArea(
-            child: Padding(
-              padding: const EdgeInsets.all(20),
-              child: SingleChildScrollView(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    Center(
-                      child: Container(
-                        width: 40,
-                        height: 4,
-                        decoration: BoxDecoration(
-                          color: Colors.grey.withValues(alpha: 0.3),
-                          borderRadius: BorderRadius.circular(2),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                    const Row(
-                      children: [
-                        Icon(
-                          Icons.credit_card_rounded,
-                          color: Colors.orange,
-                          size: 24,
-                        ),
-                        SizedBox(width: 8),
-                        Flexible(
-                          child: Text(
-                            'Formas de Pagamento',
-                            style: TextStyle(
-                              fontSize: 18,
-                              fontWeight: FontWeight.bold,
-                            ),
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 8),
-                    const Text(
-                      'Cadastre cartões de crédito e vales da casa para vincular faturas e vencimentos. Toque em uma forma para editar.',
-                      style: TextStyle(color: Colors.grey, fontSize: 13),
-                    ),
-                    const SizedBox(height: 16),
-                    if (methods.isEmpty)
-                      const Padding(
-                        padding: EdgeInsets.symmetric(vertical: 32),
-                        child: Center(
-                          child: Text(
-                            'Nenhuma forma de pagamento cadastrada.',
-                            style: TextStyle(color: Colors.grey),
-                          ),
-                        ),
-                      )
-                    else
-                      ConstrainedBox(
-                        constraints: const BoxConstraints(maxHeight: 280),
-                        child: ListView.separated(
-                          shrinkWrap: true,
-                          itemCount: methods.length,
-                          separatorBuilder: (_, _) => const Divider(height: 1),
-                          itemBuilder: (context, index) {
-                            final pm = methods[index];
-                            final owner = members
-                                .where((m) => m.id == pm.ownerMemberId)
-                                .firstOrNull;
-
-                            IconData iconData;
-                            Color iconColor;
-                            if (pm.isCreditCard) {
-                              iconData = Icons.credit_card_rounded;
-                              iconColor = Colors.orange;
-                            } else if (pm.isBenefit) {
-                              iconData = Icons.restaurant_rounded;
-                              iconColor = Colors.green;
-                            } else {
-                              iconData = Icons.account_balance_wallet_rounded;
-                              iconColor = AppColors.primary;
-                            }
-
-                            return ListTile(
-                              contentPadding: EdgeInsets.zero,
-                              leading: CircleAvatar(
-                                radius: 18,
-                                backgroundColor: iconColor.withValues(
-                                  alpha: 0.15,
-                                ),
-                                child: Icon(iconData, size: 18, color: iconColor),
-                              ),
-                              title: Text(
-                                pm.name,
-                                style: const TextStyle(
-                                  fontWeight: FontWeight.w600,
-                                ),
-                              ),
-                              subtitle: Text(
-                                pm.closingDay != null && pm.dueDay != null
-                                    ? 'Fecha dia ${pm.closingDay} • Vence dia ${pm.dueDay}'
-                                    : 'Conta / Débito imediato',
-                                style: const TextStyle(
-                                  fontSize: 12,
-                                  color: Colors.grey,
-                                ),
-                              ),
-                              trailing: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  if (owner != null)
-                                    Container(
-                                      padding: const EdgeInsets.symmetric(
-                                        horizontal: 8,
-                                        vertical: 4,
-                                      ),
-                                      decoration: BoxDecoration(
-                                        color: AppColors.primary.withValues(
-                                          alpha: 0.1,
-                                        ),
-                                        borderRadius: BorderRadius.circular(8),
-                                      ),
-                                      child: Text(
-                                        owner.name,
-                                        style: const TextStyle(
-                                          color: AppColors.primary,
-                                          fontSize: 11,
-                                          fontWeight: FontWeight.bold,
-                                        ),
-                                      ),
-                                    )
-                                  else
-                                    Container(
-                                      padding: const EdgeInsets.symmetric(
-                                        horizontal: 8,
-                                        vertical: 4,
-                                      ),
-                                      decoration: BoxDecoration(
-                                        color: Colors.grey.withValues(alpha: 0.1),
-                                        borderRadius: BorderRadius.circular(8),
-                                      ),
-                                      child: const Text(
-                                        'Casa',
-                                        style: TextStyle(
-                                          color: Colors.grey,
-                                          fontSize: 11,
-                                          fontWeight: FontWeight.bold,
-                                        ),
-                                      ),
-                                    ),
-                                  PopupMenuButton<String>(
-                                    icon: const Icon(
-                                      Icons.more_vert,
-                                      size: 20,
-                                      color: Colors.grey,
-                                    ),
-                                    tooltip: 'Opções',
-                                    onSelected: (action) {
-                                      if (action == 'invoice') {
-                                        showAdaptiveModal(
-                                          context: context,
-                                          maxWidth: 480,
-                                          child: CardInvoicePaymentSheet(
-                                            card: pm,
-                                            repository: sl<FinanceRepository>(),
-                                            financeCubit: financeCubit,
-                                            cycleSchedule: financeCubit.cycleSchedule,
-                                            isCycleClosed: (cycle) async =>
-                                                (await sl<SettlementRepository>()
-                                                        .getSettlementSummary(cycle))
-                                                    .status ==
-                                                SettlementStatus.settled,
-                                          ),
-                                        );
-                                      } else if (action == 'edit') {
-                                        _showPaymentMethodFormDialog(
-                                          context: context,
-                                          financeCubit: financeCubit,
-                                          members: members,
-                                          existingPm: pm,
-                                        );
-                                      } else if (action == 'delete') {
-                                        _confirmDeletePaymentMethod(
-                                          context,
-                                          financeCubit,
-                                          pm,
-                                          methods.length,
-                                        );
-                                      }
-                                    },
-                                    itemBuilder: (context) => [
-                                      if (pm.type == PaymentMethodType.card)
-                                        const PopupMenuItem(
-                                          value: 'invoice',
-                                          child: Row(
-                                            children: [
-                                              Icon(
-                                                Icons.receipt_long_outlined,
-                                                size: 18,
-                                                color: AppColors.primary,
-                                              ),
-                                              SizedBox(width: 8),
-                                              Text('Registrar pagamento da fatura'),
-                                            ],
-                                          ),
-                                        ),
-                                      const PopupMenuItem(
-                                        value: 'edit',
-                                        child: Row(
-                                          children: [
-                                            Icon(
-                                              Icons.edit_outlined,
-                                              size: 18,
-                                              color: AppColors.primary,
-                                            ),
-                                            SizedBox(width: 8),
-                                            Text('Editar'),
-                                          ],
-                                        ),
-                                      ),
-                                      const PopupMenuItem(
-                                        value: 'delete',
-                                        child: Row(
-                                          children: [
-                                            Icon(
-                                              Icons.delete_outline_rounded,
-                                              size: 18,
-                                              color: AppColors.debtRed,
-                                            ),
-                                            SizedBox(width: 8),
-                                            Text(
-                                              'Excluir',
-                                              style: TextStyle(
-                                                color: AppColors.debtRed,
-                                              ),
-                                            ),
-                                          ],
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ],
-                              ),
-                              onTap: () {
-                                _showPaymentMethodFormDialog(
-                                  context: context,
-                                  financeCubit: financeCubit,
-                                  members: members,
-                                  existingPm: pm,
-                                );
-                              },
-                            );
-                          },
-                        ),
-                      ),
-                    const SizedBox(height: 16),
-                    FilledButton.icon(
-                      onPressed: () {
-                        _showAddPaymentMethodDialog(
-                          context,
-                          financeCubit,
-                          members,
-                        );
-                      },
-                      icon: const Icon(Icons.add_rounded, size: 18),
-                      label: const Text('Cadastrar Cartão ou VR'),
-                      style: FilledButton.styleFrom(
-                        backgroundColor: AppColors.primary,
-                        padding: const EdgeInsets.symmetric(vertical: 12),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          );
-        },
-      ),
     );
   }
 
@@ -2469,11 +2167,9 @@ class _SettingsPageState extends State<SettingsPage> {
     );
   }
 
-  void _showRecurringExpensesModal(BuildContext context) {
-    showAdaptiveModal(
-      context: context,
-      maxWidth: 540,
-      child: SafeArea(
+  /// Contas fixas da casa, mostradas dentro do grupo "Pagamentos e contas".
+  Widget _recurringExpensesEditor(BuildContext context) {
+    return SizedBox(
         child: BlocBuilder<FinanceCubit, FinanceState>(
           builder: (context, financeState) {
             final recurring = financeState.recurringSeries;
@@ -2483,46 +2179,17 @@ class _SettingsPageState extends State<SettingsPage> {
             );
 
             return Padding(
-              padding: const EdgeInsets.all(20),
-              child: SingleChildScrollView(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+              child: SizedBox(
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    Center(
-                      child: Container(
-                        width: 40,
-                        height: 4,
-                        decoration: BoxDecoration(
-                          color: Colors.grey.withValues(alpha: 0.3),
-                          borderRadius: BorderRadius.circular(2),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        const Expanded(
-                          child: Text(
-                            'Assinaturas & Contas Fixas',
-                            style: TextStyle(
-                              fontSize: 18,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                        ),
-                        IconButton(
-                          icon: const Icon(Icons.close_rounded),
-                          onPressed: () => Navigator.pop(context),
-                        ),
-                      ],
-                    ),
                     const Text(
                       'Compromissos mensais provisionados automaticamente no Fôlego da Casa.',
                       style: TextStyle(color: Colors.grey, fontSize: 13),
                     ),
-                    const SizedBox(height: 16),
+                    const SizedBox(height: 12),
 
                     // Card de Resumo do Custo Mensal
                     Container(
@@ -2584,10 +2251,10 @@ class _SettingsPageState extends State<SettingsPage> {
                         ),
                       )
                     else
-                      ConstrainedBox(
-                        constraints: const BoxConstraints(maxHeight: 220),
+                      SizedBox(
                         child: ListView.separated(
                           shrinkWrap: true,
+                          physics: const NeverScrollableScrollPhysics(),
                           itemCount: recurring.length,
                           separatorBuilder: (_, _) => const SizedBox(height: 8),
                           itemBuilder: (context, index) {
@@ -2716,7 +2383,6 @@ class _SettingsPageState extends State<SettingsPage> {
                         style: TextStyle(fontWeight: FontWeight.bold),
                       ),
                       onPressed: () {
-                        Navigator.pop(context);
                         showAdaptiveModal(
                           context: context,
                           maxWidth: 540,
@@ -2730,7 +2396,6 @@ class _SettingsPageState extends State<SettingsPage> {
             );
           },
         ),
-      ),
     );
   }
 

@@ -5,6 +5,7 @@ import 'package:omni_lar/core/di/service_locator.dart';
 import 'package:omni_lar/core/domain/value_objects/money.dart';
 import 'package:omni_lar/core/theme/theme_cubit.dart';
 import 'package:omni_lar/features/auth/presentation/cubit/auth_cubit.dart';
+import 'package:omni_lar/features/finance/domain/entities/cycle_funding_estimate.dart';
 import 'package:omni_lar/features/finance/presentation/cubit/finance_cubit.dart';
 import 'package:omni_lar/features/settings/presentation/pages/settings_page.dart';
 
@@ -107,16 +108,10 @@ void main() {
 
     // Clica no tile de formas de pagamento
     await openGroup(tester, 'Pagamentos e contas');
-    final paymentTile = find.text('Cartões e Formas de Pagamento');
-    await tester.ensureVisible(paymentTile);
-    await tester.tap(paymentTile);
-    await tester.pumpAndSettle();
-
-    // Verifica que o modal abriu
-    expect(find.text('Formas de Pagamento'), findsOneWidget);
-    // Aparecem na janela e no resumo do grupo, atrás dela
-    expect(find.text('Nubank Carlos'), findsWidgets);
-    expect(find.text('VR Marina (Vale Refeição)'), findsWidgets);
+    // As formas de pagamento ficam à vista no grupo, sem janela por cima
+    expect(find.text('Cartões e Formas de Pagamento'), findsOneWidget);
+    expect(find.text('Nubank Carlos'), findsOneWidget);
+    expect(find.text('VR Marina (Vale Refeição)'), findsOneWidget);
     expect(find.text('Cadastrar Cartão ou VR'), findsOneWidget);
   });
 
@@ -285,5 +280,29 @@ void main() {
     expect(find.text('Categorias de Gastos'), findsOneWidget);
     expect(find.text('Membros da Casa e Convites'), findsNothing);
     expect(find.byType(BackButton), findsNothing);
+  });
+
+  testWidgets('Edição do rateio em andamento sobrevive a uma atualização da tela', (
+    tester,
+  ) async {
+    final cubit = sl<FinanceCubit>();
+    await cubit.loadCycleData();
+
+    await tester.pumpWidget(buildTestableWidget());
+    await tester.pumpAndSettle();
+    await openGroup(tester, 'Divisão das despesas');
+
+    // Escolhe outro modelo, sem salvar
+    await tester.tap(find.text('Aportes Fixos (Balde Comum)'));
+    await tester.pumpAndSettle();
+    expect(find.text('Balde Mensal Previsto:'), findsOneWidget);
+
+    // O cubit emite um estado novo que não muda moradores nem categorias
+    cubit.updateFundingEstimateMode(FundingEstimateMode.comfortable);
+    await tester.pumpAndSettle();
+
+    // A escolha em andamento continua na tela
+    expect(find.text('Balde Mensal Previsto:'), findsOneWidget);
+    cubit.updateFundingEstimateMode(FundingEstimateMode.historicalAverage);
   });
 }
