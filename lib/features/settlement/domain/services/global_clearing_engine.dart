@@ -81,14 +81,51 @@ class GlobalClearingEngine {
         );
       }
 
+      // Sub-itens pessoais de despesas compostas não saem do balde: são cobrados
+      // do responsável por cima do aporte fixo.
+      final memberIds = members.map((m) => m.id).toList();
+      int personalItemsCents = 0;
+      for (final expense in expenses) {
+        for (final item in expense.items) {
+          final isPersonalItem = item.responsibleMemberId != null ||
+              item.splitRule?.type == SplitType.categoryOwner;
+          if (!isPersonalItem) continue;
+          final SplitRule itemRule =
+              item.splitRule ?? SplitRule.singleResponsible(item.responsibleMemberId!);
+          final allocations = itemRule.calculateAllocations(
+            totalAmount: item.amount,
+            memberIds: memberIds,
+          );
+          for (final entry in allocations.entries) {
+            if (entry.value.cents <= 0) continue;
+            personalItemsCents += entry.value.cents;
+            contributionTargets[entry.key] = Money(
+              (contributionTargets[entry.key]?.cents ?? 0) + entry.value.cents,
+            );
+            memberExpenseShares[entry.key]?.add(
+              ExpenseShareAudit(
+                expenseId: expense.id,
+                expenseTitle: '${expense.title} • ${item.title}',
+                totalExpenseAmount: item.amount,
+                allocatedAmount: entry.value,
+                ruleDescription: 'Item pessoal exclusivo',
+                date: expense.date,
+                isPersonal: true,
+              ),
+            );
+          }
+        }
+      }
+
       // Gastos acima do balde: a Caixinha escolhida cobre o que puder e o
       // restante é rateado entre os moradores conforme a opção do fechamento.
       final bucketCents = customContributionTargets.values.fold<int>(
         0,
         (acc, t) => acc + t.cents,
       );
-      if (totalExpensesCents > bucketCents) {
-        bucketDeficitCents = totalExpensesCents - bucketCents;
+      final sharedExpensesCents = totalExpensesCents - personalItemsCents;
+      if (sharedExpensesCents > bucketCents) {
+        bucketDeficitCents = sharedExpensesCents - bucketCents;
       }
       // Ciclo reaberto: o que a Caixinha já cobriu no fechamento anterior não volta a ser cobrado
       deficitAlreadyCoveredCents = deficitAlreadyCovered.cents.clamp(0, bucketDeficitCents).toInt();

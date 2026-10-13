@@ -2,6 +2,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:omni_lar/core/domain/value_objects/financial_cycle.dart';
 import 'package:omni_lar/core/domain/value_objects/money.dart';
 import 'package:omni_lar/features/finance/domain/entities/house_expense.dart';
+import 'package:omni_lar/features/finance/domain/entities/house_expense_item.dart';
 import 'package:omni_lar/features/finance/domain/entities/house_member.dart';
 import 'package:omni_lar/features/finance/domain/entities/split_rule.dart';
 import 'package:omni_lar/features/settlement/domain/entities/settlement_options.dart';
@@ -112,6 +113,52 @@ void main() {
       expect(due(summary, 'ana'), 70000);
       expect(due(summary, 'bia'), 130000);
       expect(due(summary, 'caio'), 100000);
+    });
+    test('Sub-itens pessoais são cobrados do responsável e não consomem o balde', () {
+      // Boleto de R$ 3.100,00 pago pelo Caixa: R$ 200,00 são só da Ana.
+      final summary = engine.computeSettlement(
+        cycle: cycle,
+        members: members,
+        expenses: [
+          HouseExpense(
+            id: 'e1',
+            title: 'Condomínio',
+            amount: const Money(310000),
+            date: DateTime(2026, 10, 12),
+            categoryId: 'c',
+            paidByMemberId: 'ana',
+            paymentMethodId: 'pm',
+            splitRule: const SplitRule.percentage(null),
+            items: const [
+              HouseExpenseItem(
+                id: 'i1',
+                expenseId: 'e1',
+                title: 'Taxa condominial',
+                amount: Money(290000),
+              ),
+              HouseExpenseItem(
+                id: 'i2',
+                expenseId: 'e1',
+                title: 'Fundo Reserva',
+                amount: Money(20000),
+                responsibleMemberId: 'ana',
+                splitRule: SplitRule.singleResponsible('ana'),
+              ),
+            ],
+          ),
+        ],
+        contributions: const [],
+        loans: const [],
+        customContributionTargets: targets,
+      );
+
+      // R$ 2.900,00 de gastos comuns cabem no balde de R$ 3.000,00
+      expect(summary.bucketDeficit.cents, 0);
+      expect(due(summary, 'ana'), 70000 + 20000);
+      expect(due(summary, 'bia'), 130000);
+      expect(due(summary, 'caio'), 100000);
+      expect(summary.totalPersonalExpensesInBills.cents, 20000);
+      expect(summary.auditTrails['ana']!.personalItemsSharesTotal.cents, 20000);
     });
   });
 }
