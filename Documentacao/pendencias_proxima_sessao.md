@@ -4,7 +4,7 @@ Atualizado em 12/10/2026. Este arquivo resume onde o trabalho parou, o que falta
 
 ## Estado atual
 
-- **Código:** `main` local e `origin/main` sincronizadas. A branch `fix/ui-fechamento-e-fila-offline` tem commits ainda não levados para a `main`. Eles dependem das migrations 0027 a 0030, todas já no banco.
+- **Código:** `main` local e `origin/main` no commit `3789193`, sincronizadas. O código depende das migrations 0027 a 0030, todas já no banco.
 - **Banco (Supabase `rygxmpwzofgieodvhpcy`):** migrations 0001 a 0030 aplicadas. Só as 0022 a 0027 e a 0030 constam no histórico de migrations do Supabase; as 0001 a 0021, a 0028 e a 0029 foram aplicadas à mão pelo SQL Editor (o conector recusou a aplicação da 0028 pelo assistente).
 - **Edge Functions:** `capture-read` versão 8 e `assistant` versão 4, ambas com `verify_jwt=true` e exigindo usuário logado que more na casa.
 - **Qualidade:** `flutter analyze` com 0 erros (4 warnings antigos de import não usado) e 264 testes passando. Os testes rodam só contra os datasources mock.
