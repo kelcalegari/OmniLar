@@ -16,6 +16,7 @@ import '../../domain/entities/capture_proposal.dart';
 import '../../domain/services/boleto_parser.dart';
 import '../../domain/services/capture_service.dart';
 import '../../../finance/presentation/cubit/finance_cubit.dart';
+import '../../../finance/domain/entities/category.dart';
 import '../../../finance/domain/entities/house_expense.dart';
 import '../../../finance/domain/entities/house_expense_item.dart';
 import '../../../finance/domain/entities/split_rule.dart';
@@ -45,6 +46,10 @@ class _SmartScannerPageState extends State<SmartScannerPage> {
   String _processingMessage = 'Processando documento...';
   bool _isSubmitting = false;
   String? _selectedPaymentMethodId;
+  // Título e categoria editados na revisão; voltam ao sugerido a cada documento lido
+  final _titleController = TextEditingController();
+  String? _selectedCategoryId;
+  String? _reviewedProposalId;
 
   MobileScannerController? _scannerController;
   bool _isCameraActive = false;
@@ -86,6 +91,7 @@ class _SmartScannerPageState extends State<SmartScannerPage> {
   @override
   void dispose() {
     _barcodeController.dispose();
+    _titleController.dispose();
     _scannerController?.dispose();
     super.dispose();
   }
@@ -236,7 +242,6 @@ class _SmartScannerPageState extends State<SmartScannerPage> {
     final proposal = _currentProposal;
     if (proposal == null) return;
 
-    final titleCtrl = TextEditingController(text: proposal.title);
     final amountCtrl = TextEditingController(
       text: (proposal.totalAmount.cents > 0)
           ? (proposal.totalAmount.cents / 100).toStringAsFixed(2)
@@ -280,14 +285,6 @@ class _SmartScannerPageState extends State<SmartScannerPage> {
                   ],
                 ),
                 const SizedBox(height: 14),
-                TextField(
-                  controller: titleCtrl,
-                  decoration: const InputDecoration(
-                    labelText: 'Título / Descrição',
-                    border: OutlineInputBorder(),
-                  ),
-                ),
-                const SizedBox(height: 12),
                 TextField(
                   controller: amountCtrl,
                   keyboardType: const TextInputType.numberWithOptions(decimal: true),
@@ -371,7 +368,6 @@ class _SmartScannerPageState extends State<SmartScannerPage> {
                     padding: const EdgeInsets.symmetric(vertical: 14),
                   ),
                   onPressed: () {
-                    final newTitle = titleCtrl.text.trim();
                     final rawAmount = double.tryParse(amountCtrl.text.replaceAll(',', '.')) ?? 0.0;
                     final newCents = (rawAmount * 100).round();
 
@@ -391,7 +387,6 @@ class _SmartScannerPageState extends State<SmartScannerPage> {
 
                     setState(() {
                       _currentProposal = proposal.copyWith(
-                        title: newTitle.isNotEmpty ? newTitle : null,
                         totalAmount: Money(newCents),
                         items: updatedItems,
                       );
@@ -705,6 +700,14 @@ class _SmartScannerPageState extends State<SmartScannerPage> {
     );
   }
 
+  /// Boleto cai em "Contas" e nota em "Mercado"; sem categoria parecida, a primeira da casa.
+  String? _suggestedCategoryId(CaptureProposal proposal, List<ExpenseCategory> categories) {
+    if (categories.isEmpty) return null;
+    final keyword = proposal.documentType == DocumentType.boleto ? 'conta' : 'mercado';
+    final found = categories.where((c) => c.name.toLowerCase().contains(keyword)).firstOrNull;
+    return (found ?? categories.first).id;
+  }
+
   Future<void> _confirmProposal() async {
     if (_currentProposal == null || _isSubmitting) return;
     final proposal = _currentProposal!;
@@ -728,16 +731,12 @@ class _SmartScannerPageState extends State<SmartScannerPage> {
           selectedPm.ownerMemberId != null &&
           selectedPm.id != 'pm_caixa';
 
-      // 1. Resolução dinâmica de Categoria compatível com Supabase e Mock
-      String? matchedCategoryId;
-      if (state.categories.isNotEmpty) {
-        final isBoleto = proposal.documentType == DocumentType.boleto;
-        final keyword = isBoleto ? 'conta' : 'mercado';
-        final found = state.categories.where(
-          (c) => c.name.toLowerCase().contains(keyword),
-        ).firstOrNull ?? state.categories.first;
-        matchedCategoryId = found.id;
-      }
+      // 1. Categoria escolhida na revisão; sem escolha, a sugerida pelo tipo do documento
+      final matchedCategoryId = state.categories.any((c) => c.id == _selectedCategoryId)
+          ? _selectedCategoryId
+          : _suggestedCategoryId(proposal, state.categories);
+      final typedTitle = _titleController.text.trim();
+      final title = typedTitle.isNotEmpty ? typedTitle : proposal.title;
 
       // 2. Forma de Pagamento escolhida na revisão
       final matchedPaymentMethodId = selectedPm?.id;
@@ -774,7 +773,7 @@ class _SmartScannerPageState extends State<SmartScannerPage> {
 
       final expense = HouseExpense(
         id: expenseId,
-        title: proposal.title,
+        title: title,
         amount: proposal.totalAmount,
         date: proposal.date,
         dueDate: proposal.date,
@@ -799,7 +798,7 @@ class _SmartScannerPageState extends State<SmartScannerPage> {
           SnackBar(
             backgroundColor: AppColors.creditGreen,
             content: Text(
-              'Proposta "${proposal.title}" confirmada! Despesa de ${proposal.houseAmount.format()} lançada. 📋✅',
+              'Proposta "$title" confirmada! Despesa de ${proposal.houseAmount.format()} lançada. 📋✅',
             ),
           ),
         );
@@ -848,7 +847,11 @@ class _SmartScannerPageState extends State<SmartScannerPage> {
     }
 
     if (_currentProposal != null) {
-      return _buildReviewProposalView(theme);
+      // Rola e sobe com o teclado: a revisão tem campo de texto
+      return SingleChildScrollView(
+        padding: EdgeInsets.only(bottom: MediaQuery.viewInsetsOf(context).bottom),
+        child: _buildReviewProposalView(theme),
+      );
     }
 
     return Padding(
@@ -1098,6 +1101,11 @@ class _SmartScannerPageState extends State<SmartScannerPage> {
   Widget _buildReviewProposalView(ThemeData theme) {
     final proposal = _currentProposal!;
     final isNfce = proposal.documentType == DocumentType.nfce;
+    if (_reviewedProposalId != proposal.id) {
+      _reviewedProposalId = proposal.id;
+      _titleController.text = proposal.title;
+      _selectedCategoryId = null;
+    }
 
     return Padding(
       padding: const EdgeInsets.all(20),
@@ -1137,6 +1145,17 @@ class _SmartScannerPageState extends State<SmartScannerPage> {
           ),
           const SizedBox(height: 16),
 
+          TextField(
+            controller: _titleController,
+            textCapitalization: TextCapitalization.sentences,
+            decoration: InputDecoration(
+              labelText: 'Título do gasto',
+              border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+              prefixIcon: const Icon(Icons.edit_note_rounded),
+            ),
+          ),
+          const SizedBox(height: 12),
+
           // Card de Resumo Financeiro
           Container(
             padding: const EdgeInsets.all(16),
@@ -1151,7 +1170,7 @@ class _SmartScannerPageState extends State<SmartScannerPage> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(proposal.title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                      const Text('Valor', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
                       if (proposal.merchantOrBeneficiary != null)
                         Text(proposal.merchantOrBeneficiary!, style: theme.textTheme.bodySmall),
                     ],
@@ -1167,7 +1186,7 @@ class _SmartScannerPageState extends State<SmartScannerPage> {
                     const SizedBox(width: 8),
                     IconButton(
                       icon: const Icon(Icons.edit_outlined, size: 20, color: AppColors.primary),
-                      tooltip: 'Ajustar valor ou título',
+                      tooltip: 'Ajustar valor',
                       onPressed: _editProposalDetails,
                     ),
                   ],
@@ -1301,6 +1320,34 @@ class _SmartScannerPageState extends State<SmartScannerPage> {
             ),
           ],
           const SizedBox(height: 16),
+
+          // Categoria
+          Builder(
+            builder: (context) {
+              final categories = context.watch<FinanceCubit>().state.categories;
+              if (categories.isEmpty) return const SizedBox.shrink();
+              final currentId = categories.any((c) => c.id == _selectedCategoryId)
+                  ? _selectedCategoryId
+                  : _suggestedCategoryId(proposal, categories);
+
+              return Padding(
+                padding: const EdgeInsets.only(bottom: 12),
+                child: DropdownButtonFormField<String>(
+                  key: ValueKey('scan_category_${proposal.id}'),
+                  initialValue: currentId,
+                  decoration: InputDecoration(
+                    labelText: 'Categoria',
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                    prefixIcon: const Icon(Icons.category_outlined),
+                  ),
+                  items: categories.map((c) {
+                    return DropdownMenuItem(value: c.id, child: Text(c.name));
+                  }).toList(),
+                  onChanged: (val) => setState(() => _selectedCategoryId = val),
+                ),
+              );
+            },
+          ),
 
           // Forma de Pagamento
           Builder(
