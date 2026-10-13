@@ -315,7 +315,7 @@ class _AddExpensePageState extends State<AddExpensePage> {
         categoryId: catId,
         paidByMemberId: paidById,
         paymentMethodId: pmId,
-        splitRule: rule,
+        splitRule: splitRuleForEdit(oldExpense, catId, rule),
         paidOutOfPocket: paidOutOfPocket,
         status: _expenseStatus,
         // Conta que estava pendente e foi marcada como paga agora
@@ -1553,3 +1553,10 @@ DateTime editableDateOfExpense(HouseExpense expense, PaymentMethod? paymentMetho
   if (isCardPurchase) return expense.date;
   return expense.dueDate ?? expense.date;
 }
+
+/// Rateio ao salvar a edição de uma despesa: mantém o que foi gravado no
+/// lançamento. Só é refeito pelo padrão atual quando a categoria muda, porque
+/// a categoria pode ter dono.
+@visibleForTesting
+SplitRule splitRuleForEdit(HouseExpense old, String newCategoryId, SplitRule defaultRule) =>
+    newCategoryId == old.categoryId ? old.splitRule : defaultRule;

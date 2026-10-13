@@ -128,6 +128,28 @@ void main() {
     });
   });
 
+  group('Rateio ao editar uma despesa', () {
+    final old = HouseExpense(
+      id: 'e1',
+      title: 'Aluguel',
+      amount: const Money(100000),
+      date: DateTime(2026, 9, 10),
+      categoryId: 'c-casa',
+      paymentMethodId: 'pm-pix',
+      paidByMemberId: 'm1',
+      splitRule: const SplitRule.percentage({'m1': 50.0, 'm2': 50.0}),
+    );
+    const currentDefault = SplitRule.percentage({'m1': 60.0, 'm2': 40.0});
+
+    test('mantém o rateio do lançamento quando a categoria não muda', () {
+      expect(splitRuleForEdit(old, 'c-casa', currentDefault), old.splitRule);
+    });
+
+    test('refaz pelo padrão quando a categoria muda', () {
+      expect(splitRuleForEdit(old, 'c-mercado', currentDefault), currentDefault);
+    });
+  });
+
   group('Projetos compartilhados', () {
     test('projeto novo usa a casa e o usuário da sessão e inclui os moradores', () async {
       final projects = MockProjectsRepository();

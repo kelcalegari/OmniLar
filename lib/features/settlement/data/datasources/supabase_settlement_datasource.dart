@@ -1,4 +1,6 @@
+import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import '../settlement_summary_codec.dart';
 import '../../../../core/domain/value_objects/financial_cycle.dart';
 import '../../../../core/domain/value_objects/money.dart';
 import '../../../../core/errors/failures.dart';
@@ -70,15 +72,33 @@ class SupabaseSettlementDataSource implements SettlementDataSource {
       if (existingSettlement != null &&
           (existingSettlement['status'] == 'confirmed' ||
               existingSettlement['status'] == 'completed')) {
+        final settledAt = existingSettlement['settled_at'] != null
+            ? DateTime.tryParse(existingSettlement['settled_at'] as String)?.toLocal()
+            : null;
+        // Retrato gravado no fechamento: saldos, transferências e memória de cálculo
+        final snapshot = settlementSummaryFromJson(
+          existingSettlement['summary_snapshot'],
+          cycle: cycle,
+          settledAt: settledAt,
+        );
+        if (snapshot != null) return snapshot;
+
+        // Fechamento anterior ao retrato: só o que o banco guarda, com os nomes atuais
+        var memberNames = <String, String>{};
+        try {
+          memberNames = {
+            for (final m in await financeDataSource.getMembers()) m.id: m.name,
+          };
+        } catch (_) {}
         final rawTransfers =
             existingSettlement['settlement_transfers'] as List<dynamic>? ?? [];
         final transfers = rawTransfers.map<SuperPixTransfer>((r) {
           return SuperPixTransfer(
             id: r['id'] as String,
             fromMemberId: r['from_member_id'] as String,
-            fromMemberName: 'Membro',
+            fromMemberName: memberNames[r['from_member_id']] ?? 'Membro',
             toMemberId: r['to_member_id'] as String,
-            toMemberName: 'Membro',
+            toMemberName: memberNames[r['to_member_id']] ?? 'Membro',
             amount: Money((r['amount_cents'] as num).toInt()),
             description: 'Compensação do Ciclo',
             status: r['status'] == 'confirmed'
@@ -108,9 +128,7 @@ class SupabaseSettlementDataSource implements SettlementDataSource {
           ),
           houseTreasuryBalance: const Money.zero(),
           status: SettlementStatus.settled,
-          settledAt: existingSettlement['settled_at'] != null
-              ? DateTime.tryParse(existingSettlement['settled_at'] as String)?.toLocal()
-              : null,
+          settledAt: settledAt,
         );
       }
 
@@ -508,6 +526,30 @@ class SupabaseSettlementDataSource implements SettlementDataSource {
       });
     } on PostgrestException catch (e) {
       throw ServerFailure(e.message);
+    }
+
+    // Guarda o retrato do fechamento, com o valor efetivamente pago de cada
+    // Super Pix. O ciclo já está fechado: se isto falhar, ele só aparece resumido.
+    try {
+      final snapshot = summary.copyWith(
+        transfers: [
+          for (final t in summary.transfers)
+            if (options?.transferResolutions[t.id]?.isPartialPayment ?? false)
+              t.copyWith(
+                amount: options!.transferResolutions[t.id]!.amountPaid,
+                description: '${t.description} (pagamento parcial de ${t.amount.formatted})',
+              )
+            else
+              t,
+        ],
+      );
+      await client.rpc('save_settlement_snapshot', params: {
+        'p_house_id': _houseId,
+        'p_cycle_start_date': cycle.startDate.toIso8601String().split('T')[0],
+        'p_snapshot': settlementSummaryToJson(snapshot),
+      });
+    } catch (e) {
+      debugPrint('[confirmSettlement] Retrato do fechamento não gravado: $e');
     }
   }
 
