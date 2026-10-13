@@ -179,8 +179,10 @@ class SettlementCubit extends BlocBase<SettlementState> {
         return;
       }
 
+      // Os valores são os que o admin revisou; a versão dos dados é a da
+      // releitura de agora, que o banco confere ao gravar.
       await _repository.confirmSettlement(
-        currentSummary,
+        currentSummary.copyWith(dataVersion: freshSummary.dataVersion),
         options: state.options,
       );
       final updatedSummary = await _repository.getSettlementSummary(

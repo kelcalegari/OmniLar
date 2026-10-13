@@ -123,6 +123,16 @@ class SupabaseSettlementDataSource implements SettlementDataSource {
     }
 
     // 2. Apuração dinâmica do ciclo
+    // A versão é lida antes dos dados: qualquer mudança depois dela faz o banco
+    // recusar o fechamento calculado aqui.
+    String? dataVersion;
+    try {
+      dataVersion = await client.rpc(
+        'settlement_data_version',
+        params: {'p_house_id': _houseId},
+      ) as String?;
+    } catch (_) {}
+
     final members = await financeDataSource.getMembers();
     final expenses = await financeDataSource.getExpensesForCycle(cycle);
     final contributions = await financeDataSource.getContributionsForCycle(
@@ -168,7 +178,7 @@ class SupabaseSettlementDataSource implements SettlementDataSource {
       surplusAlreadyVaulted: surplusAlreadyVaulted,
       deficitAlreadyCovered: deficitAlreadyCovered,
     );
-    return summary.copyWith(isReopened: isReopened);
+    return summary.copyWith(isReopened: isReopened, dataVersion: dataVersion);
   }
 
   @override
@@ -396,6 +406,7 @@ class SupabaseSettlementDataSource implements SettlementDataSource {
         'p_plan': {
           'house_id': _houseId,
           'cycle_start_date': dateOnly(cycle.startDate),
+          'data_version': summary.dataVersion,
           'total_expenses_cents': summary.totalHouseExpenses.cents,
           'total_contributions_cents': summary.totalContributions.cents,
           'total_cleared_p2p_cents': summary.totalP2PCleared.cents,

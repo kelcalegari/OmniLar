@@ -28,6 +28,10 @@ class SettlementSummary {
   /// mudou desde o último fechamento.
   final bool isReopened;
 
+  /// Versão dos dados da casa lida no banco antes do cálculo. O fechamento é
+  /// recusado se ela já for outra na hora de gravar (null no modo demo).
+  final String? dataVersion;
+
   const SettlementSummary({
     required this.cycle,
     required this.memberBalances,
@@ -42,6 +46,7 @@ class SettlementSummary {
     this.bucketDeficit = const Money.zero(),
     this.deficitCoveredByVault = const Money.zero(),
     this.isReopened = false,
+    this.dataVersion,
   });
 
   /// Verifica se os saldos fecham matematicamente
@@ -82,6 +87,7 @@ class SettlementSummary {
     Money? bucketDeficit,
     Money? deficitCoveredByVault,
     bool? isReopened,
+    String? dataVersion,
   }) {
     return SettlementSummary(
       cycle: cycle ?? this.cycle,
@@ -97,6 +103,7 @@ class SettlementSummary {
       bucketDeficit: bucketDeficit ?? this.bucketDeficit,
       deficitCoveredByVault: deficitCoveredByVault ?? this.deficitCoveredByVault,
       isReopened: isReopened ?? this.isReopened,
+      dataVersion: dataVersion ?? this.dataVersion,
     );
   }
 }
