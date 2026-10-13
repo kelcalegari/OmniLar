@@ -16,6 +16,7 @@ class AuthCubit extends Cubit<AuthState> {
     // Dá um tempo mínimo para a splash renderizar a identidade visual e carregar a sessão do Supabase/Cache
     Future.microtask(() => checkAuthStatus());
     _authSubscription = _repository.authStateChanges.listen((user) {
+      if (_repository.isRestoringSession) return;
       if (user == null) {
         emit(const AuthState(status: AuthStatus.unauthenticated));
       } else {
@@ -35,6 +36,7 @@ class AuthCubit extends Cubit<AuthState> {
     });
 
     _houseSubscription = _repository.houseChanges.listen((house) {
+      if (_repository.isRestoringSession) return;
       if (state.user != null) {
         if (house == null) {
           emit(
@@ -57,6 +59,9 @@ class AuthCubit extends Cubit<AuthState> {
   }
 
   void checkAuthStatus() {
+    // Sessão salva ainda carregando: mantém o estado inicial em vez de concluir "deslogado"
+    if (_repository.isRestoringSession) return;
+
     final user = _repository.currentUser;
     final house = _repository.currentHouse;
 

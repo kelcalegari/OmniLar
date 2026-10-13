@@ -25,6 +25,9 @@ class AuthRepositoryImpl implements AuthRepository {
   bool get isDemoMode => _dataSource.isDemoMode;
 
   @override
+  bool get isRestoringSession => _dataSource.isRestoringSession;
+
+  @override
   Future<UserProfile> signInWithEmailPassword(String email, String password) {
     return _dataSource.signInWithEmailPassword(email, password);
   }

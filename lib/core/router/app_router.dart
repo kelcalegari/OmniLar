@@ -7,6 +7,7 @@ import 'package:go_router/go_router.dart';
 import '../di/service_locator.dart';
 import '../widgets/desktop_shortcuts_wrapper.dart';
 import '../widgets/scaffold_with_nav_bar.dart';
+import '../../features/auth/domain/repositories/auth_repository.dart';
 import '../../features/auth/presentation/cubit/auth_cubit.dart';
 import '../../features/auth/presentation/cubit/auth_state.dart';
 import '../../features/auth/presentation/pages/login_page.dart';
@@ -61,7 +62,15 @@ class AppRouter {
 
       // 1. Enquanto o AuthCubit estiver em inicialização (fora do Splash)
       if (authState.status == AuthStatus.initial) {
-        if (kIsWeb) return isLanding ? null : '/landing';
+        if (kIsWeb) {
+          // Recarregou a página com sessão salva: aguarda no Splash e volta para onde estava
+          if (sl<AuthRepository>().isRestoringSession) {
+            return isLanding
+                ? '/splash'
+                : Uri(path: '/splash', queryParameters: {'from': state.uri.toString()}).toString();
+          }
+          return isLanding ? null : '/landing';
+        }
         return '/splash';
       }
 
@@ -104,7 +113,7 @@ class AppRouter {
         path: '/splash',
         name: 'splash',
         parentNavigatorKey: _rootNavigatorKey,
-        builder: (context, state) => const SplashPage(),
+        builder: (context, state) => SplashPage(returnTo: state.uri.queryParameters['from']),
       ),
       GoRoute(
         path: '/login',

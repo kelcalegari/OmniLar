@@ -433,9 +433,14 @@ class GlobalClearingEngine {
       housePixKeyHolderName: housePixKeyHolderName,
     );
 
-    // 6. Saldo do Caixa da Casa
+    // 6. Saldo do Caixa da Casa depois do fechamento: conta com o aporte devido
+    // de todos os moradores, não só com o que já entrou até agora.
+    final totalDueCents = memberBalances.fold<int>(
+      0,
+      (acc, b) => acc + b.contributionDue.cents,
+    );
     final houseTreasuryCents =
-        totalContributionsCents -
+        totalDueCents -
         totalExpensesCents +
         deficitCoveredCents +
         deficitAlreadyCoveredCents -

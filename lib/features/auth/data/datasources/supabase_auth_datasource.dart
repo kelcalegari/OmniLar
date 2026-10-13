@@ -16,6 +16,7 @@ class SupabaseAuthDataSource implements AuthDataSource {
   UserProfile? _currentUser;
   House? _currentHouse;
   bool _isDemoMode = false;
+  bool _isRestoringSession = false;
 
   SupabaseAuthDataSource(this._client) {
     _initAuthStateListener();
@@ -36,7 +37,16 @@ class SupabaseAuthDataSource implements AuthDataSource {
 
     final initialUser = _client.auth.currentUser;
     if (initialUser != null) {
-      _loadProfileAndHouse(initialUser);
+      // Sessão salva: só avisa quem escuta depois que perfil e casa chegarem
+      _isRestoringSession = true;
+      // Com limite de tempo: rede lenta não pode prender o app na tela de abertura
+      _loadProfileAndHouse(initialUser)
+          .timeout(const Duration(seconds: 8))
+          .catchError((_) {})
+          .whenComplete(() {
+        _isRestoringSession = false;
+        _authStateController.add(_currentUser);
+      });
     }
   }
 
@@ -99,6 +109,9 @@ class SupabaseAuthDataSource implements AuthDataSource {
 
   @override
   bool get isDemoMode => _isDemoMode;
+
+  @override
+  bool get isRestoringSession => _isRestoringSession;
 
   @override
   Future<UserProfile> signInWithEmailPassword(

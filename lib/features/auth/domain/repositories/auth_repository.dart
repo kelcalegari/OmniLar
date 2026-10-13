@@ -10,6 +10,9 @@ abstract class AuthRepository {
   House? get currentHouse;
   bool get isDemoMode;
 
+  /// Há uma sessão salva cujo perfil e casa ainda estão sendo carregados.
+  bool get isRestoringSession => false;
+
   Future<UserProfile> signInWithEmailPassword(String email, String password);
   Future<UserProfile> signUpWithEmailPassword({
     required String email,
