@@ -38,6 +38,8 @@ class GlobalClearingEngine {
     Money surplusAlreadyRolled = const Money.zero(),
     Money surplusAlreadyRefunded = const Money.zero(),
     bool refundSurplus = false,
+    Money houseShortfallAlreadySettled = const Money.zero(),
+    Money houseLoansAlreadyReceived = const Money.zero(),
   }) {
     // 0. Despesas de projetos compartilhados são liquidadas apenas no próprio projeto
     // (ProjectSettlementService). Filtramos aqui por defesa em profundidade para
@@ -317,8 +319,22 @@ class GlobalClearingEngine {
       }
     }
 
+    // Acordos em que o Lar é o credor: o que os moradores pagam neste
+    // fechamento entra no Caixa. Num ciclo reaberto, soma o que já entrou antes.
+    int houseLoanReceiptsCents = houseLoansAlreadyReceived.cents;
+    final memberIdSet = members.map((m) => m.id).toSet();
+    for (final loan in loans) {
+      if (!loan.isHouseLender || !memberIdSet.contains(loan.borrowerMemberId)) continue;
+      for (final installment in loan.installmentsChargedIn(cycle)) {
+        houseLoanReceiptsCents += installment.remainingAmount.cents;
+      }
+    }
+
     int treasuryAfterClosing() =>
         openingBalance.cents +
+        houseLoanReceiptsCents -
+        // O que um fechamento anterior deste ciclo deixou a receber ou perdoou
+        houseShortfallAlreadySettled.cents +
         members.fold<int>(0, (acc, m) => acc + (contributionTargets[m.id]?.cents ?? 0)) -
         totalExpensesCents +
         deficitCoveredCents +
@@ -525,6 +541,7 @@ class GlobalClearingEngine {
       deficitCoveredByVault: Money(deficitCoveredCents),
       openingBalance: openingBalance,
       surplusRefunded: Money(surplusRefundedCents),
+      houseLoanReceipts: Money(houseLoanReceiptsCents),
     );
   }
 

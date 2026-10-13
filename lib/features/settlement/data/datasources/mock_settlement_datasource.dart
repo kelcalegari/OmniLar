@@ -31,6 +31,8 @@ class MockSettlementDataSource implements SettlementDataSource {
   final _deficitCovered = <FinancialCycle, int>{};
   final _surplusRolled = <FinancialCycle, int>{};
   final _surplusRefunded = <FinancialCycle, int>{};
+  final _houseShortfallSettled = <FinancialCycle, int>{};
+  final _houseLoansReceived = <FinancialCycle, int>{};
 
   /// Sobra que o fechamento do ciclo imediatamente anterior deixou no Caixa.
   Money _openingBalance(FinancialCycle cycle) {
@@ -109,6 +111,8 @@ class MockSettlementDataSource implements SettlementDataSource {
       surplusAlreadyRolled: Money(_surplusRolled[cycle] ?? 0),
       surplusAlreadyRefunded: Money(_surplusRefunded[cycle] ?? 0),
       refundSurplus: options?.surplusAction == SurplusAction.refund,
+      houseShortfallAlreadySettled: Money(_houseShortfallSettled[cycle] ?? 0),
+      houseLoansAlreadyReceived: Money(_houseLoansReceived[cycle] ?? 0),
     ).copyWith(isReopened: _reopenedTransfers.containsKey(cycle));
 
     // Consultar outro ciclo não pode apagar um fechamento já arquivado
@@ -291,6 +295,10 @@ class MockSettlementDataSource implements SettlementDataSource {
     // 2. Se houver sobra no Caixa e a opção for guardar na Caixinha, efetua o depósito
     // Quem pagou a menos ao Caixa: esse dinheiro não entrou, então não é sobra
     final surplus = availableSurplus(summary, options);
+    _houseShortfallSettled[summary.cycle] =
+        (_houseShortfallSettled[summary.cycle] ?? 0) + unpaidToHouse(summary, options).cents;
+    // As parcelas de acordos com o Lar cobradas agora entram no Caixa deste ciclo
+    _houseLoansReceived[summary.cycle] = summary.houseLoanReceipts.cents;
     if (options?.surplusAction == SurplusAction.toVault &&
         options?.targetVaultId != null &&
         surplus.cents > 0) {

@@ -547,6 +547,25 @@ class _SettlementHubContent extends StatelessWidget {
               ),
               const SizedBox(height: 6),
             ],
+            if (summary.houseLoanReceipts.cents > 0) ...[
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Text(
+                    'Acordos com o Lar recebidos:',
+                    style: TextStyle(color: Colors.grey),
+                  ),
+                  PrivacySensitiveText(
+                    summary.houseLoanReceipts.formatted,
+                    style: const TextStyle(
+                      fontWeight: FontWeight.bold,
+                      color: AppColors.creditGreen,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 6),
+            ],
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
