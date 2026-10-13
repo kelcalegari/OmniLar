@@ -128,7 +128,6 @@ extension _SettingsGroupViews on _SettingsPageState {
     FinanceState financeState,
   ) {
     final house = authState.house;
-    final houseName = house?.name ?? 'Minha Casa';
     final cycleDay = house?.cycleStartDay ?? 5;
     final hasPix = house?.pixKey != null && house!.pixKey!.isNotEmpty;
 
@@ -136,29 +135,12 @@ extension _SettingsGroupViews on _SettingsPageState {
       _panel(
         context,
         title: 'Membros da Casa e Convites',
-        actionLabel: 'Gerenciar',
-        onAction: () => _showMembersModal(context, houseName, house?.id ?? ''),
         children: [
-          if (financeState.members.isEmpty)
-            _emptyLine('Nenhum morador carregado.')
-          else
-            for (final m in financeState.members)
-              _line(
-                leading: CircleAvatar(
-                  radius: 14,
-                  backgroundColor: AppColors.primary.withValues(alpha: 0.15),
-                  child: Text(
-                    m.name.isNotEmpty ? m.name[0].toUpperCase() : '?',
-                    style: const TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.bold,
-                      color: AppColors.primary,
-                    ),
-                  ),
-                ),
-                title: m.name,
-                value: _roleLabel(m.role),
-              ),
+          _HouseMembersBlock(
+            houseId: house?.id ?? '',
+            members: financeState.members,
+            currentUserId: authState.user?.id,
+          ),
         ],
       ),
       _panel(
@@ -186,12 +168,6 @@ extension _SettingsGroupViews on _SettingsPageState {
       ),
     ];
   }
-
-  String _roleLabel(String role) => switch (role) {
-    'owner' => 'Dono',
-    'admin' => 'Administrador',
-    _ => 'Morador',
-  };
 
   // --- Divisão das despesas ---
 
@@ -636,6 +612,259 @@ extension _SettingsGroupViews on _SettingsPageState {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
       child: Text(text, style: const TextStyle(color: Colors.grey, fontSize: 13)),
+    );
+  }
+}
+
+
+String _roleLabel(String role) => switch (role) {
+  'owner' => 'Dono',
+  'admin' => 'Administrador',
+  _ => 'Morador',
+};
+
+/// Moradores da casa e geração de convite, dentro do grupo "Casa".
+/// A lista vem do estado financeiro (atualiza sozinha quando alguém entra); o
+/// e-mail de cada um é buscado à parte. O convite só é criado quando pedem.
+class _HouseMembersBlock extends StatefulWidget {
+  final String houseId;
+  final List<HouseMember> members;
+  final String? currentUserId;
+
+  const _HouseMembersBlock({
+    required this.houseId,
+    required this.members,
+    required this.currentUserId,
+  });
+
+  @override
+  State<_HouseMembersBlock> createState() => _HouseMembersBlockState();
+}
+
+class _HouseMembersBlockState extends State<_HouseMembersBlock> {
+  final _authRepo = sl<AuthRepository>();
+  Map<String, String> _emailByMember = const {};
+  String? _inviteCode;
+  String? _inviteError;
+  bool _creatingInvite = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadEmails();
+  }
+
+  @override
+  void didUpdateWidget(_HouseMembersBlock oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    final before = oldWidget.members.map((m) => m.id).join(',');
+    final now = widget.members.map((m) => m.id).join(',');
+    if (before != now || oldWidget.houseId != widget.houseId) _loadEmails();
+  }
+
+  Future<void> _loadEmails() async {
+    if (_authRepo.isDemoMode || widget.houseId.isEmpty) return;
+    try {
+      final infos = await _authRepo.getHouseMembers(widget.houseId);
+      if (!mounted) return;
+      setState(() {
+        _emailByMember = {
+          for (final info in infos)
+            if ((info.profile?.email ?? '').isNotEmpty) info.userId: info.profile!.email,
+        };
+      });
+    } catch (_) {
+      // Sem o e-mail a lista continua útil: nome, papel e Pix vêm do estado
+    }
+  }
+
+  Future<void> _createInvite() async {
+    setState(() {
+      _creatingInvite = true;
+      _inviteError = null;
+    });
+    try {
+      final code = await _authRepo.createHouseInvite(widget.houseId);
+      if (!mounted) return;
+      setState(() => _inviteCode = code);
+    } catch (_) {
+      if (!mounted) return;
+      setState(
+        () => _inviteError =
+            'Não foi possível gerar o convite. Só o dono ou um administrador pode convidar.',
+      );
+    } finally {
+      if (mounted) setState(() => _creatingInvite = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final myRole = widget.members.where((m) => m.id == widget.currentUserId).firstOrNull?.role;
+    final canInvite =
+        _authRepo.isDemoMode || myRole == null || myRole == 'owner' || myRole == 'admin';
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        if (widget.members.isEmpty)
+          const Padding(
+            padding: EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+            child: Text(
+              'Nenhum morador carregado.',
+              style: TextStyle(color: Colors.grey, fontSize: 13),
+            ),
+          )
+        else
+          for (final m in widget.members) _memberTile(m),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
+          child: _inviteCard(context, canInvite),
+        ),
+      ],
+    );
+  }
+
+  Widget _memberTile(HouseMember m) {
+    final color = m.role == 'owner' ? AppColors.primary : AppColors.accent;
+    final email = _emailByMember[m.id];
+    final hasPix = m.pixKey != null && m.pixKey!.isNotEmpty;
+    return ListTile(
+      dense: true,
+      contentPadding: const EdgeInsets.symmetric(horizontal: 16),
+      leading: CircleAvatar(
+        radius: 16,
+        backgroundColor: color,
+        child: Text(
+          m.name.isNotEmpty ? m.name[0].toUpperCase() : '?',
+          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
+        ),
+      ),
+      title: Text(m.name, style: const TextStyle(fontWeight: FontWeight.w600)),
+      subtitle: (email == null && !hasPix)
+          ? null
+          : Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                if (email != null) Text(email, style: const TextStyle(fontSize: 12)),
+                if (hasPix)
+                  Text(
+                    'Pix: ${m.pixKey}',
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontSize: 11,
+                      color: AppColors.creditGreen,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+              ],
+            ),
+      trailing: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+        decoration: BoxDecoration(
+          color: color.withValues(alpha: 0.1),
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Text(
+          _roleLabel(m.role),
+          style: TextStyle(color: color, fontSize: 12, fontWeight: FontWeight.bold),
+        ),
+      ),
+    );
+  }
+
+  Widget _inviteCard(BuildContext context, bool canInvite) {
+    final code = _inviteCode;
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: AppColors.primary.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: AppColors.primary.withValues(alpha: 0.3)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.vpn_key_rounded, color: AppColors.primary, size: 20),
+              const SizedBox(width: 10),
+              Expanded(
+                child: code == null
+                    ? const Text(
+                        'Convidar alguém para a casa',
+                        style: TextStyle(fontWeight: FontWeight.w600),
+                      )
+                    : Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text(
+                            'Código de Convite:',
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: Colors.grey,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          Text(
+                            code,
+                            style: const TextStyle(
+                              fontSize: 20,
+                              fontWeight: FontWeight.bold,
+                              letterSpacing: 2,
+                              color: AppColors.primary,
+                            ),
+                          ),
+                        ],
+                      ),
+              ),
+              if (code != null)
+                IconButton(
+                  icon: const Icon(Icons.copy_rounded, color: AppColors.primary),
+                  tooltip: 'Copiar Código',
+                  onPressed: () => copyWithFeedback(
+                    context,
+                    code,
+                    onCopied: SnackBar(
+                      content: Text('Código $code copiado para a área de transferência!'),
+                    ),
+                  ),
+                ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Text(
+            !canInvite
+                ? 'Só o dono ou um administrador da casa pode gerar convites.'
+                : (code == null
+                      ? 'Gere um código e envie para a pessoa. Cada código vale para uma pessoa só.'
+                      : 'Este código vale para uma pessoa só. Para convidar outra, gere um novo.'),
+            style: const TextStyle(color: Colors.grey, fontSize: 12),
+          ),
+          if (_inviteError != null) ...[
+            const SizedBox(height: 6),
+            Text(_inviteError!, style: const TextStyle(color: AppColors.debtRed, fontSize: 12)),
+          ],
+          if (canInvite) ...[
+            const SizedBox(height: 10),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: FilledButton.icon(
+                onPressed: _creatingInvite ? null : _createInvite,
+                style: FilledButton.styleFrom(backgroundColor: AppColors.primary),
+                icon: _creatingInvite
+                    ? const SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                      )
+                    : const Icon(Icons.add_link_rounded, size: 18),
+                label: Text(code == null ? 'Gerar código de convite' : 'Gerar outro código'),
+              ),
+            ),
+          ],
+        ],
+      ),
     );
   }
 }

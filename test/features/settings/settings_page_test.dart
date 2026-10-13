@@ -305,4 +305,29 @@ void main() {
     expect(find.text('Balde Mensal Previsto:'), findsOneWidget);
     cubit.updateFundingEstimateMode(FundingEstimateMode.historicalAverage);
   });
+
+  testWidgets('Casa mostra os moradores e só gera convite quando pedem', (tester) async {
+    final cubit = sl<FinanceCubit>();
+    await cubit.loadCycleData();
+
+    await tester.pumpWidget(buildTestableWidget());
+    await tester.pumpAndSettle();
+    await openGroup(tester, 'Casa');
+
+    // Moradores à vista, sem janela
+    for (final m in cubit.state.members) {
+      expect(find.text(m.name), findsOneWidget);
+    }
+
+    // Nenhum código existe até alguém pedir
+    expect(find.text('Código de Convite:'), findsNothing);
+    final generate = find.text('Gerar código de convite');
+    await tester.ensureVisible(generate);
+    await tester.tap(generate);
+    await tester.pumpAndSettle();
+
+    expect(find.text('Código de Convite:'), findsOneWidget);
+    expect(find.text('Gerar outro código'), findsOneWidget);
+    expect(find.byTooltip('Copiar Código'), findsOneWidget);
+  });
 }
