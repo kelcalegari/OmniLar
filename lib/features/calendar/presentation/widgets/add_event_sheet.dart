@@ -773,6 +773,15 @@ class _AddEventSheetState extends State<AddEventSheet> {
                   ),
                 ],
               ),
+              const SizedBox(height: 6),
+              Text(
+                switch (_visibility) {
+                  EventVisibility.house => 'Casa: todos os moradores veem este compromisso.',
+                  EventVisibility.restricted => 'Restrito: só você e os participantes escolhidos veem.',
+                  EventVisibility.private => 'Privado: só você vê, mesmo que haja participantes.',
+                },
+                style: const TextStyle(color: Colors.grey, fontSize: 12),
+              ),
               const SizedBox(height: 24),
 
               // Botão Criar
