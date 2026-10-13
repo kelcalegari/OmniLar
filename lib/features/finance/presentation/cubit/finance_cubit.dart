@@ -339,6 +339,28 @@ class FinanceCubit extends Cubit<FinanceState> {
     }
   }
 
+  /// Devolve a mensagem de erro para a tela mostrar, ou null se gravou.
+  Future<String?> updateCategory(ExpenseCategory category) async {
+    try {
+      await _repository.updateCategory(category);
+      await loadCycleData(cycle: state.currentCycle);
+      return null;
+    } catch (e) {
+      return '$e';
+    }
+  }
+
+  /// Devolve a mensagem de erro para a tela mostrar, ou null se excluiu.
+  Future<String?> deleteCategory(String categoryId) async {
+    try {
+      await _repository.deleteCategory(categoryId);
+      await loadCycleData(cycle: state.currentCycle);
+      return null;
+    } catch (e) {
+      return '$e';
+    }
+  }
+
   Future<void> addPaymentMethod(PaymentMethod paymentMethod) async {
     try {
       await _repository.addPaymentMethod(paymentMethod);

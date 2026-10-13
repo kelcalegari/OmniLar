@@ -45,6 +45,10 @@ class _FakeFinanceRepository implements FinanceRepository {
   @override
   Future<List<ExpenseCategory>> getCategories() async => [];
   @override
+  Future<void> updateCategory(ExpenseCategory category) async {}
+  @override
+  Future<void> deleteCategory(String categoryId) async {}
+  @override
   Future<List<PaymentMethod>> getPaymentMethods() async => [];
   @override
   Future<List<HouseMember>> getMembers() async => [];

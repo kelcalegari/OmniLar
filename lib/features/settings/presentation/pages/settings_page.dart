@@ -777,10 +777,11 @@ class SettingsPage extends StatelessWidget {
     showAdaptiveModal(
       context: context,
       maxWidth: 500,
-      child: StatefulBuilder(
-        builder: (context, setModalState) {
-          final categories = financeCubit.state.categories;
-          final members = financeCubit.state.members;
+      child: BlocBuilder<FinanceCubit, FinanceState>(
+        bloc: financeCubit,
+        builder: (context, financeState) {
+          final categories = financeState.categories;
+          final members = financeState.members;
 
           return SafeArea(
             child: Padding(
@@ -801,45 +802,26 @@ class SettingsPage extends StatelessWidget {
                       ),
                     ),
                     const SizedBox(height: 16),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    const Row(
                       children: [
-                        const Row(
-                          children: [
-                            Icon(
-                              Icons.category_outlined,
-                              color: AppColors.primary,
-                              size: 24,
-                            ),
-                            SizedBox(width: 8),
-                            Text(
-                              'Categorias da Casa',
-                              style: TextStyle(
-                                fontSize: 20,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                          ],
+                        Icon(
+                          Icons.category_outlined,
+                          color: AppColors.primary,
+                          size: 24,
                         ),
-                        IconButton(
-                          icon: const Icon(
-                            Icons.add_circle_outline_rounded,
-                            color: AppColors.primary,
+                        SizedBox(width: 8),
+                        Text(
+                          'Categorias da Casa',
+                          style: TextStyle(
+                            fontSize: 20,
+                            fontWeight: FontWeight.bold,
                           ),
-                          tooltip: 'Nova Categoria',
-                          onPressed: () {
-                            _showAddCategoryDialog(
-                              context,
-                              financeCubit,
-                              members,
-                            );
-                          },
                         ),
                       ],
                     ),
                     const SizedBox(height: 8),
                     const Text(
-                      'Categorias com dono direcionam 100% da responsabilidade para o membro escolhido.',
+                      'Categorias com dono direcionam 100% da responsabilidade para o membro escolhido. Toque em uma categoria para editar.',
                       style: TextStyle(color: Colors.grey, fontSize: 13),
                     ),
                     const SizedBox(height: 16),
@@ -888,28 +870,70 @@ class SettingsPage extends StatelessWidget {
                                     : FontWeight.normal,
                               ),
                             ),
-                            trailing: owner != null
-                                ? Container(
-                                    padding: const EdgeInsets.symmetric(
-                                      horizontal: 8,
-                                      vertical: 4,
-                                    ),
-                                    decoration: BoxDecoration(
-                                      color: AppColors.accent.withValues(
-                                        alpha: 0.1,
+                            onTap: () => _showCategoryFormDialog(
+                              context,
+                              financeCubit,
+                              members,
+                              existing: cat,
+                            ),
+                            trailing: PopupMenuButton<String>(
+                              icon: const Icon(
+                                Icons.more_vert,
+                                size: 20,
+                                color: Colors.grey,
+                              ),
+                              tooltip: 'Opções',
+                              onSelected: (action) {
+                                if (action == 'edit') {
+                                  _showCategoryFormDialog(
+                                    context,
+                                    financeCubit,
+                                    members,
+                                    existing: cat,
+                                  );
+                                } else if (action == 'delete') {
+                                  _confirmDeleteCategory(
+                                    context,
+                                    financeCubit,
+                                    cat,
+                                    categories.length,
+                                  );
+                                }
+                              },
+                              itemBuilder: (context) => const [
+                                PopupMenuItem(
+                                  value: 'edit',
+                                  child: Row(
+                                    children: [
+                                      Icon(
+                                        Icons.edit_outlined,
+                                        size: 18,
+                                        color: AppColors.primary,
                                       ),
-                                      borderRadius: BorderRadius.circular(8),
-                                    ),
-                                    child: Text(
-                                      owner.name,
-                                      style: const TextStyle(
-                                        color: AppColors.accent,
-                                        fontSize: 11,
-                                        fontWeight: FontWeight.bold,
+                                      SizedBox(width: 8),
+                                      Text('Editar'),
+                                    ],
+                                  ),
+                                ),
+                                PopupMenuItem(
+                                  value: 'delete',
+                                  child: Row(
+                                    children: [
+                                      Icon(
+                                        Icons.delete_outline_rounded,
+                                        size: 18,
+                                        color: AppColors.debtRed,
                                       ),
-                                    ),
-                                  )
-                                : null,
+                                      SizedBox(width: 8),
+                                      Text(
+                                        'Excluir',
+                                        style: TextStyle(color: AppColors.debtRed),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                            ),
                           );
                         },
                       ),
@@ -917,7 +941,7 @@ class SettingsPage extends StatelessWidget {
                     const SizedBox(height: 16),
                     FilledButton.icon(
                       onPressed: () {
-                        _showAddCategoryDialog(context, financeCubit, members);
+                        _showCategoryFormDialog(context, financeCubit, members);
                       },
                       icon: const Icon(Icons.add_rounded, size: 18),
                       label: const Text('Cadastrar Nova Categoria'),
@@ -936,22 +960,80 @@ class SettingsPage extends StatelessWidget {
     );
   }
 
-  void _showAddCategoryDialog(
+  void _confirmDeleteCategory(
     BuildContext context,
     FinanceCubit financeCubit,
-    List<dynamic> members,
+    ExpenseCategory category,
+    int totalCategories,
   ) {
-    final nameController = TextEditingController();
-    String? selectedOwnerId;
+    final messenger = ScaffoldMessenger.of(context);
+    if (totalCategories <= 1) {
+      messenger.showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Não é possível excluir a única categoria da casa. Cadastre outra antes de excluir esta.',
+          ),
+          backgroundColor: Colors.orange,
+        ),
+      );
+      return;
+    }
+
+    showDialog(
+      context: context,
+      builder: (dialogCtx) => AlertDialog(
+        title: const Text(
+          'Excluir Categoria',
+          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+        ),
+        content: Text(
+          'Excluir a categoria "${category.name}"? Só é possível excluir categoria sem lançamentos.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogCtx),
+            child: const Text('Cancelar'),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: AppColors.debtRed),
+            onPressed: () async {
+              Navigator.pop(dialogCtx);
+              final error = await financeCubit.deleteCategory(category.id);
+              messenger.showSnackBar(
+                SnackBar(
+                  backgroundColor: error == null ? null : AppColors.debtRed,
+                  content: Text(error ?? 'Categoria "${category.name}" excluída.'),
+                ),
+              );
+            },
+            child: const Text('Excluir'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showCategoryFormDialog(
+    BuildContext context,
+    FinanceCubit financeCubit,
+    List<dynamic> members, {
+    ExpenseCategory? existing,
+  }) {
+    final nameController = TextEditingController(text: existing?.name ?? '');
+    // Dono que já saiu da casa não está na lista: volta para "Compartilhado"
+    String? selectedOwnerId = members.any((m) => m.id == existing?.ownerMemberId)
+        ? existing?.ownerMemberId
+        : null;
+    final messenger = ScaffoldMessenger.of(context);
 
     showDialog(
       context: context,
       builder: (dialogCtx) => StatefulBuilder(
         builder: (context, setDialogState) {
           return AlertDialog(
-            title: const Text(
-              'Nova Categoria de Gastos',
-              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+            title: Text(
+              existing == null ? 'Nova Categoria de Gastos' : 'Editar Categoria',
+              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
             ),
             content: Column(
               mainAxisSize: MainAxisSize.min,
@@ -1015,9 +1097,29 @@ class SettingsPage extends StatelessWidget {
                 child: const Text('Cancelar'),
               ),
               FilledButton(
-                onPressed: () {
+                onPressed: () async {
                   final name = nameController.text.trim();
                   if (name.isEmpty) return;
+
+                  if (existing != null) {
+                    Navigator.pop(dialogCtx);
+                    final error = await financeCubit.updateCategory(
+                      ExpenseCategory(
+                        id: existing.id,
+                        name: name,
+                        icon: existing.icon,
+                        colorHex: existing.colorHex,
+                        ownerMemberId: selectedOwnerId,
+                      ),
+                    );
+                    messenger.showSnackBar(
+                      SnackBar(
+                        backgroundColor: error == null ? null : AppColors.debtRed,
+                        content: Text(error ?? 'Categoria "$name" atualizada.'),
+                      ),
+                    );
+                    return;
+                  }
 
                   final newCat = ExpenseCategory(
                     id: 'cat_${DateTime.now().millisecondsSinceEpoch}',
@@ -1029,7 +1131,7 @@ class SettingsPage extends StatelessWidget {
 
                   financeCubit.addCategory(newCat);
                   Navigator.pop(dialogCtx);
-                  ScaffoldMessenger.of(context).showSnackBar(
+                  messenger.showSnackBar(
                     SnackBar(
                       content: Text(
                         'Categoria "$name" cadastrada com sucesso! 🎉',

@@ -11,6 +11,11 @@ import '../../domain/entities/financial_cycle_summary.dart';
 import '../../domain/entities/savings_vault.dart';
 import '../../domain/entities/audit_entry.dart';
 
+/// Aviso único (banco e modo demo) para a categoria que não pode ser excluída.
+String categoryInUseMessage(int count) => count == 1
+    ? 'Esta categoria tem 1 lançamento. Troque a categoria dele ou edite o nome em vez de excluir.'
+    : 'Esta categoria tem $count lançamentos. Troque a categoria deles ou edite o nome em vez de excluir.';
+
 abstract class FinanceDataSource {
   Future<List<HouseMember>> getMembers();
   Future<List<ExpenseCategory>> getCategories();
@@ -37,6 +42,8 @@ abstract class FinanceDataSource {
 
   Future<void> addContribution(Contribution contribution);
   Future<void> addCategory(ExpenseCategory category);
+  Future<void> updateCategory(ExpenseCategory category);
+  Future<void> deleteCategory(String categoryId);
   Future<void> addPaymentMethod(PaymentMethod paymentMethod);
   Future<void> updatePaymentMethod(PaymentMethod paymentMethod);
   Future<void> deletePaymentMethod(String paymentMethodId);

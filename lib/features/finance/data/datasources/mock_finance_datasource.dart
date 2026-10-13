@@ -631,6 +631,24 @@ class MockFinanceDataSource implements FinanceDataSource {
     _categories.add(category);
   }
 
+  @override
+  Future<void> updateCategory(ExpenseCategory category) async {
+    final index = _categories.indexWhere((c) => c.id == category.id);
+    if (index != -1) {
+      _categories[index] = category;
+    }
+  }
+
+  @override
+  Future<void> deleteCategory(String categoryId) async {
+    final inUse = _expenses.where((e) =>
+        e.categoryId == categoryId || e.items.any((i) => i.categoryId == categoryId)).length;
+    if (inUse > 0) {
+      throw ServerFailure(categoryInUseMessage(inUse));
+    }
+    _categories.removeWhere((c) => c.id == categoryId);
+  }
+
   final List<SavingsVault> _savingsVaults = [
     SavingsVault(
       id: 'vault_reserva',

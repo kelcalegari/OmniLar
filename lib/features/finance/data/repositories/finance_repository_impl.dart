@@ -88,6 +88,14 @@ class FinanceRepositoryImpl implements FinanceRepository {
       _dataSource.addCategory(category);
 
   @override
+  Future<void> updateCategory(ExpenseCategory category) =>
+      _dataSource.updateCategory(category);
+
+  @override
+  Future<void> deleteCategory(String categoryId) =>
+      _dataSource.deleteCategory(categoryId);
+
+  @override
   Future<void> addPaymentMethod(PaymentMethod paymentMethod) =>
       _dataSource.addPaymentMethod(paymentMethod);
 

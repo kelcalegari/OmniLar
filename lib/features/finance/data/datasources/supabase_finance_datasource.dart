@@ -728,6 +728,72 @@ class SupabaseFinanceDataSource implements FinanceDataSource {
   }
 
   @override
+  Future<void> updateCategory(ExpenseCategory category) async {
+    if (!_isUuid(category.id)) return;
+    final List<dynamic> rows;
+    try {
+      rows = await client
+          .from('categories')
+          .update({
+            'name': category.name,
+            'owner_member_id': _isUuid(category.ownerMemberId) ? category.ownerMemberId : null,
+          })
+          .eq('id', category.id)
+          .eq('house_id', _houseId)
+          .select('id');
+    } catch (e) {
+      throw ServerFailure('Erro ao atualizar categoria: $e');
+    }
+    // O banco ignora em silêncio a alteração de quem não tem permissão
+    if (rows.isEmpty) {
+      throw const ServerFailure(
+        'Só o dono da casa, um administrador ou quem criou a categoria pode editá-la.',
+      );
+    }
+  }
+
+  @override
+  Future<void> deleteCategory(String categoryId) async {
+    if (!_isUuid(categoryId)) return;
+    final List<dynamic> rows;
+    try {
+      final expenses = await client
+          .from('house_expenses')
+          .select('id')
+          .eq('house_id', _houseId)
+          .eq('category_id', categoryId)
+          .isFilter('deleted_at', null);
+      final items = await client
+          .from('house_expense_items')
+          .select('expense_id')
+          .eq('category_id', categoryId);
+      final inUse = {
+        for (final r in expenses) r['id'] as String,
+        for (final r in items) r['expense_id'] as String,
+      }.length;
+      if (inUse > 0) {
+        throw ServerFailure(categoryInUseMessage(inUse));
+      }
+
+      rows = await client
+          .from('categories')
+          .delete()
+          .eq('id', categoryId)
+          .eq('house_id', _houseId)
+          .select('id');
+    } on ServerFailure {
+      rethrow;
+    } catch (e) {
+      throw ServerFailure('Erro ao excluir categoria: $e');
+    }
+    if (rows.isEmpty) {
+      throw const ServerFailure(
+        'Só o dono da casa ou um administrador pode excluir categorias.',
+      );
+    }
+  }
+
+  @override
   Future<void> addPaymentMethod(PaymentMethod paymentMethod) async {
     try {
       final payload = <String, dynamic>{
