@@ -11,6 +11,7 @@ import '../../../projects/domain/repositories/projects_repository.dart';
 import '../../domain/entities/house_expense.dart';
 import '../../domain/entities/house_expense_item.dart';
 import '../../domain/entities/split_rule.dart';
+import '../../domain/services/expense_launch_defaults.dart';
 import '../../domain/entities/category.dart';
 import '../../domain/entities/payment_method.dart';
 import '../../domain/services/credit_card_invoice_calculator.dart';
@@ -221,6 +222,13 @@ class _AddExpensePageState extends State<AddExpensePage> {
 
     // Determina a regra de rateio de forma resiliente
     final category = state.categories.where((c) => c.id == catId).firstOrNull;
+    // Sub-item em categoria com dono é do dono, salvo se outro morador foi marcado
+    String? itemResponsibleOf(_DraftExpenseItem draft) => ExpenseLaunchDefaults.itemResponsible(
+          chosenMemberId: draft.responsibleMemberId,
+          itemCategory: state.categories
+              .where((c) => c.id == (draft.categoryId ?? catId))
+              .firstOrNull,
+        );
     SplitRule rule;
     if (category != null && (category.hasOwner || _selectedSplitType == SplitType.categoryOwner)) {
       rule = SplitRule.singleResponsible(category.ownerMemberId ?? paidById);
@@ -299,9 +307,9 @@ class _AddExpensePageState extends State<AddExpensePage> {
                 title: itemTitle,
                 amount: Money(draft.cents),
                 categoryId: draft.categoryId ?? catId,
-                responsibleMemberId: draft.responsibleMemberId,
-                splitRule: draft.responsibleMemberId != null
-                    ? SplitRule.singleResponsible(draft.responsibleMemberId!)
+                responsibleMemberId: itemResponsibleOf(draft),
+                splitRule: itemResponsibleOf(draft) != null
+                    ? SplitRule.singleResponsible(itemResponsibleOf(draft))
                     : null,
               );
             }).toList()
@@ -357,9 +365,9 @@ class _AddExpensePageState extends State<AddExpensePage> {
                 title: itemTitle,
                 amount: Money(draft.cents),
                 categoryId: draft.categoryId ?? catId,
-                responsibleMemberId: draft.responsibleMemberId,
-                splitRule: draft.responsibleMemberId != null
-                    ? SplitRule.singleResponsible(draft.responsibleMemberId!)
+                responsibleMemberId: itemResponsibleOf(draft),
+                splitRule: itemResponsibleOf(draft) != null
+                    ? SplitRule.singleResponsible(itemResponsibleOf(draft))
                     : null,
               );
             }).toList()

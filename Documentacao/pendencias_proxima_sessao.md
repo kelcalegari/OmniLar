@@ -5,7 +5,7 @@ Reescrito em 13/10/2026, no fim de uma sessão longa de correções. Substitui a
 ## Estado atual
 
 - **Código:** `main` local e `origin/main` sincronizadas, diretório de trabalho limpo. Confira com `git log --oneline -5` e `git status`.
-- **Banco (Supabase `rygxmpwzofgieodvhpcy`, acessível pelo conector do Supabase):** migrations 0001 a 0050 aplicadas. No histórico de migrations do Supabase constam só as 0022 a 0027 e as 0030 a 0050; as 0001 a 0021, a 0028 e a 0029 foram aplicadas à mão pelo SQL Editor. A próxima migration é a 0051.
+- **Banco (Supabase `rygxmpwzofgieodvhpcy`, acessível pelo conector do Supabase):** migrations 0001 a 0051 aplicadas. No histórico de migrations do Supabase constam só as 0022 a 0027 e as 0030 a 0051; as 0001 a 0021, a 0028 e a 0029 foram aplicadas à mão pelo SQL Editor. A próxima migration é a 0052.
 - **Edge Functions:** `capture-read` versão 8 e `assistant` versão 5, ambas com `verify_jwt=true` e exigindo usuário logado que more na casa.
 - **Qualidade:** `flutter analyze` com 0 erros (4 warnings antigos de import não usado) e 339 testes passando. Os testes automatizados rodam só contra os datasources mock (modo demo); nenhum roda contra o Supabase.
 - **Dados no banco:** em 13/10/2026 o dono apagou todos os dados de teste (todas as tabelas de `public` e as contas de login) e recomeçou do zero; a estrutura, as funções e o histórico de migrations não mudaram. Logo depois foi criada de novo a casa "Nossa Casa", com as contas novas de kelvynn e Cristiano, sem nenhum lançamento. Nunca houve um fechamento de ciclo confirmado com sessão real.
@@ -49,6 +49,7 @@ Para não perguntar de novo:
 - **Trocar o dia de início do ciclo:** vale a partir do próximo ciclo. O ciclo em andamento termina no dia antigo, o seguinte é um ciclo de transição (de 15 a 45 dias) e depois dele vale o dia novo; os ciclos passados não mudam.
 - **Aportes fixos de quem entra depois:** o valor é ajustado à mão; não há valor automático.
 - **Rateio "Por categoria":** implementado.
+- **Categoria com dono:** sobrepõe o rateio por porcentagem e os aportes fixos (a despesa é 100% do dono, cobrada por cima do aporte). Trocar o dono vale para as despesas novas e para as que ainda não entraram em fechamento; ciclo fechado e despesa de projeto não mudam.
 - **Despesa recorrente:** as ocorrências são geradas no banco.
 - **Acordo com o Lar pago fora do fechamento:** quem paga escolhe a caixinha que recebe o valor.
 - **Reposição da Caixinha:** o pagamento volta sempre para a caixinha que cobriu.
@@ -74,6 +75,7 @@ Resumo dos mecanismos que mudaram nesta sessão, para localizar as coisas.
 - **Acordos com o Lar:** parcela cobrada no fechamento entra no Caixa; reposição de caixinha (`p2p_loans.repay_to_vault_id`) volta para a caixinha. O depósito acontece por gatilho em `payment_allocations`.
 
 ### Lançamentos
+- **Despesas de um morador só:** `exclusive_charges.dart` diz o que é cobrado por cima do aporte fixo (categoria com dono, sub-item pessoal); o motor do fechamento e o planejador usam a mesma regra. O gatilho `apply_category_owner_to_open_expenses` (migration 0051) reescreve o rateio das despesas em aberto quando o dono da categoria muda.
 - **Regra única de lançamento:** `lib/features/finance/domain/services/expense_launch_defaults.dart` (pago do bolso, categoria e rateio), usada por assistente, mercado, importação de fatura e scanner. O formulário tem lógica própria com o mesmo resultado.
 - **Gravações em uma transação:** `create_house_expense`, `create_p2p_loan`, `complete_shopping_trip`, `create_calendar_event` e `set_project_participants`. Todas rodam com as permissões de quem chama. Os dados são montados em `house_expense_payload.dart` e `p2p_loan_payload.dart`.
 - **Despesa recorrente:** RPC `generate_recurring_expenses`, chamada ao abrir o ciclo atual ou um futuro, no máximo três meses à frente (migration 0049). A série é a primeira despesa (matriz) mais as ocorrências ligadas por `recurring_series_id`; `is_active = false` na matriz encerra a série.
@@ -188,6 +190,7 @@ Uma linha por migration, para saber onde está cada regra.
 | 0048 | Data final da repetição de um evento |
 | 0049 | Contas recorrentes geradas até três meses à frente |
 | 0050 | Tempo real para despesas e moradores |
+| 0051 | Dono da categoria vale para as despesas em aberto |
 
 ## Documentos relacionados
 

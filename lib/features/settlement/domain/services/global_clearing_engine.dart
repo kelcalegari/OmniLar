@@ -10,6 +10,7 @@ import '../entities/member_net_balance.dart';
 import '../entities/settlement_options.dart';
 import '../entities/settlement_summary.dart';
 import '../entities/super_pix_transfer.dart';
+import '../../../finance/domain/services/exclusive_charges.dart';
 
 class GlobalClearingEngine {
   const GlobalClearingEngine();
@@ -93,11 +94,11 @@ class GlobalClearingEngine {
       int personalItemsCents = 0;
       for (final expense in expenses) {
         for (final item in expense.items) {
-          final isPersonalItem = item.responsibleMemberId != null ||
-              item.splitRule?.type == SplitType.categoryOwner;
-          if (!isPersonalItem) continue;
-          final SplitRule itemRule =
-              item.splitRule ?? SplitRule.singleResponsible(item.responsibleMemberId!);
+          // Inclui o sub-item sem responsável de uma despesa de categoria com dono
+          final itemRule = exclusiveItemRule(expense, item);
+          if (itemRule == null) continue;
+          final inheritedFromExpense = item.responsibleMemberId == null &&
+              item.splitRule?.type != SplitType.categoryOwner;
           final allocations = itemRule.calculateAllocations(
             totalAmount: item.amount,
             memberIds: memberIds,
@@ -114,7 +115,9 @@ class GlobalClearingEngine {
                 expenseTitle: '${expense.title} • ${item.title}',
                 totalExpenseAmount: item.amount,
                 allocatedAmount: entry.value,
-                ruleDescription: 'Item pessoal exclusivo',
+                ruleDescription: inheritedFromExpense
+                    ? 'Responsável exclusivo pela despesa'
+                    : 'Item pessoal exclusivo',
                 date: expense.date,
                 isPersonal: true,
               ),

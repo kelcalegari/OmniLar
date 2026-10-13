@@ -638,8 +638,56 @@ class MockFinanceDataSource implements FinanceDataSource {
   @override
   Future<void> updateCategory(ExpenseCategory category) async {
     final index = _categories.indexWhere((c) => c.id == category.id);
-    if (index != -1) {
-      _categories[index] = category;
+    if (index == -1) return;
+    final oldOwnerId = _categories[index].ownerMemberId;
+    _categories[index] = category;
+    if (oldOwnerId != category.ownerMemberId) {
+      _applyCategoryOwnerToOpenExpenses(category, oldOwnerId);
+    }
+  }
+
+  /// Como o gatilho do banco (migration 0051): despesas ainda não fechadas da
+  /// categoria passam a seguir o dono novo; sem dono, voltam ao rateio da casa.
+  void _applyCategoryOwnerToOpenExpenses(ExpenseCategory category, String? oldOwnerId) {
+    final newOwnerId = category.ownerMemberId;
+    for (var i = 0; i < _expenses.length; i++) {
+      var e = _expenses[i];
+      if (e.settledAt != null || e.isProjectExpense) continue;
+
+      if (e.items.any((it) => it.categoryId == category.id)) {
+        e = e.copyWith(
+          items: [
+            for (final it in e.items)
+              if (it.categoryId == category.id &&
+                  (it.responsibleMemberId == null || it.responsibleMemberId == oldOwnerId))
+                HouseExpenseItem(
+                  id: it.id,
+                  expenseId: it.expenseId,
+                  title: it.title,
+                  amount: it.amount,
+                  categoryId: it.categoryId,
+                  responsibleMemberId: newOwnerId,
+                  splitRule: newOwnerId != null ? SplitRule.singleResponsible(newOwnerId) : null,
+                )
+              else
+                it,
+          ],
+        );
+      }
+
+      if (e.categoryId == category.id) {
+        if (newOwnerId != null) {
+          e = e.copyWith(splitRule: SplitRule.singleResponsible(newOwnerId));
+        } else if (e.splitRule.type == SplitType.categoryOwner &&
+            e.splitRule.singleResponsibleMemberId == oldOwnerId) {
+          e = e.copyWith(
+            splitRule: SplitRule.percentage({
+              for (final m in _members) m.id: m.defaultSplitPercent,
+            }),
+          );
+        }
+      }
+      _expenses[i] = e;
     }
   }
 

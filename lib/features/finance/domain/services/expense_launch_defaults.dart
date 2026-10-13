@@ -43,6 +43,14 @@ class ExpenseLaunchDefaults {
     return categories.first;
   }
 
+  /// Responsável de um sub-item: quem foi marcado nele; sem marcação, o dono da
+  /// categoria do sub-item (se houver). Null = entra no rateio da despesa.
+  static String? itemResponsible({
+    required String? chosenMemberId,
+    required ExpenseCategory? itemCategory,
+  }) =>
+      chosenMemberId ?? itemCategory?.ownerMemberId;
+
   /// Rateio padrão: categoria com dono vai 100% para o dono; as demais seguem
   /// o percentual padrão dos moradores.
   static SplitRule splitRule({

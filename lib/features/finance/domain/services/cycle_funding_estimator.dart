@@ -6,6 +6,7 @@ import '../entities/cycle_funding_estimate.dart';
 import '../entities/house_expense.dart';
 import '../entities/house_member.dart';
 import '../entities/split_rule.dart';
+import 'exclusive_charges.dart';
 
 /// Motor determinístico de cálculo de aportes recomendados no início do ciclo financeiro.
 class CycleFundingEstimator {
@@ -222,10 +223,16 @@ class CycleFundingEstimator {
     final Map<String, String> ruleDescMap = {};
 
     if (hasFixedAmount) {
+      // Como no fechamento: o que é só de um morador (categoria com dono, item
+      // pessoal) é cobrado dele por cima do aporte fixo
+      final exclusive = exclusiveChargesByMember(houseExpenses, memberIds);
       for (final m in members) {
         final fixedCents = m.defaultFixedAmountCents ?? 0;
-        recommendedMap[m.id] = Money(fixedCents);
-        ruleDescMap[m.id] = 'Valor fixo definido no perfil';
+        final exclusiveCents = exclusive[m.id] ?? 0;
+        recommendedMap[m.id] = Money(fixedCents + exclusiveCents);
+        ruleDescMap[m.id] = exclusiveCents > 0
+            ? 'Valor fixo + ${Money(exclusiveCents).format()} de despesas só suas'
+            : 'Valor fixo definido no perfil';
       }
     } else {
       // Cada despesa lançada entra pelo rateio dela (como no fechamento); o que
