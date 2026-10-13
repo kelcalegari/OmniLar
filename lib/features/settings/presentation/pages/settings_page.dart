@@ -1078,12 +1078,17 @@ class SettingsPage extends StatelessWidget {
         ? 'fixed'
         : (financeCubit.state.splitModel == 'category' ? 'category' : 'percentage');
 
-    double percent1 = members.isNotEmpty
-        ? members[0].defaultSplitPercent
-        : 50.0;
-    double percent2 = members.length > 1
-        ? members[1].defaultSplitPercent
-        : (100.0 - percent1);
+    // Morador sozinho na casa fica com 100%: não há o que dividir
+    final isSingleMember = !isDemo && members.length == 1;
+
+    double percent1 = isSingleMember
+        ? 100.0
+        : (members.isNotEmpty ? members[0].defaultSplitPercent : 50.0);
+    double percent2 = isSingleMember
+        ? 0.0
+        : (members.length > 1
+              ? members[1].defaultSplitPercent
+              : (100.0 - percent1));
 
     // Com 3 ou mais moradores cada um tem o seu percentual (inteiros que somam 100)
     final isMultiMember = members.length > 2;
@@ -1185,6 +1190,8 @@ class SettingsPage extends StatelessWidget {
                             ? members
                                   .map((m) => '${percentByMember[m.id]}% ${firstName(m)}')
                                   .join(' / ')
+                            : isSingleMember
+                            ? '100% $name1'
                             : '${percent1.round()}% $name1 / ${percent2.round()}% $name2',
                       ),
                       value: 'percentage',
@@ -1257,6 +1264,14 @@ class SettingsPage extends StatelessWidget {
                           ],
                         ),
                       ),
+                    ] else if (selectedModel == 'percentage' && isSingleMember) ...[
+                      const Padding(
+                        padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        child: Text(
+                          'Você é o único morador da casa. Os percentuais poderão ser ajustados quando outra pessoa entrar.',
+                          style: TextStyle(color: Colors.grey, fontSize: 13),
+                        ),
+                      ),
                     ] else if (selectedModel == 'percentage') ...[
                       Padding(
                         padding: const EdgeInsets.symmetric(horizontal: 8),
@@ -1282,7 +1297,7 @@ class SettingsPage extends StatelessWidget {
                               ],
                             ),
                             Slider(
-                              value: percent1,
+                              value: percent1.clamp(10, 90),
                               min: 10,
                               max: 90,
                               divisions: 16,
@@ -1823,6 +1838,8 @@ class SettingsPage extends StatelessWidget {
                         if (selectedModel == 'percentage') {
                           feedback = isMultiMember
                               ? 'Rateio atualizado: ${members.map((m) => '${percentByMember[m.id]}% ${firstName(m)}').join(', ')}.'
+                              : isSingleMember
+                              ? 'Rateio atualizado: 100% $name1.'
                               : 'Rateio atualizado: ${percent1.round()}% $name1 e ${percent2.round()}% $name2.';
                         } else if (selectedModel == 'fixed') {
                           final totalBalde = fixedAmountsByMember.values
@@ -3401,7 +3418,12 @@ class SettingsPage extends StatelessWidget {
                       'Porcentagem (50/50), balde de aportes fixos ou categoria',
                     ),
                     trailing: const Icon(Icons.chevron_right_rounded),
-                    onTap: () => _showSplitModelsModal(context),
+                    onTap: () async {
+                      // Quem entrou na casa depois de o app abrir precisa aparecer aqui
+                      await context.read<FinanceCubit>().refreshMembers();
+                      if (!context.mounted) return;
+                      _showSplitModelsModal(context);
+                    },
                   ),
                   const Divider(),
                   ListTile(

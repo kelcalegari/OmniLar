@@ -66,6 +66,14 @@ class FinanceCubit extends Cubit<FinanceState> {
     return schedule.cycleFor(cycle.contains(now) ? now : cycle.startDate);
   }
 
+  /// Relê só os moradores, sem recarregar o ciclo. Em caso de erro, mantém a lista atual.
+  Future<void> refreshMembers() async {
+    try {
+      final members = await _repository.getMembers();
+      emit(state.copyWith(members: members));
+    } catch (_) {}
+  }
+
   Future<void> loadCycleData({FinancialCycle? cycle}) async {
     final targetCycle = _alignToHouse(cycle ?? state.currentCycle);
     emit(state.copyWith(status: FinanceStatus.loading, currentCycle: targetCycle));
