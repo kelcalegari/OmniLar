@@ -4,7 +4,7 @@ Atualizado em 13/10/2026. Este arquivo resume onde o trabalho parou, o que falta
 
 ## Estado atual
 
-- **Código:** `main` local e `origin/main` no commit `f1677f2`, sincronizadas. O código depende das migrations até a 0042, todas já no banco.
+- **Código:** `main` local e `origin/main` sincronizadas. O último commit de código é o `7a5b544`; depois dele pode haver commits só de documentação, como o que atualizou esta linha. O código depende das migrations até a 0042, todas já no banco.
 - **Banco (Supabase `rygxmpwzofgieodvhpcy`):** migrations 0001 a 0042 aplicadas. Só as 0022 a 0027 e as 0030 a 0042 constam no histórico de migrations do Supabase; as 0001 a 0021, a 0028 e a 0029 foram aplicadas à mão pelo SQL Editor (o conector recusou a aplicação da 0028 pelo assistente).
 - **Edge Functions:** `capture-read` versão 8 e `assistant` versão 5, ambas com `verify_jwt=true` e exigindo usuário logado que more na casa.
 - **Qualidade:** `flutter analyze` com 0 erros (4 warnings antigos) e 321 testes passando (conferido em 13/10/2026). Os testes rodam só contra os datasources mock.
