@@ -4,8 +4,8 @@ Atualizado em 12/10/2026. Este arquivo resume onde o trabalho parou, o que falta
 
 ## Estado atual
 
-- **Código:** `main` local e `origin/main` no commit `eddb034`, sincronizadas. Árvore de trabalho limpa (exceto este arquivo).
-- **Banco (Supabase `rygxmpwzofgieodvhpcy`):** migrations 0001 a 0026 aplicadas. Só as 0022 a 0026 constam no histórico de migrations do Supabase; as 0001 a 0021 foram aplicadas à mão pelo SQL Editor.
+- **Código:** `main` local e `origin/main` sincronizadas. A branch `fix/ui-fechamento-e-fila-offline` tem commits ainda não levados para a `main`. Eles dependem das migrations 0027 (já no banco) e 0028 (arquivo pronto e validado com rollback, **ainda não aplicada**: sem ela, registrar e desfazer pagamento de fatura de cartão falha).
+- **Banco (Supabase `rygxmpwzofgieodvhpcy`):** migrations 0001 a 0027 aplicadas. Só as 0022 a 0027 constam no histórico de migrations do Supabase; as 0001 a 0021 foram aplicadas à mão pelo SQL Editor.
 - **Edge Functions:** `capture-read` versão 8 e `assistant` versão 4, ambas com `verify_jwt=true` e exigindo usuário logado que more na casa.
 - **Qualidade:** `flutter analyze` com 0 erros (4 warnings antigos de import não usado) e 264 testes passando. Os testes rodam só contra os datasources mock.
 - **Dados de teste no banco:** uma casa ("Nossa Casa") com 3 moradores (kelvynn, dono; Cristiano e Joao, membros), rateio 23,33 / 43,34 / 33,33, e 3 empréstimos ativos. Existe uma segunda casa órfã, sem moradores.
@@ -32,23 +32,26 @@ Nada disto foi exercitado com usuário logado; só passou por teste automatizado
 - Evento recorrente: criar, editar e excluir nos três escopos.
 - Conta pendente atrasada sendo arrastada para o ciclo seguinte.
 - Horários: evento com hora marcada e tarefa concluída batendo com o relógio.
-- Fila offline com o aparelho realmente sem rede.
+- Fila offline com o aparelho realmente sem rede (o aviso de "Sem conexão" deve substituir o de sucesso).
+- Fechamento visto por membro comum: aviso no lugar do botão de fechar, sem botão de reabrir.
+- Caixinha: depositar, resgatar e tentar resgatar acima do saldo (agora dá erro em vez de zerar).
+- Excluir "todas" de uma despesa recorrente quando existe outra com o mesmo nome (a outra deve ficar).
 - Assistente e leitura de documento com usuário logado (nunca testados com sessão real).
 
 ## Pendente: decisões do dono do projeto
 
 - O devedor ainda pode excluir o empréstimo inteiro (política da migration 0018).
-- O botão de fechar ciclo aparece para membro comum (ele só vê o erro ao tentar).
-- As opções de sobra "rolar para o próximo ciclo" e "estornar aos membros", e a escolha de crédito do morador, são selecionáveis na tela de fechamento mas não têm efeito.
+- As opções de sobra "rolar para o próximo ciclo" e "estornar aos membros" estão desabilitadas na tela de fechamento ("Ainda não disponível") e a escolha de crédito do morador foi removida: falta decidir se serão implementadas.
 
 ## Pendente: limites conhecidos
 
 - **Reabrir ciclo:** excluir despesa já acertada não gera devolução; trocar a divisão do excedente do balde no segundo fechamento redistribui o excedente inteiro; parcelas P2P e acordos do primeiro fechamento não são desfeitos.
-- **Fatura de cartão:** o bloqueio de ciclo fechado é feito só no app, não no banco; só funciona para cartão com fechamento e vencimento cadastrados.
-- **Fila offline:** não há cache local (sem rede as listas não carregam); a tela diz "adicionada" mesmo quando a ação só foi para a fila; empréstimos, pagamento de parcela e marcar item como comprado ficam de fora.
+- **Fatura de cartão:** com a migration 0028 o bloqueio de ciclo fechado passa a ser feito no banco, pelas funções `pay_card_invoice` e `undo_card_invoice_payment`; gravar `paid_at` direto na tabela de despesas continua possível para qualquer morador; só funciona para cartão com fechamento e vencimento cadastrados.
+- **Dia de início do ciclo:** a casa está configurada com dia 9 (o correto, confirmado pelo dono), mas o painel financeiro e o fechamento usam o dia 5 fixo no código (`FinanceCubit.defaultCycleStartDay` e `settlement_hub_page.dart`).
+- **Fila offline:** não há cache local (sem rede as listas não carregam); a tela ainda mostra "adicionada com sucesso" por um instante antes do aviso de "Sem conexão", porque várias telas não esperam a gravação terminar (vale também para erro do servidor); empréstimos, pagamento de parcela e marcar item como comprado ficam de fora.
 - **Recorrência de eventos:** horizonte fixo (14 diárias, 8 semanais, 4 quinzenais, 6 mensais, 2 anuais) e a data final da repetição não é gravada.
 - **Fechamento:** o banco confia no plano calculado pelo app do admin; não recalcula o rateio.
-- **Itens médios da análise ainda abertos:** saldo de caixinha lido e regravado pelo cliente (fora do fechamento); `delete_house_expense` com `allInstances` apaga por título; categorias e formas de pagamento padrão duplicadas; `category_id` de compras nunca gravado; participantes removidos de evento não são apagados; "testar chave" de IA usa `dart:io` (não deve funcionar na web); colunas duplicadas no schema.
+- **Itens médios da análise ainda abertos:** caixinha pode ser criada pelo cliente já com saldo inicial; a sobrecarga antiga `delete_house_expense(uuid)` continua no banco; categorias e formas de pagamento padrão duplicadas; `category_id` de compras nunca gravado; participantes removidos de evento não são apagados; "testar chave" de IA usa `dart:io` (não deve funcionar na web); colunas duplicadas no schema.
 - **Documentação:** `o_que_falta_fazer.md` precisa ser reescrito.
 
 ## Como trabalhar neste projeto

@@ -1204,14 +1204,12 @@ class SupabaseFinanceDataSource implements FinanceDataSource {
     required DateTime paidAt,
   }) async {
     try {
-      await client
-          .from('house_expenses')
-          .update({'paid_at': paidAt.toUtc().toIso8601String()})
-          .eq('house_id', _houseId)
-          .eq('payment_method_id', paymentMethodId)
-          .eq('due_date', invoiceDueDate.toIso8601String().split('T')[0])
-          .isFilter('deleted_at', null)
-          .isFilter('paid_at', null);
+      // O banco confere se algum dos ciclos envolvidos já foi fechado
+      await client.rpc('pay_card_invoice', params: {
+        'p_payment_method_id': paymentMethodId,
+        'p_due_date': invoiceDueDate.toIso8601String().split('T')[0],
+        'p_paid_at': paidAt.toUtc().toIso8601String(),
+      });
     } catch (e) {
       throw ServerFailure('Erro ao registrar pagamento da fatura: $e');
     }
@@ -1248,14 +1246,10 @@ class SupabaseFinanceDataSource implements FinanceDataSource {
     required DateTime invoiceDueDate,
   }) async {
     try {
-      await client
-          .from('house_expenses')
-          .update({'paid_at': null})
-          .eq('house_id', _houseId)
-          .eq('payment_method_id', paymentMethodId)
-          .eq('due_date', invoiceDueDate.toIso8601String().split('T')[0])
-          .isFilter('deleted_at', null)
-          .not('paid_at', 'is', null);
+      await client.rpc('undo_card_invoice_payment', params: {
+        'p_payment_method_id': paymentMethodId,
+        'p_due_date': invoiceDueDate.toIso8601String().split('T')[0],
+      });
     } catch (e) {
       throw ServerFailure('Erro ao desfazer pagamento da fatura: $e');
     }
