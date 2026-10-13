@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../../../core/theme/app_colors.dart';
+import '../../../../core/utils/clipboard_helper.dart';
 import '../../../../core/widgets/omni_logo.dart';
 import '../../domain/entities/project_settlement_summary.dart';
 import '../../domain/entities/shared_project.dart';
@@ -362,8 +363,10 @@ class _ProjectsHubPageState extends State<ProjectsHubPage> {
         buffer.writeln('• ${t.fromMemberName} transfere ${t.amount.formatted} para ${t.toMemberName} (${t.description})');
       }
     }
-    Clipboard.setData(ClipboardData(text: buffer.toString()));
-    ScaffoldMessenger.of(context).showSnackBar(
+    copyWithFeedback(
+ context,
+ buffer.toString(),
+ onCopied:
       const SnackBar(
         content: Text('Resumo do rateio copiado! Pronto para compartilhar com os participantes.'),
       ),
@@ -373,8 +376,10 @@ class _ProjectsHubPageState extends State<ProjectsHubPage> {
   void _copySingleProjectTransfer(BuildContext context, SharedProject project, SuperPixTransfer t) {
     final msg =
         'Oi ${t.fromMemberName}! No fechamento do projeto "${project.title}" no Omni Lar, ficou acertado você transferir ${t.amount.formatted} para ${t.toMemberName} para quitar a sua parte (${t.description}).';
-    Clipboard.setData(ClipboardData(text: msg));
-    ScaffoldMessenger.of(context).showSnackBar(
+    copyWithFeedback(
+ context,
+ msg,
+ onCopied:
       const SnackBar(
         content: Text('Mensagem de cobrança copiada para o WhatsApp!'),
       ),

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../../../../core/domain/value_objects/money.dart';
 import '../../../../core/theme/app_colors.dart';
+import '../../../../core/utils/clipboard_helper.dart';
 import '../../../../core/widgets/privacy_toggle.dart';
 import '../../domain/entities/member_audit_trail.dart';
 import '../../domain/entities/settlement_summary.dart';
@@ -122,8 +123,10 @@ class _SettlementAuditSheetState extends State<SettlementAuditSheet> {
       buffer.writeln('');
     }
 
-    Clipboard.setData(ClipboardData(text: buffer.toString()));
-    ScaffoldMessenger.of(context).showSnackBar(
+    copyWithFeedback(
+ context,
+ buffer.toString(),
+ onCopied:
       SnackBar(
         backgroundColor: AppColors.primary,
         content: Row(

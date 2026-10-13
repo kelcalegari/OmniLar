@@ -7,6 +7,7 @@ import '../../../../core/domain/value_objects/financial_cycle.dart';
 import '../../../../core/domain/value_objects/money.dart';
 import '../../../../core/security/biometric_auth_service.dart';
 import '../../../../core/theme/app_colors.dart';
+import '../../../../core/utils/clipboard_helper.dart';
 import '../../../../core/utils/responsive.dart';
 import '../../../../core/widgets/responsive_container.dart';
 import '../../../../core/widgets/privacy_toggle.dart';
@@ -1505,10 +1506,10 @@ class _SettlementHubContent extends StatelessWidget {
                   if (transfer.pixKey != null) ...[
                     TextButton.icon(
                       onPressed: () {
-                        Clipboard.setData(
-                          ClipboardData(text: transfer.pixKey!),
-                        );
-                        ScaffoldMessenger.of(context).showSnackBar(
+                        copyWithFeedback(
+ context,
+ transfer.pixKey!,
+ onCopied:
                           SnackBar(
                             content: Text(
                               'Chave Pix copiada: ${transfer.pixKey}',
@@ -1702,8 +1703,10 @@ class _SettlementHubContent extends StatelessWidget {
       'Todas as contas da casa e empréstimos pessoais foram compensados e quitados.',
     );
 
-    Clipboard.setData(ClipboardData(text: buffer.toString()));
-    ScaffoldMessenger.of(context).showSnackBar(
+    copyWithFeedback(
+ context,
+ buffer.toString(),
+ onCopied:
       const SnackBar(
         content: Text(
           'Veredito do Super Pix copiado! Pronto para colar no WhatsApp.',
@@ -1718,8 +1721,10 @@ class _SettlementHubContent extends StatelessWidget {
         : '';
     final msg =
         'Oi ${transfer.fromMemberName}! Pelo fechamento do Omni Lar, ficou acertado você enviar ${transfer.amount.formatted} para ${transfer.toMemberName}$pixInfo para quitar o ciclo.';
-    Clipboard.setData(ClipboardData(text: msg));
-    ScaffoldMessenger.of(context).showSnackBar(
+    copyWithFeedback(
+ context,
+ msg,
+ onCopied:
       SnackBar(
         backgroundColor: AppColors.creditGreen,
         content: Row(
