@@ -2056,8 +2056,7 @@ class SettingsPage extends StatelessWidget {
                                             card: pm,
                                             repository: sl<FinanceRepository>(),
                                             financeCubit: financeCubit,
-                                            cycleStartDay:
-                                                sl<AuthRepository>().currentHouse?.cycleStartDay ?? 5,
+                                            cycleSchedule: financeCubit.cycleSchedule,
                                             isCycleClosed: (cycle) async =>
                                                 (await sl<SettlementRepository>()
                                                         .getSettlementSummary(cycle))

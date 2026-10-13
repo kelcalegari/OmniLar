@@ -147,6 +147,18 @@ Continuam abertos: fila offline para edições, empréstimos e pagamento de parc
 
 **Categorias e formas de pagamento duplicadas (conferido no banco em 13/10/2026).** A casa principal tem 6 categorias e 3 formas de pagamento em dobro, todas criadas em 11/10/2026: "Contas (Luz, Água, Net)", "Lazer e Restaurantes", "Moradia / Aluguel", "Saúde e Farmácia", "Supermercado", "Transporte", "Cartão de Crédito", "Dinheiro" e "Pix / Transferência". Há despesas apontando para elas (5 em "Contas", 5 em "Supermercado", 3 em "Cartão de Crédito", 2 em "Dinheiro", 8 em "Pix / Transferência"). Causa provável: o app cria os padrões quando a lista vem vazia (`getCategories` e `getPaymentMethods` no datasource do Supabase), e duas leituras simultâneas criaram duas vezes; casas novas já recebem os padrões pela RPC de criação. O app deixou de criar os padrões quando a lista vem vazia (13/10/2026). A migration 0041, aplicada em 13/10/2026, unificou as cópias: fica a ativa (entre iguais, a mais antiga), o que apontava para as outras é repontado e elas são apagadas. Saíram 6 categorias e 3 formas de pagamento, 3 despesas foram repontadas e nenhuma perdeu categoria ou forma de pagamento; conferido no banco que não sobrou nome repetido.
 
+## Terceira varredura (13/10/2026): agenda, empréstimos e autenticação
+
+Feita por leitura do código, nas áreas que as duas análises anteriores não tinham coberto. Corrigido na hora, falta testar no app:
+
+- **Nome do responsável sumia dos cartões de tarefa.** A sincronização em tempo real das tarefas traz só o id do responsável, e cada atualização substituía a lista carregada, apagando os nomes. Agora o nome vem do que já está carregado e, se faltar algum, a lista é recarregada com os nomes.
+- **Casa de onde o usuário já saiu continuava na lista de casas dele.** `getUserHouses` não filtrava `left_at`; a primeira da lista vira a casa ativa, então quem saiu de uma casa podia cair nela e ver telas vazias. Não existe tela de "sair da casa" hoje, então só afetaria quem fosse removido pelo banco.
+- **Pagamento de fatura de cartão** passou a usar o calendário de ciclos da casa, no lugar do dia fixo.
+
+Anotado, não corrigido: criar evento na agenda faz várias gravações separadas (evento, série, ocorrências e participantes), sem transação, como era com despesa e empréstimo antes da migration 0042. Das 5 despesas sem categoria no banco, 4 já estão excluídas (testes de "Compras de Mercado") e sobra uma ativa, "Maçãs" (R$ 10,00, de 12/10/2026).
+
+Lido sem achar problema: entrada na casa por convite, criação de convite, criação de empréstimo.
+
 ## Como trabalhar neste projeto
 
 - **Fluxo de git:** criar uma branch a partir da `main`, commitar nela e, quando o dono pedir, fazer merge fast-forward na `main` e push. Commit e push só a pedido.

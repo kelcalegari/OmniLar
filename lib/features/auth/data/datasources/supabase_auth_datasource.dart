@@ -337,7 +337,10 @@ class SupabaseAuthDataSource implements AuthDataSource {
       final rows = await _client
           .from('house_members')
           .select('house:houses(*)')
-          .eq('user_id', userId);
+          .eq('user_id', userId)
+          // Casa de onde o usuário já saiu não é mais dele
+          .isFilter('left_at', null)
+          .order('joined_at');
 
       final houses = <House>[];
       for (final r in rows) {

@@ -1,3 +1,4 @@
+import '../../../../core/domain/value_objects/cycle_schedule.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../../../../core/domain/value_objects/financial_cycle.dart';
@@ -13,7 +14,8 @@ class CardInvoicePaymentSheet extends StatefulWidget {
   final PaymentMethod card;
   final FinanceRepository repository;
   final FinanceCubit financeCubit;
-  final int cycleStartDay;
+  /// Calendário de ciclos da casa (sabe das trocas do dia de início).
+  final CycleSchedule cycleSchedule;
 
   /// Informa se o ciclo já foi fechado: mexer em fatura de ciclo fechado
   /// tiraria as compras de um acerto já feito ou as cobraria duas vezes.
@@ -24,7 +26,7 @@ class CardInvoicePaymentSheet extends StatefulWidget {
     required this.card,
     required this.repository,
     required this.financeCubit,
-    required this.cycleStartDay,
+    required this.cycleSchedule,
     required this.isCycleClosed,
   });
 
@@ -46,8 +48,7 @@ class _CardInvoicePaymentSheetState extends State<CardInvoicePaymentSheet> {
     return (open: open, paid: paid);
   }
 
-  FinancialCycle _cycleOf(DateTime date) =>
-      FinancialCycle.fromDate(date: date, cycleStartDay: widget.cycleStartDay);
+  FinancialCycle _cycleOf(DateTime date) => widget.cycleSchedule.cycleFor(date);
 
   /// Primeiro ciclo já fechado entre [dates], ou null se todos estão abertos.
   Future<FinancialCycle?> _firstClosedCycle(List<DateTime> dates) async {

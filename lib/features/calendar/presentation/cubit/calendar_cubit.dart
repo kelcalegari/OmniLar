@@ -34,9 +34,30 @@ class CalendarCubit extends Cubit<CalendarState> {
   void _listenToTasks(bool includeArchived) {
     _tasksSubscription?.cancel();
     _tasksSubscription = _repository.watchTasks(includeArchived: includeArchived).listen(
-      (tasks) {
-        if (!isClosed) {
-          emit(state.copyWith(tasks: tasks));
+      (tasks) async {
+        if (isClosed) return;
+        // A sincronização em tempo real traz só o id do responsável: o nome
+        // vem do que já está carregado; se faltar algum, recarrega com os nomes.
+        final names = {
+          for (final t in state.tasks)
+            if (t.assignedToMemberId != null && t.assignedToMemberName != null)
+              t.assignedToMemberId!: t.assignedToMemberName!,
+        };
+        final named = [
+          for (final t in tasks)
+            t.assignedToMemberName == null && names.containsKey(t.assignedToMemberId)
+                ? t.copyWith(assignedToMemberName: names[t.assignedToMemberId])
+                : t,
+        ];
+        emit(state.copyWith(tasks: named));
+
+        final missingName =
+            named.any((t) => t.assignedToMemberId != null && t.assignedToMemberName == null);
+        if (missingName) {
+          try {
+            final full = await _repository.getTasks(includeArchived: includeArchived);
+            if (!isClosed) emit(state.copyWith(tasks: full));
+          } catch (_) {}
         }
       },
       onError: (e) {
