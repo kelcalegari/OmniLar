@@ -33,7 +33,10 @@ class SettlementHubPage extends StatelessWidget {
       return financeCycle;
     } catch (_) {
       final now = DateTime.now();
-      return FinancialCycle.fromDate(date: now, cycleStartDay: 5);
+      return FinancialCycle.fromDate(
+        date: now,
+        cycleStartDay: FinanceCubit.defaultCycleStartDay,
+      );
     }
   }
 
@@ -50,6 +53,15 @@ class SettlementHubPage extends StatelessWidget {
 
 class _SettlementHubContent extends StatelessWidget {
   const _SettlementHubContent();
+
+  /// Dia de início do ciclo da casa, o mesmo usado no painel financeiro.
+  int _cycleStartDay(BuildContext context) {
+    try {
+      return context.read<FinanceCubit>().cycleStartDay;
+    } catch (_) {
+      return FinanceCubit.defaultCycleStartDay;
+    }
+  }
 
   /// Só dono ou admin fecha e reabre o ciclo (o banco recusa os demais).
   /// Sem conseguir identificar o morador (ex: modo demo), nada é escondido.
@@ -367,8 +379,9 @@ class _SettlementHubContent extends StatelessWidget {
               IconButton.filledTonal(
                 icon: const Icon(Icons.chevron_left_rounded),
                 tooltip: 'Ciclo anterior',
-                onPressed: () =>
-                    context.read<SettlementCubit>().previousCycle(5),
+                onPressed: () => context
+                    .read<SettlementCubit>()
+                    .previousCycle(_cycleStartDay(context)),
               ),
               const SizedBox(width: 8),
               Expanded(
@@ -409,7 +422,9 @@ class _SettlementHubContent extends StatelessWidget {
               IconButton.filledTonal(
                 icon: const Icon(Icons.chevron_right_rounded),
                 tooltip: 'Próximo ciclo',
-                onPressed: () => context.read<SettlementCubit>().nextCycle(5),
+                onPressed: () => context
+                    .read<SettlementCubit>()
+                    .nextCycle(_cycleStartDay(context)),
               ),
             ],
           ),

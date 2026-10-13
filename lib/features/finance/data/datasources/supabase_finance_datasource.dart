@@ -687,17 +687,11 @@ class SupabaseFinanceDataSource implements FinanceDataSource {
           'p_scope': scope.name,
         });
         if (res == true) return;
-      } catch (_) {
-        // Se a RPC não aceitar 2 parâmetros ainda (versão anterior), tenta com 1 param
-        if (scope == RecurrenceScope.thisInstanceOnly) {
-          try {
-            final resLegacy = await client.rpc('delete_house_expense', params: {
-              'p_expense_id': expenseId,
-            });
-            if (resLegacy == true) return;
-          } catch (_) {}
-        }
-      }
+      } on PostgrestException catch (e) {
+        // Recusa do próprio banco (ex: despesa já acertada em um fechamento):
+        // não tenta contornar pela gravação direta
+        if (e.code == 'P0001') throw ServerFailure(e.message);
+      } catch (_) {}
 
       // 2. Busca dados da despesa atual para guiar a exclusão direta caso a RPC falhe
       final current = await client
@@ -779,6 +773,8 @@ class SupabaseFinanceDataSource implements FinanceDataSource {
         }
         return;
       }
+    } on ServerFailure {
+      rethrow;
     } catch (e) {
       throw ServerFailure('Erro ao excluir despesa: $e');
     }

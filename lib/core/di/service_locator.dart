@@ -19,6 +19,7 @@ import '../../features/finance/data/datasources/mock_finance_datasource.dart';
 import '../../features/finance/data/datasources/supabase_finance_datasource.dart';
 import '../../features/finance/data/repositories/finance_repository_impl.dart';
 import '../../features/finance/domain/repositories/finance_repository.dart';
+import '../../features/finance/domain/services/cycle_funding_estimator.dart';
 import '../../features/finance/presentation/cubit/finance_cubit.dart';
 
 import '../../features/p2p/data/datasources/p2p_datasource.dart';
@@ -145,7 +146,11 @@ Future<void> initServiceLocator() async {
     return mock;
   });
   sl.registerLazySingleton<FinanceRepository>(() => FinanceRepositoryImpl(sl(), sl<OfflineSyncService>()));
-  sl.registerLazySingleton<FinanceCubit>(() => FinanceCubit(sl()));
+  sl.registerLazySingleton<FinanceCubit>(() => FinanceCubit(
+        sl(),
+        const CycleFundingEstimator(),
+        () => sl<AuthRepository>().currentHouse?.cycleStartDay,
+      ));
 
   // P2P Feature
   sl.registerLazySingleton<P2PDataSource>(() {

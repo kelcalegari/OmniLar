@@ -19,29 +19,52 @@ class FinanceCubit extends Cubit<FinanceState> {
   final CycleFundingEstimator _fundingEstimator;
   static const int defaultCycleStartDay = 5;
 
-  FinanceCubit(this._repository, [this._fundingEstimator = const CycleFundingEstimator()])
-      : super(
+  /// Dia de início do ciclo configurado na casa atual (null = casa ainda não carregada).
+  final int? Function()? _cycleStartDayOf;
+
+  FinanceCubit(
+    this._repository, [
+    this._fundingEstimator = const CycleFundingEstimator(),
+    this._cycleStartDayOf,
+  ]) : super(
           FinanceState(
             currentCycle: FinancialCycle.fromDate(
               date: DateTime.now(),
-              cycleStartDay: defaultCycleStartDay,
+              cycleStartDay: _cycleStartDayOf?.call() ?? defaultCycleStartDay,
             ),
           ),
         );
+
+  /// Dia em que o ciclo financeiro da casa começa.
+  int get cycleStartDay => _cycleStartDayOf?.call() ?? defaultCycleStartDay;
 
   void resetState() {
     emit(
       FinanceState(
         currentCycle: FinancialCycle.fromDate(
           date: DateTime.now(),
-          cycleStartDay: defaultCycleStartDay,
+          cycleStartDay: cycleStartDay,
         ),
       ),
     );
   }
 
+  /// O cubit pode ter nascido antes de a casa ser carregada (ou o dia de início
+  /// pode ter mudado nos Ajustes): devolve o ciclo no dia de início atual.
+  FinancialCycle _alignToHouse(FinancialCycle cycle) {
+    final startDay = cycleStartDay;
+    if (FinancialCycle.fromDate(date: cycle.startDate, cycleStartDay: startDay) == cycle) {
+      return cycle;
+    }
+    final now = DateTime.now();
+    return FinancialCycle.fromDate(
+      date: cycle.contains(now) ? now : cycle.startDate,
+      cycleStartDay: startDay,
+    );
+  }
+
   Future<void> loadCycleData({FinancialCycle? cycle}) async {
-    final targetCycle = cycle ?? state.currentCycle;
+    final targetCycle = _alignToHouse(cycle ?? state.currentCycle);
     emit(state.copyWith(status: FinanceStatus.loading, currentCycle: targetCycle));
 
     try {
@@ -56,7 +79,7 @@ class FinanceCubit extends Cubit<FinanceState> {
       // Busca histórico de despesas do ciclo anterior para cálculo de médias de variáveis (ex: Mercado)
       List<HouseExpense> historicalExpenses = [];
       try {
-        final prevCycle = targetCycle.previous(defaultCycleStartDay);
+        final prevCycle = targetCycle.previous(cycleStartDay);
         final prevExpenses = await _repository.getExpensesForCycle(prevCycle);
         historicalExpenses.addAll(prevExpenses);
       } catch (_) {}
@@ -132,12 +155,12 @@ class FinanceCubit extends Cubit<FinanceState> {
   }
 
   void nextCycle() {
-    final next = state.currentCycle.next(defaultCycleStartDay);
+    final next = state.currentCycle.next(cycleStartDay);
     loadCycleData(cycle: next);
   }
 
   void previousCycle() {
-    final prev = state.currentCycle.previous(defaultCycleStartDay);
+    final prev = state.currentCycle.previous(cycleStartDay);
     loadCycleData(cycle: prev);
   }
 
@@ -172,6 +195,7 @@ class FinanceCubit extends Cubit<FinanceState> {
     String expenseId, {
     RecurrenceScope scope = RecurrenceScope.thisInstanceOnly,
   }) async {
+    final before = state;
     try {
       // Atualização otimista: remove imediatamente da lista local e recalcula saldo do fôlego
       final deleted = state.expenses.where((e) => e.id == expenseId).firstOrNull;
@@ -221,7 +245,8 @@ class FinanceCubit extends Cubit<FinanceState> {
       await _repository.deleteExpense(expenseId, scope: scope);
       await loadCycleData(cycle: state.currentCycle);
     } catch (e) {
-      emit(state.copyWith(
+      // A exclusão não aconteceu: a despesa volta para a lista
+      emit(before.copyWith(
         status: FinanceStatus.failure,
         errorMessage: 'Erro ao excluir despesa: $e',
       ));

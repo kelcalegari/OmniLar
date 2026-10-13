@@ -12,6 +12,7 @@ import '../../../finance/domain/entities/payment_method.dart';
 import '../../../finance/domain/entities/house_member.dart';
 import '../../../finance/domain/entities/split_rule.dart';
 import '../../../finance/presentation/cubit/finance_cubit.dart';
+import '../../../finance/presentation/cubit/finance_state.dart';
 import '../../../finance/presentation/pages/add_expense_page.dart';
 import '../../../finance/presentation/widgets/audit_log_sheet.dart';
 
@@ -135,9 +136,19 @@ class _ExpenseDetailDesktopPaneState extends State<ExpenseDetailDesktopPane> {
       widget.onClose();
       await context.read<FinanceCubit>().deleteExpense(expense.id, scope: scope);
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Despesa "${expense.title}" excluída.')),
-        );
+        final state = context.read<FinanceCubit>().state;
+        if (state.status == FinanceStatus.failure && state.errorMessage != null) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              backgroundColor: AppColors.debtRed,
+              content: Text(state.errorMessage!),
+            ),
+          );
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Despesa "${expense.title}" excluída.')),
+          );
+        }
       }
     }
   }

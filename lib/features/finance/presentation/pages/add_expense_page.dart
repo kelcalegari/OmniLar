@@ -426,6 +426,15 @@ class _AddExpensePageState extends State<AddExpensePage> {
 
     await cubit.deleteExpense(exp.id, scope: scope);
     if (mounted) {
+      if (cubit.state.status == FinanceStatus.failure && cubit.state.errorMessage != null) {
+        messenger.showSnackBar(
+          SnackBar(
+            backgroundColor: AppColors.debtRed,
+            content: Text(cubit.state.errorMessage!),
+          ),
+        );
+        return;
+      }
       nav.pop();
       messenger.showSnackBar(
         SnackBar(content: Text('Despesa "${exp.title}" excluída com sucesso! 🗑️')),
