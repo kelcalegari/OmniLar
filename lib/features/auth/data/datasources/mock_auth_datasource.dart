@@ -106,6 +106,8 @@ class MockAuthDataSource implements AuthDataSource {
   House? get currentHouse => _currentHouse;
   @override
   bool get isDemoMode => true;
+  @override
+  bool get isRestoringSession => false;
 
   @override
   Future<UserProfile> signInWithEmailPassword(

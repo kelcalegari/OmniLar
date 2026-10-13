@@ -26,6 +26,7 @@ void main() {
         ),
       );
       when(() => mockAuthRepo.currentHouse).thenReturn(null);
+      when(() => mockAuthRepo.isRestoringSession).thenReturn(false);
       when(
         () => mockAuthRepo.authStateChanges,
       ).thenAnswer((_) => const Stream.empty());
