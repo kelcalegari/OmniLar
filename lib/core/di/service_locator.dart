@@ -155,7 +155,14 @@ Future<void> initServiceLocator() async {
   // P2P Feature
   sl.registerLazySingleton<P2PDataSource>(() {
     final client = SupabaseConfig.client;
-    final mock = MockP2PDataSource();
+    final mock = MockP2PDataSource()
+      ..depositToVault = (vaultId, memberId, amount, description) =>
+          sl<FinanceDataSource>().depositToVault(
+            vaultId: vaultId,
+            memberId: memberId,
+            amount: amount,
+            description: description,
+          );
     if (client != null) {
       final remote = SupabaseP2PDataSource(
         client: client,

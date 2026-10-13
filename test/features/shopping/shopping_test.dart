@@ -97,7 +97,9 @@ void main() {
       // Verifica que uma nova despesa da casa foi criada
       final updatedExpenses = await financeRepo.getExpensesForCycle(expenseCycle);
       expect(updatedExpenses.length, equals(initialExpensesCount + 1));
-      final tripExpense = updatedExpenses.first;
+      // O ciclo também traz as contas recorrentes geradas: a despesa da compra é a que não existia antes
+      final initialIds = initialExpenses.map((e) => e.id).toSet();
+      final tripExpense = updatedExpenses.firstWhere((e) => !initialIds.contains(e.id));
       expect(tripExpense.paidByMemberId, equals('member_carlos'));
 
       // Verifica que um empréstimo P2P foi gerado para a Marina pagar o Carlos

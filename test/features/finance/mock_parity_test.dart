@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:omni_lar/core/domain/value_objects/financial_cycle.dart';
 import 'package:omni_lar/core/domain/value_objects/money.dart';
 import 'package:omni_lar/core/errors/failures.dart';
 import 'package:omni_lar/features/finance/data/datasources/mock_finance_datasource.dart';
@@ -100,6 +101,47 @@ void main() {
       expect(series.length, 1);
       expect(series.single.id, 's1-nov');
       expect(series.single.amount.cents, 12000);
+    });
+  });
+
+  group('Demo gera as contas recorrentes do mês seguinte', () {
+    test('a série ganha a ocorrência do próximo ciclo, sem duplicar nem recriar a excluída', () async {
+      final dataSource = MockFinanceDataSource();
+      final now = DateTime.now();
+      final current = FinancialCycle.fromDate(date: now, cycleStartDay: 5);
+      final next = current.next(5);
+
+      final head = HouseExpense(
+        id: 'serie-teste',
+        title: 'Streaming de teste',
+        amount: const Money(4990),
+        date: current.startDate,
+        dueDate: current.startDate,
+        categoryId: 'c',
+        paymentMethodId: 'pm_caixa',
+        paidByMemberId: 'member_carlos',
+        splitRule: const SplitRule.percentage({'member_carlos': 50.0, 'member_marina': 50.0}),
+        status: ExpenseStatus.pending,
+        isRecurring: true,
+        dueDay: current.startDate.day,
+      );
+      await dataSource.addExpense(head);
+
+      List<HouseExpense> generated(List<HouseExpense> all) =>
+          all.where((e) => e.recurringSeriesId == 'serie-teste').toList();
+
+      final first = generated(await dataSource.getExpensesForCycle(next));
+      expect(first.length, 1);
+      expect(first.single.isPending, isTrue);
+      expect(first.single.amount, head.amount);
+      expect(next.contains(first.single.effectiveDueDate), isTrue);
+
+      // Abrir de novo não duplica
+      expect(generated(await dataSource.getExpensesForCycle(next)).length, 1);
+
+      // Excluir "só esta" não recria
+      await dataSource.deleteExpense(first.single.id);
+      expect(generated(await dataSource.getExpensesForCycle(next)), isEmpty);
     });
   });
 }

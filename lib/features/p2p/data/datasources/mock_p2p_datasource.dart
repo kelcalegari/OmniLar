@@ -132,12 +132,30 @@ class MockP2PDataSource implements P2PDataSource {
   }) =>
       payInstallment(installmentId, amount);
 
+  /// Depósito em Caixinha (ligado ao financeiro de demonstração): como no
+  /// banco, o pagamento de um acordo com o Lar pode ir para uma Caixinha.
+  Future<void> Function(String vaultId, String memberId, Money amount, String description)?
+      depositToVault;
+
+  Future<void> _routeHouseLoanPayment(P2PLoan loan, Money amount, String? chosenVaultId) async {
+    if (!loan.isHouseLender) return;
+    final target = loan.repayToVaultId ?? chosenVaultId;
+    if (target == null) return;
+    await depositToVault?.call(
+      target,
+      loan.borrowerMemberId,
+      amount,
+      'Pagamento de acordo com o Lar: ${loan.title}',
+    );
+  }
+
   @override
   Future<void> payInstallment(String installmentId, Money amount, {String? vaultId}) async {
     for (int i = 0; i < _loans.length; i++) {
       final loan = _loans[i];
       final instIndex = loan.installments.indexWhere((inst) => inst.id == installmentId);
       if (instIndex != -1) {
+        await _routeHouseLoanPayment(loan, amount, vaultId);
         final currentInst = loan.installments[instIndex];
         final newPaidAmount = currentInst.paidAmount + amount;
         final updatedInst = currentInst.copyWith(
@@ -257,7 +275,7 @@ class MockP2PDataSource implements P2PDataSource {
     for (final inst in loan.openInstallments) {
       if (left <= 0) break;
       final part = left < inst.remainingAmount.cents ? left : inst.remainingAmount.cents;
-      await payInstallment(inst.id, Money(part));
+      await payInstallment(inst.id, Money(part), vaultId: vaultId);
       left -= part;
     }
   }

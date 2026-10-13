@@ -57,8 +57,10 @@ DIRETRIZES E REGRAS INEGOCIÁVEIS:
      * Preencha os argumentos "paymentMethodId" (id correspondente) e "paymentMethodName" (nome legível).
      * Inclua o meio de pagamento na descrição da proposta (ex: "Maçã: R$ 10,00 • Meio de Pagamento: Nubank Carlos").
      * Gere a proposta em 'actions' com status de proposta para o Cartão de Confirmação.
-7. AÇÕES DE RISCO (RN07):
-   - Para perdão de dívidas, renegociação de empréstimo ou exclusões, marque 'isHighRisk: true'.
+7. AÇÕES FORA DO ALCANCE DO ASSISTENTE (RN07):
+   - Perdão de dívida, renegociação de empréstimo e exclusões (de despesa, empréstimo, tarefa ou item) NÃO são feitos pelo assistente.
+   - Se o usuário pedir uma dessas ações, NÃO gere ação: o array 'actions' deve vir vazio ([]). No 'textResponse', explique em que tela ele faz isso (ex: "abra o empréstimo na aba Pessoal e use Perdoar ou Renegociar").
+   - Use somente as ferramentas listadas acima; nunca invente um 'toolName'.
 8. FORMATO DE SAÍDA:
    Retorne EXCLUSIVAMENTE um objeto JSON válido no formato:
    {

@@ -308,11 +308,91 @@ class MockFinanceDataSource implements FinanceDataSource {
 
   @override
   Future<List<HouseExpense>> getExpensesForCycle(FinancialCycle cycle) async {
+    // Como no banco: ciclo atual ou futuro ganha as contas recorrentes que faltam
+    if (!cycle.endDate.isBefore(DateTime.now())) _generateRecurringExpenses(cycle.endDate);
     return _expenses.where((e) {
       final isCard = _paymentMethods.any((pm) => pm.id == e.paymentMethodId && pm.type == PaymentMethodType.card);
       return expenseBelongsToCycle(e, cycle, isCardPayment: isCard);
     }).toList()
       ..sort((a, b) => b.effectiveDueDate.compareTo(a.effectiveDueDate));
+  }
+
+  /// Último vencimento já gerado por série: uma ocorrência excluída com "só
+  /// esta" não é recriada.
+  final Map<String, DateTime> _lastGeneratedDue = {};
+
+  /// Cria a ocorrência de cada mês das séries ativas até [until], no máximo
+  /// dois meses à frente. A série é a primeira despesa (matriz) mais as
+  /// ocorrências ligadas a ela por `recurringSeriesId`.
+  void _generateRecurringExpenses(DateTime until) {
+    final now = DateTime.now();
+    final cap = DateTime(now.year, now.month + 2, now.day);
+    final limit = until.isAfter(cap) ? cap : until;
+
+    final seriesHeads = _expenses
+        .where((e) =>
+            e.isRecurring && e.isActive && e.recurringSeriesId == null && e.projectId == null)
+        .toList();
+    for (final head in seriesHeads) {
+      final occurrences =
+          _expenses.where((e) => e.id == head.id || e.recurringSeriesId == head.id).toList();
+      var lastDue = occurrences
+          .map((e) => e.effectiveDueDate)
+          .reduce((a, b) => a.isAfter(b) ? a : b);
+      final generated = _lastGeneratedDue[head.id];
+      if (generated != null && generated.isAfter(lastDue)) lastDue = generated;
+
+      final dueDay = head.dueDay ?? head.effectiveDueDate.day;
+      for (var guard = 0; guard < 12; guard++) {
+        final lastDayOfNextMonth = DateTime(lastDue.year, lastDue.month + 2, 0).day;
+        final nextDue = DateTime(
+          lastDue.year,
+          lastDue.month + 1,
+          dueDay > lastDayOfNextMonth ? lastDayOfNextMonth : dueDay,
+        );
+        if (nextDue.isAfter(limit)) break;
+
+        // Modelo: a ocorrência mais recente que ainda existe
+        final template = _expenses
+            .where((e) => e.id == head.id || e.recurringSeriesId == head.id)
+            .reduce((a, b) => a.effectiveDueDate.isAfter(b.effectiveDueDate) ? a : b);
+        final newId = 'exp_rec_${head.id}_${nextDue.year}_${nextDue.month}';
+        _expenses.add(
+          HouseExpense(
+            id: newId,
+            title: template.title,
+            amount: template.amount,
+            date: nextDue,
+            dueDate: nextDue,
+            categoryId: template.categoryId,
+            paidByMemberId: template.paidByMemberId,
+            paymentMethodId: template.paymentMethodId,
+            splitRule: template.splitRule,
+            status: ExpenseStatus.pending,
+            isRecurring: true,
+            isVariable: template.isVariable,
+            dueDay: dueDay,
+            paidOutOfPocket: template.paidOutOfPocket,
+            notes: template.notes,
+            items: [
+              for (final item in template.items)
+                HouseExpenseItem(
+                  id: '${newId}_${item.id}',
+                  expenseId: newId,
+                  title: item.title,
+                  amount: item.amount,
+                  categoryId: item.categoryId,
+                  responsibleMemberId: item.responsibleMemberId,
+                  splitRule: item.splitRule,
+                ),
+            ],
+            recurringSeriesId: head.id,
+          ),
+        );
+        _lastGeneratedDue[head.id] = nextDue;
+        lastDue = nextDue;
+      }
+    }
   }
 
   /// Todas as despesas do projeto, de qualquer ciclo (viagens e obras atravessam meses).
