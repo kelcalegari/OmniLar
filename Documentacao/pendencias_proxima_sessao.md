@@ -1,179 +1,194 @@
-# Omni Lar — pendências para a próxima sessão
+# Omni Lar — ponto de partida para a próxima sessão
 
-Atualizado em 13/10/2026. Este arquivo resume onde o trabalho parou, o que falta e como trabalhar no projeto. Ele substitui, para fins de continuidade, o `o_que_falta_fazer.md`, que está desatualizado e marca como concluído o que não está.
+Reescrito em 13/10/2026, no fim de uma sessão longa de correções. Substitui a versão anterior deste arquivo e o antigo `o_que_falta_fazer.md`, que foi apagado. Leia este arquivo inteiro antes de propor trabalho.
 
 ## Estado atual
 
-- **Código:** `main` local e `origin/main` sincronizadas. O último commit de código é o da fila offline ampliada (edição de tarefa e de item de compra, criação de empréstimo); depois dele pode haver commits só de documentação, como o que atualizou esta linha. O código depende das migrations até a 0048, todas já no banco.
-- **Banco (Supabase `rygxmpwzofgieodvhpcy`):** migrations 0001 a 0048 aplicadas. Só as 0022 a 0027 e as 0030 a 0048 constam no histórico de migrations do Supabase; as 0001 a 0021, a 0028 e a 0029 foram aplicadas à mão pelo SQL Editor (o conector recusou a aplicação da 0028 pelo assistente).
+- **Código:** `main` local e `origin/main` sincronizadas, diretório de trabalho limpo. Confira com `git log --oneline -5` e `git status`.
+- **Banco (Supabase `rygxmpwzofgieodvhpcy`, acessível pelo conector do Supabase):** migrations 0001 a 0048 aplicadas. No histórico de migrations do Supabase constam só as 0022 a 0027 e as 0030 a 0048; as 0001 a 0021, a 0028 e a 0029 foram aplicadas à mão pelo SQL Editor. A próxima migration é a 0049.
 - **Edge Functions:** `capture-read` versão 8 e `assistant` versão 5, ambas com `verify_jwt=true` e exigindo usuário logado que more na casa.
-- **Qualidade:** `flutter analyze` com 0 erros (4 warnings antigos) e 339 testes passando (conferido em 13/10/2026). Os testes rodam só contra os datasources mock.
-- **Dados de teste no banco:** uma casa ("Nossa Casa") com 3 moradores (kelvynn, dono; Cristiano e Joao, membros), rateio 23,33 / 43,34 / 33,33, e 3 empréstimos ativos. Existe uma segunda casa no banco. Desde a migration 0033 toda casa tem ao menos uma caixinha: as novas nascem com a "Reserva da Casa" e a que não tinha nenhuma recebeu uma.
+- **Qualidade:** `flutter analyze` com 0 erros (4 warnings antigos de import não usado) e 339 testes passando. Os testes automatizados rodam só contra os datasources mock (modo demo); nenhum roda contra o Supabase.
+- **Dados no banco:** uma casa ("Nossa Casa") com 3 moradores (kelvynn, dono; Cristiano e Joao, membros), no modelo de aportes fixos (R$ 700, R$ 1.300 e R$ 1.000), dia de início do ciclo 9, e 3 empréstimos ativos. Existe uma segunda casa de teste. O único fechamento gravado está em rascunho (ciclo de 09/10/2026): nunca houve um fechamento de ciclo confirmado com sessão real.
 
-## O que foi feito nesta sessão
+## O ponto mais importante
 
-1. **Projetos compartilhados só funcionavam no modo demo (corrigido em 13/10/2026, falta testar no app).** A tela e o seletor de projeto do formulário de despesa passaram a usar a casa e o usuário da sessão no lugar de `'house_demo'` e `'user_1'`. Projeto novo nasce com todos os moradores como participantes, cada um com o seu percentual padrão. Não há tela para editar participantes depois.
-2. **Rateio e fechamento (0023):** percentuais normalizados; fechamento do ciclo atômico pela RPC `confirm_cycle_settlement`; só admin fecha ou reabre.
-3. **Correções de dados:** IDs não-uuid, rateio gravado ao criar despesa, Pix inventado removido, fuso horário (0024).
-4. **Editar uma compra no cartão a empurrava para a fatura seguinte (corrigido em 13/10/2026, falta testar no app).** O formulário agora abre uma compra no cartão na data da compra, não no vencimento da fatura. Em recorrentes, editar uma ocorrência mantém o vencimento no mês dela. Compras já gravadas com a data errada por edições anteriores não foram corrigidas. Salvar a edição também regravava o rateio pelo padrão atual da casa (uma despesa lançada em 50/50 virava 60/40 se o padrão tivesse mudado); agora o rateio do lançamento é mantido e só é refeito quando a categoria muda. O formulário não tem campo para rateio personalizado por despesa.
-5. **Regra de ciclo único e data da baixa (0025):** cada despesa conta em um ciclo só; `paid_at` define o ciclo de uma conta que estava pendente.
-6. **Modelo de rateio "Por categoria" (corrigido em 13/10/2026, falta testar no app).** Decisão do dono: implementar. O modelo gravado em `houses.default_split_model` passou a ser lido e a tela reabre em "Por Categoria de Gasto", mostrando as categorias com dono (100% para o dono) e a divisão igual das demais. A regra em si já era aplicada pelo formulário de despesa; os outros caminhos de lançamento continuam ignorando o dono da categoria (item 5). No modelo de aportes fixos a categoria com dono não tem efeito.
-7. **Aportes fixos: quem entra depois não paga nada (corrigido em 13/10/2026, falta testar no app).** Decisão do dono: o valor é ajustado à mão. O novo morador continua nascendo com valor fixo 0, mas a tela de Modelos de Rateio passou a mostrar esse 0 (antes exibia R$ 1.000 que não valiam) com o aviso "Sem aporte definido", aceita gravar 0 de propósito e o fechamento avisa quem está sem aporte antes de fechar o ciclo. Só dono ou admin consegue gravar (regra do banco); para os demais a tela não avisa que não salvou.
-8. **O planejador de aportes da Home não batia com o fechamento (corrigido em 13/10/2026, falta testar no app).** A conta passou a ser a do ciclo inteiro: tudo o que o ciclo custa (pago e a vencer), menos a sobra do ciclo anterior, e só então o que cada um já aportou é abatido da cota dele. Antes as contas pendentes entravam duas vezes e os aportes eram abatidos duas vezes. Cada despesa lançada entra pelo rateio dela, conta paga do próprio bolso abate a cota de quem pagou, e compra já lançada em categoria variável conta dentro da estimativa. Trocar o modo (econômico/confortável) mantém o histórico do ciclo anterior. No modelo de aportes fixos a cota continua sendo o valor fixo.
+**Nada do que foi feito nesta sessão foi exercitado no app com sessão real.** Tudo passou por teste automatizado no modo demo e por testes de banco com rollback. O dono testa no app; quem continuar o trabalho deve tratar qualquer relato de erro dele como prioridade.
 
-## Pendente: testes manuais no app
+O que testar primeiro, depois de reiniciar por completo as instâncias abertas do app:
 
-Nada disto foi exercitado com usuário logado; só passou por teste automatizado (mock) e por testes de banco com rollback.
+1. **Fechamento de ciclo de ponta a ponta**, com pagamento parcial e cobertura por caixinha. A função `confirm_cycle_settlement` foi recriada nas migrations 0037 e 0044 e só teve a sintaxe validada.
+2. **Lançar despesa, criar empréstimo e fechar compra do mercado.** Os três passaram a ser uma chamada só ao banco (migration 0042). Repetir o lançamento de despesa com um morador comum.
+3. **Criar evento na agenda**, com e sem repetição (migrations 0045 e 0048).
+4. **Reabrir a tela do ciclo fechado** e conferir saldos, transferências e memória de cálculo (migration 0035).
+5. **Despesa recorrente:** cadastrar e avançar para o ciclo seguinte (migrations 0036 e 0038).
 
-- Fechar um ciclo como dono, tentar fechar como membro comum, reabrir, lançar uma despesa esquecida e fechar de novo (o Super Pix deve mostrar só a diferença).
-- Fechar um ciclo com conta pendente e com gasto acima do balde (modelo de aportes fixos).
-- Criar despesa com rateio personalizado (ex.: 70/30) e de responsável único; reabrir e conferir.
-- Registrar e desfazer o pagamento de uma fatura de cartão; tentar com o ciclo fechado.
-- Evento recorrente: criar, editar e excluir nos três escopos.
-- Conta pendente atrasada sendo arrastada para o ciclo seguinte.
-- Horários: evento com hora marcada e tarefa concluída batendo com o relógio.
-- Fila offline com o aparelho realmente sem rede (o aviso de "Sem conexão" deve substituir o de sucesso).
-- Com o fechamento aberto no aparelho do admin, lançar uma despesa por outro aparelho e confirmar: deve pedir para revisar; confirmar de novo deve fechar.
-- Com um ciclo fechado, tentar lançar despesa paga e aporte com data dentro dele (deve recusar) e uma conta pendente atrasada (deve aceitar).
-- Fechamento visto por membro comum: aviso no lugar do botão de fechar, sem botão de reabrir.
-- Caixinha: depositar, resgatar e tentar resgatar acima do saldo (agora dá erro em vez de zerar).
-- Excluir "todas" de uma despesa recorrente quando existe outra com o mesmo nome (a outra deve ficar).
-- Assistente e leitura de documento com usuário logado (nunca testados com sessão real).
-
-## Pendente: decisões do dono do projeto
-
-- O devedor ainda pode excluir o empréstimo inteiro (política da migration 0018).
-- As opções de sobra "deixar no Caixa para o próximo mês" (fica como folga: cobre o excedente do balde antes da Caixinha e do rateio) e "devolver aos membros" (abate do aporte, proporcional ao aporte) foram implementadas e dependem da migration 0031. A escolha de crédito do morador continua removida: quem aporta acima do devido não recebe a diferença de volta e esse valor fica no Caixa sem entrar na sobra do fechamento.
-
-## Pendente: limites conhecidos
-
-- **Reabrir ciclo:** com a migration 0029, excluir despesa já acertada passa a ser recusado (a correção é um lançamento de ajuste), mas alterar o valor de uma despesa já acertada continua possível e não gera acerto; trocar a divisão do excedente do balde no segundo fechamento redistribui o excedente inteiro; parcelas P2P e acordos do primeiro fechamento não são desfeitos.
-- **Fatura de cartão:** com a migration 0028 o bloqueio de ciclo fechado passa a ser feito no banco, pelas funções `pay_card_invoice` e `undo_card_invoice_payment`; gravar `paid_at` direto na tabela de despesas continua possível para qualquer morador; só funciona para cartão com fechamento e vencimento cadastrados.
-- **Dia de início do ciclo:** o painel financeiro e o fechamento passaram a usar o dia configurado na casa (9), no lugar do 5 fixo. Falta conferir no app. O assistente passou a usar o dia da casa quando não recebe o ciclo atual (13/10/2026).
-- **Fila offline:** não há cache local (sem rede as listas não carregam); a tela ainda mostra "adicionada com sucesso" por um instante antes do aviso de "Sem conexão", porque várias telas não esperam a gravação terminar (vale também para erro do servidor); pagamento de parcela (de propósito), marcar item como comprado, concluir tarefa e exclusões ficam de fora.
-- **Recorrência de eventos:** horizonte fixo (14 diárias, 8 semanais, 4 quinzenais, 6 mensais, 2 anuais) e a data final da repetição não é gravada.
-- **Fechamento:** o cálculo é feito no app de quem fecha e o banco só confere o plano. Levar o cálculo para o banco é um trabalho à parte, adiado para o final por decisão do dono: está descrito em `fechamento_no_banco.md` e não entra mais nas listas de pendências e de inconsistências deste arquivo.
-- **Itens médios da análise ainda abertos:** categorias e formas de pagamento padrão duplicadas; `category_id` de compras nunca gravado; participantes removidos de evento não são apagados; "testar chave" de IA usa `dart:io` (não deve funcionar na web); colunas duplicadas no schema.
-- **Documentação:** `o_que_falta_fazer.md` precisa ser reescrito.
-
-## Pendente: inconsistências de funcionalidades já implementadas
-
-Análise feita em 12/10/2026 por leitura do código e das migrations, e reavaliada em 13/10/2026 contra o código da `main` (commit `e4ff129`), de novo só por leitura: nenhum item foi reproduzido no app. Resultado da reavaliação: o item 3 foi corrigido (com pontas em aberto), o item 5 foi corrigido em parte (scanner) e os outros 13 continuavam como descritos; os itens 6, 7 e 11 foram corrigidos em seguida, no mesmo dia. Não repete o que já está em "limites conhecidos".
-
-### Graves: o recurso existe na tela mas não funciona com sessão real
-
-1. **Projetos compartilhados só funcionam no modo demo.** A casa está fixa como `'house_demo'` e o usuário como `'user_1'` ao carregar e ao criar projeto (`projects_cubit.dart:19`, `projects_hub_page.dart:453`). No Supabase isso vira erro de uuid inválido. O seletor de projeto do formulário de despesa tem o mesmo problema e fica vazio em silêncio (`add_expense_page.dart:113`).
-2. **Despesa recorrente era só uma marcação (corrigido em 13/10/2026, migration 0036; falta testar no app).** O banco passa a criar a ocorrência de cada mês (RPC `generate_recurring_expenses`, chamada ao abrir o ciclo atual ou um futuro, no máximo dois meses à frente), como conta pendente, copiando valor, categoria, forma de pagamento, rateio e sub-itens da ocorrência mais recente. A série é a primeira despesa (matriz) mais as ocorrências ligadas por `recurring_series_id`; excluir "só esta" não recria a ocorrência, e "esta e as próximas" ou "todas" encerram a série. Conta variável nasce com o valor do mês anterior, para ser ajustada. A tela "Recorrentes" dos Ajustes lista as séries ativas da casa (uma linha por série, com a ocorrência mais recente), não só as do ciclo carregado. Em aberto: uma série cuja primeira despesa foi excluída com "só esta" continua gerando contas, mas some dessa lista.
-3. **Pagamento parcial no fechamento (corrigido em 13/10/2026, migration 0032).** "Financiar via P2P" e "Manter como pendência" criam o acordo também quando o credor é o Caixa da Casa (a pendência vence no início do ciclo seguinte), o que deixou de entrar no Caixa sai da sobra, e o fechamento grava quanto ficou a receber, quanto foi perdoado e quanto entrou de acordos com o Lar, de modo que reabrir o ciclo não recria sobra. As quatro pontas que ficaram em aberto foram decididas pelo dono em 13/10/2026: (a) acordo com o Lar pago fora do fechamento: quem paga escolhe a Caixinha que recebe o valor (RPC `pay_house_loan_to_vault`; a tela sugere a "Reserva da Casa"), em vez de o dinheiro não entrar na sobra de nenhum ciclo; (b) "Reposição da Caixinha": o acordo guarda a Caixinha que cobriu (`p2p_loans.repay_to_vault_id`) e cada pagamento volta para ela, no fechamento ou fora dele, sem contar como sobra do Caixa; (c) "Devolver a sobra aos membros" com pagamento parcial ao Caixa continua recusado, com a mensagem que já explica o motivo; (d) Super Pix não marcado como parcial continua sendo tratado como pago. As pontas (a) e (b) usam a migration 0037 e faltam ser testadas no app. Em aberto: acordos de reposição criados antes da 0037 não têm Caixinha de origem (ao pagar fora do fechamento a tela pergunta a Caixinha; no fechamento contam como entrada do Caixa); acordo com o Lar pago por uma instância antiga do app, sem escolher Caixinha, continua fora da sobra.
-4. **Editar uma compra no cartão a empurra para a fatura seguinte.** O formulário abre com a data igual ao vencimento da fatura e, ao salvar, usa essa data como data da compra e recalcula o vencimento (`add_expense_page.dart:87` e `:247`). Em recorrentes, editar uma ocorrência antiga traz o vencimento para o mês atual (`add_expense_page.dart:241`).
-
-### A mesma regra implementada de formas diferentes
-
-5. **"Pago do próprio bolso", categoria e forma de pagamento dependiam de onde a despesa foi lançada (corrigido em 13/10/2026, falta testar no app).** Assistente, compra do mercado e importação de fatura passaram a usar a mesma regra (`expense_launch_defaults.dart`): pago do bolso só quando a forma de pagamento tem dono, categoria real da casa (por nome) e categoria com dono indo 100% para o dono. A importação de fatura usa o cartão cujo nome bate com o da fatura. O formulário e o scanner mantêm a lógica própria, com o mesmo resultado. A tabela abaixo descreve como era antes.
-
-   | Caminho | Pago do bolso | Categoria gravada no Supabase |
-   |---|---|---|
-   | Formulário | conforme o dono da forma de pagamento | a escolhida |
-   | Assistente | sempre sim | nenhuma |
-   | Fechar compra do mercado | sempre sim | nenhuma |
-   | Scanner | conforme o dono da forma de pagamento (corrigido em 13/10/2026) | por nome ("mercado"/"conta") |
-   | Importar fatura | sempre não | nenhuma |
-
-   Os caminhos "nenhuma" usam ids de demonstração (`cat_mercado`, `cat_contas`, `cat_groceries`), que o Supabase descarta; o assistente ainda recebe `categoryHint` da Edge Function e lê `categoryId` no app. O scanner passou a pedir a forma de pagamento na revisão e a usar o dono dela como pagador; a importação de fatura continua usando a primeira forma de pagamento da lista, não a real. Só o formulário respeita o dono da categoria.
-6. **Modelo de rateio "Por categoria" não existe de fato.** O valor é gravado em `houses.default_split_model` e nunca lido. Ao reabrir a tela ele aparece como "Porcentagem", porque o modelo ativo é deduzido dos valores fixos (`settings_page.dart:1069`).
-7. **Aportes fixos: quem entra depois não paga nada.** O novo morador nasce com valor fixo 0 e só entra na lista de metas quem tem valor maior que zero (`supabase_settlement_datasource.dart:161`, usada em `global_clearing_engine.dart:75`). No modelo percentual o mesmo morador recebe 1/n automaticamente.
-8. **O planejador de aportes da Home não bate com o fechamento.** Soma as contas pendentes e depois abate o fôlego, que já as descontou; abate os aportes de novo por morador; ignora o rateio por despesa. Trocar o modo (econômico/confortável) muda o histórico do ciclo anterior para o atual (`finance_cubit.dart:125`).
-9. **Relatórios: totais que não fechavam (corrigido em 13/10/2026, falta testar no app).** O gráfico por categoria divide pelo total do próprio gráfico (pagas e pendentes) e soma 100%. O CSV traz "Total Pago", "Total Pendente" e "Total Lançado", calculados das linhas listadas.
-10. **Ciclo fechado aparecia empobrecido em produção (corrigido em 13/10/2026, migration 0035; falta testar no app).** Logo depois de fechar o ciclo, o app grava um retrato do fechamento (`settlements.summary_snapshot`, pela RPC `save_settlement_snapshot`, só admin): saldos por morador, todas as transferências (inclusive as com o Caixa, com o valor efetivamente pago) e a memória de cálculo. A tela do ciclo fechado passa a ser montada a partir dele. Ciclos fechados antes disso continuam resumidos, mas com os nomes dos moradores no lugar de "Membro". Se a gravação do retrato falhar, o ciclo fica fechado e aparece resumido. Reabrir e fechar de novo regrava o retrato.
-11. **Dia de início do ciclo entre 29 e 31 (corrigido em 13/10/2026, migration 0034; falta testar no app).** Decisão do dono: em mês que não tem o dia, o ciclo começa no último dia do mês. `FinancialCycle.fromDate` foi corrigido (dia 31, data 30/04: ciclo de 30/04 a 30/05) e a migration 0034 faz o banco usar o mesmo fim de ciclo na trava de ciclo fechado. Os acordos gerados no fechamento passam a vencer no dia 10 seguinte ao fim do ciclo, nunca dentro dele. Não cobre: trocar o dia de início da casa depois de já ter ciclos fechados.
-
-### Menores
-
-12. **Mock e Supabase divergiam (corrigido em parte em 13/10/2026).** Igualados: resgate acima do saldo da caixinha é recusado no demo; empréstimo criado sem parcelas ganha as parcelas no demo; "esta e as próximas" vale a partir do vencimento nos dois; atualizar uma série no Supabase regrava as regras de rateio das outras ocorrências. O demo também passou a gerar as contas recorrentes do mês seguinte e a depositar em Caixinha o pagamento de acordo com o Lar. Continua: os testes rodam só no mock.
-13. **"Atrasado" tinha duas definições (corrigido em 13/10/2026).** Parcela P2P passa a ficar atrasada só no dia seguinte ao vencimento, como as contas da casa.
-14. **Código morto e fluxos incompletos (corrigido em parte em 13/10/2026).** `ShoppingListPage` foi removida. Tarefas e itens de compra ganharam edição (menu "Editar" na tarefa e botão de lápis no item; tarefa: título, descrição, prazo, responsável, prioridade e custo; item: nome, quantidade e se é pessoal), ainda sem teste no app. O prompt do assistente deixou de citar perdão, renegociação e exclusão como ações (o app nunca as executou): agora manda explicar em que tela fazer; publicado na versão 5 da Edge Function `assistant`, sem teste com sessão real. Continua: a edição não passa pela fila offline; o selo de "exceção da série" na agenda nunca aparece em produção.
-15. **Fechar compra no mercado não ligava a viagem à despesa (corrigido em 13/10/2026, falta testar no app).** A despesa nasce com id real e `shopping_trips.expense_id` passa a ser gravado. Continua: despesa, empréstimo, viagem e limpeza da lista são quatro gravações separadas, sem transação.
-
-**Ordem sugerida (reavaliada em 13/10/2026).** Critério: primeiro o que grava dinheiro errado sem avisar, depois o que quebra à vista, deixando por último o que exige decisão do dono ou muito esforço.
-
-1. **Corrigidos em 13/10/2026 (falta teste no app):** 4, 5, 1 e 9.
-2. **Decididos e corrigidos em 13/10/2026:** 11, 7 e 6 (falta teste no app).
-3. **Maiores:** 10 (corrigido em 13/10/2026), pontas do item 3 (decididas e corrigidas em 13/10/2026), 8 (corrigido em 13/10/2026), 2 (corrigido em 13/10/2026, gerando no banco).
-4. **Limpeza:** 15 e 13 corrigidos, 12 e 14 em parte (13/10/2026).
-
-## Pendente: segunda análise de inconsistências (13/10/2026)
-
-Feita depois de corrigir a lista acima, de novo só por leitura do código e das migrations: nenhum item foi reproduzido no app. A numeração continua com o prefixo N para não confundir com a lista anterior.
-
-### Dinheiro calculado ou atribuído errado
-
-- **N1. Conta recorrente gerada ignorava a mudança do dia de vencimento (corrigido em 13/10/2026, migration 0038).** O gerador passou a ler o dia de vencimento da ocorrência mais recente, como já fazia com valor, título e rateio. O modo demo segue a mesma regra.
-- **N2. Fechar compra do mercado sugeria o pagador errado (corrigido em 13/10/2026, falta testar no app).** O diálogo abre com "quem pagou" em quem está logado e com a forma de pagamento dele. Ganhou o campo "De quem são os itens pessoais", que também abre em quem está logado e lista todos os moradores (decisão do dono): se o dono dos itens for o próprio pagador, o valor só sai da despesa da casa; se for outro morador, vira empréstimo dele para quem pagou. Antes os itens pessoais iam sempre para o segundo morador da lista, sem pergunta. Continua: sem nenhuma forma de pagamento cadastrada o lançamento vai sem forma de pagamento.
-- **N3. O scanner ignorava o dono da categoria no rateio (corrigido em 13/10/2026, falta testar no app).** Passou a usar a mesma regra dos outros lançamentos (`expense_launch_defaults.dart`).
-
-### A tela promete uma coisa e o banco faz outra
-
-- **N4. Caixinha: a tela deixava escolher quem depositou ou resgatou, mas o banco gravava quem está logado (corrigido em 13/10/2026).** Decisão do dono: gravar sempre quem está logado, para saber quem fez o quê. Com sessão real os diálogos de depósito e de resgate não perguntam mais o morador (a escolha continua só no modo demo). A caixinha ganhou o botão "Histórico de entradas e saídas", que mostra quem guardou ou resgatou, quanto, quando e a descrição (as 200 movimentações mais recentes); antes o extrato era gravado mas não aparecia em tela nenhuma. Chegou a ser escrita uma migration para depositar em nome de outro morador; foi descartada antes de ser aplicada.
-- **N5. Item de compra "Pessoal (só meu)" é visto por todos (corrigido em 13/10/2026).** Decisão do dono: manter visível e corrigir o texto, que passou a dizer "Todos veem na lista; o valor é separado ao fechar a compra".
-
-### Menores
-
-- **N6. Editar despesa não conseguia tirá-la de um projeto (corrigido em 13/10/2026, falta testar no app).** Desmarcar o projeto no formulário agora grava a despesa sem projeto.
-- **N7. "Por categoria" com 3 moradores gravava 33,33% para cada (corrigido em 13/10/2026).** Passou a gravar partes inteiras que somam 100 (34/33/33), como o botão "Dividir igualmente".
-- **N8. "Reverter para pendente" deixava a data de baixa no modo demo (corrigido em 13/10/2026).** O demo passou a limpar a data, como o banco.
-
-Os oito itens foram corrigidos em 13/10/2026; falta o teste no app.
-
-## Limites fechados em 13/10/2026 (terceira leva)
-
-Itens que estavam em "limites conhecidos" ou anotados como abertos nas correções. Todos faltam ser testados no app.
-
-- **Aportes fixos e categoria com dono.** A despesa inteira de um responsável único (categoria com dono) deixou de consumir o balde: é cobrada do responsável por cima do aporte fixo, como já acontecia com os sub-itens pessoais.
-- **Caixinha com saldo inicial (migration 0039).** O app cria a caixinha zerada e registra o saldo inicial como depósito, com lançamento no histórico; o banco deixa de aceitar saldo na criação.
-- **Rateio salvo por quem não é dono nem admin.** A tela de Modelos de Rateio mostra o aviso e desabilita o botão, em vez de salvar sem efeito.
-- **Assistente e o dia de início do ciclo.** Usa o dia configurado na casa.
-- **Sobrecarga antiga `delete_house_expense(uuid)`.** Conferido no banco: já não existe; só a versão com escopo.
-
-- **Ciclo reaberto: despesa já acertada (migration 0040).** Valor, pagador e "pago do próprio bolso" de uma despesa que já entrou em um fechamento não mudam mais; a correção é um lançamento de ajuste, como já era na exclusão. Título, categoria, observações e datas continuam editáveis. Editar uma série recorrente deixa de tocar nas ocorrências já acertadas.
-- **Lista de Recorrentes.** Uma série cuja primeira despesa foi excluída com "só esta" volta a aparecer na lista enquanto estiver ativa.
-- **"Testar chave" de IA na web.** Passou a usar `package:http` (adicionado ao `pubspec.yaml`) no lugar de `dart:io`.
-
-- **Gravações em uma transação (migration 0042).** Lançar despesa (despesa, sub-itens e rateio), criar empréstimo (empréstimo e parcelas) e fechar compra do mercado (despesa, empréstimo, viagem e limpeza da lista) passaram a ser uma chamada cada (`create_house_expense`, `create_p2p_loan`, `complete_shopping_trip`): ou grava tudo, ou nada. As funções rodam com as permissões de quem chama, então as regras de acesso das tabelas não mudam. A compra no cartão feita pelo fechamento da compra agora também recebe o vencimento da fatura.
-
-- **Quem pode excluir um empréstimo (migration 0043).** Decisão do dono: só quem emprestou ou um administrador da casa exclui (no acordo com o Caixa, só o administrador), e só enquanto nada foi pago; depois disso o caminho é perdoar o restante. O devedor não apaga mais a própria dívida. A tela esconde o botão de quem não pode, e a recusa do banco, que antes passava como "excluído com sucesso", agora vira mensagem de erro.
-- **Trocar o dia de início do ciclo (migration 0044).** O diálogo "Dia de Início do Ciclo" dos Ajustes mostrava "atualizado" sem gravar nada, e não havia outro jeito de trocar o dia pelo app. Decisão do dono: a troca vale a partir do próximo ciclo. O ciclo em andamento termina no dia antigo, o seguinte é um ciclo de transição (de 15 a 45 dias) e depois dele os ciclos seguem o dia novo; os que já passaram não mudam. A casa guarda cada troca (`houses.cycle_day_schedule`), o app monta o calendário de ciclos com ela (`cycle_schedule.dart`), a troca passa pela RPC `change_house_cycle_start_day` (só dono ou admin) e gravar o dia direto na tabela é recusado. O fechamento guarda o fim do ciclo (`settlements.cycle_end_date`), usado pela trava de ciclo fechado. Fora do calendário novo: a tela de registrar pagamento de fatura de cartão ainda calcula o ciclo só pelo dia atual (o banco é quem recusa de fato), e os testes de tela não cobrem o diálogo.
-
-- **Projetos compartilhados: divisão pelos participantes e edição deles (migration 0047).** O acerto de um projeto usava o rateio da casa gravado em cada despesa: convidado de fora ficava com 0% e tirar um morador jogava a parte dele para o último da lista. Decisão do dono: a despesa de projeto é dividida entre os participantes do projeto, pelo percentual de cada um (normalizado, então tirar alguém redistribui); se algum não tiver percentual, divide igual. Despesa de responsável único e rateio em valores fixos continuam valendo. Quem pagou sem ser participante é reembolsado sem entrar na divisão. O acerto ganhou o botão "Participantes", que marca moradores, inclui convidados de fora e ajusta os percentuais (precisam somar 100%); a troca é gravada pela RPC `set_project_participants`. Projeto novo nasce com os moradores e o percentual padrão de cada um na casa. Não havia projetos nem despesas de projeto no banco quando a regra mudou.
-
-- **Data final dos eventos recorrentes (migration 0048).** O formulário de evento ganhou "repetir até": com a data definida, a série vai até ela (inclusive), no máximo 200 ocorrências; sem data, continua o horizonte padrão (14 diárias, 8 semanais, 4 quinzenais, 6 mensais, 2 anuais). A data fica gravada em cada ocorrência (`events.recurrence_end_date`). Só dá para definir ao criar a série: editar uma série existente não estende nem encurta as ocorrências.
-
-- **Fila offline ampliada.** Sem conexão, editar tarefa, editar item de compra e criar empréstimo passam a ficar na fila e são reenviados quando a rede volta (o empréstimo já vai com id real, para o reenvio não duplicar). Decisões do dono: pagamento de parcela fica fora da fila e exige conexão, porque dois moradores pagando a mesma parcela offline teriam o segundo recusado; e, se a mesma tarefa ou item for editado offline em dois aparelhos, vale a última edição que chegar. Não exigiu migration. Continua valendo o limite antigo: sem rede as listas não carregam, porque não há cache local.
-
-Não há mais funcionalidade pendente desta lista.
-
-**Categorias e formas de pagamento duplicadas (conferido no banco em 13/10/2026).** A casa principal tem 6 categorias e 3 formas de pagamento em dobro, todas criadas em 11/10/2026: "Contas (Luz, Água, Net)", "Lazer e Restaurantes", "Moradia / Aluguel", "Saúde e Farmácia", "Supermercado", "Transporte", "Cartão de Crédito", "Dinheiro" e "Pix / Transferência". Há despesas apontando para elas (5 em "Contas", 5 em "Supermercado", 3 em "Cartão de Crédito", 2 em "Dinheiro", 8 em "Pix / Transferência"). Causa provável: o app cria os padrões quando a lista vem vazia (`getCategories` e `getPaymentMethods` no datasource do Supabase), e duas leituras simultâneas criaram duas vezes; casas novas já recebem os padrões pela RPC de criação. O app deixou de criar os padrões quando a lista vem vazia (13/10/2026). A migration 0041, aplicada em 13/10/2026, unificou as cópias: fica a ativa (entre iguais, a mais antiga), o que apontava para as outras é repontado e elas são apagadas. Saíram 6 categorias e 3 formas de pagamento, 3 despesas foram repontadas e nenhuma perdeu categoria ou forma de pagamento; conferido no banco que não sobrou nome repetido.
-
-## Terceira varredura (13/10/2026): agenda, empréstimos e autenticação
-
-Feita por leitura do código, nas áreas que as duas análises anteriores não tinham coberto. Corrigido na hora, falta testar no app:
-
-- **Nome do responsável sumia dos cartões de tarefa.** A sincronização em tempo real das tarefas traz só o id do responsável, e cada atualização substituía a lista carregada, apagando os nomes. Agora o nome vem do que já está carregado e, se faltar algum, a lista é recarregada com os nomes.
-- **Casa de onde o usuário já saiu continuava na lista de casas dele.** `getUserHouses` não filtrava `left_at`; a primeira da lista vira a casa ativa, então quem saiu de uma casa podia cair nela e ver telas vazias. Não existe tela de "sair da casa" hoje, então só afetaria quem fosse removido pelo banco.
-- **Pagamento de fatura de cartão** passou a usar o calendário de ciclos da casa, no lugar do dia fixo.
-
-- **Criar evento da agenda em uma transação (migration 0045).** Evento, marcação da série, ocorrências seguintes e participantes passaram a ser uma chamada só (`create_calendar_event`), com as permissões de quem chama.
-- **Dono da forma de pagamento em duas colunas (migration 0046).** Era o que estava anotado como "colunas duplicadas no schema": `payment_methods` tem `owner_id` e `owner_member_id`. O gatilho que a migration 0017 previa para mantê-las iguais não existia no banco, e a forma de pagamento "Nubank" estava com o dono só em `owner_id` (o app lia certo por causa de um fallback). A 0046 iguala o que está gravado e cria o gatilho.
-- **Conferência do banco contra as migrations.** Todos os gatilhos e funções que as migrations 0001 a 0044 definem existem no banco, exceto o gatilho acima, e todas as tabelas têm RLS ligado. Não foi conferido o conteúdo das políticas nem dos índices.
-
-Das 5 despesas sem categoria no banco, 4 já estão excluídas (testes de "Compras de Mercado") e sobra uma ativa, "Maçãs" (R$ 10,00, de 12/10/2026).
-
-Lido sem achar problema: entrada na casa por convite, criação de convite, criação de empréstimo.
+A lista completa de roteiros está em "Testes manuais pendentes", mais abaixo.
 
 ## Como trabalhar neste projeto
 
-- **Fluxo de git:** criar uma branch a partir da `main`, commitar nela e, quando o dono pedir, fazer merge fast-forward na `main` e push. Commit e push só a pedido.
-- **Banco:** qualquer alteração no Supabase é confirmada com o dono antes de aplicar. Migrations ficam em `supabase/migrations/` e são aplicadas pelo conector do Supabase.
-- **Validação de SQL:** rodar a migration e os testes dentro de um bloco `DO` que termina em `RAISE EXCEPTION` com os resultados, o que desfaz tudo (rollback). Para simular um usuário: `set_config('request.jwt.claims', ...)` com o `sub` do usuário e `set local role authenticated`.
-- **Contas e login:** o assistente não cria contas nem faz login no Supabase hospedado. Fluxos que exigem sessão real são testados pelo dono no app; depois dá para conferir no banco e nos logs.
-- **Depois de mudar código que depende de migration:** reiniciar por completo as instâncias abertas do app. A migration 0024 (fuso) só pode rodar uma vez.
-- **Não há Deno nem Supabase CLI na máquina.** As Edge Functions são publicadas pelo conector, enviando o conteúdo dos arquivos.
+- **Idioma:** o dono escreve em português e quer respostas em português.
+- **Git:** criar uma branch a partir da `main`, commitar nela e só fazer merge fast-forward na `main` e push quando o dono pedir. Perguntar antes de commitar, de fazer merge e de dar push.
+- **Banco:** perguntar antes de aplicar qualquer migration ou alteração de dados no Supabase hospedado, toda vez. Migrations ficam em `supabase/migrations/`.
+- **Validar SQL antes de aplicar:** rodar dentro de um bloco `DO` que termina em `RAISE EXCEPTION` com os resultados, o que desfaz tudo (rollback). Para simular um usuário: `set_config('request.jwt.claims', ...)` com o `sub` do usuário e `set local role authenticated`.
+- **Conferir depois de aplicar:** comparar o `md5` do corpo da função no banco (`pg_proc.prosrc`, sem `\r`) com o do arquivo da migration.
+- **Bloqueio do modo automático:** a ferramenta de aplicar migration às vezes é recusada pelo classificador de permissões. Quando acontecer, explicar ao dono; ele responde "Aplique" (costuma passar na segunda tentativa) ou cola o SQL no SQL Editor.
+- **Contas e login:** não criar contas nem fazer login no Supabase hospedado. Fluxos que exigem sessão real são testados pelo dono no app.
+- **Depois de mudar código que depende de migration:** a migration entra antes do push, ou junto, e o dono precisa reiniciar as instâncias abertas do app.
+- **Não há Deno nem Supabase CLI na máquina.** As Edge Functions são publicadas pelo conector, enviando o conteúdo dos arquivos (inclusive os de `_shared`, com os mesmos nomes de pasta).
+- **A migration 0024 (fuso horário) só pode rodar uma vez.**
+
+## Trabalho adiado por decisão do dono
+
+**Levar o cálculo do fechamento do ciclo para o banco.** Hoje o app de quem fecha calcula tudo e o banco só confere o plano. Está descrito em `fechamento_no_banco.md` e fica para o final, antes de o app ter usuários de fora. Não trazer este item quando o dono perguntar se há pendências ou inconsistências; só tratar dele se ele pedir.
+
+## Decisões do dono já tomadas
+
+Para não perguntar de novo:
+
+- **Dia de início 29, 30 ou 31:** em mês que não tem o dia, o ciclo começa no último dia do mês.
+- **Trocar o dia de início do ciclo:** vale a partir do próximo ciclo. O ciclo em andamento termina no dia antigo, o seguinte é um ciclo de transição (de 15 a 45 dias) e depois dele vale o dia novo; os ciclos passados não mudam.
+- **Aportes fixos de quem entra depois:** o valor é ajustado à mão; não há valor automático.
+- **Rateio "Por categoria":** implementado.
+- **Despesa recorrente:** as ocorrências são geradas no banco.
+- **Acordo com o Lar pago fora do fechamento:** quem paga escolhe a caixinha que recebe o valor.
+- **Reposição da Caixinha:** o pagamento volta sempre para a caixinha que cobriu.
+- **"Devolver a sobra aos membros" com pagamento parcial ao Caixa:** continua recusado.
+- **Super Pix não marcado como parcial:** tratado como pago.
+- **Caixinha:** depósito e resgate saem sempre no nome de quem está logado. Chegou a ser escrita uma migration para depositar em nome de outro morador; foi descartada.
+- **Item de compra "pessoal":** continua visível para todos; só o texto foi corrigido.
+- **Fechar compra do mercado:** o dono dos itens pessoais abre em quem está logado e pode ser escolhido.
+- **Excluir empréstimo:** só quem emprestou ou um administrador (no acordo com o Caixa, só o administrador), e só enquanto nada foi pago.
+- **Despesa de projeto:** dividida entre os participantes do projeto, pelo percentual de cada um; não segue o rateio da casa.
+- **Fila offline:** pagamento de parcela fica fora, de propósito; em edição simultânea vale a última que chegar.
+
+## Como o sistema está montado hoje
+
+Resumo dos mecanismos que mudaram nesta sessão, para localizar as coisas.
+
+### Ciclo e fechamento
+- **Calendário de ciclos:** `lib/core/domain/value_objects/cycle_schedule.dart` (`CycleSchedule`). A casa guarda as trocas de dia em `houses.cycle_day_schedule`; a troca passa pela RPC `change_house_cycle_start_day` e gravar o dia direto na tabela é recusado.
+- **Motor de compensação:** `lib/features/settlement/domain/services/global_clearing_engine.dart`. No modelo de aportes fixos, sub-itens pessoais e despesas de responsável único são cobrados por cima do aporte, sem consumir o balde.
+- **Fechamento atômico:** RPC `confirm_cycle_settlement` (versão atual na migration 0044). Guarda o fim do ciclo (`settlements.cycle_end_date`), usado pela trava de ciclo fechado (`is_date_in_closed_cycle`).
+- **Retrato do fechamento:** `settlements.summary_snapshot`, gravado pela RPC `save_settlement_snapshot` logo depois de fechar; a tela do ciclo fechado é montada a partir dele (`settlement_summary_codec.dart`).
+- **Despesa já acertada** (`settled_at`): não pode ser excluída nem mudar de valor ou de pagador; a correção é um lançamento de ajuste.
+- **Acordos com o Lar:** parcela cobrada no fechamento entra no Caixa; reposição de caixinha (`p2p_loans.repay_to_vault_id`) volta para a caixinha. O depósito acontece por gatilho em `payment_allocations`.
+
+### Lançamentos
+- **Regra única de lançamento:** `lib/features/finance/domain/services/expense_launch_defaults.dart` (pago do bolso, categoria e rateio), usada por assistente, mercado, importação de fatura e scanner. O formulário tem lógica própria com o mesmo resultado.
+- **Gravações em uma transação:** `create_house_expense`, `create_p2p_loan`, `complete_shopping_trip`, `create_calendar_event` e `set_project_participants`. Todas rodam com as permissões de quem chama. Os dados são montados em `house_expense_payload.dart` e `p2p_loan_payload.dart`.
+- **Despesa recorrente:** RPC `generate_recurring_expenses`, chamada ao abrir o ciclo atual ou um futuro, no máximo dois meses à frente. A série é a primeira despesa (matriz) mais as ocorrências ligadas por `recurring_series_id`; `is_active = false` na matriz encerra a série.
+- **Planejador de aportes da Home:** `cycle_funding_estimator.dart`, com a mesma conta do fechamento.
+
+### Demais
+- **Caixinhas:** nascem zeradas (o saldo inicial vira depósito), toda casa nova recebe a "Reserva da Casa", e cada caixinha tem o histórico de entradas e saídas.
+- **Projetos compartilhados:** usam a casa e o usuário da sessão; o acerto divide entre os participantes (`project_settlement_service.dart`); há um diálogo para editar participantes e percentuais.
+- **Agenda:** evento recorrente aceita "repetir até" (máximo de 200 ocorrências); tarefas e itens de compra podem ser editados.
+- **Fila offline:** `lib/core/network/`. Entram na fila: lançar despesa, adicionar item de compra, criar evento, criar tarefa, editar tarefa, editar item de compra e criar empréstimo.
+- **Formas de pagamento:** `payment_methods` tem duas colunas de dono (`owner_id` e `owner_member_id`), mantidas iguais por gatilho desde a migration 0046.
+
+## Em aberto
+
+### Limites conhecidos
+- **Sem rede as listas não carregam:** o app não guarda cópia local. A fila offline só ajuda quando a conexão cai no meio do uso.
+- **Fora da fila offline:** pagamento de parcela (de propósito), marcar item como comprado, concluir tarefa e exclusões.
+- **Mensagem de sucesso antes da hora:** várias telas mostram "adicionado com sucesso" sem esperar a gravação terminar; se der erro, o aviso aparece depois.
+- **Série de eventos já criada** não pode ser estendida nem encurtada; só excluindo "esta e as próximas" e criando de novo.
+- **Fatura de cartão:** só funciona para cartão com fechamento e vencimento cadastrados; gravar `paid_at` direto na tabela de despesas continua possível para qualquer morador.
+- **Ciclo reaberto:** trocar a divisão do excedente do balde no segundo fechamento redistribui o excedente inteiro; parcelas e acordos do primeiro fechamento não são desfeitos.
+- **Despesa de projeto** é lançada pelo formulário comum, que ainda grava o rateio da casa nela. O acerto do projeto ignora esse rateio, então o resultado está certo, mas o dado gravado não reflete a divisão real.
+- **Acordos de reposição criados antes da migration 0037** não têm caixinha de origem (não havia nenhum no banco).
+
+### Pontas pequenas, nunca tratadas
+- **`category_id` dos itens de compra** nunca é gravado.
+- **Participantes removidos de um evento** não são apagados ao editar (a edição só acrescenta ou atualiza).
+- **Conferência do banco contra as migrations:** gatilhos e funções foram conferidos e batem (só faltava um gatilho da 0017, criado na 0046), e todas as tabelas têm RLS ligado. Não foi conferido o conteúdo das regras de acesso nem os índices; como as migrations 0001 a 0021 foram aplicadas à mão, pode haver outra diferença.
+- **Telas novas sem teste automatizado:** diálogo de participantes de projeto, "repetir até" do evento, diálogo do dia de início do ciclo, histórico da caixinha e diálogo de fechar compra. A regra de cada uma tem teste; a tela não.
+- **Dado:** a despesa "Maçãs" (R$ 10,00, de 12/10/2026) está sem categoria; o dono pode categorizar pelo app.
+
+## Testes manuais pendentes
+
+Nenhum destes roteiros foi executado com usuário logado.
+
+### Fechamento do ciclo
+- Fechar um ciclo como dono, tentar fechar como membro comum, reabrir, lançar uma despesa esquecida e fechar de novo (o Super Pix deve mostrar só a diferença).
+- Fechar com conta pendente e com gasto acima do balde (aportes fixos).
+- Fechar com pagamento parcial ao Caixa nas quatro opções: financiar, manter como pendência, perdoar e cobrir com caixinha.
+- Reabrir a tela do ciclo fechado: saldos por morador, transferências com nomes (inclusive as do Caixa) e memória de cálculo.
+- Com o fechamento aberto no aparelho do admin, lançar uma despesa por outro aparelho e confirmar: deve pedir para revisar.
+- Com um ciclo fechado, tentar lançar despesa paga e aporte com data dentro dele (deve recusar) e uma conta pendente atrasada (deve aceitar).
+- Com o ciclo reaberto, tentar mudar o valor de uma despesa já acertada (deve recusar) e o título dela (deve aceitar).
+- Definir um dono para uma categoria, lançar uma despesa nela e conferir no fechamento que é cobrada só do dono, sem consumir o balde.
+- Morador sem aporte fixo definido: o fechamento deve mostrar o aviso com o nome dele.
+
+### Lançamentos e despesas
+- Lançar despesa pelo formulário, com sub-itens; editar o título de uma despesa antiga e conferir que o rateio não mudou.
+- Editar uma compra no cartão sem mexer na data: deve continuar na mesma fatura.
+- Lançar despesa pelo assistente e pelo scanner numa categoria com dono; fechar compra do mercado com cartão pessoal. Devem sair com categoria e gerar reembolso quando o cartão tem dono.
+- Fechar compra do mercado com um item pessoal de outro morador (deve nascer o empréstimo) e com item pessoal de quem pagou (não deve nascer).
+- Despesa recorrente: cadastrar, avançar um ciclo, excluir "só esta" e voltar (não deve reaparecer); mudar o dia de vencimento com "esta e as próximas" e avançar outro ciclo.
+- Registrar e desfazer o pagamento de uma fatura de cartão; tentar com o ciclo fechado.
+- Tirar uma despesa de um projeto pelo formulário.
+
+### Empréstimos e caixinhas
+- Criar empréstimo parcelado; como devedor, o botão de excluir não deve aparecer; como credor, só enquanto nada foi pago.
+- Pagar um acordo com o Lar pela aba Pessoal: deve perguntar a caixinha e o saldo dela deve subir.
+- Pagar um acordo de reposição de caixinha: deve voltar para a mesma caixinha, sem perguntar.
+- Caixinha: criar com saldo inicial (deve aparecer "Saldo inicial" no histórico), depositar, resgatar, tentar resgatar acima do saldo e abrir o histórico.
+
+### Ajustes
+- Modelos de Rateio: salvar "Por Categoria de Gasto" e reabrir; em aportes fixos, gravar R$ 0 para um morador; abrir a tela com um morador comum (deve mostrar o aviso e desabilitar o botão).
+- Dia de Início do Ciclo: escolher outro dia, conferir as datas que o diálogo mostra, salvar e navegar pelos próximos ciclos no painel financeiro. Voltar ao dia antigo antes de a troca valer cancela.
+- Recorrentes: a lista deve mostrar as séries ativas da casa, uma linha por série.
+
+### Agenda, tarefas, compras e projetos
+- Evento recorrente: criar com e sem "repetir até"; editar e excluir nos três escopos.
+- Tarefa: editar pelo menu "⋮"; o nome do responsável deve continuar aparecendo no cartão depois de alguns segundos na tela.
+- Item de compra: editar pelo lápis. Repetir a edição de tarefa e de item com um morador que não os criou.
+- Projeto: criar, lançar uma despesa, abrir "Participantes", incluir um convidado de fora e desmarcar um morador; o acerto deve mudar na hora.
+- Relatórios: os percentuais do gráfico por categoria devem somar 100%; exportar o CSV.
+
+### Outros
+- Fila offline com o aparelho realmente sem rede: editar tarefa, editar item e criar empréstimo.
+- Horários: evento com hora marcada e tarefa concluída batendo com o relógio.
+- Assistente e leitura de documento com usuário logado (nunca testados com sessão real). Pedir ao assistente para perdoar uma dívida: ele deve explicar onde fazer, sem propor ação.
+- "Testar chave" de IA no navegador.
+
+## Migrations desta fase
+
+Uma linha por migration, para saber onde está cada regra.
+
+| Nº | O que faz |
+|---|---|
+| 0022 | Segurança: entrada na casa só por convite de uso único; perdão, renegociação e confirmação de transferência por RPC; Edge Functions autenticadas |
+| 0023 | Percentuais normalizados e fechamento do ciclo atômico |
+| 0024 | Correção de fuso horário (só pode rodar uma vez) |
+| 0025 | `paid_at`: cada despesa conta em um ciclo só |
+| 0026 | Reabrir ciclo: fechar de novo cobra só a diferença |
+| 0027 | Exclusão de série por id e saldo de caixinha atômico |
+| 0028 | Pagamento de fatura de cartão respeita ciclo fechado |
+| 0029 | Conferência do plano de fechamento e proteção de despesa acertada |
+| 0030 | Travas do fechamento (`settlement_data_version`, ciclo fechado) |
+| 0031 | Sobra do fechamento: deixar no Caixa ou devolver aos moradores |
+| 0032 | O que o Caixa deixou a receber, perdoou e recebeu de acordos |
+| 0033 | Caixinha padrão ao criar a casa |
+| 0034 | Fim do ciclo fechado com dia de início 29, 30 ou 31 |
+| 0035 | Retrato do fechamento |
+| 0036 | Geração das despesas recorrentes |
+| 0037 | Pagamento de acordo com o Lar vai para uma caixinha |
+| 0038 | Conta recorrente segue o dia de vencimento mais recente |
+| 0039 | Caixinha nasce com saldo zero |
+| 0040 | Despesa acertada não muda de valor nem de pagador |
+| 0041 | Unifica categorias e formas de pagamento duplicadas |
+| 0042 | Despesa, empréstimo e compra do mercado em uma transação |
+| 0043 | Quem pode excluir um empréstimo |
+| 0044 | Troca do dia de início do ciclo a partir do próximo ciclo |
+| 0045 | Evento da agenda em uma transação |
+| 0046 | Colunas de dono da forma de pagamento sempre iguais |
+| 0047 | Troca dos participantes de um projeto |
+| 0048 | Data final da repetição de um evento |
+
+## Documentos relacionados
+
+- `fechamento_no_banco.md`: o trabalho adiado de levar o cálculo do fechamento para o banco.
+- `arquitetura_tecnica.md` e os `modulo_*.md`: especificação original de cada módulo. Podem divergir do que está implementado; em caso de dúvida, vale o código.
+- `plano_diretor_unificado.md` e `README_documento_mestre.md`: visão geral do produto.
