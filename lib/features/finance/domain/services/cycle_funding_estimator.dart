@@ -41,7 +41,7 @@ class CycleFundingEstimator {
     final variableCategoryIds = historicalEstimates.map((v) => v.categoryId).toSet();
     final launchedByCategory = <String, int>{};
     for (final e in houseExpenses) {
-      if (variableCategoryIds.contains(e.categoryId)) {
+      if (variableCategoryIds.contains(e.categoryId) && !_isFixedBill(e)) {
         launchedByCategory[e.categoryId] =
             (launchedByCategory[e.categoryId] ?? 0) + e.amount.cents;
       }
@@ -67,7 +67,7 @@ class CycleFundingEstimator {
     // 2. Contas do ciclo fora das categorias variáveis (pagas e a vencer)
     final fixedCommittedExpenses = Money(
       houseExpenses
-          .where((e) => !variableCategoryIds.contains(e.categoryId))
+          .where((e) => !variableCategoryIds.contains(e.categoryId) || _isFixedBill(e))
           .fold<int>(0, (acc, e) => acc + e.amount.cents),
     );
 
@@ -105,6 +105,10 @@ class CycleFundingEstimator {
       memberQuotes: memberQuotes,
     );
   }
+
+  /// Conta recorrente de valor fixo (internet, condomínio): é conta fixa mesmo
+  /// quando a categoria dela é de consumo variável.
+  bool _isFixedBill(HouseExpense e) => e.isRecurring && !e.isVariable;
 
   /// Calcula estimativas históricas para categorias variáveis (como Mercado e Contas de Consumo)
   List<CategoryFundingEstimate> _computeVariableCategoryEstimates({
@@ -147,7 +151,7 @@ class CycleFundingEstimator {
 
     for (final cat in targetCategories) {
       final catExpenses = historicalExpenses
-          .where((e) => e.categoryId == cat.id)
+          .where((e) => e.categoryId == cat.id && !_isFixedBill(e))
           .toList();
 
       int averageCents = 0;

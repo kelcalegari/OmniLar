@@ -75,7 +75,7 @@ class CycleFundingPlannerCard extends StatelessWidget {
                         ),
                       ),
                       Text(
-                        'Contas do ciclo + estimativa de mercado',
+                        'Contas do ciclo + estimativa de gastos variáveis',
                         style: TextStyle(
                           fontSize: 11,
                           color: Colors.grey.shade600,
@@ -185,7 +185,7 @@ class CycleFundingPlannerCard extends StatelessWidget {
                   const SizedBox(width: 6),
                   Expanded(
                     child: Text(
-                      '${estimate.fixedCommittedExpenses.formatted} fixas + ${estimate.totalVariablesEstimated.formatted} em variáveis (mercado)'
+                      '${estimate.fixedCommittedExpenses.formatted} fixas + ${estimate.totalVariablesEstimated.formatted} em variáveis (mercado e consumo)'
                       '${estimate.currentHouseBalance.cents > 0 ? " - ${estimate.currentHouseBalance.formatted} de sobra em caixa" : ""}',
                       style: const TextStyle(fontSize: 11, color: Colors.grey),
                     ),

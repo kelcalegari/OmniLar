@@ -390,5 +390,39 @@ void main() {
       expect(cris.pendingAmount.cents, 0);
       expect(kelvynn.pendingAmount.cents, 100000);
     });
+
+    test('Conta recorrente de valor fixo é fixa mesmo em categoria de consumo', () {
+      // Internet cadastrada na categoria "Luz e Energia"
+      final internet = HouseExpense(
+        id: 'e_internet',
+        title: 'Internet',
+        amount: const Money(12990),
+        date: DateTime(2026, 10, 25),
+        dueDate: DateTime(2026, 10, 25),
+        paidByMemberId: 'm_kelvynn',
+        paidOutOfPocket: false,
+        paymentMethodId: 'pm_caixa',
+        categoryId: 'cat_energia',
+        splitRule: defaultSplit,
+        status: ExpenseStatus.pending,
+        isRecurring: true,
+      );
+
+      final estimate = estimator.calculateEstimate(
+        cycle: currentCycle,
+        members: members,
+        categories: categories,
+        currentCycleExpenses: [internet],
+        historicalExpenses: [internet],
+        currentCycleContributions: [],
+      );
+
+      expect(estimate.fixedCommittedExpenses.cents, 12990);
+      final energia = estimate.variableCategoryEstimates.firstWhere(
+        (e) => e.categoryId == 'cat_energia',
+      );
+      expect(energia.adjustedAmount.cents, 0);
+      expect(estimate.totalProjectedExpenses.cents, 12990);
+    });
   });
 }
