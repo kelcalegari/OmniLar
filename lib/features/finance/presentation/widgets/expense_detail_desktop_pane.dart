@@ -329,7 +329,7 @@ class _ExpenseDetailDesktopPaneState extends State<ExpenseDetailDesktopPane> {
               ),
             ],
 
-            const Spacer(),
+            const SizedBox(height: 20),
 
             // Ações Rápidas do Desktop
             if (expense.isPending) ...[
