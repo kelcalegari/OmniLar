@@ -82,6 +82,7 @@ Resumo dos mecanismos que mudaram nesta sessão, para localizar as coisas.
 - **Planejador de aportes da Home:** `cycle_funding_estimator.dart`, com a mesma conta do fechamento.
 
 ### Demais
+- **Ajustes:** quatro grupos (Casa, Divisão das despesas, Pagamentos e contas, Aplicativo). No celular e no tablet o índice abre uma página por grupo; a partir de 1024 px os grupos ficam à esquerda e o conteúdo ao lado. Cada grupo mostra o que está configurado e um botão que abre a janela de edição antiga. O índice e o esqueleto ficam em `settings_page.dart`; o conteúdo dos grupos, em `settings_groups.dart`.
 - **Tempo real:** tarefas, itens de compra, despesas e moradores avisam os outros aparelhos (migrations 0015 e 0050). Despesas e moradores recarregam o ciclo pelo `FinanceCubit` (`watchHouseChanges`); aportes, empréstimos, agenda e caixinhas só atualizam ao recarregar.
 - **Caixinhas:** nascem zeradas (o saldo inicial vira depósito), toda casa nova recebe a "Reserva da Casa", e cada caixinha tem o histórico de entradas e saídas.
 - **Projetos compartilhados:** usam a casa e o usuário da sessão; o acerto divide entre os participantes (`project_settlement_service.dart`); há um diálogo para editar participantes e percentuais.

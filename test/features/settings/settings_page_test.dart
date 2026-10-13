@@ -26,6 +26,12 @@ void main() {
     );
   }
 
+  /// Os ajustes ficam em grupos: abre a página do grupo antes de procurar a opção.
+  Future<void> openGroup(WidgetTester tester, String title) async {
+    await tester.tap(find.text(title));
+    await tester.pumpAndSettle();
+  }
+
   testWidgets('SettingsPage renders all setting tiles properly', (
     tester,
   ) async {
@@ -35,13 +41,34 @@ void main() {
     await tester.pumpWidget(buildTestableWidget());
     await tester.pumpAndSettle();
 
+    // Índice: os quatro grupos
     expect(find.text('Ajustes da Casa'), findsOneWidget);
+    expect(find.text('Casa'), findsOneWidget);
+    expect(find.text('Divisão das despesas'), findsOneWidget);
+    expect(find.text('Pagamentos e contas'), findsOneWidget);
+    expect(find.text('Aplicativo'), findsOneWidget);
+
+    // Cada grupo mostra as opções dele
+    await openGroup(tester, 'Casa');
     expect(find.text('Membros da Casa e Convites'), findsOneWidget);
-    expect(find.text('Categorias de Gastos'), findsOneWidget);
+    expect(find.text('Ciclo Financeiro'), findsOneWidget);
+    expect(find.text('Chave Pix da Casa'), findsOneWidget);
+    await tester.pageBack();
+    await tester.pumpAndSettle();
+
+    await openGroup(tester, 'Divisão das despesas');
     expect(find.text('Modelos de Rateio'), findsOneWidget);
+    expect(find.text('Categorias de Gastos'), findsOneWidget);
+    await tester.pageBack();
+    await tester.pumpAndSettle();
+
+    await openGroup(tester, 'Pagamentos e contas');
     expect(find.text('Cartões e Formas de Pagamento'), findsOneWidget);
     expect(find.text('Assinaturas & Contas Fixas'), findsOneWidget);
-    expect(find.text('Ciclo Financeiro'), findsOneWidget);
+    await tester.pageBack();
+    await tester.pumpAndSettle();
+
+    await openGroup(tester, 'Aplicativo');
     expect(find.text('Assistente IA'), findsOneWidget);
   });
 
@@ -53,16 +80,20 @@ void main() {
       await tester.pumpWidget(buildTestableWidget());
       await tester.pumpAndSettle();
 
-      // Clica no tile de categorias
-      await tester.tap(find.text('Categorias de Gastos'));
-      await tester.pumpAndSettle();
+      // As categorias ficam à vista dentro do grupo, sem janela por cima
+      await openGroup(tester, 'Divisão das despesas');
 
-      // Verifica que o modal abriu
-      expect(find.text('Categorias da Casa'), findsOneWidget);
+      expect(find.text('Categorias de Gastos'), findsOneWidget);
       expect(find.text('Supermercado'), findsOneWidget);
       expect(find.text('Moradia / Aluguel'), findsOneWidget);
       expect(find.text('Carro (Combustível)'), findsOneWidget);
-      expect(find.text('Cadastrar Nova Categoria'), findsOneWidget);
+      expect(find.text('Nova categoria'), findsOneWidget);
+
+      // Tocar em uma categoria abre a edição dela
+      await tester.ensureVisible(find.text('Supermercado'));
+      await tester.tap(find.text('Supermercado'));
+      await tester.pumpAndSettle();
+      expect(find.text('Editar Categoria'), findsOneWidget);
     },
   );
 
@@ -75,6 +106,7 @@ void main() {
     await tester.pumpAndSettle();
 
     // Clica no tile de formas de pagamento
+    await openGroup(tester, 'Pagamentos e contas');
     final paymentTile = find.text('Cartões e Formas de Pagamento');
     await tester.ensureVisible(paymentTile);
     await tester.tap(paymentTile);
@@ -82,8 +114,9 @@ void main() {
 
     // Verifica que o modal abriu
     expect(find.text('Formas de Pagamento'), findsOneWidget);
-    expect(find.text('Nubank Carlos'), findsOneWidget);
-    expect(find.text('VR Marina (Vale Refeição)'), findsOneWidget);
+    // Aparecem na janela e no resumo do grupo, atrás dela
+    expect(find.text('Nubank Carlos'), findsWidgets);
+    expect(find.text('VR Marina (Vale Refeição)'), findsWidgets);
     expect(find.text('Cadastrar Cartão ou VR'), findsOneWidget);
   });
 
@@ -95,6 +128,7 @@ void main() {
       await tester.pumpWidget(buildTestableWidget());
       await tester.pumpAndSettle();
 
+      await openGroup(tester, 'Pagamentos e contas');
       final tile = find.text('Assinaturas & Contas Fixas');
       await tester.ensureVisible(tile);
       await tester.tap(tile);
@@ -113,6 +147,7 @@ void main() {
       await tester.pumpWidget(buildTestableWidget());
       await tester.pumpAndSettle();
 
+      await openGroup(tester, 'Divisão das despesas');
       await tester.tap(find.text('Modelos de Rateio'));
       await tester.pumpAndSettle();
 
@@ -140,6 +175,7 @@ void main() {
     await tester.pumpWidget(buildTestableWidget());
     await tester.pumpAndSettle();
 
+    await openGroup(tester, 'Casa');
     final tile = find.text('Ciclo Financeiro');
     await tester.ensureVisible(tile);
     await tester.tap(tile);
@@ -158,7 +194,8 @@ void main() {
     await tester.pumpWidget(buildTestableWidget());
     await tester.pumpAndSettle();
 
-    final profileTile = find.text('Meu Perfil da Conta');
+    // O cartão do topo abre o perfil; o lápis é o alvo visível dele
+    final profileTile = find.byTooltip('Editar Perfil');
     await tester.ensureVisible(profileTile);
     await tester.tap(profileTile);
     await tester.pumpAndSettle();
@@ -194,6 +231,7 @@ void main() {
     await tester.pumpWidget(buildTestableWidget());
     await tester.pumpAndSettle();
 
+    await openGroup(tester, 'Casa');
     final pixTile = find.text('Chave Pix da Casa');
     await tester.ensureVisible(pixTile);
     expect(pixTile, findsOneWidget);
@@ -216,6 +254,36 @@ void main() {
     await tester.tap(saveButton);
     await tester.pumpAndSettle();
 
-    expect(find.text('caixa.nossacasa@nubank.com.br • Fundo Conjunto Nossa Casa'), findsOneWidget);
+    // O grupo mostra a chave e o titular gravados
+    expect(find.text('caixa.nossacasa@nubank.com.br'), findsOneWidget);
+    expect(find.text('Fundo Conjunto Nossa Casa'), findsOneWidget);
+  });
+
+  testWidgets('No PC os grupos ficam à esquerda e o conteúdo ao lado, sem trocar de página', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1440, 900);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    await sl<FinanceCubit>().loadCycleData();
+
+    await tester.pumpWidget(buildTestableWidget());
+    await tester.pumpAndSettle();
+
+    // O primeiro grupo já vem aberto ao lado do índice
+    expect(find.text('Divisão das despesas'), findsOneWidget);
+    expect(find.text('Membros da Casa e Convites'), findsOneWidget);
+    expect(find.text('Modelos de Rateio'), findsNothing);
+
+    await tester.tap(find.text('Divisão das despesas'));
+    await tester.pumpAndSettle();
+
+    // Mesmo lugar: o índice continua na tela e o conteúdo trocou
+    expect(find.text('Pagamentos e contas'), findsOneWidget);
+    expect(find.text('Modelos de Rateio'), findsOneWidget);
+    expect(find.text('Categorias de Gastos'), findsOneWidget);
+    expect(find.text('Membros da Casa e Convites'), findsNothing);
+    expect(find.byType(BackButton), findsNothing);
   });
 }

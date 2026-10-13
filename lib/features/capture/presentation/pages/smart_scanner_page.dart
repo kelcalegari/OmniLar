@@ -459,7 +459,7 @@ class _SmartScannerPageState extends State<SmartScannerPage> {
                 const SizedBox(height: 12),
                 SwitchListTile(
                   contentPadding: EdgeInsets.zero,
-                  title: Text(isPersonal ? 'Item Pessoal (RN09)' : 'Gasto da Casa (Compartilhado)'),
+                  title: Text(isPersonal ? 'Item Pessoal' : 'Gasto da Casa (Compartilhado)'),
                   subtitle: Text(
                     isPersonal ? 'Cobrado exclusivamente do responsável' : 'Rateado entre todos os moradores',
                     style: const TextStyle(fontSize: 11),
@@ -1132,7 +1132,7 @@ class _SmartScannerPageState extends State<SmartScannerPage> {
                   ),
                   const SizedBox(width: 10),
                   const Text(
-                    'Revisão da Proposta (RN01)',
+                    'Revisar Lançamento',
                     style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                   ),
                 ],
@@ -1219,7 +1219,7 @@ class _SmartScannerPageState extends State<SmartScannerPage> {
           ],
           const SizedBox(height: 16),
 
-          // Lista os itens reconhecidos com toggle de "Item Pessoal (RN09)"
+          // Lista os itens reconhecidos com toggle de "Item Pessoal"
           if (proposal.items.isNotEmpty) ...[
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,

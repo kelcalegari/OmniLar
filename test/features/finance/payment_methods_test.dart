@@ -68,6 +68,9 @@ void main() {
     await tester.pumpAndSettle();
 
     // Scroll if needed and tap Cartões e Formas de Pagamento
+    // Os ajustes ficam em grupos: abre o grupo antes de procurar a opção
+    await tester.tap(find.text('Pagamentos e contas'));
+    await tester.pumpAndSettle();
     final tileFinder = find.text('Cartões e Formas de Pagamento');
     await tester.ensureVisible(tileFinder);
     await tester.tap(tileFinder);
@@ -101,6 +104,9 @@ void main() {
     await tester.pumpAndSettle();
 
     // Open modal
+    // Os ajustes ficam em grupos: abre o grupo antes de procurar a opção
+    await tester.tap(find.text('Pagamentos e contas'));
+    await tester.pumpAndSettle();
     final tileFinder = find.text('Cartões e Formas de Pagamento');
     await tester.ensureVisible(tileFinder);
     await tester.tap(tileFinder);
@@ -136,10 +142,10 @@ void main() {
       isTrue,
     );
 
-    // Verify item is present in widget tree (skipOffstage: false for scrollable ListView)
+    // Aparece na janela e no resumo do grupo, atrás dela
     expect(
       find.text('Cartão Alimentação Pluxee', skipOffstage: false),
-      findsOneWidget,
+      findsWidgets,
     );
   });
 }

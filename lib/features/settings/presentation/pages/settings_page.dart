@@ -30,8 +30,18 @@ import '../../../../core/theme/theme_cubit.dart';
 import '../../../../core/widgets/theme_toggle_button.dart';
 import '../widgets/ai_key_config_sheet.dart';
 
-class SettingsPage extends StatelessWidget {
+part 'settings_groups.dart';
+
+class SettingsPage extends StatefulWidget {
   const SettingsPage({super.key});
+
+  @override
+  State<SettingsPage> createState() => _SettingsPageState();
+}
+
+class _SettingsPageState extends State<SettingsPage> {
+  /// Grupo aberto na coluna da direita (só no PC).
+  _SettingsGroup _selectedGroup = _SettingsGroup.house;
 
   void _showEditProfileModal(BuildContext context, UserProfile? user) {
     if (user == null) return;
@@ -767,195 +777,6 @@ class SettingsPage extends StatelessWidget {
             ),
           ),
         ),
-      ),
-    );
-  }
-
-  void _showCategoriesModal(BuildContext context) {
-    final financeCubit = context.read<FinanceCubit>();
-
-    showAdaptiveModal(
-      context: context,
-      maxWidth: 500,
-      child: BlocBuilder<FinanceCubit, FinanceState>(
-        bloc: financeCubit,
-        builder: (context, financeState) {
-          final categories = financeState.categories;
-          final members = financeState.members;
-
-          return SafeArea(
-            child: Padding(
-              padding: const EdgeInsets.all(20),
-              child: SingleChildScrollView(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    Center(
-                      child: Container(
-                        width: 40,
-                        height: 4,
-                        decoration: BoxDecoration(
-                          color: Colors.grey.withValues(alpha: 0.3),
-                          borderRadius: BorderRadius.circular(2),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                    const Row(
-                      children: [
-                        Icon(
-                          Icons.category_outlined,
-                          color: AppColors.primary,
-                          size: 24,
-                        ),
-                        SizedBox(width: 8),
-                        Text(
-                          'Categorias da Casa',
-                          style: TextStyle(
-                            fontSize: 20,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 8),
-                    const Text(
-                      'Categorias com dono direcionam 100% da responsabilidade para o membro escolhido. Toque em uma categoria para editar.',
-                      style: TextStyle(color: Colors.grey, fontSize: 13),
-                    ),
-                    const SizedBox(height: 16),
-                    ConstrainedBox(
-                      constraints: const BoxConstraints(maxHeight: 260),
-                      child: ListView.separated(
-                        shrinkWrap: true,
-                        itemCount: categories.length,
-                        separatorBuilder: (_, _) => const Divider(height: 1),
-                        itemBuilder: (context, index) {
-                          final cat = categories[index];
-                          final owner = members
-                              .where((m) => m.id == cat.ownerMemberId)
-                              .firstOrNull;
-
-                          return ListTile(
-                            contentPadding: EdgeInsets.zero,
-                            leading: CircleAvatar(
-                              radius: 18,
-                              backgroundColor: AppColors.primary.withValues(
-                                alpha: 0.15,
-                              ),
-                              child: const Icon(
-                                Icons.label_outline_rounded,
-                                size: 18,
-                                color: AppColors.primary,
-                              ),
-                            ),
-                            title: Text(
-                              cat.name,
-                              style: const TextStyle(
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                            subtitle: Text(
-                              owner != null
-                                  ? 'Responsável: 100% ${owner.name}'
-                                  : 'Divisão padrão da casa',
-                              style: TextStyle(
-                                fontSize: 12,
-                                color: owner != null
-                                    ? AppColors.accent
-                                    : Colors.grey,
-                                fontWeight: owner != null
-                                    ? FontWeight.w600
-                                    : FontWeight.normal,
-                              ),
-                            ),
-                            onTap: () => _showCategoryFormDialog(
-                              context,
-                              financeCubit,
-                              members,
-                              existing: cat,
-                            ),
-                            trailing: PopupMenuButton<String>(
-                              icon: const Icon(
-                                Icons.more_vert,
-                                size: 20,
-                                color: Colors.grey,
-                              ),
-                              tooltip: 'Opções',
-                              onSelected: (action) {
-                                if (action == 'edit') {
-                                  _showCategoryFormDialog(
-                                    context,
-                                    financeCubit,
-                                    members,
-                                    existing: cat,
-                                  );
-                                } else if (action == 'delete') {
-                                  _confirmDeleteCategory(
-                                    context,
-                                    financeCubit,
-                                    cat,
-                                    categories.length,
-                                  );
-                                }
-                              },
-                              itemBuilder: (context) => const [
-                                PopupMenuItem(
-                                  value: 'edit',
-                                  child: Row(
-                                    children: [
-                                      Icon(
-                                        Icons.edit_outlined,
-                                        size: 18,
-                                        color: AppColors.primary,
-                                      ),
-                                      SizedBox(width: 8),
-                                      Text('Editar'),
-                                    ],
-                                  ),
-                                ),
-                                PopupMenuItem(
-                                  value: 'delete',
-                                  child: Row(
-                                    children: [
-                                      Icon(
-                                        Icons.delete_outline_rounded,
-                                        size: 18,
-                                        color: AppColors.debtRed,
-                                      ),
-                                      SizedBox(width: 8),
-                                      Text(
-                                        'Excluir',
-                                        style: TextStyle(color: AppColors.debtRed),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              ],
-                            ),
-                          );
-                        },
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                    FilledButton.icon(
-                      onPressed: () {
-                        _showCategoryFormDialog(context, financeCubit, members);
-                      },
-                      icon: const Icon(Icons.add_rounded, size: 18),
-                      label: const Text('Cadastrar Nova Categoria'),
-                      style: FilledButton.styleFrom(
-                        backgroundColor: AppColors.primary,
-                        padding: const EdgeInsets.symmetric(vertical: 12),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          );
-        },
       ),
     );
   }
@@ -3306,8 +3127,6 @@ class SettingsPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-
     return Scaffold(
       appBar: AppBar(
         title: const Text(
@@ -3318,21 +3137,145 @@ class SettingsPage extends StatelessWidget {
       ),
       body: BlocBuilder<AuthCubit, AuthState>(
         builder: (context, authState) {
-          final user = authState.user;
-          final house = authState.house;
+          return BlocBuilder<FinanceCubit, FinanceState>(
+            builder: (context, financeState) {
+              if (!context.isDesktop) {
+                // Celular e tablet: índice dos grupos; cada um abre a própria página
+                return SingleChildScrollView(
+                  child: ResponsiveContainer(
+                    child: _groupIndex(
+                      context,
+                      authState,
+                      selected: null,
+                      onSelect: (group) => _openGroupPage(context, group),
+                    ),
+                  ),
+                );
+              }
 
-          final userName = user?.fullName ?? 'Usuário';
-          final userEmail = user?.email ?? 'sem e-mail';
-          final houseName = house?.name ?? 'Minha Casa';
-          final cycleDay = house?.cycleStartDay ?? 5;
+              // PC: grupos à esquerda, conteúdo do grupo escolhido à direita
+              return Align(
+                alignment: Alignment.topCenter,
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 1200),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 12),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        SizedBox(
+                          width: 340,
+                          child: SingleChildScrollView(
+                            child: _groupIndex(
+                              context,
+                              authState,
+                              selected: _selectedGroup,
+                              onSelect: (group) => setState(() => _selectedGroup = group),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 24),
+                        Expanded(
+                          child: SingleChildScrollView(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.stretch,
+                              children: [
+                                Padding(
+                                  padding: const EdgeInsets.only(top: 8, bottom: 16, left: 4),
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        _selectedGroup.title,
+                                        style: const TextStyle(
+                                          fontSize: 20,
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                      ),
+                                      Text(
+                                        _selectedGroup.description,
+                                        style: const TextStyle(color: Colors.grey, fontSize: 13),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                _groupContent(context, _selectedGroup, authState, financeState),
+                                const SizedBox(height: 32),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              );
+            },
+          );
+        },
+      ),
+    );
+  }
 
-          return SingleChildScrollView(
-            child: ResponsiveContainer(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  // Card do Perfil e Casa Ativa
-                  Padding(
+  /// Abre a página de um grupo (celular e tablet), levando os mesmos cubits.
+  void _openGroupPage(BuildContext context, _SettingsGroup group) {
+    ThemeCubit? themeCubit;
+    try {
+      themeCubit = context.read<ThemeCubit>();
+    } catch (_) {}
+    final providers = [
+      BlocProvider<AuthCubit>.value(value: context.read<AuthCubit>()),
+      BlocProvider<FinanceCubit>.value(value: context.read<FinanceCubit>()),
+      if (themeCubit != null) BlocProvider<ThemeCubit>.value(value: themeCubit),
+    ];
+
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => MultiBlocProvider(
+          providers: providers,
+          child: Scaffold(
+            appBar: AppBar(
+              title: Text(
+                group.title,
+                style: const TextStyle(fontWeight: FontWeight.bold),
+              ),
+            ),
+            body: BlocBuilder<AuthCubit, AuthState>(
+              builder: (context, authState) {
+                return BlocBuilder<FinanceCubit, FinanceState>(
+                  builder: (context, financeState) {
+                    return SingleChildScrollView(
+                      child: ResponsiveContainer(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            _groupContent(context, group, authState, financeState),
+                            const SizedBox(height: 32),
+                          ],
+                        ),
+                      ),
+                    );
+                  },
+                );
+              },
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// Cartão do topo: quem está logado e em que casa. Tocar abre o perfil.
+  Widget _profileCard(BuildContext context, AuthState authState) {
+    final theme = Theme.of(context);
+    final user = authState.user;
+    final house = authState.house;
+    final userName = user?.fullName ?? 'Usuário';
+    final userEmail = user?.email ?? 'sem e-mail';
+    final houseName = house?.name ?? 'Minha Casa';
+    final cycleDay = house?.cycleStartDay ?? 5;
+
+    return Padding(
                     padding: const EdgeInsets.symmetric(vertical: 8),
                     child: Material(
                       color: Colors.transparent,
@@ -3371,6 +3314,7 @@ class SettingsPage extends StatelessWidget {
                                   children: [
                                     Text(
                                       userName,
+                                      overflow: TextOverflow.ellipsis,
                                       style: const TextStyle(
                                         fontSize: 16,
                                         fontWeight: FontWeight.bold,
@@ -3378,6 +3322,7 @@ class SettingsPage extends StatelessWidget {
                                     ),
                                     Text(
                                       userEmail,
+                                      overflow: TextOverflow.ellipsis,
                                       style: const TextStyle(
                                         fontSize: 13,
                                         color: Colors.grey,
@@ -3417,12 +3362,15 @@ class SettingsPage extends StatelessWidget {
                                           color: AppColors.primary,
                                         ),
                                         const SizedBox(width: 4),
-                                        Text(
-                                          '$houseName (Ciclo dia $cycleDay)',
-                                          style: const TextStyle(
-                                            fontSize: 12,
-                                            fontWeight: FontWeight.w600,
-                                            color: AppColors.primary,
+                                        Flexible(
+                                          child: Text(
+                                            '$houseName (Ciclo dia $cycleDay)',
+                                            overflow: TextOverflow.ellipsis,
+                                            style: const TextStyle(
+                                              fontSize: 12,
+                                              fontWeight: FontWeight.w600,
+                                              color: AppColors.primary,
+                                            ),
                                           ),
                                         ),
                                       ],
@@ -3444,185 +3392,11 @@ class SettingsPage extends StatelessWidget {
                         ),
                       ),
                     ),
-                  ),
-                  const SizedBox(height: 8),
+                  );
+  }
 
-                  ListTile(
-                    leading: const Icon(
-                      Icons.person_outline_rounded,
-                      color: AppColors.primary,
-                    ),
-                    title: const Text('Meu Perfil da Conta'),
-                    subtitle: Text(
-                      user?.pixKey != null && user!.pixKey!.isNotEmpty
-                          ? 'Nome, e-mail e Chave Pix (${user.pixKey})'
-                          : 'Alterar nome, e-mail e cadastrar Chave Pix',
-                    ),
-                    trailing: const Icon(Icons.chevron_right_rounded),
-                    onTap: () => _showEditProfileModal(context, user),
-                  ),
-                  const Divider(),
-
-                  ListTile(
-                    leading: const Icon(
-                      Icons.people_outline_rounded,
-                      color: AppColors.primary,
-                    ),
-                    title: const Text('Membros da Casa e Convites'),
-                    subtitle: Text(
-                      sl<AuthRepository>().isDemoMode
-                          ? 'Carlos, Marina • Código LAR123'
-                          : '$userName • Gerenciar membros e convites',
-                    ),
-                    trailing: const Icon(Icons.chevron_right_rounded),
-                    onTap: () =>
-                        _showMembersModal(context, houseName, house?.id ?? ''),
-                  ),
-                  const Divider(),
-                  ListTile(
-                    leading: const Icon(
-                      Icons.category_outlined,
-                      color: AppColors.primary,
-                    ),
-                    title: const Text('Categorias de Gastos'),
-                    subtitle: const Text(
-                      'Supermercado, Aluguel, Carro e donos',
-                    ),
-                    trailing: const Icon(Icons.chevron_right_rounded),
-                    onTap: () => _showCategoriesModal(context),
-                  ),
-                  const Divider(),
-                  ListTile(
-                    leading: const Icon(
-                      Icons.tune_rounded,
-                      color: AppColors.accent,
-                    ),
-                    title: const Text('Modelos de Rateio'),
-                    subtitle: const Text(
-                      'Porcentagem (50/50), balde de aportes fixos ou categoria',
-                    ),
-                    trailing: const Icon(Icons.chevron_right_rounded),
-                    onTap: () async {
-                      // Quem entrou na casa depois de o app abrir precisa aparecer aqui
-                      await context.read<FinanceCubit>().refreshMembers();
-                      if (!context.mounted) return;
-                      _showSplitModelsModal(context);
-                    },
-                  ),
-                  const Divider(),
-                  ListTile(
-                    leading: const Icon(
-                      Icons.credit_card_rounded,
-                      color: Colors.orange,
-                    ),
-                    title: const Text('Cartões e Formas de Pagamento'),
-                    subtitle: Text(
-                      sl<AuthRepository>().isDemoMode
-                          ? 'Nubank Carlos, Inter Marina, VR Alelo'
-                          : 'Cadastre cartões e formas de pagamento da casa',
-                    ),
-                    trailing: const Icon(Icons.chevron_right_rounded),
-                    onTap: () => _showPaymentMethodsModal(context),
-                  ),
-                  const Divider(),
-                  ListTile(
-                    leading: const Icon(
-                      Icons.call_split_rounded,
-                      color: AppColors.accent,
-                    ),
-                    title: const Text('Rachar Fatura & Extratos (RN09)'),
-                    subtitle: const Text(
-                      'Conciliação de cartão misto entre Casa, Pessoal e P2P',
-                    ),
-                    trailing: const Icon(Icons.chevron_right_rounded),
-                    onTap: () => SplitInvoiceModal.show(context),
-                  ),
-                  const Divider(),
-                  ListTile(
-                    leading: const Icon(
-                      Icons.repeat_rounded,
-                      color: Colors.indigoAccent,
-                    ),
-                    title: const Text('Assinaturas & Contas Fixas'),
-                    subtitle: const Text(
-                      'Aluguel, Luz, Internet, Netflix e consumo',
-                    ),
-                    trailing: const Icon(Icons.chevron_right_rounded),
-                    onTap: () => _showRecurringExpensesModal(context),
-                  ),
-                  const Divider(),
-                  ListTile(
-                    leading: const Icon(
-                      Icons.calendar_today_outlined,
-                      color: Colors.teal,
-                    ),
-                    title: const Text('Ciclo Financeiro'),
-                    subtitle: Text(
-                      'Dia $cycleDay ao dia ${cycleDay == 1 ? 31 : cycleDay - 1}',
-                    ),
-                    trailing: const Icon(Icons.chevron_right_rounded),
-                    onTap: () => _showCycleDayDialog(context, cycleDay),
-                  ),
-                  const Divider(),
-                  ListTile(
-                    leading: const Icon(
-                      Icons.pix_rounded,
-                      color: AppColors.creditGreen,
-                    ),
-                    title: const Text('Chave Pix da Casa'),
-                    subtitle: Text(
-                      house?.pixKey != null && house!.pixKey!.isNotEmpty
-                          ? '${house.pixKey} • ${house.pixKeyHolderName ?? "Caixa da Casa"}'
-                          : 'Configure a chave oficial do Caixa da Casa',
-                    ),
-                    trailing: const Icon(Icons.chevron_right_rounded),
-                    onTap: () => _showHousePixKeyModal(context, house),
-                  ),
-                  const Divider(),
-                  ListTile(
-                    leading: const Icon(
-                      Icons.auto_awesome_rounded,
-                      color: Colors.purple,
-                    ),
-                    title: const Text('Assistente IA'),
-                    subtitle: const Text('Chave Gemini (BYOK), preferências e privacidade'),
-                    trailing: const Icon(Icons.chevron_right_rounded),
-                    onTap: () => _showAssistantPreferencesModal(context),
-                  ),
-                  const Divider(),
-                  ListTile(
-                    leading: const Icon(
-                      Icons.history_edu_rounded,
-                      color: AppColors.primary,
-                    ),
-                    title: const Text('Auditoria e Histórico da Casa'),
-                    subtitle: const Text('Rastreabilidade de criações, edições e exclusões'),
-                    trailing: const Icon(Icons.chevron_right_rounded),
-                    onTap: () => showAuditLogSheet(context: context, title: 'Auditoria da Casa'),
-                  ),
-                  Builder(
-                    builder: (context) {
-                      ThemeMode mode = ThemeMode.system;
-                      try {
-                        mode = context.watch<ThemeCubit>().state;
-                      } catch (_) {}
-                      return ListTile(
-                        leading: const Icon(
-                          Icons.palette_outlined,
-                          color: Colors.blueAccent,
-                        ),
-                        title: const Text('Aparência & Tema'),
-                        subtitle: Text(_getThemeModeLabel(mode)),
-                        trailing: const Icon(Icons.chevron_right_rounded),
-                        onTap: () => showThemeSelectionDialog(context),
-                      );
-                    },
-                  ),
-                  const Divider(),
-                  const SizedBox(height: 16),
-
-                  // Botão Sair da Conta
-                  Padding(
+  Widget _signOutButton(BuildContext context) {
+    return Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 16),
                     child: OutlinedButton.icon(
                       onPressed: () => _confirmSignOut(context),
@@ -3647,14 +3421,22 @@ class SettingsPage extends StatelessWidget {
                         ),
                       ),
                     ),
-                  ),
-                  const SizedBox(height: 32),
-                ],
-              ),
-            ),
-          );
-        },
-      ),
+                  );
+  }
+
+  Widget _settingsTile({
+    required IconData icon,
+    required Color color,
+    required String title,
+    required String subtitle,
+    required VoidCallback onTap,
+  }) {
+    return ListTile(
+      leading: Icon(icon, color: color),
+      title: Text(title),
+      subtitle: Text(subtitle),
+      trailing: const Icon(Icons.chevron_right_rounded),
+      onTap: onTap,
     );
   }
 
