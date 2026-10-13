@@ -486,6 +486,10 @@ class _SettlementHubContent extends StatelessWidget {
     SettlementState state,
   ) {
     final isSurplus = summary.houseTreasuryBalance.cents >= 0;
+    // Com "Devolver aos membros" a sobra já sai do saldo e vira abatimento dos aportes
+    final surplusToDecide = Money(
+      summary.houseTreasuryBalance.cents + summary.surplusRefunded.cents,
+    );
     final isSettled = summary.status == SettlementStatus.settled;
 
     return Card(
@@ -523,6 +527,25 @@ class _SettlementHubContent extends StatelessWidget {
               ],
             ),
             const SizedBox(height: 14),
+            if (summary.openingBalance.cents > 0) ...[
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Text(
+                    'Sobra do ciclo anterior (folga):',
+                    style: TextStyle(color: Colors.grey),
+                  ),
+                  PrivacySensitiveText(
+                    summary.openingBalance.formatted,
+                    style: const TextStyle(
+                      fontWeight: FontWeight.bold,
+                      color: AppColors.creditGreen,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 6),
+            ],
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
@@ -648,7 +671,7 @@ class _SettlementHubContent extends StatelessWidget {
                 'Todas as despesas deste ciclo foram cobertas pelos aportes e quitadas.',
                 style: TextStyle(color: Colors.grey.shade600, fontSize: 12),
               ),
-            ] else if (isSurplus && summary.houseTreasuryBalance.cents > 0) ...[
+            ] else if (isSurplus && surplusToDecide.cents > 0) ...[
               const SizedBox(height: 16),
               Container(
                 padding: const EdgeInsets.all(12),
@@ -672,7 +695,7 @@ class _SettlementHubContent extends StatelessWidget {
                         const SizedBox(width: 8),
                         Expanded(
                           child: Text(
-                            'O que fazer com a sobra de ${summary.houseTreasuryBalance.formatted}?',
+                            'O que fazer com a sobra de ${surplusToDecide.formatted}?',
                             style: const TextStyle(
                               fontWeight: FontWeight.bold,
                               fontSize: 13,
@@ -774,11 +797,15 @@ class _SettlementHubContent extends StatelessWidget {
                         ),
                       ),
                       subtitle: const Text(
-                        'Ainda não disponível',
+                        'Fica como folga: cobre gastos acima do balde no próximo ciclo',
                         style: TextStyle(fontSize: 11),
                       ),
-                      // O fechamento ainda não leva a sobra para o ciclo seguinte
-                      onChanged: null,
+                      onChanged: (val) {
+                        if (val != null)
+                          context.read<SettlementCubit>().updateSurplusAction(
+                            val,
+                          );
+                      },
                     ),
                     RadioListTile<SurplusAction>(
                       dense: true,
@@ -793,11 +820,15 @@ class _SettlementHubContent extends StatelessWidget {
                         ),
                       ),
                       subtitle: const Text(
-                        'Ainda não disponível',
+                        'Abate do aporte de cada um, na proporção do aporte',
                         style: TextStyle(fontSize: 11),
                       ),
-                      // O fechamento ainda não gera o estorno aos membros
-                      onChanged: null,
+                      onChanged: (val) {
+                        if (val != null)
+                          context.read<SettlementCubit>().updateSurplusAction(
+                            val,
+                          );
+                      },
                     ),
                   ],
                 ),
@@ -1174,7 +1205,7 @@ class _SettlementHubContent extends StatelessWidget {
               ...summary.transfers.map(
                 (t) => _buildTransferCard(context, t, state, isSettled),
               ),
-            if (summary.houseTreasuryBalance.cents > 0)
+            if (summary.houseTreasuryBalance.cents + summary.surplusRefunded.cents > 0)
               Container(
                 margin: const EdgeInsets.only(top: 6),
                 padding: const EdgeInsets.all(12),
@@ -1195,9 +1226,15 @@ class _SettlementHubContent extends StatelessWidget {
                     const SizedBox(width: 10),
                     Expanded(
                       child: Text(
-                        targetVault != null
-                            ? 'Sobra de ${summary.houseTreasuryBalance.formatted} será guardada na caixinha "${targetVault.name}".'
-                            : 'Sobra de ${summary.houseTreasuryBalance.formatted} não será movimentada: crie uma caixinha para guardá-la.',
+                        switch (state.options.surplusAction) {
+                          SurplusAction.refund =>
+                            'Sobra de ${summary.surplusRefunded.formatted} devolvida aos moradores: já está abatida dos valores acima.',
+                          SurplusAction.rollover =>
+                            'Sobra de ${summary.houseTreasuryBalance.formatted} fica no Caixa como folga do próximo ciclo.',
+                          SurplusAction.toVault => targetVault != null
+                              ? 'Sobra de ${summary.houseTreasuryBalance.formatted} será guardada na caixinha "${targetVault.name}".'
+                              : 'Sobra de ${summary.houseTreasuryBalance.formatted} não será movimentada: crie uma caixinha para guardá-la.',
+                        },
                         style: const TextStyle(
                           fontSize: 12,
                           color: AppColors.creditGreen,
@@ -1633,10 +1670,17 @@ class _SettlementHubContent extends StatelessWidget {
     final targetVault = state.vaults
         .where((v) => v.id == state.options.targetVaultId)
         .firstOrNull;
-    final hasSurplus = (state.summary?.houseTreasuryBalance.cents ?? 0) > 0;
-    final surplusDesc = targetVault != null
-        ? 'Guardar sobra na caixinha "${targetVault.name}"'
-        : 'Não será movimentada (nenhuma caixinha criada)';
+    final hasSurplus =
+        (state.summary?.houseTreasuryBalance.cents ?? 0) +
+            (state.summary?.surplusRefunded.cents ?? 0) >
+        0;
+    final surplusDesc = switch (state.options.surplusAction) {
+      SurplusAction.refund => 'Devolver aos moradores, na proporção do aporte',
+      SurplusAction.rollover => 'Deixar no Caixa como folga do próximo ciclo',
+      SurplusAction.toVault => targetVault != null
+          ? 'Guardar sobra na caixinha "${targetVault.name}"'
+          : 'Não será movimentada (nenhuma caixinha criada)',
+    };
 
     showDialog(
       context: context,

@@ -63,6 +63,11 @@ class _SettlementAuditSheetState extends State<SettlementAuditSheet> {
     buffer.writeln(
       '  (-) Aporte Pendente da Casa: ${audit.pendingContribution.formatted} (Meta: ${audit.contributionDue.formatted} | Pago: ${audit.contributionPaid.formatted})',
     );
+    if (audit.contributionRefund.cents > 0) {
+      buffer.writeln(
+        '  (+) Devolução da Sobra (já aportada): ${audit.contributionRefund.formatted}',
+      );
+    }
     buffer.writeln(
       '  (+) Empréstimos a Receber: ${audit.p2pLentTotal.formatted}',
     );
@@ -425,6 +430,13 @@ class _SettlementAuditSheetState extends State<SettlementAuditSheet> {
             label: 'Aporte Pendente (Meta menos o já pago)',
             value: '-${audit.pendingContribution.formatted}',
           ),
+          if (audit.contributionRefund.cents > 0)
+            _buildEquationLine(
+              icon: Icons.add_circle_outline_rounded,
+              iconColor: AppColors.creditGreen,
+              label: 'Devolução da Sobra (já aportada)',
+              value: '+${audit.contributionRefund.formatted}',
+            ),
           _buildEquationLine(
             icon: Icons.add_circle_outline_rounded,
             iconColor: AppColors.creditGreen,

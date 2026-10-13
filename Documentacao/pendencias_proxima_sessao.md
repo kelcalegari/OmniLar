@@ -43,7 +43,7 @@ Nada disto foi exercitado com usuário logado; só passou por teste automatizado
 ## Pendente: decisões do dono do projeto
 
 - O devedor ainda pode excluir o empréstimo inteiro (política da migration 0018).
-- As opções de sobra "rolar para o próximo ciclo" e "estornar aos membros" estão desabilitadas na tela de fechamento ("Ainda não disponível") e a escolha de crédito do morador foi removida: falta decidir se serão implementadas.
+- As opções de sobra "deixar no Caixa para o próximo mês" (fica como folga: cobre o excedente do balde antes da Caixinha e do rateio) e "devolver aos membros" (abate do aporte, proporcional ao aporte) foram implementadas e dependem da migration 0031. A escolha de crédito do morador continua removida: quem aporta acima do devido não recebe a diferença de volta e esse valor fica no Caixa sem entrar na sobra do fechamento.
 
 ## Pendente: limites conhecidos
 

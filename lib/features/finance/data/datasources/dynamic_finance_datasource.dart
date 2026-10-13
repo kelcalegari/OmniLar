@@ -47,6 +47,9 @@ class DynamicFinanceDataSource implements FinanceDataSource {
       _active.getContributionsForCycle(cycle);
 
   @override
+  Future<Money> getOpeningBalance(FinancialCycle cycle) => _active.getOpeningBalance(cycle);
+
+  @override
   Future<FinancialCycleSummary> getCycleSummary(FinancialCycle cycle) =>
       _active.getCycleSummary(cycle);
 

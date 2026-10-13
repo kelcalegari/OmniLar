@@ -73,9 +73,15 @@ class SettlementCubit extends BlocBase<SettlementState> {
   }
 
   void updateSurplusAction(SurplusAction action) {
-    emit(
-      state.copyWith(options: state.options.copyWith(surplusAction: action)),
-    );
+    final previous = state.options.surplusAction;
+    final options = state.options.copyWith(surplusAction: action);
+    // Devolver a sobra muda o aporte devido de cada morador: recalcula o Super Pix
+    if (action != previous &&
+        (action == SurplusAction.refund || previous == SurplusAction.refund)) {
+      _applyDeficitOptions(options);
+      return;
+    }
+    emit(state.copyWith(options: options));
   }
 
   void updateTargetVaultId(String vaultId) {

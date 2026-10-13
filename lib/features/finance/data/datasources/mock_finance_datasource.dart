@@ -322,6 +322,9 @@ class MockFinanceDataSource implements FinanceDataSource {
   }
 
   @override
+  Future<Money> getOpeningBalance(FinancialCycle cycle) async => const Money.zero();
+
+  @override
   Future<List<Contribution>> getContributionsForCycle(FinancialCycle cycle) async {
     return _contributions.where((c) => cycle.contains(c.date)).toList()
       ..sort((a, b) => b.date.compareTo(a.date));

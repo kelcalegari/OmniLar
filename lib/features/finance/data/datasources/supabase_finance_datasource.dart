@@ -341,6 +341,27 @@ class SupabaseFinanceDataSource implements FinanceDataSource {
   }
 
   @override
+  Future<Money> getOpeningBalance(FinancialCycle cycle) async {
+    try {
+      String dateOnly(DateTime d) => d.toIso8601String().split('T')[0];
+      // Só o ciclo imediatamente anterior conta: os ciclos são mensais
+      final row = await client
+          .from('settlements')
+          .select('surplus_rolled_cents')
+          .eq('house_id', _houseId)
+          .neq('status', 'cancelled')
+          .lt('cycle_start_date', dateOnly(cycle.startDate))
+          .gte('cycle_start_date', dateOnly(cycle.startDate.subtract(const Duration(days: 32))))
+          .order('cycle_start_date', ascending: false)
+          .limit(1)
+          .maybeSingle();
+      return Money((row?['surplus_rolled_cents'] as num?)?.toInt() ?? 0);
+    } catch (_) {
+      return const Money.zero();
+    }
+  }
+
+  @override
   Future<List<Contribution>> getContributionsForCycle(FinancialCycle cycle) async {
     try {
       List<Map<String, dynamic>> rows;
@@ -405,7 +426,11 @@ class SupabaseFinanceDataSource implements FinanceDataSource {
         }
       }
 
-      final folegoCents = totalContributionsCents - (totalExpensesPaidCents + committedFutureExpensesCents);
+      // A sobra deixada pelo ciclo anterior entra como folga do Caixa
+      final openingBalance = await getOpeningBalance(cycle);
+      final folegoCents = openingBalance.cents +
+          totalContributionsCents -
+          (totalExpensesPaidCents + committedFutureExpensesCents);
 
       return FinancialCycleSummary(
         cycle: cycle,

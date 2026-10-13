@@ -1,0 +1,493 @@
+-- 0031: destino da sobra do fechamento
+--
+-- 1. Sobra deixada no Caixa como folga do próximo ciclo (surplus_rolled_cents).
+-- 2. Sobra devolvida aos moradores, abatida do aporte devido (surplus_refunded_cents).
+-- 3. Quem já tinha aportado a parte devolvida recebe de volta do Caixa: o
+--    fechamento registra um aporte negativo. Lançamentos feitos pelo app
+--    continuam exigindo valor positivo.
+
+alter table public.settlements
+  add column if not exists surplus_rolled_cents bigint not null default 0,
+  add column if not exists surplus_refunded_cents bigint not null default 0;
+
+alter table public.contributions drop constraint if exists contributions_amount_cents_check;
+alter table public.contributions
+  add constraint contributions_amount_cents_check check (amount_cents <> 0);
+
+create or replace function public.guard_closed_cycle_contribution()
+returns trigger
+language plpgsql
+set search_path = public
+as $$
+begin
+  if current_user not in ('authenticated', 'anon') or pg_trigger_depth() > 1 then
+    return new;
+  end if;
+
+  -- Devolução de aporte só nasce do fechamento do ciclo
+  if new.amount_cents <= 0 then
+    raise exception 'O valor do aporte deve ser maior que zero.';
+  end if;
+
+  perform pg_advisory_xact_lock_shared(hashtextextended('house-ledger:' || new.house_id::text, 0));
+
+  if public.house_date_is_closed(new.house_id, new.cycle_start_date) then
+    raise exception 'O ciclo desta data já foi fechado. Reabra o ciclo no Fechamento para lançar um aporte nele.';
+  end if;
+
+  return new;
+end;
+$$;
+
+create or replace function public.settlement_data_version(p_house_id uuid)
+returns text
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_version text;
+begin
+  if not public.is_house_member(p_house_id) then
+    raise exception 'Acesso negado: você não é membro desta casa';
+  end if;
+
+  select md5(concat_ws('|',
+    (select md5(coalesce(string_agg(x::text, ',' order by x.id), ''))
+       from (select e.id, e.updated_at, e.deleted_at
+             from public.house_expenses e where e.house_id = p_house_id) x),
+    (select md5(coalesce(string_agg(x::text, ',' order by x.id), ''))
+       from (select s.id, s.expense_id, s.member_id, s.percentage_basis_points, s.fixed_amount_cents, s.calculated_cents
+             from public.split_rules s
+             join public.house_expenses e on e.id = s.expense_id
+             where e.house_id = p_house_id) x),
+    (select md5(coalesce(string_agg(x::text, ',' order by x.id), ''))
+       from (select i.id, i.expense_id, i.amount_cents, i.responsible_member_id, i.split_type
+             from public.house_expense_items i
+             join public.house_expenses e on e.id = i.expense_id
+             where e.house_id = p_house_id) x),
+    (select md5(coalesce(string_agg(x::text, ',' order by x.id), ''))
+       from (select c.id, c.member_id, c.amount_cents, c.cycle_start_date, c.date
+             from public.contributions c where c.house_id = p_house_id) x),
+    (select md5(coalesce(string_agg(x::text, ',' order by x.user_id), ''))
+       from (select hm.user_id, hm.role, hm.left_at, hm.default_split_percent, hm.default_fixed_amount_cents
+             from public.house_members hm where hm.house_id = p_house_id) x),
+    (select md5(coalesce(string_agg(x::text, ',' order by x.id), ''))
+       from (select l.id, l.updated_at
+             from public.p2p_loans l where l.house_id = p_house_id) x),
+    (select md5(coalesce(string_agg(x::text, ',' order by x.id), ''))
+       from (select i.id, i.updated_at
+             from public.p2p_installments i
+             join public.p2p_loans l on l.id = i.loan_id
+             where l.house_id = p_house_id) x),
+    (select md5(coalesce(string_agg(x::text, ',' order by x.id), ''))
+       from (select v.id, v.current_balance_cents, v.deleted_at
+             from public.savings_vaults v where v.house_id = p_house_id) x),
+    (select md5(coalesce(string_agg(x::text, ',' order by x.id), ''))
+       from (select pm.id, pm.type
+             from public.payment_methods pm where pm.house_id = p_house_id) x),
+    (select md5(coalesce(string_agg(x::text, ',' order by x.id), ''))
+       from (select st.id, st.cycle_start_date, st.status, st.surplus_vaulted_cents, st.deficit_covered_cents,
+                    st.surplus_rolled_cents, st.surplus_refunded_cents
+             from public.settlements st where st.house_id = p_house_id) x)
+  )) into v_version;
+
+  return v_version;
+end;
+$$;
+
+create or replace function public.confirm_cycle_settlement(p_plan jsonb)
+returns uuid
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_uid uuid := auth.uid();
+  v_house_id uuid := (p_plan->>'house_id')::uuid;
+  v_cycle date := (p_plan->>'cycle_start_date')::date;
+  v_item jsonb;
+  v_sub jsonb;
+  v_vault public.savings_vaults%rowtype;
+  v_amount bigint;
+  v_member uuid;
+  v_lender uuid;
+  v_loan_id uuid;
+  v_settlement_id uuid;
+begin
+  if v_uid is null then
+    raise exception 'Usuário precisa estar autenticado.';
+  end if;
+  if v_house_id is null or v_cycle is null then
+    raise exception 'Plano de fechamento incompleto.';
+  end if;
+  if not public.is_house_admin(v_house_id) then
+    raise exception 'Apenas administradores da casa podem fechar o ciclo.';
+  end if;
+
+  -- Um fechamento por vez para o mesmo ciclo
+  perform pg_advisory_xact_lock(hashtextextended(v_house_id::text || v_cycle::text, 0));
+
+  if exists (
+    select 1 from public.settlements
+    where house_id = v_house_id and cycle_start_date = v_cycle and status in ('confirmed', 'completed')
+  ) then
+    raise exception 'Este ciclo já foi fechado.';
+  end if;
+
+  -- Quem lança despesa ou aporte nesta casa espera o fechamento terminar, e o
+  -- fechamento espera os lançamentos em andamento
+  perform pg_advisory_xact_lock(hashtextextended('house-ledger:' || v_house_id::text, 0));
+
+  -- O plano foi calculado sobre os dados que o app leu: se algo mudou desde
+  -- então, o admin revisa antes de fechar
+  if p_plan->>'data_version' is null then
+    raise exception 'Atualize o aplicativo para fechar o ciclo.';
+  end if;
+  if p_plan->>'data_version' <> public.settlement_data_version(v_house_id) then
+    raise exception 'Os dados da casa mudaram desde o cálculo do fechamento. Revise os valores e confirme de novo.';
+  end if;
+
+  -- O plano é calculado no app de quem fecha: confere antes de gravar qualquer coisa
+  if coalesce((p_plan->>'total_expenses_cents')::bigint, 0) < 0
+     or coalesce((p_plan->>'total_contributions_cents')::bigint, 0) < 0
+     or coalesce((p_plan->>'total_cleared_p2p_cents')::bigint, 0) < 0
+     or coalesce((p_plan->>'surplus_vaulted_cents')::bigint, 0) < 0
+     or coalesce((p_plan->>'deficit_covered_cents')::bigint, 0) < 0
+     or coalesce((p_plan->>'surplus_rolled_cents')::bigint, 0) < 0
+     or coalesce((p_plan->>'surplus_refunded_cents')::bigint, 0) < 0 then
+    raise exception 'O plano de fechamento tem um total negativo.';
+  end if;
+
+  if exists (
+    select 1
+    from (
+      select value::uuid as id
+      from jsonb_array_elements_text(coalesce(p_plan->'expense_ids', '[]'::jsonb))
+      union all
+      select value::uuid
+      from jsonb_array_elements_text(coalesce(p_plan->'settled_expense_ids', '[]'::jsonb))
+      union all
+      select (value->>'expense_id')::uuid
+      from jsonb_array_elements(coalesce(p_plan->'split_snapshots', '[]'::jsonb))
+    ) x
+    where not exists (
+      select 1 from public.house_expenses e
+      where e.id = x.id and e.house_id = v_house_id and e.deleted_at is null
+    )
+  ) then
+    raise exception 'O plano de fechamento cita uma despesa que não existe nesta casa. Atualize a tela e tente de novo.';
+  end if;
+
+  -- O rateio congelado de cada despesa precisa somar o valor dela, entre moradores da casa
+  if exists (
+    select 1
+    from jsonb_array_elements(coalesce(p_plan->'split_snapshots', '[]'::jsonb)) snap
+    join public.house_expenses e on e.id = (snap->>'expense_id')::uuid
+    where e.amount_cents <> (
+        select coalesce(sum((rule->>'calculated_cents')::bigint), 0)
+        from jsonb_array_elements(coalesce(snap->'rules', '[]'::jsonb)) rule
+      )
+      or exists (
+        select 1
+        from jsonb_array_elements(coalesce(snap->'rules', '[]'::jsonb)) rule
+        where coalesce((rule->>'calculated_cents')::bigint, -1) < 0
+          or not exists (
+            select 1 from public.house_members hm
+            where hm.house_id = v_house_id and hm.user_id = (rule->>'member_id')::uuid
+          )
+      )
+  ) then
+    raise exception 'O rateio de uma despesa no plano de fechamento não soma o valor dela. Atualize a tela e tente de novo.';
+  end if;
+
+  if exists (
+    select 1
+    from jsonb_array_elements(coalesce(p_plan->'transfers', '[]'::jsonb)) t
+    where coalesce((t->>'amount_cents')::bigint, 0) <= 0
+      or t->>'from_member_id' is null
+      or t->>'to_member_id' is null
+      or t->>'from_member_id' = t->>'to_member_id'
+      or not exists (
+        select 1 from public.house_members hm
+        where hm.house_id = v_house_id and hm.user_id = (t->>'from_member_id')::uuid
+      )
+      or not exists (
+        select 1 from public.house_members hm
+        where hm.house_id = v_house_id and hm.user_id = (t->>'to_member_id')::uuid
+      )
+  ) then
+    raise exception 'O plano de fechamento tem uma transferência inválida.';
+  end if;
+
+  if exists (
+    select 1
+    from jsonb_array_elements(coalesce(p_plan->'new_loans', '[]'::jsonb)) l
+    where (l->>'total_amount_cents')::bigint is distinct from (
+      select sum((i->>'amount_cents')::bigint)
+      from jsonb_array_elements(coalesce(l->'installments', '[]'::jsonb)) i
+    )
+  ) then
+    raise exception 'O plano de fechamento tem um acordo cujas parcelas não somam o total.';
+  end if;
+
+  -- Aportes e devoluções do fechamento: valores positivos, para moradores da casa
+  if exists (
+    select 1
+    from (
+      select value from jsonb_array_elements(coalesce(p_plan->'contributions', '[]'::jsonb))
+      union all
+      select value from jsonb_array_elements(coalesce(p_plan->'contribution_refunds', '[]'::jsonb))
+    ) c
+    where coalesce((c.value->>'amount_cents')::bigint, 0) <= 0
+      or not exists (
+        select 1 from public.house_members hm
+        where hm.house_id = v_house_id and hm.user_id = (c.value->>'member_id')::uuid
+      )
+  ) then
+    raise exception 'O plano de fechamento tem um aporte ou uma devolução inválida.';
+  end if;
+
+  -- O que o fechamento diz ter movido nas caixinhas precisa bater com as movimentações
+  if coalesce((p_plan->>'surplus_vaulted_cents')::bigint, 0) <> (
+       select coalesce(sum((op->>'amount_cents')::bigint), 0)
+       from jsonb_array_elements(coalesce(p_plan->'vault_operations', '[]'::jsonb)) op
+       where op->>'type' = 'deposit'
+     )
+     or coalesce((p_plan->>'deficit_covered_cents')::bigint, 0) > (
+       select coalesce(sum((op->>'amount_cents')::bigint), 0)
+       from jsonb_array_elements(coalesce(p_plan->'vault_operations', '[]'::jsonb)) op
+       where op->>'type' = 'withdraw'
+     ) then
+    raise exception 'O plano de fechamento não bate com as movimentações de caixinha.';
+  end if;
+
+  -- 1. Caixinhas (sobra do Caixa guardada / cobertura de quem pagou a menos)
+  for v_item in select * from jsonb_array_elements(coalesce(p_plan->'vault_operations', '[]'::jsonb))
+  loop
+    v_amount := (v_item->>'amount_cents')::bigint;
+    v_member := coalesce((v_item->>'member_id')::uuid, v_uid);
+
+    select * into v_vault
+    from public.savings_vaults
+    where id = (v_item->>'vault_id')::uuid and house_id = v_house_id and deleted_at is null
+    for update;
+    if not found then
+      raise exception 'Caixinha não encontrada nesta casa.';
+    end if;
+    if not exists (
+      select 1 from public.house_members
+      where house_id = v_house_id and user_id = v_member and left_at is null
+    ) then
+      raise exception 'Movimentação de caixinha para quem não mora na casa.';
+    end if;
+
+    if v_item->>'type' = 'deposit' then
+      update public.savings_vaults
+      set current_balance_cents = current_balance_cents + v_amount
+      where id = v_vault.id;
+    elsif v_item->>'type' = 'withdraw' then
+      if v_vault.current_balance_cents < v_amount then
+        raise exception 'Saldo insuficiente na caixinha "%".', v_vault.name;
+      end if;
+      update public.savings_vaults
+      set current_balance_cents = current_balance_cents - v_amount
+      where id = v_vault.id;
+    else
+      raise exception 'Tipo de movimentação de caixinha inválido.';
+    end if;
+
+    insert into public.savings_transactions (vault_id, house_id, member_id, amount_cents, type, description)
+    values (v_vault.id, v_house_id, v_member, v_amount, v_item->>'type', v_item->>'description');
+  end loop;
+
+  -- 2. Aportes compensatórios no Caixa da Casa
+  for v_item in select * from jsonb_array_elements(coalesce(p_plan->'contributions', '[]'::jsonb))
+  loop
+    v_member := (v_item->>'member_id')::uuid;
+    if not exists (
+      select 1 from public.house_members
+      where house_id = v_house_id and user_id = v_member and left_at is null
+    ) then
+      raise exception 'Aporte para quem não mora na casa.';
+    end if;
+
+    insert into public.contributions (house_id, member_id, amount_cents, cycle_start_date, notes, created_by)
+    values (v_house_id, v_member, (v_item->>'amount_cents')::bigint, v_cycle, 'Aporte do fechamento do ciclo', v_uid);
+  end loop;
+
+  -- Quem já tinha aportado mais do que deve recebe a diferença de volta do Caixa:
+  -- fica registrada como aporte negativo no ciclo
+  for v_item in select * from jsonb_array_elements(coalesce(p_plan->'contribution_refunds', '[]'::jsonb))
+  loop
+    insert into public.contributions (house_id, member_id, amount_cents, cycle_start_date, notes, created_by)
+    values (v_house_id, (v_item->>'member_id')::uuid, -((v_item->>'amount_cents')::bigint), v_cycle,
+            'Devolução de aporte no fechamento do ciclo', v_uid);
+  end loop;
+
+  -- 3. Baixa das contas pendentes do ciclo
+  update public.house_expenses
+  set status = 'paid',
+      paid_at = coalesce((p_plan->>'expenses_paid_at')::timestamptz, now())
+  where house_id = v_house_id
+    and status = 'pending'
+    and deleted_at is null
+    and id in (
+      select value::uuid
+      from jsonb_array_elements_text(coalesce(p_plan->'expense_ids', '[]'::jsonb))
+    );
+
+  -- Despesas que entram neste acerto: se o ciclo for reaberto, quem pagou do
+  -- bolso não é reembolsado de novo por elas
+  update public.house_expenses
+  set settled_at = now()
+  where house_id = v_house_id
+    and deleted_at is null
+    and settled_at is null
+    and id in (
+      select value::uuid
+      from jsonb_array_elements_text(coalesce(p_plan->'settled_expense_ids', '[]'::jsonb))
+    );
+
+  -- Congela o rateio: despesas que usaram o padrão da casa passam a carregar os
+  -- percentuais deste fechamento. Mudar o padrão ou entrar um morador novo depois
+  -- não altera o que já foi acertado.
+  for v_item in select * from jsonb_array_elements(coalesce(p_plan->'split_snapshots', '[]'::jsonb))
+  loop
+    if exists (
+      select 1 from public.house_expenses e
+      where e.id = (v_item->>'expense_id')::uuid and e.house_id = v_house_id
+    ) and not exists (
+      select 1 from public.split_rules s
+      where s.expense_id = (v_item->>'expense_id')::uuid
+    ) then
+      insert into public.split_rules (expense_id, member_id, percentage_basis_points, calculated_cents)
+      select
+        (v_item->>'expense_id')::uuid,
+        (rule->>'member_id')::uuid,
+        (rule->>'percentage_basis_points')::integer,
+        (rule->>'calculated_cents')::bigint
+      from jsonb_array_elements(coalesce(v_item->'rules', '[]'::jsonb)) as rule;
+    end if;
+  end loop;
+
+  -- 4. Parcelas P2P cobradas neste fechamento (antes de criar os acordos novos,
+  --    que só começam a vencer nos próximos ciclos)
+  for v_item in select * from jsonb_array_elements(coalesce(p_plan->'installment_payments', '[]'::jsonb))
+  loop
+    if not exists (
+      select 1
+      from public.p2p_installments i
+      join public.p2p_loans l on l.id = i.loan_id
+      where i.id = (v_item->>'installment_id')::uuid and l.house_id = v_house_id
+    ) then
+      raise exception 'Parcela não pertence a esta casa.';
+    end if;
+
+    perform public.apply_p2p_installment_payment(
+      (v_item->>'installment_id')::uuid,
+      (v_item->>'amount_cents')::bigint,
+      null,
+      'Fechamento do ciclo'
+    );
+  end loop;
+
+  -- 5. Acordos P2P do saldo que ficou em aberto
+  for v_item in select * from jsonb_array_elements(coalesce(p_plan->'new_loans', '[]'::jsonb))
+  loop
+    v_lender := (v_item->>'lender_id')::uuid;
+    v_member := (v_item->>'borrower_id')::uuid;
+
+    if not exists (
+      select 1 from public.house_members
+      where house_id = v_house_id and user_id = v_member and left_at is null
+    ) or (
+      v_lender is not null and not exists (
+        select 1 from public.house_members
+        where house_id = v_house_id and user_id = v_lender and left_at is null
+      )
+    ) then
+      raise exception 'Acordo envolvendo quem não mora na casa.';
+    end if;
+
+    insert into public.p2p_loans (
+      house_id, lender_id, lender_is_house, borrower_id, title, description,
+      total_amount_cents, installments_count, repayment_mode, status, created_by
+    ) values (
+      v_house_id,
+      v_lender,
+      v_lender is null,
+      v_member,
+      v_item->>'title',
+      v_item->>'description',
+      (v_item->>'total_amount_cents')::bigint,
+      greatest(jsonb_array_length(coalesce(v_item->'installments', '[]'::jsonb)), 1),
+      coalesce(v_item->>'repayment_mode', 'installments'),
+      'active',
+      v_uid
+    ) returning id into v_loan_id;
+
+    for v_sub in select * from jsonb_array_elements(coalesce(v_item->'installments', '[]'::jsonb))
+    loop
+      insert into public.p2p_installments (loan_id, installment_number, amount_cents, paid_cents, due_date, status)
+      values (
+        v_loan_id,
+        (v_sub->>'number')::integer,
+        (v_sub->>'amount_cents')::bigint,
+        0,
+        (v_sub->>'due_date')::date,
+        'pending'
+      );
+    end loop;
+  end loop;
+
+  -- 6. Registro do fechamento e do Super Pix
+  insert into public.settlements (
+    house_id, cycle_start_date, status,
+    total_expenses_cents, total_contributions_cents, total_cleared_p2p_cents,
+    surplus_vaulted_cents, deficit_covered_cents,
+    surplus_rolled_cents, surplus_refunded_cents,
+    settled_at, settled_by
+  ) values (
+    v_house_id, v_cycle, 'confirmed',
+    coalesce((p_plan->>'total_expenses_cents')::bigint, 0),
+    coalesce((p_plan->>'total_contributions_cents')::bigint, 0),
+    coalesce((p_plan->>'total_cleared_p2p_cents')::bigint, 0),
+    coalesce((p_plan->>'surplus_vaulted_cents')::bigint, 0),
+    coalesce((p_plan->>'deficit_covered_cents')::bigint, 0),
+    coalesce((p_plan->>'surplus_rolled_cents')::bigint, 0),
+    coalesce((p_plan->>'surplus_refunded_cents')::bigint, 0),
+    now(), v_uid
+  )
+  on conflict (house_id, cycle_start_date) do update
+    set status = 'confirmed',
+        total_expenses_cents = excluded.total_expenses_cents,
+        total_contributions_cents = excluded.total_contributions_cents,
+        total_cleared_p2p_cents = excluded.total_cleared_p2p_cents,
+        -- Ciclo reaberto: soma ao que o fechamento anterior já movimentou nas caixinhas
+        surplus_vaulted_cents = public.settlements.surplus_vaulted_cents + excluded.surplus_vaulted_cents,
+        deficit_covered_cents = public.settlements.deficit_covered_cents + excluded.deficit_covered_cents,
+        surplus_rolled_cents = public.settlements.surplus_rolled_cents + excluded.surplus_rolled_cents,
+        surplus_refunded_cents = public.settlements.surplus_refunded_cents + excluded.surplus_refunded_cents,
+        settled_at = excluded.settled_at,
+        settled_by = excluded.settled_by
+  returning id into v_settlement_id;
+
+  -- As transferências de um fechamento anterior (ciclo reaberto) ficam no histórico;
+  -- as novas são somadas a elas.
+  for v_item in select * from jsonb_array_elements(coalesce(p_plan->'transfers', '[]'::jsonb))
+  loop
+    insert into public.settlement_transfers (settlement_id, from_member_id, to_member_id, amount_cents, status, paid_at)
+    values (
+      v_settlement_id,
+      (v_item->>'from_member_id')::uuid,
+      (v_item->>'to_member_id')::uuid,
+      (v_item->>'amount_cents')::bigint,
+      'confirmed',
+      now()
+    );
+  end loop;
+
+  return v_settlement_id;
+end;
+$$;
