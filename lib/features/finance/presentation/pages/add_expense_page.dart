@@ -84,7 +84,16 @@ class _AddExpensePageState extends State<AddExpensePage> {
       _selectedPaidByMemberId = edit.paidByMemberId;
       _selectedPaymentMethodId = edit.paymentMethodId;
       _selectedProjectId = edit.projectId;
-      _selectedDate = edit.dueDate ?? edit.date;
+      PaymentMethod? editPm;
+      try {
+        editPm = context
+            .read<FinanceCubit>()
+            .state
+            .paymentMethods
+            .where((p) => p.id == edit.paymentMethodId)
+            .firstOrNull;
+      } catch (_) {}
+      _selectedDate = editableDateOfExpense(edit, editPm);
       _isRecurring = edit.isRecurring;
       _isVariable = edit.isVariable;
       _dueDay = edit.dueDay ?? (edit.dueDate ?? edit.date).day;
@@ -110,7 +119,9 @@ class _AddExpensePageState extends State<AddExpensePage> {
   Future<void> _loadAvailableProjects() async {
     try {
       if (sl.isRegistered<ProjectsRepository>()) {
-        final projects = await sl<ProjectsRepository>().getProjects(houseId: 'house_demo');
+        final auth = sl<AuthRepository>();
+        final houseId = auth.isDemoMode ? 'house_demo' : (auth.currentHouse?.id ?? 'house_demo');
+        final projects = await sl<ProjectsRepository>().getProjects(houseId: houseId);
         if (mounted) {
           setState(() {
             _availableProjects = projects;
@@ -236,10 +247,15 @@ class _AddExpensePageState extends State<AddExpensePage> {
     final paidOutOfPocket = !isHouseMethod;
 
     if (_isRecurring) {
-      final daysInMonth = DateTime(now.year, now.month + 1, 0).day;
+      // Ao editar, o vencimento fica no mês da própria ocorrência (não no mês atual)
+      final old = widget.expenseToEdit;
+      final base = old != null ? (old.dueDate ?? old.date) : now;
+      final daysInMonth = DateTime(base.year, base.month + 1, 0).day;
       final safeDay = _dueDay.clamp(1, daysInMonth);
-      dueDate = DateTime(now.year, now.month, safeDay);
-      expenseDate = _expenseStatus == ExpenseStatus.paid ? now : dueDate;
+      dueDate = DateTime(base.year, base.month, safeDay);
+      expenseDate = _expenseStatus == ExpenseStatus.paid
+          ? (old != null && !old.isPending ? old.date : now)
+          : dueDate;
     } else if (selectedPm != null &&
         selectedPm.type == PaymentMethodType.card &&
         selectedPm.closingDay != null &&
@@ -1523,4 +1539,17 @@ class _AddExpensePageState extends State<AddExpensePage> {
       ),
     );
   }
+}
+
+/// Data que o formulário mostra ao editar uma despesa. Em compra no cartão o
+/// vencimento guardado é o da fatura, então a data editável é a da compra;
+/// nos demais casos é o vencimento, quando existe.
+@visibleForTesting
+DateTime editableDateOfExpense(HouseExpense expense, PaymentMethod? paymentMethod) {
+  final isCardPurchase = paymentMethod != null &&
+      paymentMethod.type == PaymentMethodType.card &&
+      paymentMethod.closingDay != null &&
+      paymentMethod.dueDay != null;
+  if (isCardPurchase) return expense.date;
+  return expense.dueDate ?? expense.date;
 }

@@ -3,7 +3,6 @@ import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/widgets/omni_logo.dart';
-import '../../domain/entities/project_participant.dart';
 import '../../domain/entities/project_settlement_summary.dart';
 import '../../domain/entities/shared_project.dart';
 import '../../../settlement/domain/entities/super_pix_transfer.dart';
@@ -447,26 +446,10 @@ class _ProjectsHubPageState extends State<ProjectsHubPage> {
                 ElevatedButton(
                   onPressed: () {
                     if (titleCtrl.text.trim().isNotEmpty) {
-                      final now = DateTime.now();
-                      final newProject = SharedProject(
-                        id: 'proj_${now.millisecondsSinceEpoch}',
-                        houseId: 'house_demo',
+                      context.read<ProjectsCubit>().createProjectForHouse(
                         title: titleCtrl.text.trim(),
                         type: selectedType,
-                        participants: [
-                          ProjectParticipant(
-                            id: 'part_me',
-                            projectId: 'proj_${now.millisecondsSinceEpoch}',
-                            userId: 'user_1',
-                            externalName: 'Eu',
-                            createdAt: now,
-                          ),
-                        ],
-                        createdBy: 'user_1',
-                        createdAt: now,
-                        updatedAt: now,
                       );
-                      context.read<ProjectsCubit>().createProject(newProject);
                       Navigator.pop(ctx);
                     }
                   },

@@ -4,18 +4,18 @@ Atualizado em 13/10/2026. Este arquivo resume onde o trabalho parou, o que falta
 
 ## Estado atual
 
-- **Código:** `main` local e `origin/main` no commit `e4ff129`, sincronizadas. A branch `feat/default-vault-on-house-creation` (commit `cfb3bf5`, caixinha padrão ao criar a casa) ainda não foi mesclada. O código depende das migrations até a 0033, todas já no banco.
-- **Banco (Supabase `rygxmpwzofgieodvhpcy`):** migrations 0001 a 0033 aplicadas. Só as 0022 a 0027 e as 0030 a 0033 constam no histórico de migrations do Supabase; as 0001 a 0021, a 0028 e a 0029 foram aplicadas à mão pelo SQL Editor (o conector recusou a aplicação da 0028 pelo assistente).
+- **Código:** `main` local e `origin/main` no commit `ddcacfd`, sincronizadas. O código depende das migrations até a 0034, todas já no banco.
+- **Banco (Supabase `rygxmpwzofgieodvhpcy`):** migrations 0001 a 0034 aplicadas. Só as 0022 a 0027 e as 0030 a 0034 constam no histórico de migrations do Supabase; as 0001 a 0021, a 0028 e a 0029 foram aplicadas à mão pelo SQL Editor (o conector recusou a aplicação da 0028 pelo assistente).
 - **Edge Functions:** `capture-read` versão 8 e `assistant` versão 4, ambas com `verify_jwt=true` e exigindo usuário logado que more na casa.
-- **Qualidade:** `flutter analyze` com 0 erros (4 warnings antigos) e 285 testes passando (conferido em 13/10/2026). Os testes rodam só contra os datasources mock.
+- **Qualidade:** `flutter analyze` com 0 erros (4 warnings antigos) e 297 testes passando (conferido em 13/10/2026). Os testes rodam só contra os datasources mock.
 - **Dados de teste no banco:** uma casa ("Nossa Casa") com 3 moradores (kelvynn, dono; Cristiano e Joao, membros), rateio 23,33 / 43,34 / 33,33, e 3 empréstimos ativos. Existe uma segunda casa no banco. Desde a migration 0033 toda casa tem ao menos uma caixinha: as novas nascem com a "Reserva da Casa" e a que não tinha nenhuma recebeu uma.
 
 ## O que foi feito nesta sessão
 
-1. **Segurança (migration 0022):** entrada em casa só por convite válido de uso único (RPC `join_house_with_invite`); convites não listáveis; perdão e renegociação de empréstimo por RPC com checagem de papel; confirmação de transferência só por RPC; Edge Functions autenticadas e com cota.
+1. **Projetos compartilhados só funcionavam no modo demo (corrigido em 13/10/2026, falta testar no app).** A tela e o seletor de projeto do formulário de despesa passaram a usar a casa e o usuário da sessão no lugar de `'house_demo'` e `'user_1'`. Projeto novo nasce com todos os moradores como participantes, cada um com o seu percentual padrão. Não há tela para editar participantes depois.
 2. **Rateio e fechamento (0023):** percentuais normalizados; fechamento do ciclo atômico pela RPC `confirm_cycle_settlement`; só admin fecha ou reabre.
 3. **Correções de dados:** IDs não-uuid, rateio gravado ao criar despesa, Pix inventado removido, fuso horário (0024).
-4. **Itens 14, 15 e 16 da análise:** recorrência de eventos no Supabase, contas atrasadas e competência de cartão, fila offline (4 ações).
+4. **Editar uma compra no cartão a empurrava para a fatura seguinte (corrigido em 13/10/2026, falta testar no app).** O formulário agora abre uma compra no cartão na data da compra, não no vencimento da fatura. Em recorrentes, editar uma ocorrência mantém o vencimento no mês dela. Compras já gravadas com a data errada por edições anteriores não foram corrigidas. Continua em aberto: salvar a edição regrava o rateio pelo padrão da casa, descartando um rateio personalizado.
 5. **Regra de ciclo único e data da baixa (0025):** cada despesa conta em um ciclo só; `paid_at` define o ciclo de uma conta que estava pendente.
 6. **Modelo de rateio "Por categoria" (corrigido em 13/10/2026, falta testar no app).** Decisão do dono: implementar. O modelo gravado em `houses.default_split_model` passou a ser lido e a tela reabre em "Por Categoria de Gasto", mostrando as categorias com dono (100% para o dono) e a divisão igual das demais. A regra em si já era aplicada pelo formulário de despesa; os outros caminhos de lançamento continuam ignorando o dono da categoria (item 5). No modelo de aportes fixos a categoria com dono não tem efeito.
 7. **Aportes fixos: quem entra depois não paga nada (corrigido em 13/10/2026, falta testar no app).** Decisão do dono: o valor é ajustado à mão. O novo morador continua nascendo com valor fixo 0, mas a tela de Modelos de Rateio passou a mostrar esse 0 (antes exibia R$ 1.000 que não valiam) com o aviso "Sem aporte definido", aceita gravar 0 de propósito e o fechamento avisa quem está sem aporte antes de fechar o ciclo. Só dono ou admin consegue gravar (regra do banco); para os demais a tela não avisa que não salvou.
@@ -69,7 +69,7 @@ Análise feita em 12/10/2026 por leitura do código e das migrations, e reavalia
 
 ### A mesma regra implementada de formas diferentes
 
-5. **"Pago do próprio bolso", categoria e forma de pagamento dependem de onde a despesa foi lançada.** O campo "pago do bolso" é o que gera reembolso no fechamento.
+5. **"Pago do próprio bolso", categoria e forma de pagamento dependiam de onde a despesa foi lançada (corrigido em 13/10/2026, falta testar no app).** Assistente, compra do mercado e importação de fatura passaram a usar a mesma regra (`expense_launch_defaults.dart`): pago do bolso só quando a forma de pagamento tem dono, categoria real da casa (por nome) e categoria com dono indo 100% para o dono. A importação de fatura usa o cartão cujo nome bate com o da fatura. O formulário e o scanner mantêm a lógica própria, com o mesmo resultado. A tabela abaixo descreve como era antes.
 
    | Caminho | Pago do bolso | Categoria gravada no Supabase |
    |---|---|---|
@@ -83,9 +83,9 @@ Análise feita em 12/10/2026 por leitura do código e das migrations, e reavalia
 6. **Modelo de rateio "Por categoria" não existe de fato.** O valor é gravado em `houses.default_split_model` e nunca lido. Ao reabrir a tela ele aparece como "Porcentagem", porque o modelo ativo é deduzido dos valores fixos (`settings_page.dart:1069`).
 7. **Aportes fixos: quem entra depois não paga nada.** O novo morador nasce com valor fixo 0 e só entra na lista de metas quem tem valor maior que zero (`supabase_settlement_datasource.dart:161`, usada em `global_clearing_engine.dart:75`). No modelo percentual o mesmo morador recebe 1/n automaticamente.
 8. **O planejador de aportes da Home não bate com o fechamento.** Soma as contas pendentes e depois abate o fôlego, que já as descontou; abate os aportes de novo por morador; ignora o rateio por despesa. Trocar o modo (econômico/confortável) muda o histórico do ciclo anterior para o atual (`finance_cubit.dart:125`).
-9. **Relatórios: totais que não fecham.** O gráfico por categoria soma pagas e pendentes, mas divide só pelo total pago, e pode passar de 100% (`reports_page.dart:213`). O CSV lista todas as despesas e o "Total gasto" conta só as pagas.
+9. **Relatórios: totais que não fechavam (corrigido em 13/10/2026, falta testar no app).** O gráfico por categoria divide pelo total do próprio gráfico (pagas e pendentes) e soma 100%. O CSV traz "Total Pago", "Total Pendente" e "Total Lançado", calculados das linhas listadas.
 10. **Ciclo fechado aparece empobrecido em produção.** As transferências mostram "Membro transfere para Membro" (`supabase_settlement_datasource.dart:74`), as que envolvem o Caixa não são gravadas, e saldos por morador e memória de cálculo vêm vazios. No modo demo tudo aparece completo.
-11. **Dia de início do ciclo entre 29 e 31 (corrigido em 13/10/2026; depende da migration 0034).** Decisão do dono: em mês que não tem o dia, o ciclo começa no último dia do mês. `FinancialCycle.fromDate` foi corrigido (dia 31, data 30/04: ciclo de 30/04 a 30/05) e a migration 0034 faz o banco usar o mesmo fim de ciclo na trava de ciclo fechado. Os acordos gerados no fechamento passam a vencer no dia 10 seguinte ao fim do ciclo, nunca dentro dele. Não cobre: trocar o dia de início da casa depois de já ter ciclos fechados.
+11. **Dia de início do ciclo entre 29 e 31 (corrigido em 13/10/2026, migration 0034; falta testar no app).** Decisão do dono: em mês que não tem o dia, o ciclo começa no último dia do mês. `FinancialCycle.fromDate` foi corrigido (dia 31, data 30/04: ciclo de 30/04 a 30/05) e a migration 0034 faz o banco usar o mesmo fim de ciclo na trava de ciclo fechado. Os acordos gerados no fechamento passam a vencer no dia 10 seguinte ao fim do ciclo, nunca dentro dele. Não cobre: trocar o dia de início da casa depois de já ter ciclos fechados.
 
 ### Menores
 
@@ -96,7 +96,7 @@ Análise feita em 12/10/2026 por leitura do código e das migrations, e reavalia
 
 **Ordem sugerida (reavaliada em 13/10/2026).** Critério: primeiro o que grava dinheiro errado sem avisar, depois o que quebra à vista, deixando por último o que exige decisão do dono ou muito esforço.
 
-1. **Sem migration e sem decisão:** 4 (edição de compra no cartão corrompe a fatura em silêncio), 5 (reembolso e categoria errados no assistente, no mercado e na importação), 1 (projetos só no demo), 9 (relatórios).
+1. **Corrigidos em 13/10/2026 (falta teste no app):** 4, 5, 1 e 9.
 2. **Decididos e corrigidos em 13/10/2026:** 11, 7 e 6 (falta teste no app).
 3. **Maiores:** 10 (ciclo fechado empobrecido; deve exigir migration para guardar saldos e transferências com o Caixa), pontas do item 3, 8 (planejador da Home), 2 (recorrência; o maior em esforço e pede decisão de onde gerar as ocorrências).
 4. **Limpeza:** 15, 13, 12, 14.

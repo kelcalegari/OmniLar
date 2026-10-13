@@ -1,3 +1,4 @@
+import '../../../finance/domain/services/expense_launch_defaults.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../../core/domain/value_objects/money.dart';
 import '../../../../core/domain/value_objects/financial_cycle.dart';
@@ -781,13 +782,21 @@ class AssistantInterpreterService {
       case 'finance.addExpense':
         final payerId = proposal.arguments['paidByMemberId'] as String? ?? effectivePayerId;
         final members = await financeRepository.getMembers();
-        final splitRule = members.isNotEmpty
-            ? SplitRule.percentage({
-                for (final m in members) m.id: m.defaultSplitPercent > 0 ? m.defaultSplitPercent : (100.0 / members.length),
-              })
-            : const SplitRule.percentage({'member_carlos': 50.0, 'member_marina': 50.0});
-
         final paymentMethods = await financeRepository.getPaymentMethods();
+        final categories = await financeRepository.getCategories();
+        // Categoria real da casa: a indicada pela proposta (id ou nome), senão mercado
+        final category = ExpenseLaunchDefaults.matchCategory(
+          categories,
+          preferred: (proposal.arguments['categoryId'] ?? proposal.arguments['categoryHint']) as String?,
+          nameKeywords: const ['mercado'],
+        );
+        final splitRule = members.isNotEmpty || category?.ownerMemberId != null
+            ? ExpenseLaunchDefaults.splitRule(
+                category: category,
+                members: members,
+                paidByMemberId: payerId,
+              )
+            : const SplitRule.percentage({'member_carlos': 50.0, 'member_marina': 50.0});
 
         // 1. Tenta usar paymentMethodId explícito passado nos argumentos da proposta
         String? paymentMethodId = proposal.arguments['paymentMethodId'] as String?;
@@ -809,10 +818,12 @@ class AssistantInterpreterService {
           title: proposal.arguments['title'] as String? ?? 'Despesa',
           amount: Money(proposal.arguments['cents'] as int? ?? 0),
           date: DateTime.now(),
-          categoryId: proposal.arguments['categoryId'] as String? ?? 'cat_groceries',
+          categoryId: category?.id ?? 'cat_groceries',
           paidByMemberId: payerId,
           paymentMethodId: paymentMethodId,
-          paidOutOfPocket: true,
+          paidOutOfPocket: ExpenseLaunchDefaults.paidOutOfPocket(
+            paymentMethods.where((pm) => pm.id == paymentMethodId).firstOrNull,
+          ),
           splitRule: splitRule,
         );
         await financeRepository.addExpense(expense);

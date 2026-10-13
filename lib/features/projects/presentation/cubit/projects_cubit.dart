@@ -1,5 +1,6 @@
 import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../../finance/domain/repositories/finance_repository.dart';
+import '../../domain/entities/project_participant.dart';
 import '../../domain/entities/shared_project.dart';
 import '../../domain/repositories/projects_repository.dart';
 import '../../domain/services/project_settlement_service.dart';
@@ -10,16 +11,27 @@ class ProjectsCubit extends BlocBase<ProjectsState> {
   final FinanceRepository financeRepository;
   final ProjectSettlementService settlementService;
 
+  /// Casa e usuário da sessão; nulos no modo demo, que usa os ids de demonstração.
+  final String? Function()? currentHouseId;
+  final String? Function()? currentUserId;
+
+  static const demoHouseId = 'house_demo';
+  static const demoUserId = 'user_1';
+
   ProjectsCubit({
     required this.projectsRepository,
     required this.financeRepository,
     this.settlementService = const ProjectSettlementService(),
+    this.currentHouseId,
+    this.currentUserId,
   }) : super(const ProjectsInitial());
 
-  Future<void> loadProjects({String houseId = 'house_demo'}) async {
+  String get _houseId => currentHouseId?.call() ?? demoHouseId;
+
+  Future<void> loadProjects({String? houseId}) async {
     emit(const ProjectsLoading());
     try {
-      final projects = await projectsRepository.getProjects(houseId: houseId);
+      final projects = await projectsRepository.getProjects(houseId: houseId ?? _houseId);
       emit(ProjectsLoaded(projects: projects));
     } catch (e) {
       emit(ProjectsError('Falha ao carregar projetos: $e'));
@@ -45,6 +57,57 @@ class ProjectsCubit extends BlocBase<ProjectsState> {
         settlementSummary: summary,
       ));
     }
+  }
+
+  /// Cria um projeto na casa atual com todos os moradores como participantes,
+  /// cada um com o seu percentual padrão de rateio.
+  Future<void> createProjectForHouse({
+    required String title,
+    required ProjectType type,
+  }) async {
+    final now = DateTime.now();
+    final projectId = 'proj_${now.millisecondsSinceEpoch}';
+    final userId = currentUserId?.call() ?? demoUserId;
+
+    var participants = <ProjectParticipant>[];
+    try {
+      final members = await financeRepository.getMembers();
+      participants = [
+        for (final m in members)
+          ProjectParticipant(
+            id: 'part_${m.id}',
+            projectId: projectId,
+            userId: m.id,
+            externalName: m.name.split(' ').first,
+            defaultSplitPercent: m.defaultSplitPercent,
+            createdAt: now,
+          ),
+      ];
+    } catch (_) {}
+    if (participants.isEmpty) {
+      participants = [
+        ProjectParticipant(
+          id: 'part_me',
+          projectId: projectId,
+          userId: userId,
+          externalName: 'Eu',
+          createdAt: now,
+        ),
+      ];
+    }
+
+    await createProject(
+      SharedProject(
+        id: projectId,
+        houseId: _houseId,
+        title: title,
+        type: type,
+        participants: participants,
+        createdBy: userId,
+        createdAt: now,
+        updatedAt: now,
+      ),
+    );
   }
 
   Future<void> createProject(SharedProject project) async {

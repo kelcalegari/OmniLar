@@ -1,8 +1,8 @@
+import '../../../finance/domain/services/expense_launch_defaults.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../../core/domain/value_objects/money.dart';
 import '../../../../core/errors/failures.dart';
 import '../../../finance/domain/entities/house_expense.dart';
-import '../../../finance/domain/entities/split_rule.dart';
 import '../../../finance/domain/repositories/finance_repository.dart';
 import '../../../p2p/domain/entities/p2p_loan.dart';
 import '../../../p2p/domain/repositories/p2p_repository.dart';
@@ -247,10 +247,13 @@ class SupabaseShoppingDataSource implements ShoppingDataSource {
       if (houseExpenseAmount.cents > 0) {
         createdExpenseId = 'exp_shop_${now.millisecondsSinceEpoch}';
         final members = await financeRepository.getMembers();
-        final splitPercentages = {
-          for (final m in members)
-            m.id: m.defaultSplitPercent > 0 ? m.defaultSplitPercent : (100.0 / (members.isEmpty ? 1 : members.length)),
-        };
+        final category = ExpenseLaunchDefaults.matchCategory(
+          await financeRepository.getCategories(),
+          nameKeywords: const ['mercado'],
+        );
+        final paymentMethod = (await financeRepository.getPaymentMethods())
+            .where((pm) => pm.id == paymentMethodId)
+            .firstOrNull;
 
         await financeRepository.addExpense(
           HouseExpense(
@@ -258,11 +261,15 @@ class SupabaseShoppingDataSource implements ShoppingDataSource {
             title: 'Compras de Mercado',
             amount: houseExpenseAmount,
             date: now,
-            categoryId: 'cat_mercado',
+            categoryId: category?.id ?? 'cat_mercado',
             paidByMemberId: paidByMemberId,
             paymentMethodId: paymentMethodId,
-            paidOutOfPocket: true,
-            splitRule: SplitRule.percentage(splitPercentages),
+            paidOutOfPocket: ExpenseLaunchDefaults.paidOutOfPocket(paymentMethod),
+            splitRule: ExpenseLaunchDefaults.splitRule(
+              category: category,
+              members: members,
+              paidByMemberId: paidByMemberId,
+            ),
           ),
         );
       }

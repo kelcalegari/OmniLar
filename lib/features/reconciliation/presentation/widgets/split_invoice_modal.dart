@@ -1,3 +1,4 @@
+import '../../../finance/domain/services/expense_launch_defaults.dart';
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -173,13 +174,29 @@ class _SplitInvoiceModalState extends State<SplitInvoiceModal> {
 
     final currentUserId = sl<AuthRepository>().currentUser?.id;
     final paidByMemberId = currentUserId ?? (financeState.members.isNotEmpty ? financeState.members.first.id : 'member_carlos');
-    final paymentMethodId = financeState.paymentMethods.isNotEmpty ? financeState.paymentMethods.first.id : 'pm_caixa';
+    // Forma de pagamento: o cartão da fatura (pelo nome), senão um cartão de quem importou
+    final cards = financeState.paymentMethods.where((p) => p.isCreditCard).toList();
+    final cardNameLower = _cardName.toLowerCase();
+    final paymentMethod = cards
+            .where((p) =>
+                p.name.toLowerCase().contains(cardNameLower) ||
+                cardNameLower.contains(p.name.toLowerCase()))
+            .firstOrNull ??
+        cards.where((p) => p.ownerMemberId == paidByMemberId).firstOrNull ??
+        cards.firstOrNull ??
+        financeState.paymentMethods.firstOrNull;
+    final paymentMethodId = paymentMethod?.id ?? 'pm_caixa';
+    final category = ExpenseLaunchDefaults.matchCategory(
+      financeState.categories,
+      nameKeywords: const ['conta'],
+    );
 
-    final splitPercentages = {
-      for (final m in financeState.members) m.id: m.defaultSplitPercent,
-    };
-    final splitRule = splitPercentages.isNotEmpty
-        ? SplitRule.percentage(splitPercentages)
+    final splitRule = financeState.members.isNotEmpty || category?.ownerMemberId != null
+        ? ExpenseLaunchDefaults.splitRule(
+            category: category,
+            members: financeState.members,
+            paidByMemberId: paidByMemberId,
+          )
         : const SplitRule.percentage(null);
 
     // 1. Gravar despesa da Casa (soma de todas as linhas com destination = house)
@@ -189,9 +206,10 @@ class _SplitInvoiceModalState extends State<SplitInvoiceModal> {
         title: 'Fatura $_cardName — Despesa Casa',
         amount: split.houseAmount,
         date: now,
-        categoryId: 'cat_contas',
+        categoryId: category?.id ?? 'cat_contas',
         paidByMemberId: paidByMemberId,
         paymentMethodId: paymentMethodId,
+        paidOutOfPocket: ExpenseLaunchDefaults.paidOutOfPocket(paymentMethod),
         splitRule: splitRule,
         status: ExpenseStatus.paid,
         notes: 'Divisão de fatura $_cardName',

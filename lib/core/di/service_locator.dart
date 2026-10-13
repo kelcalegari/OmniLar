@@ -272,6 +272,14 @@ Future<void> initServiceLocator() async {
   sl.registerFactory<ProjectsCubit>(() => ProjectsCubit(
         projectsRepository: sl(),
         financeRepository: sl(),
+        currentHouseId: () {
+          final auth = sl<AuthRepository>();
+          return auth.isDemoMode ? null : auth.currentHouse?.id;
+        },
+        currentUserId: () {
+          final auth = sl<AuthRepository>();
+          return auth.isDemoMode ? null : auth.currentUser?.id;
+        },
       ));
 
   // Reenvio da fila offline: cada ação volta pela mesma gravação que faria online

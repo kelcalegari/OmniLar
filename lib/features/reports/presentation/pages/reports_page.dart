@@ -214,7 +214,8 @@ class _ReportsPageContent extends StatelessWidget {
       catTotals[exp.categoryId] = (catTotals[exp.categoryId] ?? 0) + exp.amount.cents;
     }
 
-    final totalSpentCents = state.summary?.totalSpent.cents ?? 1;
+    // O gráfico soma pagas e pendentes: o percentual é sobre esse mesmo total
+    final totalSpentCents = catTotals.values.fold<int>(0, (a, b) => a + b);
 
     // Ordena do maior para o menor
     final sortedCatIds = catTotals.keys.toList()
@@ -496,8 +497,17 @@ class _ReportsPageContent extends StatelessWidget {
 
     buffer.writeln('');
     buffer.writeln('RESUMO GERAL');
-    final totalSpent = ((state.summary?.totalSpent.cents ?? 0) / 100.0).toStringAsFixed(2).replaceAll('.', ',');
-    buffer.writeln('Total Gasto (R\$);$totalSpent');
+    // Totais das próprias linhas listadas acima, para o arquivo fechar com ele mesmo
+    String asCsvMoney(int cents) => (cents / 100.0).toStringAsFixed(2).replaceAll('.', ',');
+    final paidCents = state.expenses
+        .where((e) => !e.isPending)
+        .fold<int>(0, (acc, e) => acc + e.amount.cents);
+    final pendingCents = state.expenses
+        .where((e) => e.isPending)
+        .fold<int>(0, (acc, e) => acc + e.amount.cents);
+    buffer.writeln('Total Pago (R\$);${asCsvMoney(paidCents)}');
+    buffer.writeln('Total Pendente (R\$);${asCsvMoney(pendingCents)}');
+    buffer.writeln('Total Lançado (R\$);${asCsvMoney(paidCents + pendingCents)}');
 
     showDialog(
       context: context,
@@ -526,7 +536,7 @@ class _ReportsPageContent extends StatelessWidget {
                 border: Border.all(color: Colors.grey.withValues(alpha: 0.2)),
               ),
               child: Text(
-                'Total de lançamentos: ${state.expenses.length}\nTotal apurado: ${state.summary?.totalSpent.format() ?? "R\$ 0,00"}',
+                'Total de lançamentos: ${state.expenses.length}\nTotal lançado (pagas e pendentes): ${Money(state.expenses.fold<int>(0, (acc, e) => acc + e.amount.cents)).format()}',
                 style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
               ),
             ),
