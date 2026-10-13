@@ -26,6 +26,9 @@ class DynamicFinanceDataSource implements FinanceDataSource {
   FinanceDataSource get _active => isDemoMode() ? mock : remote;
 
   @override
+  Stream<void> watchHouseChanges() => _active.watchHouseChanges();
+
+  @override
   Future<List<HouseMember>> getMembers() => _active.getMembers();
 
   @override

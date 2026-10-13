@@ -47,6 +47,8 @@ class _FakeFinanceRepository implements FinanceRepository {
   @override
   Future<void> updateCategory(ExpenseCategory category) async {}
   @override
+  Stream<void> watchHouseChanges() => const Stream.empty();
+  @override
   Future<void> deleteCategory(String categoryId) async {}
   @override
   Future<List<PaymentMethod>> getPaymentMethods() async => [];

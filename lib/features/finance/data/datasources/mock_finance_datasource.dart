@@ -631,6 +631,10 @@ class MockFinanceDataSource implements FinanceDataSource {
     _categories.add(category);
   }
 
+  /// No modo demo só há um aparelho: nada muda por fora.
+  @override
+  Stream<void> watchHouseChanges() => const Stream.empty();
+
   @override
   Future<void> updateCategory(ExpenseCategory category) async {
     final index = _categories.indexWhere((c) => c.id == category.id);

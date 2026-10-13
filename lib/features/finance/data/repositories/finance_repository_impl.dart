@@ -88,6 +88,9 @@ class FinanceRepositoryImpl implements FinanceRepository {
       _dataSource.addCategory(category);
 
   @override
+  Stream<void> watchHouseChanges() => _dataSource.watchHouseChanges();
+
+  @override
   Future<void> updateCategory(ExpenseCategory category) =>
       _dataSource.updateCategory(category);
 

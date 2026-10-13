@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import '../../../../core/domain/value_objects/cycle_schedule.dart';
 import '../../domain/services/recurring_series.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -47,7 +49,44 @@ class FinanceCubit extends Cubit<FinanceState> {
   /// em volta de uma troca do dia de início.
   CycleSchedule get cycleSchedule => _cycleScheduleOf?.call() ?? CycleSchedule(cycleStartDay);
 
+  // Mudanças feitas em outro aparelho (despesas e moradores) recarregam o ciclo
+  StreamSubscription<void>? _houseChangesSubscription;
+  Timer? _houseChangesDebounce;
+
+  /// Liga o aviso de mudanças da casa, se ainda não estiver ligado. Enquanto a
+  /// casa não carregou a fonte recusa; a próxima carga do ciclo tenta de novo.
+  void _watchHouseChanges() {
+    if (_houseChangesSubscription != null || isClosed) return;
+    try {
+      _houseChangesSubscription = _repository.watchHouseChanges().listen(
+        (_) {
+          // Um lançamento gera vários avisos seguidos: recarrega uma vez só
+          _houseChangesDebounce?.cancel();
+          _houseChangesDebounce = Timer(const Duration(milliseconds: 600), () {
+            if (!isClosed) loadCycleData(cycle: state.currentCycle);
+          });
+        },
+        onError: (_) {},
+      );
+    } catch (_) {}
+  }
+
+  void _stopWatchingHouseChanges() {
+    _houseChangesDebounce?.cancel();
+    _houseChangesDebounce = null;
+    _houseChangesSubscription?.cancel();
+    _houseChangesSubscription = null;
+  }
+
+  @override
+  Future<void> close() {
+    _stopWatchingHouseChanges();
+    return super.close();
+  }
+
   void resetState() {
+    // Troca de conta ou de casa: o aviso volta a ser ligado para a casa nova
+    _stopWatchingHouseChanges();
     emit(
       FinanceState(
         currentCycle: cycleSchedule.cycleFor(DateTime.now()),
@@ -137,6 +176,7 @@ class FinanceCubit extends Cubit<FinanceState> {
         splitModel: splitModel,
         recurringSeries: recurringSeries,
       ));
+      _watchHouseChanges();
     } catch (e) {
       emit(state.copyWith(
         status: FinanceStatus.failure,

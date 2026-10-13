@@ -18,6 +18,7 @@ String categoryInUseMessage(int count) => count == 1
 
 abstract class FinanceDataSource {
   Future<List<HouseMember>> getMembers();
+  Stream<void> watchHouseChanges();
   Future<List<ExpenseCategory>> getCategories();
   Future<List<PaymentMethod>> getPaymentMethods();
 

@@ -13,6 +13,8 @@ import '../../../../core/domain/value_objects/financial_cycle.dart';
 
 abstract class FinanceRepository {
   Future<List<HouseMember>> getMembers();
+  /// Avisa quando outro aparelho muda as despesas ou os moradores da casa.
+  Stream<void> watchHouseChanges();
   Future<List<ExpenseCategory>> getCategories();
   Future<List<PaymentMethod>> getPaymentMethods();
 

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'house_expense_payload.dart';
 import '../../domain/entities/card_invoice.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -36,6 +38,44 @@ class SupabaseFinanceDataSource implements FinanceDataSource {
       r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$',
     );
     return uuidRegex.hasMatch(id);
+  }
+
+  @override
+  Stream<void> watchHouseChanges() {
+    final houseId = _houseId;
+    if (!_isUuid(houseId)) {
+      throw const ServerFailure('Casa ainda não carregada.');
+    }
+
+    RealtimeChannel? channel;
+    late final StreamController<void> controller;
+    controller = StreamController<void>.broadcast(
+      onListen: () {
+        var pending = client.channel('house-finance-$houseId');
+        for (final table in const ['house_expenses', 'house_members']) {
+          pending = pending.onPostgresChanges(
+            event: PostgresChangeEvent.all,
+            schema: 'public',
+            table: table,
+            filter: PostgresChangeFilter(
+              type: PostgresChangeFilterType.eq,
+              column: 'house_id',
+              value: houseId,
+            ),
+            callback: (_) {
+              if (!controller.isClosed) controller.add(null);
+            },
+          );
+        }
+        channel = pending.subscribe();
+      },
+      onCancel: () {
+        final current = channel;
+        channel = null;
+        if (current != null) client.removeChannel(current);
+      },
+    );
+    return controller.stream;
   }
 
   @override
