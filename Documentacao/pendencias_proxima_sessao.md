@@ -1,14 +1,14 @@
 # Omni Lar — ponto de partida para a próxima sessão
 
-Reescrito em 13/10/2026, no fim de uma sessão longa de correções. Substitui a versão anterior deste arquivo e o antigo `o_que_falta_fazer.md`, que foi apagado. Leia este arquivo inteiro antes de propor trabalho.
+Reescrito em 13/10/2026, no fim de uma sessão longa de correções, e atualizado no mesmo dia ao fim de uma segunda sessão (banco zerado, correções relatadas pelo dono no app, tempo real, categoria com dono e Ajustes refeitos). Substitui a versão anterior deste arquivo e o antigo `o_que_falta_fazer.md`, que foi apagado. Leia este arquivo inteiro antes de propor trabalho.
 
 ## Estado atual
 
 - **Código:** `main` local e `origin/main` sincronizadas, diretório de trabalho limpo. Confira com `git log --oneline -5` e `git status`.
 - **Banco (Supabase `rygxmpwzofgieodvhpcy`, acessível pelo conector do Supabase):** migrations 0001 a 0051 aplicadas. No histórico de migrations do Supabase constam só as 0022 a 0027 e as 0030 a 0051; as 0001 a 0021, a 0028 e a 0029 foram aplicadas à mão pelo SQL Editor. A próxima migration é a 0052.
 - **Edge Functions:** `capture-read` versão 8 e `assistant` versão 5, ambas com `verify_jwt=true` e exigindo usuário logado que more na casa.
-- **Qualidade:** `flutter analyze` com 0 erros (4 warnings antigos de import não usado) e 339 testes passando. Os testes automatizados rodam só contra os datasources mock (modo demo); nenhum roda contra o Supabase.
-- **Dados no banco:** em 13/10/2026 o dono apagou todos os dados de teste (todas as tabelas de `public` e as contas de login) e recomeçou do zero; a estrutura, as funções e o histórico de migrations não mudaram. Logo depois foi criada de novo a casa "Nossa Casa", com as contas novas de kelvynn e Cristiano, sem nenhum lançamento. Nunca houve um fechamento de ciclo confirmado com sessão real.
+- **Qualidade:** `flutter analyze` com 0 erros (4 warnings antigos de import não usado) e 362 testes passando. Os testes automatizados rodam só contra os datasources mock (modo demo); nenhum roda contra o Supabase.
+- **Dados no banco:** em 13/10/2026 o dono apagou todos os dados de teste (todas as tabelas de `public` e as contas de login) e recomeçou do zero; a estrutura, as funções e o histórico de migrations não mudaram. Logo depois foi criada de novo a casa "Nossa Casa", com as contas novas de kelvynn e Cristiano; o dono já lançou algumas despesas de teste nela (entre elas a recorrente "Internet", todo dia 25). Nunca houve um fechamento de ciclo confirmado com sessão real.
 
 ## O ponto mais importante
 
@@ -21,6 +21,13 @@ O que testar primeiro, depois de reiniciar por completo as instâncias abertas d
 3. **Criar evento na agenda**, com e sem repetição (migrations 0045 e 0048).
 4. **Reabrir a tela do ciclo fechado** e conferir saldos, transferências e memória de cálculo (migration 0035).
 5. **Despesa recorrente:** cadastrar e avançar para o ciclo seguinte (migrations 0036 e 0038).
+
+Da segunda sessão de 13/10, o que mais depende de teste do dono:
+
+1. **Copiar no navegador.** Não foi reproduzido: a hipótese é o site aberto por http fora de `localhost`, onde o navegador não deixa copiar. Entrou um plano B (`clipboard_helper.dart`) e a mensagem "copiado" só aparece se copiou. Falta o dono dizer se agora copia e por qual endereço abre o site.
+2. **Tempo real de despesas e moradores** (migration 0050): só se confirma com dois aparelhos logados.
+3. **Trocar o dono de uma categoria** (migration 0051): as despesas em aberto dela devem mudar de rateio; tirar o dono deve devolver ao percentual da casa.
+4. **Ajustes novos:** índice de grupos, página por grupo no celular e duas colunas no PC, com edição dentro da página.
 
 A lista completa de roteiros está em "Testes manuais pendentes", mais abaixo.
 
@@ -82,7 +89,7 @@ Resumo dos mecanismos que mudaram nesta sessão, para localizar as coisas.
 - **Planejador de aportes da Home:** `cycle_funding_estimator.dart`, com a mesma conta do fechamento.
 
 ### Demais
-- **Ajustes:** quatro grupos (Casa, Divisão das despesas, Pagamentos e contas, Aplicativo). No celular e no tablet o índice abre uma página por grupo; a partir de 1024 px os grupos ficam à esquerda e o conteúdo ao lado. Moradores e convites, categorias, modelo de rateio, formas de pagamento e contas fixas ficam dentro da página; ciclo, chave Pix, perfil e Assistente IA abrem janela (formulários curtos). O código de convite só é criado quando o dono ou um administrador toca em "Gerar código de convite". O editor do rateio guarda a edição em variáveis do método que o cria, por isso é mantido pelo `_KeptEditor` e só é recriado quando moradores, categorias ou o modelo mudam. A busca do índice ignora acentos e acha as opções (por título ou sinônimo) e o que a casa cadastrou: moradores, categorias, formas de pagamento e contas fixas. O índice e o esqueleto ficam em `settings_page.dart`; o conteúdo dos grupos, em `settings_groups.dart`.
+- **Ajustes:** quatro grupos (Casa, Divisão das despesas, Pagamentos e contas, Aplicativo). No celular e no tablet o índice abre uma página por grupo; a partir de 1024 px os grupos ficam à esquerda e o conteúdo ao lado. Moradores e convites, categorias, modelo de rateio, formas de pagamento e contas fixas ficam dentro da página, assim como a chave de IA, o tema, a auditoria e o "Rachar Fatura" (os três últimos widgets têm o parâmetro `embedded`). Só ciclo, chave Pix e perfil abrem janela (formulários curtos). Os interruptores "Assistente Ativo", "Alertas Proativos" e "Horário Silencioso" foram removidos: não gravavam nada. O código de convite só é criado quando o dono ou um administrador toca em "Gerar código de convite". O editor do rateio guarda a edição em variáveis do método que o cria, por isso é mantido pelo `_KeptEditor` e só é recriado quando moradores, categorias ou o modelo mudam. A busca do índice ignora acentos e acha as opções (por título ou sinônimo) e o que a casa cadastrou: moradores, categorias, formas de pagamento e contas fixas. O índice e o esqueleto ficam em `settings_page.dart`; o conteúdo dos grupos, em `settings_groups.dart`.
 - **Tempo real:** tarefas, itens de compra, despesas e moradores avisam os outros aparelhos (migrations 0015 e 0050). Despesas e moradores recarregam o ciclo pelo `FinanceCubit` (`watchHouseChanges`); aportes, empréstimos, agenda e caixinhas só atualizam ao recarregar.
 - **Caixinhas:** nascem zeradas (o saldo inicial vira depósito), toda casa nova recebe a "Reserva da Casa", e cada caixinha tem o histórico de entradas e saídas.
 - **Projetos compartilhados:** usam a casa e o usuário da sessão; o acerto divide entre os participantes (`project_settlement_service.dart`); há um diálogo para editar participantes e percentuais.
@@ -96,11 +103,27 @@ Resumo dos mecanismos que mudaram nesta sessão, para localizar as coisas.
 - **Sem rede as listas não carregam:** o app não guarda cópia local. A fila offline só ajuda quando a conexão cai no meio do uso.
 - **Fora da fila offline:** pagamento de parcela (de propósito), marcar item como comprado, concluir tarefa e exclusões.
 - **Mensagem de sucesso antes da hora:** várias telas mostram "adicionado com sucesso" sem esperar a gravação terminar; se der erro, o aviso aparece depois.
+- **Rachar Fatura:** com conta real a tela começa vazia e só mostra lançamentos depois de importar um arquivo; a fatura de exemplo aparece só no modo demo.
 - **Série de eventos já criada** não pode ser estendida nem encurtada; só excluindo "esta e as próximas" e criando de novo.
 - **Fatura de cartão:** só funciona para cartão com fechamento e vencimento cadastrados; gravar `paid_at` direto na tabela de despesas continua possível para qualquer morador.
 - **Ciclo reaberto:** trocar a divisão do excedente do balde no segundo fechamento redistribui o excedente inteiro; parcelas e acordos do primeiro fechamento não são desfeitos.
 - **Despesa de projeto** é lançada pelo formulário comum, que ainda grava o rateio da casa nela. O acerto do projeto ignora esse rateio, então o resultado está certo, mas o dado gravado não reflete a divisão real.
 - **Acordos de reposição criados antes da migration 0037** não têm caixinha de origem (não havia nenhum no banco).
+
+### Oferecido ao dono e ainda sem decisão
+Itens levantados na segunda sessão de 13/10; ele não pediu nenhum. Perguntar antes de fazer.
+- **Selo "Saudável"** do cartão do Fôlego continua aparecendo em ciclo passado e vazio.
+- **Cartão da despesa em tela estreita:** não estoura mais, mas fica apertado; a opção é passar o valor e o "Pagar" para uma segunda linha.
+- **Revisão do scanner:** título e categoria são editáveis; data e status não (sai sempre como pago, na data do documento). O pedido do dono foi "alterar cadastro", entendido como categoria.
+- **Excluir categoria com lançamentos:** hoje é recusado. A alternativa é arquivar (some das escolhas, continua nas despesas antigas).
+- **Planejamento de Aportes:** "variável" é toda categoria cujo nome contém mercado, feira, luz, energia, água ou gás. Conta recorrente de valor fixo já conta como fixa, mas uma despesa avulsa numa dessas categorias (ex.: condomínio em "Contas (Luz, Água, Internet)") ainda entra como variável.
+- **Tempo real** para aportes, empréstimos, agenda e caixinhas.
+- **Relatórios:** tem as próprias setas de ciclo, sem o atalho "voltar ao ciclo atual" nem o esmaecimento na troca.
+- **Troca de ciclo:** o resumo do ciclo ainda relê despesas e aportes por dentro; cortar isso é o próximo passo se a troca parecer lenta.
+- **Busca nos ajustes:** leva até o grupo, não até o item.
+- **Assistente:** "Assistente Ativo", "Alertas Proativos" e "Horário Silencioso" eram controles de enfeite e foram removidos; implementar de verdade é trabalho à parte.
+- **Lista de moradores desatualizada** depois que alguém entra na casa: corrigido nos Ajustes e, pelo tempo real, no estado financeiro; outras telas (formulário de despesa, agenda) não foram conferidas.
+- **Importação de fatura ("Rachar Fatura"):** o dono está planejando esse trabalho em outra sessão, no documento `plano_importacao_conciliacao.md`. Quem mexer nisso parte do `split_invoice_modal.dart` atual (começa vazio com conta real e tem o modo `embedded`).
 
 ### Pontas pequenas, nunca tratadas
 - **`category_id` dos itens de compra** nunca é gravado.
@@ -111,6 +134,21 @@ Resumo dos mecanismos que mudaram nesta sessão, para localizar as coisas.
 ## Testes manuais pendentes
 
 Nenhum destes roteiros foi executado com usuário logado.
+
+### Segunda sessão de 13/10
+- **Rateio com morador novo:** abrir Ajustes > Divisão das despesas logo depois de alguém entrar na casa; deve mostrar os dois moradores (antes quebrava com "Value 100 is not between 10 and 90").
+- **Copiar:** código de convite, chave Pix e cobrança do Super Pix, no navegador e no celular. Se não copiar, deve aparecer o aviso de falha, não "copiado".
+- **Fôlego do Caixa:** a faixa "Gasto diário seguro" só aparece no ciclo em andamento; fora dele aparece "Voltar ao ciclo atual".
+- **Troca de ciclo:** ao passar de um ciclo para outro os números esmaecem até o novo chegar; clicar várias vezes seguidas deve parar no último ciclo pedido.
+- **Recorrente em ciclo futuro:** com a "Internet" todo dia 25, o ciclo de 09/12 a 08/01 deve mostrar só a de 25/12, sem as de outubro e novembro.
+- **Planejamento de Aportes:** conta recorrente fixa entra em "fixas"; em aportes fixos, a cota do dono de uma categoria sobe no valor das despesas dela e bate com o fechamento.
+- **Scanner:** editar o título direto na revisão e trocar a categoria, por código de barras e por documento.
+- **Painel de detalhes da despesa e cartão em "Gastos do Ciclo":** nome longo de morador e coluna estreita não devem estourar.
+- **Categorias:** editar nome e dono; excluir uma sem lançamentos; tentar excluir uma com lançamentos (deve recusar dizendo quantos são); repetir como morador comum (deve recusar por permissão).
+- **Dono da categoria:** definir um dono e conferir que as despesas em aberto viram 100% dele; tirar o dono e conferir a volta ao percentual da casa; despesa com sub-itens em aportes fixos deve ser cobrada do dono no fechamento.
+- **Tempo real:** com dois aparelhos, lançar, pagar e excluir uma despesa em um e ver mudar no outro; entrar na casa com convite e aparecer na lista dos outros.
+- **Ajustes:** índice com quatro grupos e busca ("cartao" sem acento, nome de um cartão, algo inexistente); no PC, grupos à esquerda e conteúdo ao lado; salvar o modelo de rateio dentro da página; editar forma de pagamento e conta fixa na lista; "Gerar código de convite" só cria o código ao tocar; trocar o tema pelos três botões; importar um OFX em "Rachar Fatura" (com conta real a tela começa vazia).
+- **Visibilidade do evento:** a linha de ajuda abaixo de Casa / Restrito / Privado muda conforme a opção.
 
 ### Fechamento do ciclo
 - Fechar um ciclo como dono, tentar fechar como membro comum, reabrir, lançar uma despesa esquecida e fechar de novo (o Super Pix deve mostrar só a diferença).
@@ -196,5 +234,6 @@ Uma linha por migration, para saber onde está cada regra.
 ## Documentos relacionados
 
 - `fechamento_no_banco.md`: o trabalho adiado de levar o cálculo do fechamento para o banco.
+- `plano_importacao_conciliacao.md`: plano do dono para a importação de fatura e conciliação, escrito em outra sessão. Não é desta linha de trabalho; não alterar sem ele pedir.
 - `arquitetura_tecnica.md` e os `modulo_*.md`: especificação original de cada módulo. Podem divergir do que está implementado; em caso de dúvida, vale o código.
 - `plano_diretor_unificado.md` e `README_documento_mestre.md`: visão geral do produto.
