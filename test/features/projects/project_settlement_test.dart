@@ -116,9 +116,9 @@ void main() {
       expect(project.isOverBudget(const Money(450000)), isTrue);
     });
 
-    test('Resolução de pagador por userId e SplitRule percentual por userId', () {
+    test('Resolução de pagador por userId e percentual de cada participante do projeto', () {
       // Ana pagou R$ 100,00 identificada por seu userId ('user_ana')
-      // Rateio definido por userId: Ana 60% e Beto 40%
+      // No projeto, Ana tem 60% e Beto 40% (o rateio gravado na despesa é o da casa e não vale aqui)
       final expense = HouseExpense(
         id: 'exp_percent',
         title: 'Jantar',
@@ -134,7 +134,10 @@ void main() {
       final summary = service.computeProjectSettlement(
         project: project,
         expenses: [expense],
-        participants: [participantAna, participantBeto],
+        participants: [
+          participantAna.copyWith(defaultSplitPercent: 60.0),
+          participantBeto.copyWith(defaultSplitPercent: 40.0),
+        ],
       );
 
       final balAna = summary.participantBalances.firstWhere((b) => b.participantId == 'part_ana');
@@ -149,6 +152,107 @@ void main() {
       expect(summary.transfers.first.fromMemberName, equals('Beto'));
       expect(summary.transfers.first.toMemberName, equals('Ana'));
       expect(summary.transfers.first.amount.cents, equals(4000));
+    });
+
+    test('O rateio da casa gravado na despesa não vale no projeto: sem percentuais, divide igual', () {
+      final expense = HouseExpense(
+        id: 'exp_casa',
+        title: 'Jantar',
+        amount: const Money(10000),
+        date: now,
+        categoryId: 'cat_lazer',
+        paidByMemberId: 'user_ana',
+        paymentMethodId: 'cartao',
+        // Percentual padrão da casa, copiado para a despesa no lançamento
+        splitRule: const SplitRule.percentage({'user_ana': 80.0, 'user_beto': 20.0}),
+        projectId: 'proj_trip_1',
+      );
+
+      final summary = service.computeProjectSettlement(
+        project: project,
+        expenses: [expense],
+        participants: [participantAna, participantBeto],
+      );
+
+      final balAna = summary.participantBalances.firstWhere((b) => b.participantId == 'part_ana');
+      expect(balAna.totalShareDue.cents, 5000);
+      expect(balAna.netBalance.cents, 5000);
+    });
+
+    test('Convidado de fora paga a parte dele, e tirar um participante redistribui', () {
+      final guest = ProjectParticipant(
+        id: 'part_guest',
+        projectId: 'proj_trip_1',
+        externalName: 'Carla',
+        createdAt: now,
+      );
+      final expense = HouseExpense(
+        id: 'exp_guest',
+        title: 'Hospedagem',
+        amount: const Money(9000),
+        date: now,
+        categoryId: 'cat_lazer',
+        paidByMemberId: 'user_ana',
+        paymentMethodId: 'cartao',
+        splitRule: const SplitRule.percentage({'user_ana': 50.0, 'user_beto': 50.0}),
+        projectId: 'proj_trip_1',
+      );
+
+      final withGuest = service.computeProjectSettlement(
+        project: project,
+        expenses: [expense],
+        participants: [participantAna, participantBeto, guest],
+      );
+      for (final b in withGuest.participantBalances) {
+        expect(b.totalShareDue.cents, 3000, reason: b.participantName);
+      }
+
+      // Com percentuais 50/30/20, tirar o Beto (30) deixa Ana 50 e Carla 20: 5/7 e 2/7
+      final withoutBeto = service.computeProjectSettlement(
+        project: project,
+        expenses: [expense.copyWith(amount: const Money(7000))],
+        participants: [
+          participantAna.copyWith(defaultSplitPercent: 50.0),
+          guest.copyWith(defaultSplitPercent: 20.0),
+        ],
+      );
+      expect(
+        withoutBeto.participantBalances.firstWhere((b) => b.participantId == 'part_ana').totalShareDue.cents,
+        5000,
+      );
+      expect(
+        withoutBeto.participantBalances.firstWhere((b) => b.participantId == 'part_guest').totalShareDue.cents,
+        2000,
+      );
+      expect(withoutBeto.participantBalances.length, 2);
+    });
+
+    test('Quem pagou mas não participa do projeto é reembolsado sem entrar na divisão', () {
+      final expense = HouseExpense(
+        id: 'exp_fora',
+        title: 'Passagens',
+        amount: const Money(10000),
+        date: now,
+        categoryId: 'cat_lazer',
+        paidByMemberId: 'user_de_fora',
+        paymentMethodId: 'cartao',
+        splitRule: const SplitRule.percentage({'user_ana': 50.0, 'user_beto': 50.0}),
+        projectId: 'proj_trip_1',
+      );
+
+      final summary = service.computeProjectSettlement(
+        project: project,
+        expenses: [expense],
+        participants: [participantAna, participantBeto],
+      );
+
+      final outsider = summary.participantBalances.firstWhere((b) => b.participantId == 'user_de_fora');
+      expect(outsider.totalShareDue.cents, 0);
+      expect(outsider.netBalance.cents, 10000);
+      expect(
+        summary.participantBalances.firstWhere((b) => b.participantId == 'part_ana').totalShareDue.cents,
+        5000,
+      );
     });
 
     test('Rateio respeita defaultSplitPercent dos participantes quando a regra não define', () {

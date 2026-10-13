@@ -1,3 +1,5 @@
+import '../../../finance/domain/entities/house_member.dart';
+import '../../domain/entities/project_participant.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -246,15 +248,25 @@ class _ProjectsHubPageState extends State<ProjectsHubPage> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text(
-                'Acerto de Contas: ${proj.title}',
-                style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
+              Expanded(
+                child: Text(
+                  'Acerto de Contas: ${proj.title}',
+                  style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
+                ),
               ),
               Chip(
                 label: Text('Total: ${summary.totalExpenses.formatted}'),
                 backgroundColor: AppColors.accent.withValues(alpha: 0.15),
               ),
             ],
+          ),
+          Align(
+            alignment: Alignment.centerLeft,
+            child: TextButton.icon(
+              onPressed: () => _showParticipantsDialog(context, proj),
+              icon: const Icon(Icons.group_outlined, size: 18),
+              label: Text('Participantes (${proj.participants.length})'),
+            ),
           ),
           const SizedBox(height: 12),
           Text(
@@ -399,6 +411,212 @@ class _ProjectsHubPageState extends State<ProjectsHubPage> {
     }
   }
 
+  /// Edita quem participa do projeto e o percentual de cada um. As despesas do
+  /// projeto são divididas entre os participantes por esses percentuais.
+  Future<void> _showParticipantsDialog(BuildContext context, SharedProject project) async {
+    final cubit = context.read<ProjectsCubit>();
+    final messenger = ScaffoldMessenger.of(context);
+
+    var houseMembers = <HouseMember>[];
+    try {
+      houseMembers = await cubit.financeRepository.getMembers();
+    } catch (_) {}
+    if (!context.mounted) return;
+
+    // Uma linha por pessoa: moradores da casa (marcados ou não) e convidados de fora
+    final rows = <_ParticipantRow>[
+      for (final m in houseMembers)
+        _ParticipantRow(
+          userId: m.id,
+          name: m.name.split(' ').first,
+          included: project.participants.any((p) => p.userId == m.id),
+          percent: project.participants
+              .where((p) => p.userId == m.id)
+              .map((p) => p.defaultSplitPercent?.round())
+              .firstOrNull,
+        ),
+      for (final p in project.participants)
+        if (!houseMembers.any((m) => m.id == p.userId))
+          _ParticipantRow(
+            userId: p.userId,
+            name: p.displayName,
+            included: true,
+            percent: p.defaultSplitPercent?.round(),
+          ),
+    ];
+
+    void splitEqually() {
+      final active = rows.where((r) => r.included).toList();
+      if (active.isEmpty) return;
+      final base = 100 ~/ active.length;
+      final remainder = 100 % active.length;
+      for (int i = 0; i < active.length; i++) {
+        active[i].percent = base + (i < remainder ? 1 : 0);
+      }
+    }
+
+    // Projeto sem percentuais definidos: começa dividido igualmente
+    if (rows.where((r) => r.included).any((r) => r.percent == null)) splitEqually();
+
+    final guestController = TextEditingController();
+
+    await showDialog<void>(
+      context: context,
+      builder: (dialogCtx) => StatefulBuilder(
+        builder: (dialogCtx, setDialogState) {
+          final active = rows.where((r) => r.included).toList();
+          final total = active.fold<int>(0, (acc, r) => acc + (r.percent ?? 0));
+          final canSave = active.isNotEmpty && total == 100 && active.every((r) => (r.percent ?? 0) > 0);
+
+          return AlertDialog(
+            title: Text('Participantes de ${project.title}'),
+            content: SizedBox(
+              width: 420,
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    const Text(
+                      'As despesas do projeto são divididas entre os participantes, pelo percentual de cada um.',
+                      style: TextStyle(fontSize: 12, color: Colors.grey),
+                    ),
+                    const SizedBox(height: 8),
+                    for (final row in rows)
+                      Row(
+                        children: [
+                          Checkbox(
+                            value: row.included,
+                            onChanged: (val) => setDialogState(() {
+                              row.included = val ?? false;
+                              splitEqually();
+                            }),
+                          ),
+                          Expanded(
+                            child: Text(
+                              row.userId == null ? '${row.name} (convidado)' : row.name,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                          if (row.included) ...[
+                            IconButton(
+                              icon: const Icon(Icons.remove_circle_outline, size: 18),
+                              tooltip: 'Diminuir',
+                              onPressed: () => setDialogState(() {
+                                row.percent = ((row.percent ?? 0) - 1).clamp(0, 100);
+                              }),
+                            ),
+                            SizedBox(
+                              width: 44,
+                              child: Text(
+                                '${row.percent ?? 0}%',
+                                textAlign: TextAlign.center,
+                                style: const TextStyle(fontWeight: FontWeight.bold),
+                              ),
+                            ),
+                            IconButton(
+                              icon: const Icon(Icons.add_circle_outline, size: 18),
+                              tooltip: 'Aumentar',
+                              onPressed: () => setDialogState(() {
+                                row.percent = ((row.percent ?? 0) + 1).clamp(0, 100);
+                              }),
+                            ),
+                          ],
+                        ],
+                      ),
+                    const SizedBox(height: 4),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: TextField(
+                            controller: guestController,
+                            decoration: const InputDecoration(
+                              labelText: 'Convidado de fora da casa',
+                              isDense: true,
+                              border: OutlineInputBorder(),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        OutlinedButton(
+                          onPressed: () {
+                            final name = guestController.text.trim();
+                            if (name.isEmpty) return;
+                            setDialogState(() {
+                              rows.add(_ParticipantRow(userId: null, name: name, included: true));
+                              guestController.clear();
+                              splitEqually();
+                            });
+                          },
+                          child: const Text('Adicionar'),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          total == 100 ? 'Total: 100%' : 'Total: $total% (precisa somar 100%)',
+                          style: TextStyle(
+                            fontWeight: FontWeight.w600,
+                            fontSize: 13,
+                            color: total == 100 ? AppColors.creditGreen : AppColors.debtRed,
+                          ),
+                        ),
+                        TextButton(
+                          onPressed: () => setDialogState(splitEqually),
+                          child: const Text('Dividir igualmente'),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(dialogCtx),
+                child: const Text('Cancelar'),
+              ),
+              FilledButton(
+                onPressed: !canSave
+                    ? null
+                    : () async {
+                        final now = DateTime.now();
+                        final participants = [
+                          for (int i = 0; i < active.length; i++)
+                            ProjectParticipant(
+                              id: 'part_${now.millisecondsSinceEpoch}_$i',
+                              projectId: project.id,
+                              userId: active[i].userId,
+                              externalName: active[i].name,
+                              defaultSplitPercent: active[i].percent!.toDouble(),
+                              createdAt: now,
+                            ),
+                        ];
+                        Navigator.pop(dialogCtx);
+                        final ok = await cubit.setParticipants(project, participants);
+                        messenger.showSnackBar(
+                          SnackBar(
+                            content: Text(
+                              ok
+                                  ? 'Participantes atualizados. O acerto do projeto foi refeito.'
+                                  : 'Não foi possível atualizar os participantes.',
+                            ),
+                            backgroundColor: ok ? null : AppColors.debtRed,
+                          ),
+                        );
+                      },
+                child: const Text('Salvar'),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
   void _showCreateProjectDialog(BuildContext context) {
     final titleCtrl = TextEditingController();
     ProjectType selectedType = ProjectType.trip;
@@ -462,4 +680,19 @@ class _ProjectsHubPageState extends State<ProjectsHubPage> {
       },
     );
   }
+}
+
+/// Linha do diálogo de participantes de um projeto.
+class _ParticipantRow {
+  final String? userId; // null = convidado de fora da casa
+  final String name;
+  bool included;
+  int? percent;
+
+  _ParticipantRow({
+    required this.userId,
+    required this.name,
+    required this.included,
+    this.percent,
+  });
 }

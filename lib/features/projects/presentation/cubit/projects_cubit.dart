@@ -110,6 +110,23 @@ class ProjectsCubit extends BlocBase<ProjectsState> {
     );
   }
 
+  /// Troca os participantes do projeto e refaz o acerto com a lista nova.
+  Future<bool> setParticipants(SharedProject project, List<ProjectParticipant> participants) async {
+    try {
+      await projectsRepository.setParticipants(project.id, participants);
+      await loadProjects(houseId: project.houseId);
+      final current = state;
+      if (current is ProjectsLoaded) {
+        final updated = current.projects.where((p) => p.id == project.id).firstOrNull;
+        if (updated != null) await selectProject(updated);
+      }
+      return true;
+    } catch (e) {
+      emit(ProjectsError('Falha ao atualizar participantes: $e'));
+      return false;
+    }
+  }
+
   Future<void> createProject(SharedProject project) async {
     try {
       await projectsRepository.createProject(project);

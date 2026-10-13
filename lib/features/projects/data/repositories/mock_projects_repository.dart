@@ -106,4 +106,12 @@ class MockProjectsRepository implements ProjectsRepository {
   Future<void> deleteProject(String id) async {
     _projects.removeWhere((p) => p.id == id);
   }
+
+  @override
+  Future<void> setParticipants(String projectId, List<ProjectParticipant> participants) async {
+    final index = _projects.indexWhere((p) => p.id == projectId);
+    if (index != -1) {
+      _projects[index] = _projects[index].copyWith(participants: participants);
+    }
+  }
 }

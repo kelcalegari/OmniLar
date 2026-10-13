@@ -68,13 +68,13 @@ class ProjectSettlementService {
               (item.responsibleMemberId != null
                   ? SplitRule.singleResponsible(item.responsibleMemberId!)
                   : exp.splitRule);
-          final allocations = _calculateAllocations(itemRule, item.amount, activeParticipants);
+          final allocations = _calculateAllocations(itemRule, item.amount, activeParticipants, sharers: participants);
           for (final entry in allocations.entries) {
             dueCentsMap[entry.key] = (dueCentsMap[entry.key] ?? 0) + entry.value.cents;
           }
         }
       } else {
-        final allocations = _calculateAllocations(exp.splitRule, exp.amount, activeParticipants);
+        final allocations = _calculateAllocations(exp.splitRule, exp.amount, activeParticipants, sharers: participants);
         for (final entry in allocations.entries) {
           dueCentsMap[entry.key] = (dueCentsMap[entry.key] ?? 0) + entry.value.cents;
         }
@@ -116,12 +116,16 @@ class ProjectSettlementService {
     );
   }
 
+  /// [participants] é todo mundo que aparece no acerto (inclui quem só pagou);
+  /// [sharers] são os participantes do projeto, entre quem a despesa é dividida.
   Map<String, Money> _calculateAllocations(
     SplitRule rule,
     Money totalAmount,
-    List<ProjectParticipant> participants,
-  ) {
+    List<ProjectParticipant> participants, {
+    List<ProjectParticipant>? sharers,
+  }) {
     if (participants.isEmpty) return {};
+    final sharing = (sharers == null || sharers.isEmpty) ? participants : sharers;
 
     switch (rule.type) {
       case SplitType.categoryOwner:
@@ -153,19 +157,22 @@ class ProjectSettlementService {
         };
 
       case SplitType.percentage:
-        if (rule.percentages != null && rule.percentages!.isNotEmpty) {
-          final res = <String, Money>{};
+        // Despesa de projeto não segue o rateio da casa (que vem gravado na
+        // despesa): divide entre os participantes do projeto, pelo percentual
+        // de cada um. Se algum não tiver percentual, divide igual. Os
+        // percentuais são normalizados, então tirar alguém redistribui a parte
+        // dele entre os que ficam.
+        final res = <String, Money>{for (final p in participants) p.id: const Money.zero()};
+        final totalPercent = sharing.fold<double>(0, (acc, p) => acc + (p.defaultSplitPercent ?? 0));
+        final allDefined = sharing.every((p) => (p.defaultSplitPercent ?? 0) > 0);
+        if (allDefined && totalPercent > 0) {
           int allocatedCents = 0;
-          for (int i = 0; i < participants.length; i++) {
-            final p = participants[i];
-            final percent = rule.percentages![p.id] ??
-                (p.userId != null ? rule.percentages![p.userId!] : null) ??
-                (p.externalName != null ? rule.percentages![p.externalName!] : null) ??
-                0.0;
-            if (i == participants.length - 1) {
+          for (int i = 0; i < sharing.length; i++) {
+            final p = sharing[i];
+            if (i == sharing.length - 1) {
               res[p.id] = Money(totalAmount.cents - allocatedCents);
             } else {
-              final share = totalAmount.percentage(percent);
+              final share = Money((totalAmount.cents * p.defaultSplitPercent! / totalPercent).round());
               res[p.id] = share;
               allocatedCents += share.cents;
             }
@@ -173,28 +180,11 @@ class ProjectSettlementService {
           return res;
         }
 
-        final hasConfiguredPercents = participants.any((p) => p.defaultSplitPercent != null && p.defaultSplitPercent! > 0);
-        if (hasConfiguredPercents) {
-          final res = <String, Money>{};
-          int allocatedCents = 0;
-          for (int i = 0; i < participants.length; i++) {
-            final p = participants[i];
-            final percent = p.defaultSplitPercent ?? 0.0;
-            if (i == participants.length - 1) {
-              res[p.id] = Money(totalAmount.cents - allocatedCents);
-            } else {
-              final share = totalAmount.percentage(percent);
-              res[p.id] = share;
-              allocatedCents += share.cents;
-            }
-          }
-          return res;
+        final parts = totalAmount.splitEqually(sharing.length);
+        for (int i = 0; i < sharing.length; i++) {
+          res[sharing[i].id] = parts[i];
         }
-
-        final parts = totalAmount.splitEqually(participants.length);
-        return {
-          for (int i = 0; i < participants.length; i++) participants[i].id: parts[i],
-        };
+        return res;
     }
   }
 

@@ -1,3 +1,4 @@
+import '../../domain/entities/project_participant.dart';
 import '../../domain/entities/shared_project.dart';
 import '../../domain/repositories/projects_repository.dart';
 
@@ -33,4 +34,8 @@ class DynamicProjectsRepository implements ProjectsRepository {
   @override
   Future<void> deleteProject(String id) =>
       _active.deleteProject(id);
+
+  @override
+  Future<void> setParticipants(String projectId, List<ProjectParticipant> participants) =>
+      _active.setParticipants(projectId, participants);
 }

@@ -202,6 +202,26 @@ class SupabaseProjectsRepository implements ProjectsRepository {
   }
 
   @override
+  Future<void> setParticipants(String projectId, List<ProjectParticipant> participants) async {
+    try {
+      // Sai a lista antiga e entra a nova na mesma transação
+      await client.rpc('set_project_participants', params: {
+        'p_project_id': projectId,
+        'p_participants': [
+          for (final p in participants)
+            {
+              if (_isUuid(p.userId ?? '')) 'user_id': p.userId,
+              'external_name': p.externalName,
+              'default_split_percent': p.defaultSplitPercent,
+            },
+        ],
+      });
+    } catch (e) {
+      throw ServerFailure('Erro ao atualizar participantes do projeto: $e');
+    }
+  }
+
+  @override
   Future<void> deleteProject(String id) async {
     try {
       await client
