@@ -44,7 +44,18 @@ class ShoppingRepositoryImpl implements ShoppingRepository {
   Future<void> deleteItem(String itemId) => _dataSource.deleteItem(itemId);
 
   @override
-  Future<void> updateItem(ShoppingItem item) => _dataSource.updateItem(item);
+  Future<void> updateItem(ShoppingItem item) async {
+    final sync = _offlineSync;
+    // Só o que já tem id real pode ser reenviado depois
+    if (sync == null || !sync.isActive || !isUuid(item.id)) {
+      return _dataSource.updateItem(item);
+    }
+    await sync.runOrQueue(
+      OfflineActionType.updateShoppingItem,
+      () => shoppingItemToJson(item),
+      () => _dataSource.updateItem(item),
+    );
+  }
 
   @override
   Future<ShoppingTrip> completeTrip({

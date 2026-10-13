@@ -1,3 +1,4 @@
+import '../../features/p2p/data/offline/p2p_loan_offline_codec.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:get_it/get_it.dart';
 import '../network/offline_queue.dart';
@@ -177,7 +178,7 @@ Future<void> initServiceLocator() async {
     }
     return mock;
   });
-  sl.registerLazySingleton<P2PRepository>(() => P2PRepositoryImpl(sl()));
+  sl.registerLazySingleton<P2PRepository>(() => P2PRepositoryImpl(sl(), sl<OfflineSyncService>()));
   sl.registerLazySingleton<P2PCubit>(() => P2PCubit(sl(), sl<AuthRepository>()));
 
   // Settlement Feature (Motor de Compensação / Super Pix)
@@ -307,6 +308,18 @@ Future<void> initServiceLocator() async {
     ..registerHandler(
       OfflineActionType.addTask,
       (payload) => sl<CalendarDataSource>().addTask(taskItemFromJson(payload)),
+    )
+    ..registerHandler(
+      OfflineActionType.updateTask,
+      (payload) => sl<CalendarDataSource>().updateTask(taskItemFromJson(payload)),
+    )
+    ..registerHandler(
+      OfflineActionType.updateShoppingItem,
+      (payload) => sl<ShoppingDataSource>().updateItem(shoppingItemFromJson(payload)),
+    )
+    ..registerHandler(
+      OfflineActionType.createLoan,
+      (payload) => sl<P2PDataSource>().createLoan(p2pLoanFromJson(payload)),
     );
 
   // Capture Feature

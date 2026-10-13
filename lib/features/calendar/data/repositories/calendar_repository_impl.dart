@@ -95,5 +95,16 @@ class CalendarRepositoryImpl implements CalendarRepository {
   Future<void> deleteTask(String taskId) => _dataSource.deleteTask(taskId);
 
   @override
-  Future<void> updateTask(TaskItem task) => _dataSource.updateTask(task);
+  Future<void> updateTask(TaskItem task) async {
+    final sync = _offlineSync;
+    // Só o que já tem id real pode ser reenviado depois
+    if (sync == null || !sync.isActive || !isUuid(task.id)) {
+      return _dataSource.updateTask(task);
+    }
+    await sync.runOrQueue(
+      OfflineActionType.updateTask,
+      () => taskItemToJson(task),
+      () => _dataSource.updateTask(task),
+    );
+  }
 }
