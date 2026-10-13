@@ -611,7 +611,14 @@ class MockFinanceDataSource implements FinanceDataSource {
 
   @override
   Future<List<HouseExpense>> getRecurringExpenses() async {
-    return _expenses.where((e) => e.isRecurring && e.isActive).toList();
+    // Série ativa: vale a primeira despesa dela (matriz); sem matriz, a própria ocorrência
+    final headActive = {
+      for (final e in _expenses)
+        if (e.isRecurring && e.recurringSeriesId == null) e.id: e.isActive,
+    };
+    return _expenses
+        .where((e) => e.isRecurring && (headActive[e.recurringSeriesId ?? e.id] ?? e.isActive))
+        .toList();
   }
 
   @override

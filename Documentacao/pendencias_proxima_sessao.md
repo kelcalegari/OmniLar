@@ -4,8 +4,8 @@ Atualizado em 13/10/2026. Este arquivo resume onde o trabalho parou, o que falta
 
 ## Estado atual
 
-- **Código:** `main` local e `origin/main` no commit `841e201`, sincronizadas. O código depende das migrations até a 0039, todas já no banco.
-- **Banco (Supabase `rygxmpwzofgieodvhpcy`):** migrations 0001 a 0039 aplicadas. Só as 0022 a 0027 e as 0030 a 0039 constam no histórico de migrations do Supabase; as 0001 a 0021, a 0028 e a 0029 foram aplicadas à mão pelo SQL Editor (o conector recusou a aplicação da 0028 pelo assistente).
+- **Código:** `main` local e `origin/main` no commit `8618593`, sincronizadas. O código depende das migrations até a 0040, todas já no banco. A 0041 (unificar categorias e formas de pagamento duplicadas) está escrita e testada com rollback, mas ainda não foi aplicada.
+- **Banco (Supabase `rygxmpwzofgieodvhpcy`):** migrations 0001 a 0040 aplicadas. Só as 0022 a 0027 e as 0030 a 0040 constam no histórico de migrations do Supabase; as 0001 a 0021, a 0028 e a 0029 foram aplicadas à mão pelo SQL Editor (o conector recusou a aplicação da 0028 pelo assistente).
 - **Edge Functions:** `capture-read` versão 8 e `assistant` versão 5, ambas com `verify_jwt=true` e exigindo usuário logado que more na casa.
 - **Qualidade:** `flutter analyze` com 0 erros (4 warnings antigos) e 317 testes passando (conferido em 13/10/2026). Os testes rodam só contra os datasources mock.
 - **Dados de teste no banco:** uma casa ("Nossa Casa") com 3 moradores (kelvynn, dono; Cristiano e Joao, membros), rateio 23,33 / 43,34 / 33,33, e 3 empréstimos ativos. Existe uma segunda casa no banco. Desde a migration 0033 toda casa tem ao menos uma caixinha: as novas nascem com a "Reserva da Casa" e a que não tinha nenhuma recebeu uma.
@@ -134,7 +134,13 @@ Itens que estavam em "limites conhecidos" ou anotados como abertos nas correçõ
 - **Assistente e o dia de início do ciclo.** Usa o dia configurado na casa.
 - **Sobrecarga antiga `delete_house_expense(uuid)`.** Conferido no banco: já não existe; só a versão com escopo.
 
-Continuam abertos: o ciclo reaberto (alterar valor de despesa já acertada não gera acerto); fechar compra do mercado em gravações separadas; o devedor poder excluir o empréstimo inteiro (decisão do dono); trocar o dia de início com ciclos já fechados; fila offline para edições, empréstimos e pagamento de parcela; horizonte fixo de eventos recorrentes; edição de participantes de projeto; série cuja primeira despesa foi excluída com "só esta" sumir da lista de Recorrentes; categorias e formas de pagamento padrão duplicadas; "testar chave" de IA na web; colunas duplicadas no schema.
+- **Ciclo reaberto: despesa já acertada (migration 0040).** Valor, pagador e "pago do próprio bolso" de uma despesa que já entrou em um fechamento não mudam mais; a correção é um lançamento de ajuste, como já era na exclusão. Título, categoria, observações e datas continuam editáveis. Editar uma série recorrente deixa de tocar nas ocorrências já acertadas.
+- **Lista de Recorrentes.** Uma série cuja primeira despesa foi excluída com "só esta" volta a aparecer na lista enquanto estiver ativa.
+- **"Testar chave" de IA na web.** Passou a usar `package:http` (adicionado ao `pubspec.yaml`) no lugar de `dart:io`.
+
+Continuam abertos: fechar compra do mercado em gravações separadas; criar empréstimo em duas gravações (empréstimo e parcelas), sem transação; o devedor poder excluir o empréstimo inteiro (decisão do dono); trocar o dia de início com ciclos já fechados; fila offline para edições, empréstimos e pagamento de parcela; horizonte fixo de eventos recorrentes; edição de participantes de projeto; colunas duplicadas no schema.
+
+**Categorias e formas de pagamento duplicadas (conferido no banco em 13/10/2026).** A casa principal tem 6 categorias e 3 formas de pagamento em dobro, todas criadas em 11/10/2026: "Contas (Luz, Água, Net)", "Lazer e Restaurantes", "Moradia / Aluguel", "Saúde e Farmácia", "Supermercado", "Transporte", "Cartão de Crédito", "Dinheiro" e "Pix / Transferência". Há despesas apontando para elas (5 em "Contas", 5 em "Supermercado", 3 em "Cartão de Crédito", 2 em "Dinheiro", 8 em "Pix / Transferência"). Causa provável: o app cria os padrões quando a lista vem vazia (`getCategories` e `getPaymentMethods` no datasource do Supabase), e duas leituras simultâneas criaram duas vezes; casas novas já recebem os padrões pela RPC de criação. O app deixou de criar os padrões quando a lista vem vazia (13/10/2026). Falta aplicar a migration 0041, aprovada pelo dono, que unifica as cópias: fica a ativa (entre iguais, a mais antiga), o que apontava para as outras é repontado e elas são apagadas. No teste com rollback saíram 6 categorias e 3 formas de pagamento, 3 despesas foram repontadas e nenhuma ficou sem categoria ou forma de pagamento.
 
 ## Como trabalhar neste projeto
 

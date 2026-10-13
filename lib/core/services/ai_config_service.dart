@@ -1,5 +1,5 @@
 import 'dart:convert';
-import 'dart:io';
+import 'package:http/http.dart' as http;
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 /// Serviço de gerenciamento da configuração de IA do usuário (modelo BYOK - Bring Your Own Key).
@@ -97,10 +97,7 @@ class AiConfigService {
       'https://generativelanguage.googleapis.com/v1beta/models/$targetModel:generateContent?key=$cleanKey',
     );
 
-    final client = HttpClient();
     try {
-      final request = await client.postUrl(url);
-      request.headers.set('Content-Type', 'application/json');
       final payload = jsonEncode({
         'contents': [
           {
@@ -111,9 +108,13 @@ class AiConfigService {
           }
         ],
       });
-      request.write(payload);
-      final response = await request.close();
-      final responseBody = await response.transform(utf8.decoder).join();
+      // package:http funciona também no navegador (dart:io não existe na web)
+      final response = await http.post(
+        url,
+        headers: const {'Content-Type': 'application/json'},
+        body: payload,
+      );
+      final responseBody = utf8.decode(response.bodyBytes);
 
       if (response.statusCode == 200) {
         return (isValid: true, errorMessage: null);
@@ -137,8 +138,6 @@ class AiConfigService {
       }
     } catch (e) {
       return (isValid: false, errorMessage: 'Erro de conexão ao validar chave: $e');
-    } finally {
-      client.close();
     }
   }
 }

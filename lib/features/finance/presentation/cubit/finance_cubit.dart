@@ -83,14 +83,11 @@ class FinanceCubit extends Cubit<FinanceState> {
       // Sem a lista da casa, valem as recorrentes do ciclo aberto
       var recurringSeries = expenses.where((e) => e.isRecurring).toList();
       try {
-        // Série ativa: a primeira despesa dela (a matriz) continua ativa
+        // O repositório já devolve só as ocorrências de séries ativas
         final rows = await _repository.getRecurringExpenses();
         recurringSeries = latestOccurrencePerSeries(
           rows,
-          activeSeriesIds: {
-            for (final e in rows)
-              if (e.recurringSeriesId == null) e.id,
-          },
+          activeSeriesIds: {for (final e in rows) e.recurringSeriesId ?? e.id},
         );
       } catch (_) {}
 

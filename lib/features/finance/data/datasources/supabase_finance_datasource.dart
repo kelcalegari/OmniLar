@@ -149,39 +149,9 @@ class SupabaseFinanceDataSource implements FinanceDataSource {
         }).toList();
       }
 
-      // Provisiona categorias padrão para nova casa
-      final defaultList = [
-        {'name': 'Supermercado', 'icon': 'shopping_cart_outlined', 'color_hex': '#10B981'},
-        {'name': 'Moradia / Aluguel', 'icon': 'home_outlined', 'color_hex': '#3B82F6'},
-        {'name': 'Contas (Luz, Água, Net)', 'icon': 'bolt_outlined', 'color_hex': '#F59E0B'},
-        {'name': 'Transporte', 'icon': 'directions_car_outlined', 'color_hex': '#EC4899'},
-        {'name': 'Lazer e Restaurantes', 'icon': 'restaurant_outlined', 'color_hex': '#8B5CF6'},
-        {'name': 'Saúde e Farmácia', 'icon': 'local_hospital_outlined', 'color_hex': '#EF4444'},
-      ];
-
-      try {
-        final toInsert = defaultList.map((d) => {
-          'house_id': _houseId,
-          'name': d['name'],
-          'icon': d['icon'],
-          'color_hex': d['color_hex'],
-        }).toList();
-        final inserted = await client.from('categories').insert(toInsert).select();
-        return inserted.map((r) => ExpenseCategory(
-          id: r['id'] as String,
-          name: r['name'] as String,
-          icon: r['icon'] as String? ?? 'category_outlined',
-          colorHex: r['color_hex'] as String? ?? '0xFF2196F3',
-          ownerMemberId: r['owner_member_id'] as String?,
-        )).toList();
-      } catch (_) {
-        return defaultList.map((d) => ExpenseCategory(
-          id: 'cat_${d['name']!.toLowerCase().replaceAll(' ', '_')}',
-          name: d['name']!,
-          icon: d['icon']!,
-          colorHex: d['color_hex']!,
-        )).toList();
-      }
+      // A casa recebe as categorias padrão ao ser criada (no banco). Criá-las
+      // aqui quando a lista vinha vazia duplicava tudo em leituras simultâneas.
+      return const [];
     } catch (e) {
       throw ServerFailure('Erro ao buscar categorias: $e');
     }
@@ -232,35 +202,9 @@ class SupabaseFinanceDataSource implements FinanceDataSource {
         }).toList();
       }
 
-      // Provisiona métodos de pagamento padrão para nova casa
-      final defaultPms = [
-        {'name': 'Pix / Transferência', 'type': 'pix'},
-        {'name': 'Cartão de Crédito', 'type': 'card'},
-        {'name': 'Dinheiro', 'type': 'cash'},
-      ];
-
-      try {
-        final toInsert = defaultPms.map((d) => {
-          'house_id': _houseId,
-          'name': d['name'],
-          'type': d['type'],
-        }).toList();
-        final inserted = await client.from('payment_methods').insert(toInsert).select();
-        return inserted.map((r) {
-          final typeStr = r['type'] as String? ?? 'pix';
-          return PaymentMethod(
-            id: r['id'] as String,
-            name: r['name'] as String,
-            type: typeStr == 'card' ? PaymentMethodType.card : (typeStr == 'cash' ? PaymentMethodType.cash : PaymentMethodType.pix),
-          );
-        }).toList();
-      } catch (_) {
-        return const [
-          PaymentMethod(id: 'pm_pix', name: 'Pix / Transferência', type: PaymentMethodType.pix),
-          PaymentMethod(id: 'pm_cartao', name: 'Cartão de Crédito', type: PaymentMethodType.card),
-          PaymentMethod(id: 'pm_dinheiro', name: 'Dinheiro', type: PaymentMethodType.cash),
-        ];
-      }
+      // A casa recebe as formas de pagamento padrão ao ser criada (no banco).
+      // Criá-las aqui quando a lista vinha vazia duplicava tudo.
+      return const [];
     } catch (e) {
       throw ServerFailure('Erro ao buscar métodos de pagamento: $e');
     }
@@ -697,6 +641,8 @@ class SupabaseFinanceDataSource implements FinanceDataSource {
               .from('house_expenses')
               .update(recurringUpdate)
               .or('recurring_series_id.eq.$seriesId,id.eq.$seriesId')
+              // Ocorrência já acertada em um fechamento fica como está
+              .isFilter('settled_at', null)
               .select('id');
         } else if (scope == RecurrenceScope.thisAndFuture) {
           updatedRows = await client
@@ -704,6 +650,7 @@ class SupabaseFinanceDataSource implements FinanceDataSource {
               .update(recurringUpdate)
               .or('recurring_series_id.eq.$seriesId,id.eq.$seriesId')
               .gte('due_date', dueDateStr)
+              .isFilter('settled_at', null)
               .select('id');
         }
         // O valor e o tipo de rateio mudaram nas outras ocorrências: as regras
@@ -829,13 +776,26 @@ class SupabaseFinanceDataSource implements FinanceDataSource {
   @override
   Future<List<HouseExpense>> getRecurringExpenses() async {
     try {
+      // Série ativa: a primeira despesa dela (matriz) segue ativa, mesmo que
+      // tenha sido excluída com "só esta"
+      final heads = await client
+          .from('house_expenses')
+          .select('id')
+          .eq('house_id', _houseId)
+          .eq('is_recurring', true)
+          .eq('is_active', true)
+          .isFilter('recurring_series_id', null);
+      final headIds = [for (final h in heads) h['id'] as String];
+      if (headIds.isEmpty) return const [];
+
+      final idList = headIds.join(',');
       final rows = await client
           .from('house_expenses')
           .select('*, house_expense_items(*), split_rules(*)')
           .eq('house_id', _houseId)
           .eq('is_recurring', true)
-          .eq('is_active', true)
-          .isFilter('deleted_at', null);
+          .isFilter('deleted_at', null)
+          .or('id.in.($idList),recurring_series_id.in.($idList)');
 
       return rows.map((r) => _mapRowToHouseExpense(r)).toList();
     } catch (e) {
