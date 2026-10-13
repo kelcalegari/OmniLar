@@ -8,15 +8,18 @@ import '../cubit/finance_cubit.dart';
 import '../cubit/finance_state.dart';
 
 class AddContributionPage extends StatefulWidget {
-  const AddContributionPage({super.key});
+  final String? initialMemberId;
+  final Money? initialAmount;
+
+  const AddContributionPage({super.key, this.initialMemberId, this.initialAmount});
 
   @override
   State<AddContributionPage> createState() => _AddContributionPageState();
 }
 
 class _AddContributionPageState extends State<AddContributionPage> {
-  String? _selectedMemberId;
-  int _cents = 0;
+  late String? _selectedMemberId = widget.initialMemberId;
+  late int _cents = widget.initialAmount?.cents ?? 0;
 
   void _submit() {
     if (_cents <= 0) {

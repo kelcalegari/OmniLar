@@ -1,10 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:go_router/go_router.dart';
 import '../../../../core/theme/app_colors.dart';
+import '../../../../core/utils/responsive.dart';
 import '../../../../core/widgets/privacy_toggle.dart';
 import '../../domain/entities/cycle_funding_estimate.dart';
 import '../cubit/finance_cubit.dart';
+import '../pages/add_contribution_page.dart';
 import '../cubit/finance_state.dart';
 
 /// Card interativo para planejamento e sugestão inteligente de aportes no início do ciclo financeiro.
@@ -296,7 +297,14 @@ class CycleFundingPlannerCard extends StatelessWidget {
               if (!quote.isFulfilled)
                 FilledButton.tonal(
                   onPressed: () {
-                    context.push('/adicionar-aporte');
+                    showAdaptiveModal(
+                      context: context,
+                      maxWidth: 540,
+                      child: AddContributionPage(
+                        initialMemberId: quote.memberId,
+                        initialAmount: quote.pendingAmount,
+                      ),
+                    );
                   },
                   style: FilledButton.styleFrom(
                     padding: const EdgeInsets.symmetric(
