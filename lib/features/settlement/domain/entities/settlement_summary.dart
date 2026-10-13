@@ -24,6 +24,12 @@ class SettlementSummary {
   /// Parte do excedente coberta pela Caixinha escolhida no fechamento.
   final Money deficitCoveredByVault;
 
+  /// Sobra que o fechamento do ciclo anterior deixou no Caixa como folga.
+  final Money openingBalance;
+
+  /// Sobra deste fechamento devolvida aos moradores (já abatida dos aportes devidos).
+  final Money surplusRefunded;
+
   /// O ciclo já foi fechado antes e está reaberto: só entra no acerto o que
   /// mudou desde o último fechamento.
   final bool isReopened;
@@ -45,6 +51,8 @@ class SettlementSummary {
     this.auditTrails = const {},
     this.bucketDeficit = const Money.zero(),
     this.deficitCoveredByVault = const Money.zero(),
+    this.openingBalance = const Money.zero(),
+    this.surplusRefunded = const Money.zero(),
     this.isReopened = false,
     this.dataVersion,
   });
@@ -86,6 +94,8 @@ class SettlementSummary {
     Map<String, MemberAuditTrail>? auditTrails,
     Money? bucketDeficit,
     Money? deficitCoveredByVault,
+    Money? openingBalance,
+    Money? surplusRefunded,
     bool? isReopened,
     String? dataVersion,
   }) {
@@ -102,6 +112,8 @@ class SettlementSummary {
       auditTrails: auditTrails ?? this.auditTrails,
       bucketDeficit: bucketDeficit ?? this.bucketDeficit,
       deficitCoveredByVault: deficitCoveredByVault ?? this.deficitCoveredByVault,
+      openingBalance: openingBalance ?? this.openingBalance,
+      surplusRefunded: surplusRefunded ?? this.surplusRefunded,
       isReopened: isReopened ?? this.isReopened,
       dataVersion: dataVersion ?? this.dataVersion,
     );

@@ -192,5 +192,129 @@ void main() {
 
       expect(summary.houseTreasuryBalance.cents, 50000);
     });
+    group('Destino da sobra', () {
+      // Balde de R$ 3.000,00 e gastos de R$ 2.500,00 pagos pelo Caixa: sobra R$ 500,00.
+      SettlementSummary computeSurplus({
+        int expenseCents = 250000,
+        List<Contribution> contributions = const [],
+        Money openingBalance = const Money.zero(),
+        Money surplusAlreadyRolled = const Money.zero(),
+        Money surplusAlreadyRefunded = const Money.zero(),
+        bool refundSurplus = false,
+      }) {
+        return engine.computeSettlement(
+          cycle: cycle,
+          members: members,
+          expenses: [
+            HouseExpense(
+              id: 'e1',
+              title: 'Contas do mês',
+              amount: Money(expenseCents),
+              date: DateTime(2026, 10, 12),
+              categoryId: 'c',
+              paidByMemberId: 'ana',
+              paymentMethodId: 'pm_caixa',
+              splitRule: const SplitRule.percentage(null),
+            ),
+          ],
+          contributions: contributions,
+          loans: const [],
+          customContributionTargets: targets,
+          openingBalance: openingBalance,
+          surplusAlreadyRolled: surplusAlreadyRolled,
+          surplusAlreadyRefunded: surplusAlreadyRefunded,
+          refundSurplus: refundSurplus,
+        );
+      }
+
+      test('Devolver aos membros abate a sobra do aporte, na proporção do aporte fixo', () {
+        final summary = computeSurplus(refundSurplus: true);
+
+        expect(summary.surplusRefunded.cents, 50000);
+        expect(summary.houseTreasuryBalance.cents, 0);
+        // 700 / 1300 / 1000 de um balde de 3000
+        expect(due(summary, 'ana'), closeTo(70000 - 11667, 1));
+        expect(due(summary, 'bia'), closeTo(130000 - 21667, 1));
+        expect(due(summary, 'caio'), closeTo(100000 - 16667, 1));
+        expect(
+          due(summary, 'ana') + due(summary, 'bia') + due(summary, 'caio'),
+          300000 - 50000,
+        );
+      });
+
+      test('Quem já aportou tudo recebe a devolução de volta do Caixa', () {
+        final summary = computeSurplus(
+          refundSurplus: true,
+          contributions: [
+            Contribution(
+              id: 'c1',
+              memberId: 'ana',
+              amount: const Money(70000),
+              date: DateTime(2026, 10, 12),
+            ),
+          ],
+        );
+
+        final ana = summary.memberBalances.firstWhere((b) => b.memberId == 'ana');
+        expect(ana.contributionRefund.cents, closeTo(11667, 1));
+        expect(ana.netBalance.cents, ana.contributionRefund.cents);
+        // O Caixa devolve a parte dela e recebe o aporte (já abatido) dos outros dois
+        expect(
+          summary.transfers.where((t) => t.toMemberId == 'ana').fold<int>(0, (acc, t) => acc + t.amount.cents),
+          ana.contributionRefund.cents,
+        );
+      });
+
+      test('Ciclo reaberto não devolve de novo o que já foi devolvido', () {
+        final summary = computeSurplus(surplusAlreadyRefunded: const Money(50000));
+
+        expect(summary.surplusRefunded.cents, 0);
+        expect(summary.houseTreasuryBalance.cents, 0);
+        expect(due(summary, 'ana'), closeTo(70000 - 11667, 1));
+      });
+
+      test('Sobra já deixada para o próximo ciclo não conta de novo ao reabrir', () {
+        final summary = computeSurplus(surplusAlreadyRolled: const Money(50000));
+
+        expect(summary.houseTreasuryBalance.cents, 0);
+        expect(due(summary, 'ana'), 70000);
+      });
+
+      test('Sobra do ciclo anterior é folga: cobre o excedente antes do rateio', () {
+        // Gastos de R$ 3.300,00 contra um balde de R$ 3.000,00, com R$ 500,00 herdados
+        final summary = computeSurplus(
+          expenseCents: 330000,
+          openingBalance: const Money(50000),
+        );
+
+        expect(summary.bucketDeficit.cents, 0);
+        expect(due(summary, 'ana'), 70000);
+        expect(due(summary, 'bia'), 130000);
+        expect(due(summary, 'caio'), 100000);
+        // Sobram R$ 200,00 da folga
+        expect(summary.houseTreasuryBalance.cents, 20000);
+      });
+
+      test('Folga menor que o excedente: só a diferença é rateada', () {
+        final summary = computeSurplus(
+          expenseCents: 360000,
+          openingBalance: const Money(50000),
+        );
+
+        expect(summary.bucketDeficit.cents, 10000);
+        expect(
+          due(summary, 'ana') + due(summary, 'bia') + due(summary, 'caio'),
+          300000 + 10000,
+        );
+        expect(summary.houseTreasuryBalance.cents, 0);
+      });
+
+      test('Sem gastos acima do balde, a folga herdada continua como sobra', () {
+        final summary = computeSurplus(openingBalance: const Money(50000));
+
+        expect(due(summary, 'ana'), 70000);
+        expect(summary.houseTreasuryBalance.cents, 100000);
+      });
+    });
   });
 }

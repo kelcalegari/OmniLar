@@ -28,6 +28,17 @@ class MockSettlementDataSource implements SettlementDataSource {
   final _reopenedTransfers = <FinancialCycle, List<SuperPixTransfer>>{};
   final _surplusVaulted = <FinancialCycle, int>{};
   final _deficitCovered = <FinancialCycle, int>{};
+  final _surplusRolled = <FinancialCycle, int>{};
+  final _surplusRefunded = <FinancialCycle, int>{};
+
+  /// Sobra que o fechamento do ciclo imediatamente anterior deixou no Caixa.
+  Money _openingBalance(FinancialCycle cycle) {
+    for (final entry in _surplusRolled.entries) {
+      final gap = cycle.startDate.difference(entry.key.endDate).inDays;
+      if (gap >= 0 && gap <= 2) return Money(entry.value);
+    }
+    return const Money.zero();
+  }
 
   MockSettlementDataSource({
     required this.financeDataSource,
@@ -93,6 +104,10 @@ class MockSettlementDataSource implements SettlementDataSource {
       deficitVaultBalance: deficitVaultBalance,
       surplusAlreadyVaulted: Money(_surplusVaulted[cycle] ?? 0),
       deficitAlreadyCovered: Money(_deficitCovered[cycle] ?? 0),
+      openingBalance: _openingBalance(cycle),
+      surplusAlreadyRolled: Money(_surplusRolled[cycle] ?? 0),
+      surplusAlreadyRefunded: Money(_surplusRefunded[cycle] ?? 0),
+      refundSurplus: options?.surplusAction == SurplusAction.refund,
     ).copyWith(isReopened: _reopenedTransfers.containsKey(cycle));
 
     // Consultar outro ciclo não pode apagar um fechamento já arquivado
@@ -264,10 +279,33 @@ class MockSettlementDataSource implements SettlementDataSource {
       );
     }
 
+    // Sobra deixada no Caixa como folga do próximo ciclo ou devolvida aos moradores
+    if (options?.surplusAction == SurplusAction.rollover &&
+        summary.houseTreasuryBalance.cents > 0) {
+      _surplusRolled[summary.cycle] =
+          (_surplusRolled[summary.cycle] ?? 0) + summary.houseTreasuryBalance.cents;
+    }
+    if (summary.surplusRefunded.cents > 0) {
+      _surplusRefunded[summary.cycle] =
+          (_surplusRefunded[summary.cycle] ?? 0) + summary.surplusRefunded.cents;
+    }
+
     // 3. Registra os aportes compensatórios no Caixa da Casa para equilibrar o saldo/fôlego
     for (final balance in summary.memberBalances) {
       final missingAporteCents =
           balance.contributionDue.cents - balance.contributionPaid.cents;
+      // Sobra devolvida a quem já tinha aportado: sai do Caixa de volta para o morador
+      if (balance.contributionRefund.cents > 0) {
+        await financeDataSource.addContribution(
+          Contribution(
+            id: 'contrib_refund_${DateTime.now().microsecondsSinceEpoch}_${balance.memberId}',
+            memberId: balance.memberId,
+            amount: Money(-balance.contributionRefund.cents),
+            date: summary.cycle.startDate,
+            paymentMethodId: 'pm_pix',
+          ),
+        );
+      }
       if (missingAporteCents > 0) {
         await financeDataSource.addContribution(
           Contribution(

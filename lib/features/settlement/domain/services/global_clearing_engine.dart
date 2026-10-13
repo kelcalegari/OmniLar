@@ -34,6 +34,10 @@ class GlobalClearingEngine {
     Money deficitVaultBalance = const Money.zero(),
     Money surplusAlreadyVaulted = const Money.zero(),
     Money deficitAlreadyCovered = const Money.zero(),
+    Money openingBalance = const Money.zero(),
+    Money surplusAlreadyRolled = const Money.zero(),
+    Money surplusAlreadyRefunded = const Money.zero(),
+    bool refundSurplus = false,
   }) {
     // 0. Despesas de projetos compartilhados são liquidadas apenas no próprio projeto
     // (ProjectSettlementService). Filtramos aqui por defesa em profundidade para
@@ -130,6 +134,9 @@ class GlobalClearingEngine {
       // Ciclo reaberto: o que a Caixinha já cobriu no fechamento anterior não volta a ser cobrado
       deficitAlreadyCoveredCents = deficitAlreadyCovered.cents.clamp(0, bucketDeficitCents).toInt();
       bucketDeficitCents -= deficitAlreadyCoveredCents;
+      // A sobra deixada no Caixa pelo ciclo anterior é folga: cobre o excedente
+      // antes da Caixinha e do rateio entre os moradores.
+      bucketDeficitCents -= openingBalance.cents.clamp(0, bucketDeficitCents).toInt();
 
       final vaultCents = deficitVaultBalance.cents > 0 ? deficitVaultBalance.cents : 0;
       deficitCoveredCents = vaultCents < bucketDeficitCents ? vaultCents : bucketDeficitCents;
@@ -269,6 +276,63 @@ class GlobalClearingEngine {
       }
     }
 
+    // 3.1 Devolução da sobra aos moradores: abate do aporte devido, na proporção
+    // do aporte de cada um. O que um fechamento anterior deste ciclo já devolveu
+    // continua abatido; a sobra nova só é devolvida se essa for a opção escolhida.
+    final refundWeights = <String, int>{
+      for (final m in members)
+        m.id: customContributionTargets != null
+            ? (customContributionTargets[m.id]?.cents ?? 0)
+            : (m.defaultSplitPercent * 100).round(),
+    };
+    // Aporte devido antes de qualquer devolução de sobra
+    final dueBeforeRefund = Map<String, Money>.of(contributionTargets);
+    void refundToMembers(int cents, String title) {
+      if (cents <= 0 || members.isEmpty) return;
+      final totalWeight = refundWeights.values.fold<int>(0, (acc, w) => acc + w);
+      final rule = totalWeight > 0
+          ? SplitRule.percentage({
+              for (final e in refundWeights.entries) e.key: e.value * 100 / totalWeight,
+            })
+          : const SplitRule.percentage(null);
+      final allocations = rule.calculateAllocations(
+        totalAmount: Money(cents),
+        memberIds: members.map((m) => m.id).toList(),
+      );
+      for (final entry in allocations.entries) {
+        if (entry.value.cents <= 0) continue;
+        contributionTargets[entry.key] = Money(
+          (contributionTargets[entry.key]?.cents ?? 0) - entry.value.cents,
+        );
+        memberExpenseShares[entry.key]?.add(
+          ExpenseShareAudit(
+            expenseId: 'surplus_refund',
+            expenseTitle: title,
+            totalExpenseAmount: Money(-cents),
+            allocatedAmount: Money(-entry.value.cents),
+            ruleDescription: 'Rateio proporcional ao aporte',
+            date: cycle.endDate,
+          ),
+        );
+      }
+    }
+
+    int treasuryAfterClosing() =>
+        openingBalance.cents +
+        members.fold<int>(0, (acc, m) => acc + (contributionTargets[m.id]?.cents ?? 0)) -
+        totalExpensesCents +
+        deficitCoveredCents +
+        deficitAlreadyCoveredCents -
+        surplusAlreadyVaulted.cents -
+        surplusAlreadyRolled.cents;
+
+    refundToMembers(surplusAlreadyRefunded.cents, 'Sobra já devolvida');
+    int surplusRefundedCents = 0;
+    if (refundSurplus && treasuryAfterClosing() > 0) {
+      surplusRefundedCents = treasuryAfterClosing();
+      refundToMembers(surplusRefundedCents, 'Devolução da sobra');
+    }
+
     // 4. Calcular créditos e débitos por membro e gerar a memória de cálculo (Audit Trail)
     final List<MemberNetBalance> memberBalances = [];
     final Map<String, MemberAuditTrail> auditTrails = {};
@@ -392,6 +456,14 @@ class GlobalClearingEngine {
         }
       }
 
+      // Parte da devolução da sobra que o morador já tinha aportado: o Caixa
+      // devolve. Aporte acima do devido original não entra aqui.
+      final originalDueCents = dueBeforeRefund[member.id]?.cents ?? 0;
+      final paidTowardsDue = paidCents < originalDueCents ? paidCents : originalDueCents;
+      final contributionRefund = Money(
+        paidTowardsDue > due.cents ? paidTowardsDue - due.cents : 0,
+      );
+
       final balance = MemberNetBalance(
         memberId: member.id,
         memberName: member.name,
@@ -400,6 +472,7 @@ class GlobalClearingEngine {
         outOfPocketExpenses: outOfPocket,
         p2pLentDue: Money(p2pLentCents),
         p2pBorrowedDue: Money(p2pBorrowedCents),
+        contributionRefund: contributionRefund,
       );
       memberBalances.add(balance);
 
@@ -417,6 +490,7 @@ class GlobalClearingEngine {
         p2pLentTotal: Money(p2pLentCents),
         p2pBorrowedTotal: Money(p2pBorrowedCents),
         netBalance: balance.netBalance,
+        contributionRefund: contributionRefund,
       );
     }
 
@@ -435,16 +509,7 @@ class GlobalClearingEngine {
 
     // 6. Saldo do Caixa da Casa depois do fechamento: conta com o aporte devido
     // de todos os moradores, não só com o que já entrou até agora.
-    final totalDueCents = memberBalances.fold<int>(
-      0,
-      (acc, b) => acc + b.contributionDue.cents,
-    );
-    final houseTreasuryCents =
-        totalDueCents -
-        totalExpensesCents +
-        deficitCoveredCents +
-        deficitAlreadyCoveredCents -
-        surplusAlreadyVaulted.cents;
+    final houseTreasuryCents = treasuryAfterClosing();
 
     return SettlementSummary(
       cycle: cycle,
@@ -458,6 +523,8 @@ class GlobalClearingEngine {
       auditTrails: auditTrails,
       bucketDeficit: Money(bucketDeficitCents),
       deficitCoveredByVault: Money(deficitCoveredCents),
+      openingBalance: openingBalance,
+      surplusRefunded: Money(surplusRefundedCents),
     );
   }
 

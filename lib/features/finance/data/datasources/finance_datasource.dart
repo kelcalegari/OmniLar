@@ -19,6 +19,9 @@ abstract class FinanceDataSource {
   Future<List<HouseExpense>> getExpensesForCycle(FinancialCycle cycle);
   Future<List<HouseExpense>> getExpensesForProject(String projectId);
   Future<List<Contribution>> getContributionsForCycle(FinancialCycle cycle);
+
+  /// Sobra que o fechamento do ciclo anterior deixou no Caixa para este ciclo.
+  Future<Money> getOpeningBalance(FinancialCycle cycle);
   Future<FinancialCycleSummary> getCycleSummary(FinancialCycle cycle);
 
   Future<void> addExpense(HouseExpense expense);

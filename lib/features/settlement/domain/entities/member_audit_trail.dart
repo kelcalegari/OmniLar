@@ -95,6 +95,9 @@ class MemberAuditTrail {
   final Money p2pBorrowedTotal;
   final Money netBalance;
 
+  /// Sobra devolvida que o morador já tinha aportado (o Caixa devolve).
+  final Money contributionRefund;
+
   const MemberAuditTrail({
     required this.memberId,
     required this.memberName,
@@ -109,6 +112,7 @@ class MemberAuditTrail {
     required this.p2pLentTotal,
     required this.p2pBorrowedTotal,
     required this.netBalance,
+    this.contributionRefund = const Money.zero(),
   });
 
   /// Total de participação em gastos comuns/compartilhados da Casa
@@ -137,7 +141,7 @@ class MemberAuditTrail {
 
   /// Total de créditos (+ a receber)
   Money get totalCredits {
-    return Money(outOfPocketTotal.cents + p2pLentTotal.cents);
+    return Money(outOfPocketTotal.cents + contributionRefund.cents + p2pLentTotal.cents);
   }
 
   /// Total de débitos (- a pagar)

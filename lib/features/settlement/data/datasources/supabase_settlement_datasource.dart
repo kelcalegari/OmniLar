@@ -52,6 +52,8 @@ class SupabaseSettlementDataSource implements SettlementDataSource {
     var isReopened = false;
     var surplusAlreadyVaulted = const Money.zero();
     var deficitAlreadyCovered = const Money.zero();
+    var surplusAlreadyRolled = const Money.zero();
+    var surplusAlreadyRefunded = const Money.zero();
 
     // 1. Verifica se já existe um fechamento gravado no Supabase para este ciclo
     try {
@@ -117,6 +119,12 @@ class SupabaseSettlementDataSource implements SettlementDataSource {
         deficitAlreadyCovered = Money(
           (existingSettlement['deficit_covered_cents'] as num?)?.toInt() ?? 0,
         );
+        surplusAlreadyRolled = Money(
+          (existingSettlement['surplus_rolled_cents'] as num?)?.toInt() ?? 0,
+        );
+        surplusAlreadyRefunded = Money(
+          (existingSettlement['surplus_refunded_cents'] as num?)?.toInt() ?? 0,
+        );
       }
     } catch (_) {
       // Continua para apuração dinâmica
@@ -177,6 +185,10 @@ class SupabaseSettlementDataSource implements SettlementDataSource {
       deficitVaultBalance: deficitVaultBalance,
       surplusAlreadyVaulted: surplusAlreadyVaulted,
       deficitAlreadyCovered: deficitAlreadyCovered,
+      openingBalance: await financeDataSource.getOpeningBalance(cycle),
+      surplusAlreadyRolled: surplusAlreadyRolled,
+      surplusAlreadyRefunded: surplusAlreadyRefunded,
+      refundSurplus: options?.surplusAction == SurplusAction.refund,
     );
     return summary.copyWith(isReopened: isReopened, dataVersion: dataVersion);
   }
@@ -206,6 +218,13 @@ class SupabaseSettlementDataSource implements SettlementDataSource {
       });
     }
 
+    // Sobra deixada no Caixa como folga do próximo ciclo
+    final surplusRolledCents =
+        options?.surplusAction == SurplusAction.rollover &&
+            summary.houseTreasuryBalance.cents > 0
+        ? summary.houseTreasuryBalance.cents
+        : 0;
+
     // Excedente do balde coberto pela Caixinha escolhida
     if (summary.deficitCoveredByVault.cents > 0 && options?.deficitVaultId != null) {
       vaultOperations.add({
@@ -226,6 +245,16 @@ class SupabaseSettlementDataSource implements SettlementDataSource {
             'member_id': balance.memberId,
             'amount_cents':
                 balance.contributionDue.cents - balance.contributionPaid.cents,
+          },
+    ];
+
+    // Sobra devolvida a quem já tinha aportado: sai do Caixa de volta para o morador
+    final contributionRefunds = [
+      for (final balance in summary.memberBalances)
+        if (_isUuid(balance.memberId) && balance.contributionRefund.cents > 0)
+          {
+            'member_id': balance.memberId,
+            'amount_cents': balance.contributionRefund.cents,
           },
     ];
 
@@ -412,6 +441,9 @@ class SupabaseSettlementDataSource implements SettlementDataSource {
           'total_cleared_p2p_cents': summary.totalP2PCleared.cents,
           'vault_operations': vaultOperations,
           'contributions': contributions,
+          'contribution_refunds': contributionRefunds,
+          'surplus_rolled_cents': surplusRolledCents,
+          'surplus_refunded_cents': summary.surplusRefunded.cents,
           'expense_ids': expenseIds,
           'settled_expense_ids': settledExpenseIds,
           'split_snapshots': splitSnapshots,
