@@ -166,6 +166,21 @@ class _HomePageContentState extends State<_HomePageContent> {
     );
   }
 
+  /// O ciclo mostrado no topo já mudou, mas os números ainda são do anterior.
+  bool _isSwitchingCycle(FinanceState state) =>
+      state.status == FinanceStatus.loading &&
+      state.summary != null &&
+      state.summary!.cycle != state.currentCycle;
+
+  /// Esmaece o que ainda é do ciclo anterior até o novo chegar.
+  Widget _dimWhileSwitching(FinanceState state, Widget child) {
+    return AnimatedOpacity(
+      opacity: _isSwitchingCycle(state) ? 0.4 : 1,
+      duration: const Duration(milliseconds: 150),
+      child: child,
+    );
+  }
+
   // Layout Mobile (1 coluna vertical)
   Widget _buildMobileLayout(
     BuildContext context,
@@ -182,17 +197,19 @@ class _HomePageContentState extends State<_HomePageContent> {
           cycle: state.currentCycle,
           onPreviousCycle: cubit.previousCycle,
           onNextCycle: cubit.nextCycle,
+          onCurrentCycle: cubit.goToCurrentCycle,
+          isLoading: _isSwitchingCycle(state),
         ),
         if (state.fundingEstimate != null) ...[
           const SizedBox(height: 16),
-          CycleFundingPlannerCard(estimate: state.fundingEstimate!),
+          _dimWhileSwitching(state, CycleFundingPlannerCard(estimate: state.fundingEstimate!)),
         ],
         const SizedBox(height: 16),
         _buildSettlementCard(context),
         const SizedBox(height: 16),
         _buildQuickShortcuts(context, theme),
         const SizedBox(height: 24),
-        _buildExpensesSection(theme, state),
+        _dimWhileSwitching(state, _buildExpensesSection(theme, state)),
         const SizedBox(height: 80),
       ],
     );
@@ -228,10 +245,12 @@ class _HomePageContentState extends State<_HomePageContent> {
                       cycle: state.currentCycle,
                       onPreviousCycle: cubit.previousCycle,
                       onNextCycle: cubit.nextCycle,
+                      onCurrentCycle: cubit.goToCurrentCycle,
+                      isLoading: _isSwitchingCycle(state),
                     ),
                     if (state.fundingEstimate != null) ...[
                       const SizedBox(height: 16),
-                      CycleFundingPlannerCard(estimate: state.fundingEstimate!),
+                      _dimWhileSwitching(state, CycleFundingPlannerCard(estimate: state.fundingEstimate!)),
                     ],
                     const SizedBox(height: 16),
                     _buildSettlementCard(context),
@@ -252,7 +271,7 @@ class _HomePageContentState extends State<_HomePageContent> {
                   ),
                   child: Padding(
                     padding: const EdgeInsets.all(16),
-                    child: _buildExpensesSection(theme, state, isDesktop: true),
+                    child: _dimWhileSwitching(state, _buildExpensesSection(theme, state, isDesktop: true)),
                   ),
                 ),
               ),
@@ -335,10 +354,12 @@ class _HomePageContentState extends State<_HomePageContent> {
                     cycle: state.currentCycle,
                     onPreviousCycle: cubit.previousCycle,
                     onNextCycle: cubit.nextCycle,
+                    onCurrentCycle: cubit.goToCurrentCycle,
+                    isLoading: _isSwitchingCycle(state),
                   ),
                   if (state.fundingEstimate != null) ...[
                     const SizedBox(height: 16),
-                    CycleFundingPlannerCard(estimate: state.fundingEstimate!),
+                    _dimWhileSwitching(state, CycleFundingPlannerCard(estimate: state.fundingEstimate!)),
                   ],
                   const SizedBox(height: 16),
                   _buildSettlementCard(context),
@@ -365,7 +386,7 @@ class _HomePageContentState extends State<_HomePageContent> {
                             ),
                             child: Padding(
                               padding: const EdgeInsets.all(16),
-                              child: _buildExpensesSection(theme, state, isDesktop: true),
+                              child: _dimWhileSwitching(state, _buildExpensesSection(theme, state, isDesktop: true)),
                             ),
                           ),
                         ),
@@ -391,7 +412,7 @@ class _HomePageContentState extends State<_HomePageContent> {
                       ),
                       child: Padding(
                         padding: const EdgeInsets.all(16),
-                        child: _buildExpensesSection(theme, state, isDesktop: true),
+                        child: _dimWhileSwitching(state, _buildExpensesSection(theme, state, isDesktop: true)),
                       ),
                     ),
             ),

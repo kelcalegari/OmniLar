@@ -113,40 +113,69 @@ class FinanceCubit extends Cubit<FinanceState> {
     } catch (_) {}
   }
 
+  /// Número da carga mais recente: resposta de uma carga antiga é descartada.
+  int _loadSequence = 0;
+
   Future<void> loadCycleData({FinancialCycle? cycle}) async {
     final targetCycle = _alignToHouse(cycle ?? state.currentCycle);
+    final sequence = ++_loadSequence;
     emit(state.copyWith(status: FinanceStatus.loading, currentCycle: targetCycle));
 
     try {
-      final members = await _repository.getMembers();
-      final categories = await _repository.getCategories();
-      final paymentMethods = await _repository.getPaymentMethods();
-      final summary = await _repository.getCycleSummary(targetCycle);
-      final expenses = await _repository.getExpensesForCycle(targetCycle);
-      final contributions = await _repository.getContributionsForCycle(targetCycle);
-      final vaults = await _repository.getSavingsVaults();
-      var splitModel = state.splitModel;
-      try {
-        splitModel = await _repository.getHouseSplitModel();
-      } catch (_) {}
+      // As leituras não dependem umas das outras: vão todas de uma vez
+      final membersFuture = _repository.getMembers();
+      final categoriesFuture = _repository.getCategories();
+      final paymentMethodsFuture = _repository.getPaymentMethods();
+      final summaryFuture = _repository.getCycleSummary(targetCycle);
+      final expensesFuture = _repository.getExpensesForCycle(targetCycle);
+      final contributionsFuture = _repository.getContributionsForCycle(targetCycle);
+      final vaultsFuture = _repository.getSavingsVaults();
+      // As três abaixo são opcionais: se falharem, vale o que já se tinha
+      final splitModelFuture = Future<String?>.sync(
+        () => _repository.getHouseSplitModel(),
+      ).catchError((_) => null);
+      final recurringFuture = Future<List<HouseExpense>?>.sync(
+        () => _repository.getRecurringExpenses(),
+      ).catchError((_) => null);
+      // Histórico do ciclo anterior para as médias de variáveis (ex: Mercado)
+      final historicalFuture = Future<List<HouseExpense>>.sync(
+        () => _repository.getExpensesForCycle(cycleSchedule.previous(targetCycle)),
+      ).catchError((_) => <HouseExpense>[]);
+
+      await Future.wait<void>([
+        membersFuture,
+        categoriesFuture,
+        paymentMethodsFuture,
+        summaryFuture,
+        expensesFuture,
+        contributionsFuture,
+        vaultsFuture,
+        splitModelFuture,
+        recurringFuture,
+        historicalFuture,
+      ]);
+      // Outro ciclo foi pedido enquanto este carregava: o dele é que vale
+      if (sequence != _loadSequence || isClosed) return;
+
+      final members = await membersFuture;
+      final categories = await categoriesFuture;
+      final paymentMethods = await paymentMethodsFuture;
+      final summary = await summaryFuture;
+      final expenses = await expensesFuture;
+      final contributions = await contributionsFuture;
+      final vaults = await vaultsFuture;
+      final splitModel = await splitModelFuture ?? state.splitModel;
       // Sem a lista da casa, valem as recorrentes do ciclo aberto
       var recurringSeries = expenses.where((e) => e.isRecurring).toList();
-      try {
+      final recurringRows = await recurringFuture;
+      if (recurringRows != null) {
         // O repositório já devolve só as ocorrências de séries ativas
-        final rows = await _repository.getRecurringExpenses();
         recurringSeries = latestOccurrencePerSeries(
-          rows,
-          activeSeriesIds: {for (final e in rows) e.recurringSeriesId ?? e.id},
+          recurringRows,
+          activeSeriesIds: {for (final e in recurringRows) e.recurringSeriesId ?? e.id},
         );
-      } catch (_) {}
-
-      // Busca histórico de despesas do ciclo anterior para cálculo de médias de variáveis (ex: Mercado)
-      List<HouseExpense> historicalExpenses = [];
-      try {
-        final prevCycle = cycleSchedule.previous(targetCycle);
-        final prevExpenses = await _repository.getExpensesForCycle(prevCycle);
-        historicalExpenses.addAll(prevExpenses);
-      } catch (_) {}
+      }
+      final historicalExpenses = await historicalFuture;
 
       _historicalExpenses = historicalExpenses.isNotEmpty ? historicalExpenses : expenses;
 
@@ -178,6 +207,7 @@ class FinanceCubit extends Cubit<FinanceState> {
       ));
       _watchHouseChanges();
     } catch (e) {
+      if (sequence != _loadSequence || isClosed) return;
       emit(state.copyWith(
         status: FinanceStatus.failure,
         errorMessage: 'Erro ao carregar dados do ciclo: $e',
@@ -245,6 +275,11 @@ class FinanceCubit extends Cubit<FinanceState> {
   void previousCycle() {
     final prev = cycleSchedule.previous(state.currentCycle);
     loadCycleData(cycle: prev);
+  }
+
+  /// Volta para o ciclo em andamento hoje.
+  void goToCurrentCycle() {
+    loadCycleData(cycle: cycleSchedule.cycleFor(DateTime.now()));
   }
 
   Future<void> addExpense(HouseExpense expense) async {
