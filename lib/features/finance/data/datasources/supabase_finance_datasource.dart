@@ -645,7 +645,8 @@ class SupabaseFinanceDataSource implements FinanceDataSource {
         'due_day': expense.dueDay,
         'is_active': expense.isActive,
         'notes': expense.notes,
-        if (expense.projectId != null) 'project_id': expense.projectId,
+        // Nulo desvincula a despesa do projeto
+        'project_id': expense.projectId,
       };
 
       await client.from('house_expenses').update(updateData).eq('id', expense.id);
@@ -979,6 +980,32 @@ class SupabaseFinanceDataSource implements FinanceDataSource {
       });
     } catch (e) {
       throw ServerFailure('Erro ao criar caixinha: $e');
+    }
+  }
+
+  @override
+  Future<List<SavingsTransaction>> getVaultTransactions(String vaultId) async {
+    try {
+      final rows = await client
+          .from('savings_transactions')
+          .select('id, vault_id, member_id, amount_cents, type, description, created_at')
+          .eq('vault_id', vaultId)
+          .order('created_at', ascending: false)
+          .limit(200);
+
+      return rows.map((r) {
+        return SavingsTransaction(
+          id: r['id'] as String,
+          vaultId: r['vault_id'] as String,
+          memberId: r['member_id'] as String? ?? '',
+          amount: Money((r['amount_cents'] as num).toInt()),
+          type: r['type'] as String,
+          description: r['description'] as String? ?? '',
+          date: DateTime.parse(r['created_at'] as String).toLocal(),
+        );
+      }).toList();
+    } catch (e) {
+      throw ServerFailure('Erro ao buscar o histórico da caixinha: $e');
     }
   }
 

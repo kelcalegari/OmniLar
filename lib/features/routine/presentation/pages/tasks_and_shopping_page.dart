@@ -1215,13 +1215,24 @@ class _TasksAndShoppingPageState extends State<TasksAndShoppingPage> with Single
 
     final amountController = MoneyTextEditingController(allowEmpty: false);
     final personalAmountController = MoneyTextEditingController(allowEmpty: true);
-    String? selectedPmId = paymentMethods.isNotEmpty ? paymentMethods.first.id : null;
     final currentUserId = sl<AuthRepository>().currentUser?.id ?? 'member_carlos';
-    String selectedPayerId = members.isNotEmpty ? members.first.id : currentUserId;
-    String selectedDebtorId = members.length > 1 ? members[1].id : currentUserId;
+    // Quem fecha a compra é, por padrão, quem pagou; a forma de pagamento sugerida é a dele
+    String selectedPayerId = members.any((m) => m.id == currentUserId)
+        ? currentUserId
+        : (members.isNotEmpty ? members.first.id : currentUserId);
+    String? selectedPmId = (paymentMethods.where((p) => p.ownerMemberId == selectedPayerId).firstOrNull ??
+            paymentMethods.firstOrNull)
+        ?.id;
 
     final personalItems = state.items.where((i) => i.isBought && i.isPersonal).toList();
     final hasPersonal = personalItems.isNotEmpty;
+
+    // Dono dos itens pessoais: por padrão quem está logado. Se for o próprio
+    // pagador, o valor só sai da despesa da casa; se for outro morador, vira
+    // empréstimo dele para quem pagou.
+    String selectedDebtorId = members.any((m) => m.id == currentUserId)
+        ? currentUserId
+        : (members.isNotEmpty ? members.first.id : currentUserId);
 
     showDialog(
       context: context,
@@ -1308,6 +1319,22 @@ class _TasksAndShoppingPageState extends State<TasksAndShoppingPage> with Single
                                 prefixIcon: const Icon(Icons.person_pin_circle_outlined),
                                 allowEmpty: true,
                               ),
+                              if (members.isNotEmpty) ...[
+                                const SizedBox(height: 10),
+                                DropdownButtonFormField<String>(
+                                  initialValue: selectedDebtorId,
+                                  decoration: InputDecoration(
+                                    labelText: 'De quem são os itens pessoais',
+                                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                                  ),
+                                  items: members.map((m) {
+                                    return DropdownMenuItem(value: m.id, child: Text(m.name));
+                                  }).toList(),
+                                  onChanged: (val) {
+                                    if (val != null) setDialogState(() => selectedDebtorId = val);
+                                  },
+                                ),
+                              ],
                             ],
                           ),
                         ),

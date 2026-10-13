@@ -113,6 +113,7 @@ class HouseExpense extends Equatable {
     List<HouseExpenseItem>? items,
     String? recurringSeriesId,
     String? projectId,
+    bool clearProjectId = false,
     DateTime? paidAt,
     bool clearPaidAt = false,
     DateTime? settledAt,
@@ -136,7 +137,7 @@ class HouseExpense extends Equatable {
       notes: notes ?? this.notes,
       items: items ?? this.items,
       recurringSeriesId: recurringSeriesId ?? this.recurringSeriesId,
-      projectId: projectId ?? this.projectId,
+      projectId: clearProjectId ? null : (projectId ?? this.projectId),
       paidAt: clearPaidAt ? null : (paidAt ?? this.paidAt),
       settledAt: settledAt ?? this.settledAt,
     );

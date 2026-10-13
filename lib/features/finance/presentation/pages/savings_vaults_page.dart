@@ -1,3 +1,4 @@
+import '../../domain/repositories/finance_repository.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../../../core/theme/app_colors.dart';
@@ -151,7 +152,9 @@ class SavingsVaultsPage extends StatelessWidget {
     int depositCents = 10000; // R$ 100,00 padrão
     final authRepo = sl<AuthRepository>();
     final defaultId = authRepo.isDemoMode ? 'member_carlos' : (authRepo.currentUser?.id ?? '');
-    String selectedMemberId = members.isNotEmpty ? members.first.id : defaultId;
+    // Com sessão real o banco registra quem está logado: não há o que escolher
+    String selectedMemberId =
+        authRepo.isDemoMode && members.isNotEmpty ? members.first.id as String : defaultId;
     final descController = TextEditingController(text: 'Aporte para ${vault.name}');
 
     showDialog(
@@ -165,6 +168,7 @@ class SavingsVaultsPage extends StatelessWidget {
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
+                  if (authRepo.isDemoMode) ...[
                   const Text('Quem está guardando?', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.grey)),
                   const SizedBox(height: 6),
                   DropdownButtonFormField<String>(
@@ -181,6 +185,7 @@ class SavingsVaultsPage extends StatelessWidget {
                     },
                   ),
                   const SizedBox(height: 16),
+                  ],
                   const Text('Valor a Guardar:', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.grey)),
                   const SizedBox(height: 6),
                   MoneyInputField(
@@ -232,9 +237,103 @@ class SavingsVaultsPage extends StatelessWidget {
     );
   }
 
+  /// Extrato da caixinha: quem guardou ou resgatou, quanto e quando.
+  void _showHistoryDialog(BuildContext context, SavingsVault vault, List<dynamic> members) {
+    String memberName(String id) {
+      for (final m in members) {
+        if (m.id == id) return (m.name as String).split(' ').first;
+      }
+      return 'Morador';
+    }
+
+    String two(int n) => n.toString().padLeft(2, '0');
+    String formatDate(DateTime d) =>
+        '${two(d.day)}/${two(d.month)}/${d.year} ${two(d.hour)}:${two(d.minute)}';
+
+    showDialog<void>(
+      context: context,
+      builder: (dialogCtx) => AlertDialog(
+        title: Text('Histórico: ${vault.name}'),
+        content: SizedBox(
+          width: 420,
+          child: FutureBuilder<List<SavingsTransaction>>(
+            future: sl<FinanceRepository>().getVaultTransactions(vault.id),
+            builder: (context, snapshot) {
+              if (snapshot.connectionState != ConnectionState.done) {
+                return const SizedBox(
+                  height: 80,
+                  child: Center(child: CircularProgressIndicator()),
+                );
+              }
+              if (snapshot.hasError) {
+                return const Text('Não foi possível carregar o histórico desta caixinha.');
+              }
+              final transactions = snapshot.data ?? const [];
+              if (transactions.isEmpty) {
+                return const Text('Nenhuma entrada ou saída registrada nesta caixinha.');
+              }
+              return ListView.separated(
+                shrinkWrap: true,
+                itemCount: transactions.length,
+                separatorBuilder: (_, _) => const Divider(height: 12),
+                itemBuilder: (context, index) {
+                  final t = transactions[index];
+                  final color = t.isDeposit ? AppColors.creditGreen : AppColors.debtRed;
+                  return Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Icon(
+                        t.isDeposit ? Icons.south_west_rounded : Icons.north_east_rounded,
+                        size: 18,
+                        color: color,
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              '${t.isDeposit ? 'Entrada' : 'Saída'} • ${memberName(t.memberId)}',
+                              style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
+                            ),
+                            if (t.description.isNotEmpty)
+                              Text(t.description, style: const TextStyle(fontSize: 12)),
+                            Text(
+                              formatDate(t.date),
+                              style: const TextStyle(fontSize: 11, color: Colors.grey),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      PrivacySensitiveText(
+                        '${t.isDeposit ? '+' : '-'}${t.amount.format()}',
+                        style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: color),
+                      ),
+                    ],
+                  );
+                },
+              );
+            },
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogCtx),
+            child: const Text('Fechar'),
+          ),
+        ],
+      ),
+    );
+  }
+
   void _showWithdrawDialog(BuildContext context, FinanceCubit cubit, SavingsVault vault, List<dynamic> members) {
     int withdrawCents = vault.currentBalance.cents > 10000 ? 10000 : vault.currentBalance.cents;
-    String selectedMemberId = members.isNotEmpty ? members.first.id : 'member_carlos';
+    final authRepo = sl<AuthRepository>();
+    // Com sessão real o banco registra quem está logado: não há o que escolher
+    String selectedMemberId = authRepo.isDemoMode
+        ? (members.isNotEmpty ? members.first.id as String : 'member_carlos')
+        : (authRepo.currentUser?.id ?? '');
     final descController = TextEditingController(text: 'Uso de ${vault.name} para despesa');
 
     showDialog(
@@ -251,6 +350,7 @@ class SavingsVaultsPage extends StatelessWidget {
                   Text('Saldo disponível na caixinha: ${vault.currentBalance.format()}',
                       style: const TextStyle(fontSize: 13, color: Colors.grey, fontWeight: FontWeight.bold)),
                   const SizedBox(height: 14),
+                  if (authRepo.isDemoMode) ...[
                   const Text('Quem está resgatando?', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.grey)),
                   const SizedBox(height: 6),
                   DropdownButtonFormField<String>(
@@ -267,6 +367,7 @@ class SavingsVaultsPage extends StatelessWidget {
                     },
                   ),
                   const SizedBox(height: 16),
+                  ],
                   const Text('Valor a Resgatar:', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.grey)),
                   const SizedBox(height: 6),
                   MoneyInputField(
@@ -559,6 +660,14 @@ class SavingsVaultsPage extends StatelessWidget {
                                   ),
                                 ),
                               ],
+                            ),
+                            Align(
+                              alignment: Alignment.centerLeft,
+                              child: TextButton.icon(
+                                onPressed: () => _showHistoryDialog(context, vault, members),
+                                icon: const Icon(Icons.history_rounded, size: 16),
+                                label: const Text('Histórico de entradas e saídas'),
+                              ),
                             ),
                           ],
                         ),

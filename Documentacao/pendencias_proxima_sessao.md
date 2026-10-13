@@ -4,10 +4,10 @@ Atualizado em 13/10/2026. Este arquivo resume onde o trabalho parou, o que falta
 
 ## Estado atual
 
-- **Código:** `main` local e `origin/main` no commit `40ed34d`, sincronizadas. O código depende das migrations até a 0037, todas já no banco.
-- **Banco (Supabase `rygxmpwzofgieodvhpcy`):** migrations 0001 a 0037 aplicadas. Só as 0022 a 0027 e as 0030 a 0037 constam no histórico de migrations do Supabase; as 0001 a 0021, a 0028 e a 0029 foram aplicadas à mão pelo SQL Editor (o conector recusou a aplicação da 0028 pelo assistente).
+- **Código:** `main` local e `origin/main` no commit `3cb4b63`, sincronizadas. O código depende das migrations até a 0038, todas já no banco.
+- **Banco (Supabase `rygxmpwzofgieodvhpcy`):** migrations 0001 a 0038 aplicadas. Só as 0022 a 0027 e as 0030 a 0038 constam no histórico de migrations do Supabase; as 0001 a 0021, a 0028 e a 0029 foram aplicadas à mão pelo SQL Editor (o conector recusou a aplicação da 0028 pelo assistente).
 - **Edge Functions:** `capture-read` versão 8 e `assistant` versão 5, ambas com `verify_jwt=true` e exigindo usuário logado que more na casa.
-- **Qualidade:** `flutter analyze` com 0 erros (4 warnings antigos) e 314 testes passando (conferido em 13/10/2026). Os testes rodam só contra os datasources mock.
+- **Qualidade:** `flutter analyze` com 0 erros (4 warnings antigos) e 315 testes passando (conferido em 13/10/2026). Os testes rodam só contra os datasources mock.
 - **Dados de teste no banco:** uma casa ("Nossa Casa") com 3 moradores (kelvynn, dono; Cristiano e Joao, membros), rateio 23,33 / 43,34 / 33,33, e 3 empréstimos ativos. Existe uma segunda casa no banco. Desde a migration 0033 toda casa tem ao menos uma caixinha: as novas nascem com a "Reserva da Casa" e a que não tinha nenhuma recebeu uma.
 
 ## O que foi feito nesta sessão
@@ -100,6 +100,29 @@ Análise feita em 12/10/2026 por leitura do código e das migrations, e reavalia
 2. **Decididos e corrigidos em 13/10/2026:** 11, 7 e 6 (falta teste no app).
 3. **Maiores:** 10 (corrigido em 13/10/2026), pontas do item 3 (decididas e corrigidas em 13/10/2026), 8 (corrigido em 13/10/2026), 2 (corrigido em 13/10/2026, gerando no banco).
 4. **Limpeza:** 15 e 13 corrigidos, 12 e 14 em parte (13/10/2026).
+
+## Pendente: segunda análise de inconsistências (13/10/2026)
+
+Feita depois de corrigir a lista acima, de novo só por leitura do código e das migrations: nenhum item foi reproduzido no app. A numeração continua com o prefixo N para não confundir com a lista anterior.
+
+### Dinheiro calculado ou atribuído errado
+
+- **N1. Conta recorrente gerada ignorava a mudança do dia de vencimento (corrigido em 13/10/2026, migration 0038).** O gerador passou a ler o dia de vencimento da ocorrência mais recente, como já fazia com valor, título e rateio. O modo demo segue a mesma regra.
+- **N2. Fechar compra do mercado sugeria o pagador errado (corrigido em 13/10/2026, falta testar no app).** O diálogo abre com "quem pagou" em quem está logado e com a forma de pagamento dele. Ganhou o campo "De quem são os itens pessoais", que também abre em quem está logado e lista todos os moradores (decisão do dono): se o dono dos itens for o próprio pagador, o valor só sai da despesa da casa; se for outro morador, vira empréstimo dele para quem pagou. Antes os itens pessoais iam sempre para o segundo morador da lista, sem pergunta. Continua: sem nenhuma forma de pagamento cadastrada o lançamento vai sem forma de pagamento.
+- **N3. O scanner ignorava o dono da categoria no rateio (corrigido em 13/10/2026, falta testar no app).** Passou a usar a mesma regra dos outros lançamentos (`expense_launch_defaults.dart`).
+
+### A tela promete uma coisa e o banco faz outra
+
+- **N4. Caixinha: a tela deixava escolher quem depositou ou resgatou, mas o banco gravava quem está logado (corrigido em 13/10/2026).** Decisão do dono: gravar sempre quem está logado, para saber quem fez o quê. Com sessão real os diálogos de depósito e de resgate não perguntam mais o morador (a escolha continua só no modo demo). A caixinha ganhou o botão "Histórico de entradas e saídas", que mostra quem guardou ou resgatou, quanto, quando e a descrição (as 200 movimentações mais recentes); antes o extrato era gravado mas não aparecia em tela nenhuma. Chegou a ser escrita uma migration para depositar em nome de outro morador; foi descartada antes de ser aplicada.
+- **N5. Item de compra "Pessoal (só meu)" é visto por todos (corrigido em 13/10/2026).** Decisão do dono: manter visível e corrigir o texto, que passou a dizer "Todos veem na lista; o valor é separado ao fechar a compra".
+
+### Menores
+
+- **N6. Editar despesa não conseguia tirá-la de um projeto (corrigido em 13/10/2026, falta testar no app).** Desmarcar o projeto no formulário agora grava a despesa sem projeto.
+- **N7. "Por categoria" com 3 moradores gravava 33,33% para cada (corrigido em 13/10/2026).** Passou a gravar partes inteiras que somam 100 (34/33/33), como o botão "Dividir igualmente".
+- **N8. "Reverter para pendente" deixava a data de baixa no modo demo (corrigido em 13/10/2026).** O demo passou a limpar a data, como o banco.
+
+Os oito itens foram corrigidos em 13/10/2026; falta o teste no app.
 
 ## Como trabalhar neste projeto
 

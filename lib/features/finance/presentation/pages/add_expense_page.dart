@@ -328,6 +328,7 @@ class _AddExpensePageState extends State<AddExpensePage> {
         dueDay: _isRecurring ? _dueDay : null,
         items: items,
         projectId: _selectedProjectId,
+        clearProjectId: _selectedProjectId == null,
       );
 
       if (!mounted) return;

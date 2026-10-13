@@ -52,6 +52,9 @@ abstract class FinanceDataSource {
 
   // Caixinhas & Metas da Casa
   Future<List<SavingsVault>> getSavingsVaults();
+
+  /// Entradas e saídas da caixinha, da mais recente para a mais antiga.
+  Future<List<SavingsTransaction>> getVaultTransactions(String vaultId);
   Future<void> createSavingsVault(SavingsVault vault);
   Future<void> depositToVault({
     required String vaultId,

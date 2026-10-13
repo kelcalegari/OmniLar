@@ -50,6 +50,9 @@ abstract class FinanceRepository {
 
   // Caixinhas & Metas da Casa (Dinheiro Blindado)
   Future<List<SavingsVault>> getSavingsVaults();
+
+  /// Entradas e saídas da caixinha, da mais recente para a mais antiga.
+  Future<List<SavingsTransaction>> getVaultTransactions(String vaultId);
   Future<void> createSavingsVault(SavingsVault vault);
   Future<void> depositToVault({required String vaultId, required String memberId, required Money amount, required String description});
   Future<void> withdrawFromVault({required String vaultId, required String memberId, required Money amount, required String description});

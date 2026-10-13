@@ -118,6 +118,10 @@ class FinanceRepositoryImpl implements FinanceRepository {
   Future<List<SavingsVault>> getSavingsVaults() => _dataSource.getSavingsVaults();
 
   @override
+  Future<List<SavingsTransaction>> getVaultTransactions(String vaultId) =>
+      _dataSource.getVaultTransactions(vaultId);
+
+  @override
   Future<void> createSavingsVault(SavingsVault vault) => _dataSource.createSavingsVault(vault);
 
   @override

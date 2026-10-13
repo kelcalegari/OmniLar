@@ -1742,7 +1742,7 @@ class SettingsPage extends StatelessWidget {
                                 Text(
                                   members.isEmpty
                                       ? 'Demais categorias: divididas igualmente.'
-                                      : 'Demais categorias: divididas igualmente entre ${members.length} (${(100 / members.length).toStringAsFixed(100 % members.length == 0 ? 0 : 2)}% cada).',
+                                      : 'Demais categorias: divididas igualmente entre os ${members.length} moradores.',
                                   style: const TextStyle(fontSize: 12, color: Colors.grey),
                                 ),
                               ],
@@ -1789,10 +1789,12 @@ class SettingsPage extends StatelessWidget {
                           }
                         } else {
                           // Modelo por categoria de gasto: mantém 50/50 como base geral
-                          final equalShare = members.isNotEmpty ? (100.0 / members.length) : 50.0;
-                          for (final m in members) {
-                            percentages[m.id] = equalShare;
-                            fixedAmounts[m.id] = 0;
+                          // Partes inteiras que somam 100 (34/33/33), como em "Dividir igualmente"
+                          final base = members.isNotEmpty ? 100 ~/ members.length : 0;
+                          final remainder = members.isNotEmpty ? 100 % members.length : 0;
+                          for (int i = 0; i < members.length; i++) {
+                            percentages[members[i].id] = (base + (i < remainder ? 1 : 0)).toDouble();
+                            fixedAmounts[members[i].id] = 0;
                           }
                         }
 

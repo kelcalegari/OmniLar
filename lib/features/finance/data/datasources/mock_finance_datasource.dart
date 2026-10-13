@@ -342,8 +342,12 @@ class MockFinanceDataSource implements FinanceDataSource {
       final generated = _lastGeneratedDue[head.id];
       if (generated != null && generated.isAfter(lastDue)) lastDue = generated;
 
-      final dueDay = head.dueDay ?? head.effectiveDueDate.day;
       for (var guard = 0; guard < 12; guard++) {
+        // Modelo: a ocorrência mais recente que ainda existe (inclusive o dia de vencimento)
+        final template = _expenses
+            .where((e) => e.id == head.id || e.recurringSeriesId == head.id)
+            .reduce((a, b) => a.effectiveDueDate.isAfter(b.effectiveDueDate) ? a : b);
+        final dueDay = template.dueDay ?? head.dueDay ?? head.effectiveDueDate.day;
         final lastDayOfNextMonth = DateTime(lastDue.year, lastDue.month + 2, 0).day;
         final nextDue = DateTime(
           lastDue.year,
@@ -352,10 +356,6 @@ class MockFinanceDataSource implements FinanceDataSource {
         );
         if (nextDue.isAfter(limit)) break;
 
-        // Modelo: a ocorrência mais recente que ainda existe
-        final template = _expenses
-            .where((e) => e.id == head.id || e.recurringSeriesId == head.id)
-            .reduce((a, b) => a.effectiveDueDate.isAfter(b.effectiveDueDate) ? a : b);
         final newId = 'exp_rec_${head.id}_${nextDue.year}_${nextDue.month}';
         _expenses.add(
           HouseExpense(
@@ -502,7 +502,7 @@ class MockFinanceDataSource implements FinanceDataSource {
 
     switch (scope) {
       case RecurrenceScope.thisInstanceOnly:
-        _expenses[index] = expense;
+        _expenses[index] = expense.isPending ? expense.copyWith(clearPaidAt: true) : expense;
         break;
 
       case RecurrenceScope.thisAndFuture:
@@ -526,7 +526,7 @@ class MockFinanceDataSource implements FinanceDataSource {
             }
           }
         } else {
-          _expenses[index] = expense;
+          _expenses[index] = expense.isPending ? expense.copyWith(clearPaidAt: true) : expense;
         }
         break;
 
@@ -549,7 +549,7 @@ class MockFinanceDataSource implements FinanceDataSource {
             }
           }
         } else {
-          _expenses[index] = expense;
+          _expenses[index] = expense.isPending ? expense.copyWith(clearPaidAt: true) : expense;
         }
         break;
     }
@@ -701,6 +701,12 @@ class MockFinanceDataSource implements FinanceDataSource {
   @override
   Future<List<SavingsVault>> getSavingsVaults() async {
     return List.unmodifiable(_savingsVaults);
+  }
+
+  @override
+  Future<List<SavingsTransaction>> getVaultTransactions(String vaultId) async {
+    return _savingsTransactions.where((t) => t.vaultId == vaultId).toList()
+      ..sort((a, b) => b.date.compareTo(a.date));
   }
 
   @override

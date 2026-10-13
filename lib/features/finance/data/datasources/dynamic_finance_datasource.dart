@@ -112,6 +112,10 @@ class DynamicFinanceDataSource implements FinanceDataSource {
   Future<List<SavingsVault>> getSavingsVaults() => _active.getSavingsVaults();
 
   @override
+  Future<List<SavingsTransaction>> getVaultTransactions(String vaultId) =>
+      _active.getVaultTransactions(vaultId);
+
+  @override
   Future<void> createSavingsVault(SavingsVault vault) =>
       _active.createSavingsVault(vault);
 

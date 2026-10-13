@@ -204,7 +204,7 @@ class _SmartFABContent extends StatelessWidget {
                 CheckboxListTile(
                   contentPadding: EdgeInsets.zero,
                   title: const Text('Item Pessoal (só meu)', style: TextStyle(fontSize: 14)),
-                  subtitle: const Text('Não será compartilhado com outros membros', style: TextStyle(fontSize: 12)),
+                  subtitle: const Text('Todos veem na lista; o valor é separado ao fechar a compra', style: TextStyle(fontSize: 12)),
                   value: isPersonal,
                   onChanged: (val) => setModalState(() => isPersonal = val ?? false),
                 ),

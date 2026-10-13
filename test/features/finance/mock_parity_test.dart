@@ -30,6 +30,35 @@ void main() {
       expect(after.currentBalance, vault.currentBalance);
     });
 
+    test('histórico da caixinha lista entradas e saídas, da mais recente para a mais antiga', () async {
+      final dataSource = MockFinanceDataSource();
+      final vault = (await dataSource.getSavingsVaults()).first;
+      final before = (await dataSource.getVaultTransactions(vault.id)).length;
+
+      await dataSource.depositToVault(
+        vaultId: vault.id,
+        memberId: 'member_carlos',
+        amount: const Money(5000),
+        description: 'entrada de teste',
+      );
+      await Future<void>.delayed(const Duration(milliseconds: 5));
+      await dataSource.withdrawFromVault(
+        vaultId: vault.id,
+        memberId: 'member_marina',
+        amount: const Money(2000),
+        description: 'saída de teste',
+      );
+
+      final history = await dataSource.getVaultTransactions(vault.id);
+      expect(history.length, before + 2);
+      expect(history.first.isWithdraw, isTrue);
+      expect(history.first.memberId, 'member_marina');
+      expect(history.first.amount, const Money(2000));
+      expect(history[1].isDeposit, isTrue);
+      expect(history[1].memberId, 'member_carlos');
+      expect(history.every((t) => t.vaultId == vault.id), isTrue);
+    });
+
     test('empréstimo criado sem parcelas ganha as parcelas e não aparece quitado', () async {
       final dataSource = MockP2PDataSource();
       await dataSource.createLoan(

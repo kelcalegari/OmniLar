@@ -1,3 +1,4 @@
+import '../../../finance/domain/services/expense_launch_defaults.dart';
 import 'dart:io' show Platform;
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
@@ -742,12 +743,12 @@ class _SmartScannerPageState extends State<SmartScannerPage> {
       final matchedPaymentMethodId = selectedPm?.id;
 
       // 3. Regra de rateio entre membros
-      final splitPercentages = {
-        for (final m in state.members) m.id: m.defaultSplitPercent,
-      };
-      final splitRule = splitPercentages.isNotEmpty
-          ? SplitRule.percentage(splitPercentages)
-          : SplitRule.singleResponsible(paidByMemberId);
+      // (categoria com dono vai 100% para o dono, como nos outros lançamentos)
+      final splitRule = ExpenseLaunchDefaults.splitRule(
+        category: state.categories.where((c) => c.id == matchedCategoryId).firstOrNull,
+        members: state.members,
+        paidByMemberId: paidByMemberId,
+      );
 
       // 4. Mapear sub-itens reconhecidos (InvoiceItemDraft -> HouseExpenseItem)
       final expenseId = 'exp_scan_${DateTime.now().millisecondsSinceEpoch}';
