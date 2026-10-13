@@ -21,10 +21,15 @@ class SplitInvoiceModal extends StatefulWidget {
   final String? cardName;
   final String? ownerName;
 
+  /// Dentro de uma página: sem título, sem botão de fechar e, ao confirmar,
+  /// limpa a fatura em vez de fechar.
+  final bool embedded;
+
   const SplitInvoiceModal({
     super.key,
     this.cardName,
     this.ownerName,
+    this.embedded = false,
   });
 
   static Future<void> show(BuildContext context, {String? cardName, String? ownerName}) {
@@ -71,8 +76,9 @@ class _SplitInvoiceModalState extends State<SplitInvoiceModal> {
       _partnerName = isDemo ? 'Marina' : (otherMember != null ? otherMember.name.split(' ').first : 'Parceiro(a)');
       _partnerId = isDemo ? 'member_marina' : (otherMember?.id ?? '');
 
-      // Exemplo representativo de fatura mista importada (RN09)
-      _lines = [
+      // Fatura de exemplo, só no modo demo. Com conta real começa vazia: confirmar
+      // o exemplo lançaria despesas e empréstimos que não existem.
+      _lines = !isDemo ? [] : [
         ImportedStatementLine(
           id: '1',
           date: DateTime.now().subtract(const Duration(days: 2)),
@@ -235,7 +241,11 @@ class _SplitInvoiceModalState extends State<SplitInvoiceModal> {
       }
     });
 
-    Navigator.pop(context);
+    if (widget.embedded) {
+      setState(() => _lines = []);
+    } else {
+      Navigator.pop(context);
+    }
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         backgroundColor: AppColors.creditGreen,
@@ -251,12 +261,39 @@ class _SplitInvoiceModalState extends State<SplitInvoiceModal> {
     final theme = Theme.of(context);
     final split = StatementParser.calculateSplit(_lines);
 
+    final importButton = OutlinedButton.icon(
+      style: OutlinedButton.styleFrom(
+        foregroundColor: AppColors.primary,
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+      ),
+      icon: const Icon(Icons.upload_file_rounded, size: 16),
+      label: const Text('Importar OFX/CSV', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+      onPressed: _pickAndImportFile,
+    );
+
     return Padding(
-      padding: const EdgeInsets.all(20),
+      padding: widget.embedded
+          ? const EdgeInsets.symmetric(horizontal: 16, vertical: 4)
+          : const EdgeInsets.all(20),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
+          if (widget.embedded)
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    '$_cardName • Titular: $_ownerName',
+                    style: theme.textTheme.bodySmall,
+                  ),
+                ),
+                const SizedBox(width: 8),
+                importButton,
+              ],
+            )
+          else
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
@@ -289,16 +326,7 @@ class _SplitInvoiceModalState extends State<SplitInvoiceModal> {
               Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  OutlinedButton.icon(
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: AppColors.primary,
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                    ),
-                    icon: const Icon(Icons.upload_file_rounded, size: 16),
-                    label: const Text('Importar OFX/CSV', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
-                    onPressed: _pickAndImportFile,
-                  ),
+                  importButton,
                   const SizedBox(width: 8),
                   IconButton(
                     icon: const Icon(Icons.close_rounded),
@@ -309,6 +337,33 @@ class _SplitInvoiceModalState extends State<SplitInvoiceModal> {
             ],
           ),
           const SizedBox(height: 16),
+
+          // Sem fatura importada não há o que dividir
+          if (_lines.isEmpty)
+            Container(
+              padding: const EdgeInsets.all(20),
+              decoration: BoxDecoration(
+                border: Border.all(color: theme.dividerColor),
+                borderRadius: BorderRadius.circular(14),
+              ),
+              child: const Column(
+                children: [
+                  Icon(Icons.upload_file_rounded, size: 32, color: Colors.grey),
+                  SizedBox(height: 8),
+                  Text(
+                    'Nenhuma fatura importada',
+                    style: TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                  SizedBox(height: 4),
+                  Text(
+                    'Importe o arquivo OFX ou CSV da fatura do cartão para separar o que é da casa, o que é pessoal e o que outro morador deve.',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(fontSize: 12, color: Colors.grey),
+                  ),
+                ],
+              ),
+            )
+          else ...[
 
           // Resumo da Divisão Visual (RN09)
           Container(
@@ -426,6 +481,7 @@ class _SplitInvoiceModalState extends State<SplitInvoiceModal> {
               onPressed: _confirmSplit,
             ),
           ),
+          ],
         ],
       ),
     );

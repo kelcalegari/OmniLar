@@ -388,4 +388,42 @@ void main() {
       expect(find.text('Aplicativo'), findsOneWidget);
     });
   });
+
+  testWidgets('Aplicativo: tema, chave de IA e auditoria ficam na página', (tester) async {
+    await sl<FinanceCubit>().loadCycleData();
+    final themeCubit = sl<ThemeCubit>();
+    final before = themeCubit.state;
+    addTearDown(() => themeCubit.setThemeMode(before));
+
+    await tester.pumpWidget(buildTestableWidget());
+    await tester.pumpAndSettle();
+    await openGroup(tester, 'Aplicativo');
+
+    // Os três blocos à vista, sem janela
+    expect(find.text('Assistente IA'), findsOneWidget);
+    expect(find.text('Sua Chave de API do Google AI Studio'), findsOneWidget);
+    expect(find.text('Aparência & Tema'), findsOneWidget);
+    expect(find.text('Auditoria e Histórico da Casa'), findsOneWidget);
+
+    // Trocar o tema é um toque
+    await tester.ensureVisible(find.text('Escuro'));
+    await tester.tap(find.text('Escuro'));
+    await tester.pumpAndSettle();
+    expect(themeCubit.state, ThemeMode.dark);
+
+    await tester.tap(find.text('Claro'));
+    await tester.pumpAndSettle();
+    expect(themeCubit.state, ThemeMode.light);
+  });
+
+  testWidgets('Rachar Fatura fica na página do grupo de pagamentos', (tester) async {
+    await sl<FinanceCubit>().loadCycleData();
+
+    await tester.pumpWidget(buildTestableWidget());
+    await tester.pumpAndSettle();
+    await openGroup(tester, 'Pagamentos e contas');
+
+    expect(find.text('Rachar Fatura e Extratos'), findsOneWidget);
+    expect(find.text('Importar OFX/CSV'), findsOneWidget);
+  });
 }

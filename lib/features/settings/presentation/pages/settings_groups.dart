@@ -344,15 +344,11 @@ extension _SettingsGroupViews on _SettingsPageState {
         title: 'Assinaturas & Contas Fixas',
         children: [_recurringExpensesEditor(context)],
       ),
-      _tileCard(context, [
-        _settingsTile(
-          icon: Icons.call_split_rounded,
-          color: AppColors.accent,
-          title: 'Rachar Fatura e Extratos',
-          subtitle: 'Importe a fatura e separe o que é da casa do que é pessoal',
-          onTap: () => SplitInvoiceModal.show(context),
-        ),
-      ]),
+      _panel(
+        context,
+        title: 'Rachar Fatura e Extratos',
+        children: const [SplitInvoiceModal(embedded: true)],
+      ),
     ];
   }
 
@@ -474,38 +470,99 @@ extension _SettingsGroupViews on _SettingsPageState {
   // --- Aplicativo ---
 
   List<Widget> _appBlocks(BuildContext context) {
+    ThemeCubit? themeCubit;
+    try {
+      themeCubit = context.watch<ThemeCubit>();
+    } catch (_) {}
+    final themeMode = themeCubit?.state ?? ThemeMode.system;
+
     return [
-      _tileCard(context, [
-        _settingsTile(
-          icon: Icons.auto_awesome_rounded,
-          color: Colors.purple,
-          title: 'Assistente IA',
-          subtitle: 'Chave de IA, preferências e privacidade',
-          onTap: () => _showAssistantPreferencesModal(context),
-        ),
-        Builder(
-          builder: (context) {
-            ThemeMode mode = ThemeMode.system;
-            try {
-              mode = context.watch<ThemeCubit>().state;
-            } catch (_) {}
-            return _settingsTile(
-              icon: Icons.palette_outlined,
-              color: Colors.blueAccent,
-              title: 'Aparência & Tema',
-              subtitle: _getThemeModeLabel(mode),
-              onTap: () => showThemeSelectionDialog(context),
-            );
-          },
-        ),
-        _settingsTile(
-          icon: Icons.history_edu_rounded,
-          color: AppColors.primary,
-          title: 'Auditoria e Histórico da Casa',
-          subtitle: 'Quem criou, editou ou excluiu cada lançamento',
-          onTap: () => showAuditLogSheet(context: context, title: 'Auditoria da Casa'),
-        ),
-      ]),
+      _panel(
+        context,
+        title: 'Assistente IA',
+        children: [
+          const AiKeyConfigSheet(embedded: true),
+          Container(
+            margin: const EdgeInsets.fromLTRB(16, 8, 16, 4),
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: AppColors.primary.withValues(alpha: 0.08),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: AppColors.primary.withValues(alpha: 0.2)),
+            ),
+            child: const Row(
+              children: [
+                Icon(Icons.shield_outlined, color: AppColors.primary, size: 20),
+                SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    'Privacidade LGPD: seus dados bancários, CPF e números de cartão são mascarados no dispositivo antes de qualquer processamento.',
+                    style: TextStyle(fontSize: 12, color: AppColors.primary),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+      _panel(
+        context,
+        title: 'Aparência & Tema',
+        children: [
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                const Text(
+                  'Escolha a forma como o Omni Lar é exibido.',
+                  style: TextStyle(color: Colors.grey, fontSize: 13),
+                ),
+                const SizedBox(height: 12),
+                SegmentedButton<ThemeMode>(
+                  segments: const [
+                    ButtonSegment(
+                      value: ThemeMode.system,
+                      icon: Icon(Icons.brightness_auto_rounded),
+                      label: Text('Sistema'),
+                    ),
+                    ButtonSegment(
+                      value: ThemeMode.light,
+                      icon: Icon(Icons.light_mode_rounded),
+                      label: Text('Claro'),
+                    ),
+                    ButtonSegment(
+                      value: ThemeMode.dark,
+                      icon: Icon(Icons.dark_mode_rounded),
+                      label: Text('Escuro'),
+                    ),
+                  ],
+                  selected: {themeMode},
+                  onSelectionChanged: themeCubit == null
+                      ? null
+                      : (selection) => themeCubit!.setThemeMode(selection.first),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+      _panel(
+        context,
+        title: 'Auditoria e Histórico da Casa',
+        actionLabel: 'Atualizar',
+        onAction: _reloadAudit,
+        children: [
+          const Padding(
+            padding: EdgeInsets.fromLTRB(16, 0, 16, 8),
+            child: Text(
+              'Quem criou, editou ou excluiu cada lançamento da casa.',
+              style: TextStyle(color: Colors.grey, fontSize: 12),
+            ),
+          ),
+          AuditLogView(key: ValueKey(_auditVersion)),
+        ],
+      ),
     ];
   }
 

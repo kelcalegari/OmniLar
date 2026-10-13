@@ -63,6 +63,11 @@ class _SettingsPageState extends State<SettingsPage> {
   /// Grupo aberto na coluna da direita (só no PC).
   _SettingsGroup _selectedGroup = _SettingsGroup.house;
 
+  /// Muda a cada "Atualizar" para o histórico de auditoria ser relido.
+  int _auditVersion = 0;
+
+  void _reloadAudit() => setState(() => _auditVersion++);
+
   final _searchController = TextEditingController();
   String _searchQuery = '';
 
@@ -374,156 +379,6 @@ class _SettingsPageState extends State<SettingsPage> {
             ),
           );
         },
-      ),
-    );
-  }
-
-  void _showAssistantPreferencesModal(BuildContext context) {
-    showAdaptiveModal(
-      context: context,
-      maxWidth: 500,
-      child: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.all(20),
-          child: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Center(
-                  child: Container(
-                    width: 40,
-                    height: 4,
-                    decoration: BoxDecoration(
-                      color: Colors.grey.withValues(alpha: 0.3),
-                      borderRadius: BorderRadius.circular(2),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 16),
-                const Row(
-                  children: [
-                    Icon(
-                      Icons.auto_awesome_rounded,
-                      color: Colors.purple,
-                      size: 24,
-                    ),
-                    SizedBox(width: 8),
-                    Text(
-                      'Assistente & Privacidade',
-                      style: TextStyle(
-                        fontSize: 20,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 8),
-                const Text(
-                  'Controle a inteligência artificial da casa e a proteção dos seus dados.',
-                  style: TextStyle(color: Colors.grey, fontSize: 13),
-                ),
-                const SizedBox(height: 20),
-                SwitchListTile(
-                  contentPadding: EdgeInsets.zero,
-                  title: const Text(
-                    'Assistente Ativo',
-                    style: TextStyle(fontWeight: FontWeight.w600),
-                  ),
-                  subtitle: const Text(
-                    'Permite consultas e propostas por linguagem natural',
-                  ),
-                  value: true,
-                  onChanged: (val) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('Preferência de assistente atualizada.'),
-                      ),
-                    );
-                  },
-                ),
-                const Divider(),
-                SwitchListTile(
-                  contentPadding: EdgeInsets.zero,
-                  title: const Text(
-                    'Resumos e Alertas Proativos',
-                    style: TextStyle(fontWeight: FontWeight.w600),
-                  ),
-                  subtitle: const Text(
-                    'Receber alertas de fôlego do ciclo e tarefas atrasadas',
-                  ),
-                  value: true,
-                  onChanged: (val) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('Alertas proativos atualizados.'),
-                      ),
-                    );
-                  },
-                ),
-                const Divider(),
-                const ListTile(
-                  contentPadding: EdgeInsets.zero,
-                  title: Text(
-                    'Horário Silencioso',
-                    style: TextStyle(fontWeight: FontWeight.w600),
-                  ),
-                  subtitle: Text('22:00 às 08:00 (Nenhum aviso emitido)'),
-                  trailing: Icon(Icons.bedtime_outlined, color: Colors.purple),
-                ),
-                const Divider(),
-                ListTile(
-                  contentPadding: EdgeInsets.zero,
-                  leading: const Icon(Icons.vpn_key_rounded, color: Colors.purple),
-                  title: const Text(
-                    'Chave de IA & Modelo (BYOK)',
-                    style: TextStyle(fontWeight: FontWeight.w600),
-                  ),
-                  subtitle: const Text(
-                    'Cadastre sua chave gratuita do Google AI Studio ou use a padrão',
-                  ),
-                  trailing: const Icon(Icons.chevron_right_rounded),
-                  onTap: () {
-                    Navigator.pop(context);
-                    AiKeyConfigSheet.show(context);
-                  },
-                ),
-                const Divider(),
-                Container(
-                  margin: const EdgeInsets.only(top: 8),
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: AppColors.primary.withValues(alpha: 0.08),
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(
-                      color: AppColors.primary.withValues(alpha: 0.2),
-                    ),
-                  ),
-                  child: const Row(
-                    children: [
-                      Icon(
-                        Icons.shield_outlined,
-                        color: AppColors.primary,
-                        size: 20,
-                      ),
-                      SizedBox(width: 10),
-                      Expanded(
-                        child: Text(
-                          'Privacidade LGPD: seus dados bancários, CPF e números de cartão são mascarados no dispositivo antes de qualquer processamento.',
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: AppColors.primary,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 20),
-              ],
-            ),
-          ),
-        ),
       ),
     );
   }
@@ -2836,32 +2691,5 @@ class _SettingsPageState extends State<SettingsPage> {
                       ),
                     ),
                   );
-  }
-
-  Widget _settingsTile({
-    required IconData icon,
-    required Color color,
-    required String title,
-    required String subtitle,
-    required VoidCallback onTap,
-  }) {
-    return ListTile(
-      leading: Icon(icon, color: color),
-      title: Text(title),
-      subtitle: Text(subtitle),
-      trailing: const Icon(Icons.chevron_right_rounded),
-      onTap: onTap,
-    );
-  }
-
-  String _getThemeModeLabel(ThemeMode mode) {
-    switch (mode) {
-      case ThemeMode.light:
-        return 'Modo Claro';
-      case ThemeMode.dark:
-        return 'Modo Escuro';
-      case ThemeMode.system:
-        return 'Padrão do Sistema';
-    }
   }
 }

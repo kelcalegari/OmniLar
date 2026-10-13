@@ -21,13 +21,28 @@ Future<void> showAuditLogSheet({
   );
 }
 
+/// Histórico de auditoria para ficar dentro de uma página (sem a moldura da janela).
+class AuditLogView extends StatelessWidget {
+  final String? entityId;
+
+  const AuditLogView({super.key, this.entityId});
+
+  @override
+  Widget build(BuildContext context) =>
+      _AuditLogSheetContent(entityId: entityId, title: '', embedded: true);
+}
+
 class _AuditLogSheetContent extends StatefulWidget {
   final String? entityId;
   final String title;
 
+  /// Dentro de uma página: sem alça, sem cabeçalho e sem botão de fechar.
+  final bool embedded;
+
   const _AuditLogSheetContent({
     this.entityId,
     required this.title,
+    this.embedded = false,
   });
 
   @override
@@ -48,11 +63,14 @@ class _AuditLogSheetContentState extends State<_AuditLogSheetContent> {
     final theme = Theme.of(context);
 
     return Padding(
-      padding: const EdgeInsets.all(20),
+      padding: widget.embedded
+          ? const EdgeInsets.symmetric(horizontal: 16, vertical: 4)
+          : const EdgeInsets.all(20),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
+          if (!widget.embedded) ...[
           // Alça de arraste
           Center(
             child: Container(
@@ -100,6 +118,7 @@ class _AuditLogSheetContentState extends State<_AuditLogSheetContent> {
             ],
           ),
           const SizedBox(height: 16),
+          ],
 
           // Lista de Logs
           FutureBuilder<List<AuditEntry>>(

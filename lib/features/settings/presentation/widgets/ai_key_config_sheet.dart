@@ -6,7 +6,10 @@ import '../../../../core/theme/app_colors.dart';
 import '../../../../core/utils/responsive.dart';
 
 class AiKeyConfigSheet extends StatefulWidget {
-  const AiKeyConfigSheet({super.key});
+  /// Dentro de uma página: sem alça, sem cabeçalho e sem fechar ao salvar.
+  final bool embedded;
+
+  const AiKeyConfigSheet({super.key, this.embedded = false});
 
   static Future<void> show(BuildContext context) {
     return showAdaptiveModal(
@@ -115,7 +118,7 @@ class _AiKeyConfigSheetState extends State<AiKeyConfigSheet> {
           ),
         ),
       );
-      Navigator.pop(context);
+      if (!widget.embedded) Navigator.pop(context);
     }
   }
 
@@ -138,13 +141,15 @@ class _AiKeyConfigSheetState extends State<AiKeyConfigSheet> {
           content: Text('Chave removida. Usando cota padrão do Omni Lar.'),
         ),
       );
-      Navigator.pop(context);
+      if (!widget.embedded) Navigator.pop(context);
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    if (_isLoading) {
+    // Dentro de uma página o formulário aparece logo e é preenchido quando a
+    // leitura do cofre chega; um indicador só para isso travaria o bloco.
+    if (_isLoading && !widget.embedded) {
       return const Padding(
         padding: EdgeInsets.all(40),
         child: Center(child: CircularProgressIndicator()),
@@ -152,18 +157,25 @@ class _AiKeyConfigSheetState extends State<AiKeyConfigSheet> {
     }
 
     return SafeArea(
+      top: !widget.embedded,
+      bottom: !widget.embedded,
       child: Padding(
-        padding: EdgeInsets.only(
-          left: 20,
-          right: 20,
-          top: 20,
-          bottom: MediaQuery.of(context).viewInsets.bottom + 20,
-        ),
+        padding: widget.embedded
+            ? const EdgeInsets.symmetric(horizontal: 16, vertical: 4)
+            : EdgeInsets.only(
+                left: 20,
+                right: 20,
+                top: 20,
+                bottom: MediaQuery.of(context).viewInsets.bottom + 20,
+              ),
         child: SingleChildScrollView(
+          // Dentro de uma página quem rola é a página
+          physics: widget.embedded ? const NeverScrollableScrollPhysics() : null,
           child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
+              if (!widget.embedded) ...[
               // Barra de arrastar
               Center(
                 child: Container(
@@ -198,6 +210,7 @@ class _AiKeyConfigSheetState extends State<AiKeyConfigSheet> {
                 ],
               ),
               const SizedBox(height: 8),
+              ],
 
               // Explicação da Versão Free e BYOK
               Container(
