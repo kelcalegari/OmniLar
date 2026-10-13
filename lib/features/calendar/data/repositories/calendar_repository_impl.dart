@@ -93,4 +93,7 @@ class CalendarRepositoryImpl implements CalendarRepository {
 
   @override
   Future<void> deleteTask(String taskId) => _dataSource.deleteTask(taskId);
+
+  @override
+  Future<void> updateTask(TaskItem task) => _dataSource.updateTask(task);
 }

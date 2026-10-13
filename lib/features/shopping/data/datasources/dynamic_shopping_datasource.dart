@@ -36,6 +36,9 @@ class DynamicShoppingDataSource implements ShoppingDataSource {
   Future<void> deleteItem(String itemId) => _active.deleteItem(itemId);
 
   @override
+  Future<void> updateItem(ShoppingItem item) => _active.updateItem(item);
+
+  @override
   Future<ShoppingTrip> completeTrip({
     required String listId,
     required Money totalAmount,

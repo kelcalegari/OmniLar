@@ -785,10 +785,21 @@ class _TasksAndShoppingPageState extends State<TasksAndShoppingPage> with Single
             ),
           ],
         ),
-        trailing: IconButton(
-          icon: const Icon(Icons.delete_outline_rounded, size: 20, color: Colors.grey),
-          tooltip: 'Excluir tarefa',
-          onPressed: () => cubit.deleteTask(task.id),
+        // Um botão só, para não tirar largura do conteúdo da tarefa
+        trailing: PopupMenuButton<String>(
+          icon: const Icon(Icons.more_vert_rounded, size: 20, color: Colors.grey),
+          tooltip: 'Editar ou excluir tarefa',
+          onSelected: (action) {
+            if (action == 'edit') {
+              AddTaskSheet.show(context, task.createdByMemberId, taskToEdit: task);
+            } else {
+              cubit.deleteTask(task.id);
+            }
+          },
+          itemBuilder: (_) => const [
+            PopupMenuItem(value: 'edit', child: Text('Editar')),
+            PopupMenuItem(value: 'delete', child: Text('Excluir')),
+          ],
         ),
       ),
     );
@@ -1116,9 +1127,80 @@ class _TasksAndShoppingPageState extends State<TasksAndShoppingPage> with Single
                 ),
               ),
             IconButton(
+              icon: const Icon(Icons.edit_outlined, size: 18, color: Colors.grey),
+              tooltip: 'Editar item',
+              onPressed: () => _showEditItemDialog(context, item, cubit),
+            ),
+            IconButton(
               icon: const Icon(Icons.close_rounded, size: 18, color: Colors.grey),
               tooltip: 'Remover da lista',
               onPressed: () => cubit.deleteItem(item.id),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _showEditItemDialog(BuildContext context, ShoppingItem item, ShoppingCubit cubit) {
+    final nameController = TextEditingController(text: item.name);
+    final quantityController = TextEditingController(
+      text: item.quantity == item.quantity.roundToDouble()
+          ? item.quantity.toInt().toString()
+          : item.quantity.toString().replaceAll('.', ','),
+    );
+    var isPersonal = item.isPersonal;
+
+    showDialog<void>(
+      context: context,
+      builder: (dialogCtx) => StatefulBuilder(
+        builder: (dialogCtx, setDialogState) => AlertDialog(
+          title: const Text('Editar item'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: nameController,
+                autofocus: true,
+                decoration: const InputDecoration(
+                  labelText: 'Item',
+                  border: OutlineInputBorder(),
+                ),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: quantityController,
+                keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                decoration: InputDecoration(
+                  labelText: 'Quantidade',
+                  suffixText: item.unit,
+                  border: const OutlineInputBorder(),
+                ),
+              ),
+              CheckboxListTile(
+                contentPadding: EdgeInsets.zero,
+                title: const Text('Item Pessoal (só meu)', style: TextStyle(fontSize: 14)),
+                value: isPersonal,
+                onChanged: (val) => setDialogState(() => isPersonal = val ?? false),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogCtx),
+              child: const Text('Cancelar'),
+            ),
+            FilledButton(
+              onPressed: () {
+                final name = nameController.text.trim();
+                final quantity = double.tryParse(quantityController.text.trim().replaceAll(',', '.'));
+                if (name.isEmpty || quantity == null || quantity <= 0) return;
+                cubit.updateItem(
+                  item.copyWith(name: name, quantity: quantity, isPersonal: isPersonal),
+                );
+                Navigator.pop(dialogCtx);
+              },
+              child: const Text('Salvar'),
             ),
           ],
         ),

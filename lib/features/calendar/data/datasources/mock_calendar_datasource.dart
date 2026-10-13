@@ -393,4 +393,12 @@ class MockCalendarDataSource implements CalendarDataSource {
     _tasks.removeWhere((t) => t.id == taskId);
     _notifyTasks();
   }
+
+  @override
+  Future<void> updateTask(TaskItem task) async {
+    final index = _tasks.indexWhere((t) => t.id == task.id);
+    if (index == -1) return;
+    _tasks[index] = task;
+    _notifyTasks();
+  }
 }

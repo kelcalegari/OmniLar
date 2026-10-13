@@ -538,6 +538,22 @@ class SupabaseCalendarDataSource implements CalendarDataSource {
   }
 
   @override
+  Future<void> updateTask(TaskItem task) async {
+    try {
+      await client.from('tasks').update({
+        'title': task.title,
+        'description': task.description,
+        'due_date': task.dueDate?.toIso8601String().split('T')[0],
+        'assigned_to': task.assignedToMemberId,
+        'priority': task.priority.name,
+        'cost_cents': task.cost?.cents,
+      }).eq('id', task.id);
+    } catch (e) {
+      throw ServerFailure('Erro ao atualizar tarefa: $e');
+    }
+  }
+
+  @override
   Future<void> toggleTaskComplete({
     required String taskId,
     required String completedByMemberId,

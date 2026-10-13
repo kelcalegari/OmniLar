@@ -16,16 +16,20 @@ import '../cubit/calendar_cubit.dart';
 class AddTaskSheet extends StatefulWidget {
   final String activeMemberId;
 
+  /// Tarefa existente a editar; null para criar uma nova.
+  final TaskItem? taskToEdit;
+
   const AddTaskSheet({
     required this.activeMemberId,
+    this.taskToEdit,
     super.key,
   });
 
-  static Future<void> show(BuildContext context, String activeMemberId) {
+  static Future<void> show(BuildContext context, String activeMemberId, {TaskItem? taskToEdit}) {
     return showAdaptiveModal(
       context: context,
       maxWidth: 520,
-      child: AddTaskSheet(activeMemberId: activeMemberId),
+      child: AddTaskSheet(activeMemberId: activeMemberId, taskToEdit: taskToEdit),
     );
   }
 
@@ -51,6 +55,18 @@ class _AddTaskSheetState extends State<AddTaskSheet> {
   void initState() {
     super.initState();
     _initLocalMembers();
+    final edit = widget.taskToEdit;
+    if (edit != null) {
+      _titleController.text = edit.title;
+      _descriptionController.text = edit.description ?? '';
+      if (edit.cost != null) _costController.setMoney(edit.cost!);
+      _dueDate = edit.dueDate;
+      _priority = edit.priority;
+      _assignedMemberId = edit.assignedToMemberId;
+      if (edit.assignedToMemberId != null && edit.assignedToMemberName != null) {
+        _members.putIfAbsent(edit.assignedToMemberId!, () => edit.assignedToMemberName!);
+      }
+    }
     _loadHouseMembers();
   }
 
@@ -182,6 +198,37 @@ class _AddTaskSheetState extends State<AddTaskSheet> {
 
     final now = DateTime.now();
     final calendarCubit = context.read<CalendarCubit>();
+
+    final edit = widget.taskToEdit;
+    if (edit != null) {
+      final description = _descriptionController.text.trim();
+      calendarCubit.updateTask(
+        TaskItem(
+          id: edit.id,
+          title: _titleController.text.trim(),
+          description: description.isEmpty ? null : description,
+          dueDate: _dueDate,
+          priority: _priority,
+          assignedToMemberId: _assignedMemberId,
+          assignedToMemberName: _assignedMemberId != null ? _members[_assignedMemberId] : null,
+          cost: cost,
+          isCompleted: edit.isCompleted,
+          completedAt: edit.completedAt,
+          completedByMemberId: edit.completedByMemberId,
+          createdByMemberId: edit.createdByMemberId,
+          createdAt: edit.createdAt,
+        ),
+      );
+      Navigator.pop(context);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Tarefa "${_titleController.text.trim()}" atualizada!'),
+          backgroundColor: AppColors.primary,
+        ),
+      );
+      return;
+    }
+
     final baseDueDate = _dueDate ?? now;
 
     // Se houver repetição, cria a primeira e as próximas ocorrências programadas
@@ -271,13 +318,13 @@ class _AddTaskSheetState extends State<AddTaskSheet> {
                 ),
               ),
               const SizedBox(height: 16),
-              const Row(
+              Row(
                 children: [
-                  Icon(Icons.checklist_rounded, color: Colors.blue, size: 28),
-                  SizedBox(width: 10),
+                  const Icon(Icons.checklist_rounded, color: Colors.blue, size: 28),
+                  const SizedBox(width: 10),
                   Text(
-                    'Nova Tarefa do Lar',
-                    style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                    widget.taskToEdit != null ? 'Editar Tarefa' : 'Nova Tarefa do Lar',
+                    style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
                   ),
                 ],
               ),
@@ -334,7 +381,8 @@ class _AddTaskSheetState extends State<AddTaskSheet> {
               ),
               const SizedBox(height: 16),
 
-              // Repetição / Recorrência da Tarefa
+              // Repetição / Recorrência da Tarefa (só ao criar: cada ocorrência é uma tarefa própria)
+              if (widget.taskToEdit == null) ...[
               const Text(
                 'Repetição da Tarefa:',
                 style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
@@ -382,6 +430,7 @@ class _AddTaskSheetState extends State<AddTaskSheet> {
                 ],
               ),
               const SizedBox(height: 16),
+              ],
 
               // Responsável
               const Text(

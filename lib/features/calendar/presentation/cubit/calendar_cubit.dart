@@ -192,6 +192,16 @@ class CalendarCubit extends Cubit<CalendarState> {
     }
   }
 
+  Future<void> updateTask(TaskItem task) async {
+    try {
+      await _repository.updateTask(task);
+      final tasks = await _repository.getTasks(includeArchived: state.isShowingHistory);
+      emit(state.copyWith(tasks: tasks));
+    } catch (e) {
+      emit(state.copyWith(errorMessage: 'Erro ao atualizar tarefa: $e'));
+    }
+  }
+
   Future<void> deleteTask(String taskId) async {
     try {
       await _repository.deleteTask(taskId);

@@ -4,10 +4,10 @@ Atualizado em 13/10/2026. Este arquivo resume onde o trabalho parou, o que falta
 
 ## Estado atual
 
-- **Código:** `main` local e `origin/main` no commit `9298413`, sincronizadas. O código depende das migrations até a 0037, todas já no banco.
+- **Código:** `main` local e `origin/main` no commit `835a88a`, sincronizadas. O código depende das migrations até a 0037, todas já no banco.
 - **Banco (Supabase `rygxmpwzofgieodvhpcy`):** migrations 0001 a 0037 aplicadas. Só as 0022 a 0027 e as 0030 a 0037 constam no histórico de migrations do Supabase; as 0001 a 0021, a 0028 e a 0029 foram aplicadas à mão pelo SQL Editor (o conector recusou a aplicação da 0028 pelo assistente).
 - **Edge Functions:** `capture-read` versão 8 e `assistant` versão 4, ambas com `verify_jwt=true` e exigindo usuário logado que more na casa.
-- **Qualidade:** `flutter analyze` com 0 erros (4 warnings antigos) e 311 testes passando (conferido em 13/10/2026). Os testes rodam só contra os datasources mock.
+- **Qualidade:** `flutter analyze` com 0 erros (4 warnings antigos) e 313 testes passando (conferido em 13/10/2026). Os testes rodam só contra os datasources mock.
 - **Dados de teste no banco:** uma casa ("Nossa Casa") com 3 moradores (kelvynn, dono; Cristiano e Joao, membros), rateio 23,33 / 43,34 / 33,33, e 3 empréstimos ativos. Existe uma segunda casa no banco. Desde a migration 0033 toda casa tem ao menos uma caixinha: as novas nascem com a "Reserva da Casa" e a que não tinha nenhuma recebeu uma.
 
 ## O que foi feito nesta sessão
@@ -91,7 +91,7 @@ Análise feita em 12/10/2026 por leitura do código e das migrations, e reavalia
 
 12. **Mock e Supabase divergiam (corrigido em parte em 13/10/2026).** Igualados: resgate acima do saldo da caixinha é recusado no demo; empréstimo criado sem parcelas ganha as parcelas no demo; "esta e as próximas" vale a partir do vencimento nos dois; atualizar uma série no Supabase regrava as regras de rateio das outras ocorrências. Continua: os testes rodam só no mock, e o demo não gera as ocorrências recorrentes do mês seguinte.
 13. **"Atrasado" tinha duas definições (corrigido em 13/10/2026).** Parcela P2P passa a ficar atrasada só no dia seguinte ao vencimento, como as contas da casa.
-14. **Código morto e fluxos incompletos (corrigido em parte em 13/10/2026).** `ShoppingListPage` foi removida. Continua: tarefas e itens de compra não têm edição; o prompt do assistente menciona perdão, renegociação e exclusão, mas o app não executa essas ações; o selo de "exceção da série" na agenda nunca aparece em produção.
+14. **Código morto e fluxos incompletos (corrigido em parte em 13/10/2026).** `ShoppingListPage` foi removida. Tarefas e itens de compra ganharam edição (menu "Editar" na tarefa e botão de lápis no item; tarefa: título, descrição, prazo, responsável, prioridade e custo; item: nome, quantidade e se é pessoal), ainda sem teste no app. Continua: a edição não passa pela fila offline; o prompt do assistente menciona perdão, renegociação e exclusão, mas o app não executa essas ações; o selo de "exceção da série" na agenda nunca aparece em produção.
 15. **Fechar compra no mercado não ligava a viagem à despesa (corrigido em 13/10/2026, falta testar no app).** A despesa nasce com id real e `shopping_trips.expense_id` passa a ser gravado. Continua: despesa, empréstimo, viagem e limpeza da lista são quatro gravações separadas, sem transação.
 
 **Ordem sugerida (reavaliada em 13/10/2026).** Critério: primeiro o que grava dinheiro errado sem avisar, depois o que quebra à vista, deixando por último o que exige decisão do dono ou muito esforço.

@@ -8,6 +8,9 @@ abstract class ShoppingDataSource {
   Future<List<ShoppingItem>> getItems(String listId);
   Stream<List<ShoppingItem>> watchItems(String listId);
   Future<void> addItem(ShoppingItem item);
+
+  /// Altera nome, quantidade e se o item é pessoal.
+  Future<void> updateItem(ShoppingItem item);
   Future<void> toggleItemBought(String itemId);
   Future<void> deleteItem(String itemId);
   Future<ShoppingTrip> completeTrip({

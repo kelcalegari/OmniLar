@@ -219,6 +219,19 @@ class SupabaseShoppingDataSource implements ShoppingDataSource {
   }
 
   @override
+  Future<void> updateItem(ShoppingItem item) async {
+    try {
+      await client.from('shopping_items').update({
+        'name': item.name.trim(),
+        'quantity': item.quantity,
+        'is_personal': item.isPersonal,
+      }).eq('id', item.id);
+    } catch (e) {
+      throw ServerFailure('Erro ao atualizar item da lista de compras: $e');
+    }
+  }
+
+  @override
   Future<void> deleteItem(String itemId) async {
     try {
       await client.from('shopping_items').delete().eq('id', itemId);

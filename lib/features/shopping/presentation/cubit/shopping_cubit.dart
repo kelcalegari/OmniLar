@@ -119,6 +119,17 @@ class ShoppingCubit extends BlocBase<ShoppingState> {
     }
   }
 
+  Future<void> updateItem(ShoppingItem item) async {
+    if (state.selectedList == null) return;
+    try {
+      await _repository.updateItem(item);
+      final updatedItems = await _repository.getItems(state.selectedList!.id);
+      emit(state.copyWith(items: updatedItems));
+    } catch (e) {
+      emit(state.copyWith(errorMessage: 'Erro ao atualizar item: $e'));
+    }
+  }
+
   Future<void> deleteItem(String itemId) async {
     if (state.selectedList == null) return;
     try {

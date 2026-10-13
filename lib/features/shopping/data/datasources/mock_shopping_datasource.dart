@@ -140,6 +140,14 @@ class MockShoppingDataSource implements ShoppingDataSource {
   }
 
   @override
+  Future<void> updateItem(ShoppingItem item) async {
+    final index = _items.indexWhere((i) => i.id == item.id);
+    if (index == -1) return;
+    _items[index] = item;
+    _notifyItems(item.listId);
+  }
+
+  @override
   Future<void> deleteItem(String itemId) async {
     final index = _items.indexWhere((i) => i.id == itemId);
     if (index != -1) {

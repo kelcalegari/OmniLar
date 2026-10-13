@@ -24,6 +24,9 @@ abstract class CalendarRepository {
   Future<List<TaskItem>> getTasks({bool includeArchived = false});
   Stream<List<TaskItem>> watchTasks({bool includeArchived = false});
   Future<void> addTask(TaskItem task);
+
+  /// Altera título, descrição, prazo, responsável, prioridade e custo.
+  Future<void> updateTask(TaskItem task);
   Future<void> toggleTaskComplete({
     required String taskId,
     required String completedByMemberId,

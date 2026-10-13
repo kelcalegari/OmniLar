@@ -44,6 +44,9 @@ class ShoppingRepositoryImpl implements ShoppingRepository {
   Future<void> deleteItem(String itemId) => _dataSource.deleteItem(itemId);
 
   @override
+  Future<void> updateItem(ShoppingItem item) => _dataSource.updateItem(item);
+
+  @override
   Future<ShoppingTrip> completeTrip({
     required String listId,
     required Money totalAmount,

@@ -64,6 +64,9 @@ class DynamicCalendarDataSource implements CalendarDataSource {
   Future<void> addTask(TaskItem task) => _active.addTask(task);
 
   @override
+  Future<void> updateTask(TaskItem task) => _active.updateTask(task);
+
+  @override
   Future<void> toggleTaskComplete({
     required String taskId,
     required String completedByMemberId,
