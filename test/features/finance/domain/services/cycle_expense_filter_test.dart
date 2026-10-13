@@ -50,7 +50,7 @@ void main() {
         dueDate: DateTime(2026, 9, 20),
         status: ExpenseStatus.pending,
       );
-      expect(expenseBelongsToCycle(e, cycle, isCardPayment: false), isTrue);
+      expect(expenseBelongsToCycle(e, cycle, isCardPayment: false, now: DateTime(2026, 10, 13)), isTrue);
     });
 
     test('Conta pendente que só vence depois do ciclo não entra', () {
@@ -115,6 +115,35 @@ void main() {
       expect(expenseBelongsToCycle(e, cycle, isCardPayment: false), isTrue);
       // Fechar setembro depois não pode cobrar a mesma conta de novo
       expect(expenseBelongsToCycle(e, previousCycle, isCardPayment: false), isFalse);
+    });
+
+    test('Ciclo futuro mostra só a conta que vence nele, sem arrastar as anteriores', () {
+      // Hoje é 13/10; o ciclo de 09/12 a 08/01 ainda não começou
+      final today = DateTime(2026, 10, 13);
+      final futureCycle = FinancialCycle.fromDate(
+        date: DateTime(2026, 12, 15),
+        cycleStartDay: 9,
+      );
+      final october = expense(
+        date: DateTime(2026, 10, 25),
+        dueDate: DateTime(2026, 10, 25),
+        status: ExpenseStatus.pending,
+      );
+      final december = expense(
+        date: DateTime(2026, 12, 25),
+        dueDate: DateTime(2026, 12, 25),
+        status: ExpenseStatus.pending,
+      );
+
+      expect(expenseBelongsToCycle(october, futureCycle, isCardPayment: false, now: today), isFalse);
+      expect(expenseBelongsToCycle(december, futureCycle, isCardPayment: false, now: today), isTrue);
+      // No ciclo em andamento a conta de outubro aparece normalmente
+      expect(expenseBelongsToCycle(october, cycle, isCardPayment: false, now: today), isTrue);
+      // Quando dezembro chegar e ela seguir sem baixa, passa a pesar nele
+      expect(
+        expenseBelongsToCycle(october, futureCycle, isCardPayment: false, now: DateTime(2026, 12, 10)),
+        isTrue,
+      );
     });
 
     test('Despesa de projeto nunca entra no ciclo da casa', () {

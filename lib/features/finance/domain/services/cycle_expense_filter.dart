@@ -10,16 +10,21 @@ import '../entities/house_expense.dart';
 /// - Despesa já paga conta no ciclo em que foi lançada; se era uma conta
 ///   pendente, conta no ciclo em que recebeu baixa.
 /// - Conta pendente conta no ciclo do vencimento e, se vencer sem ser paga,
-///   continua pesando nos ciclos seguintes até receber baixa.
+///   continua pesando nos ciclos seguintes até receber baixa. Ciclo que ainda
+///   não começou mostra só o que vence nele: até lá a conta pode ser paga.
 bool expenseBelongsToCycle(
   HouseExpense expense,
   FinancialCycle cycle, {
   required bool isCardPayment,
+  DateTime? now,
 }) {
   if (expense.isProjectExpense) return false;
 
+  final cycleHasStarted = !cycle.startDate.isAfter(now ?? DateTime.now());
   final isOverdueLiability =
-      expense.isPending && expense.effectiveDueDate.isBefore(cycle.endDate);
+      cycleHasStarted &&
+      expense.isPending &&
+      expense.effectiveDueDate.isBefore(cycle.endDate);
   if (isOverdueLiability) return true;
 
   if (isCardPayment && expense.dueDate != null) {
