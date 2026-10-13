@@ -182,9 +182,10 @@ class FolegoGaugeCard extends StatelessWidget {
                 ),
               ],
             ),
-            const SizedBox(height: 14),
-
             // Indicador de Gasto Diário Seguro (Burn Rate - Fase 2.1)
+            // Só no ciclo em andamento: em ciclo passado ou futuro não há "dias restantes"
+            if (cycle.contains(DateTime.now())) ...[
+            const SizedBox(height: 14),
             Builder(
               builder: (context) {
                 final now = DateTime.now();
@@ -224,7 +225,7 @@ class FolegoGaugeCard extends StatelessWidget {
                         child: Text(
                           summary.folego.isNegative
                               ? 'Déficit no ciclo: requer novo aporte para reequilibrar'
-                              : 'Gasto diário seguro: ~${Money(dailySafeCents).format()}/dia ($daysRemaining dias restantes)',
+                              : 'Gasto diário seguro: ~${Money(dailySafeCents).format()}/dia ($daysRemaining ${daysRemaining == 1 ? 'dia restante' : 'dias restantes'})',
                           style: TextStyle(
                             fontSize: 11,
                             fontWeight: FontWeight.w600,
@@ -239,6 +240,7 @@ class FolegoGaugeCard extends StatelessWidget {
                 );
               },
             ),
+            ],
           ],
         ),
       ),
