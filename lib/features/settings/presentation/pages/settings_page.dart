@@ -1065,6 +1065,11 @@ class SettingsPage extends StatelessWidget {
               ? members[1].name.split(' ').first
               : 'Parceiro(a)');
 
+    // O banco só aceita o rateio de dono ou admin. Sem identificar o morador
+    // (modo demo), nada é bloqueado.
+    final myRole = members.where((m) => m.id == currentUser?.id).firstOrNull?.role;
+    final canEditSplit = isDemo || myRole == null || myRole == 'owner' || myRole == 'admin';
+
     // Modelo ativo: aportes fixos pelos valores dos membros; senão, o gravado na casa
     final hasFixedActive = members.any((m) => (m.defaultFixedAmountCents ?? 0) > 0);
     final categories = financeCubit.state.categories;
@@ -1752,9 +1757,17 @@ class SettingsPage extends StatelessWidget {
                       ),
 
                     const SizedBox(height: 20),
+                    if (!canEditSplit) ...[
+                      const Text(
+                        'Só o dono ou um administrador da casa pode alterar o modelo de rateio.',
+                        style: TextStyle(fontSize: 12, color: AppColors.debtRed),
+                      ),
+                      const SizedBox(height: 8),
+                    ],
                     FilledButton(
                       onPressed:
-                          ((selectedModel == 'percentage' &&
+                          (!canEditSplit ||
+                              (selectedModel == 'percentage' &&
                                   isMultiMember &&
                                   percentTotal() != 100) ||
                               (selectedModel == 'fixed' &&

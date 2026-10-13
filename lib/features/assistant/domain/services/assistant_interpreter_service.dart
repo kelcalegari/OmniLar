@@ -65,7 +65,11 @@ class AssistantInterpreterService {
   }) async {
     final lower = query.toLowerCase().trim();
     final effectiveMemberId = activeMemberId ?? authRepository?.currentUser?.id ?? 'member_carlos';
-    final cycle = currentCycle ?? FinancialCycle.fromDate(date: DateTime.now(), cycleStartDay: 5);
+    final cycle = currentCycle ??
+        FinancialCycle.fromDate(
+          date: DateTime.now(),
+          cycleStartDay: authRepository?.currentHouse?.cycleStartDay ?? 5,
+        );
 
     // =========================================================================
     // 1. ATALHOS RÁPIDOS SEM IA (Economia de Quota & Velocidade Máxima)

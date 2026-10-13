@@ -4,10 +4,10 @@ Atualizado em 13/10/2026. Este arquivo resume onde o trabalho parou, o que falta
 
 ## Estado atual
 
-- **Código:** `main` local e `origin/main` no commit `3cb4b63`, sincronizadas. O código depende das migrations até a 0038, todas já no banco.
-- **Banco (Supabase `rygxmpwzofgieodvhpcy`):** migrations 0001 a 0038 aplicadas. Só as 0022 a 0027 e as 0030 a 0038 constam no histórico de migrations do Supabase; as 0001 a 0021, a 0028 e a 0029 foram aplicadas à mão pelo SQL Editor (o conector recusou a aplicação da 0028 pelo assistente).
+- **Código:** `main` local e `origin/main` no commit `841e201`, sincronizadas. O código depende das migrations até a 0039, todas já no banco.
+- **Banco (Supabase `rygxmpwzofgieodvhpcy`):** migrations 0001 a 0039 aplicadas. Só as 0022 a 0027 e as 0030 a 0039 constam no histórico de migrations do Supabase; as 0001 a 0021, a 0028 e a 0029 foram aplicadas à mão pelo SQL Editor (o conector recusou a aplicação da 0028 pelo assistente).
 - **Edge Functions:** `capture-read` versão 8 e `assistant` versão 5, ambas com `verify_jwt=true` e exigindo usuário logado que more na casa.
-- **Qualidade:** `flutter analyze` com 0 erros (4 warnings antigos) e 315 testes passando (conferido em 13/10/2026). Os testes rodam só contra os datasources mock.
+- **Qualidade:** `flutter analyze` com 0 erros (4 warnings antigos) e 317 testes passando (conferido em 13/10/2026). Os testes rodam só contra os datasources mock.
 - **Dados de teste no banco:** uma casa ("Nossa Casa") com 3 moradores (kelvynn, dono; Cristiano e Joao, membros), rateio 23,33 / 43,34 / 33,33, e 3 empréstimos ativos. Existe uma segunda casa no banco. Desde a migration 0033 toda casa tem ao menos uma caixinha: as novas nascem com a "Reserva da Casa" e a que não tinha nenhuma recebeu uma.
 
 ## O que foi feito nesta sessão
@@ -49,11 +49,11 @@ Nada disto foi exercitado com usuário logado; só passou por teste automatizado
 
 - **Reabrir ciclo:** com a migration 0029, excluir despesa já acertada passa a ser recusado (a correção é um lançamento de ajuste), mas alterar o valor de uma despesa já acertada continua possível e não gera acerto; trocar a divisão do excedente do balde no segundo fechamento redistribui o excedente inteiro; parcelas P2P e acordos do primeiro fechamento não são desfeitos.
 - **Fatura de cartão:** com a migration 0028 o bloqueio de ciclo fechado passa a ser feito no banco, pelas funções `pay_card_invoice` e `undo_card_invoice_payment`; gravar `paid_at` direto na tabela de despesas continua possível para qualquer morador; só funciona para cartão com fechamento e vencimento cadastrados.
-- **Dia de início do ciclo:** o painel financeiro e o fechamento passaram a usar o dia configurado na casa (9), no lugar do 5 fixo. Falta conferir no app. O assistente (`assistant_interpreter_service.dart`) ainda usa 5 quando não recebe o ciclo atual.
+- **Dia de início do ciclo:** o painel financeiro e o fechamento passaram a usar o dia configurado na casa (9), no lugar do 5 fixo. Falta conferir no app. O assistente passou a usar o dia da casa quando não recebe o ciclo atual (13/10/2026).
 - **Fila offline:** não há cache local (sem rede as listas não carregam); a tela ainda mostra "adicionada com sucesso" por um instante antes do aviso de "Sem conexão", porque várias telas não esperam a gravação terminar (vale também para erro do servidor); empréstimos, pagamento de parcela e marcar item como comprado ficam de fora.
 - **Recorrência de eventos:** horizonte fixo (14 diárias, 8 semanais, 4 quinzenais, 6 mensais, 2 anuais) e a data final da repetição não é gravada.
-- **Fechamento:** com a migration 0029 o banco confere o plano (despesas da casa, rateio congelado somando o valor da despesa, transferências, acordos e totais de caixinha), mas o cálculo do rateio continua sendo do app do admin. A migration 0030 acrescenta duas travas: o fechamento é recusado se os dados da casa mudaram desde o cálculo (`settlement_data_version`), e ciclo fechado não aceita despesa paga nem aporte, nem alteração de valor, datas, situação, pagador ou forma de pagamento. Continua sem cobertura: parte de cada morador calculada errado pelo app, admin alterando os valores de propósito, edição ou exclusão de aporte e alteração de itens ou rateio de despesa em ciclo fechado. O `arquitetura_tecnica.md` (princípio 2) prevê o cálculo no banco; levar o motor de compensação para lá fica como etapa futura, antes do uso real.
-- **Itens médios da análise ainda abertos:** caixinha pode ser criada pelo cliente já com saldo inicial; a sobrecarga antiga `delete_house_expense(uuid)` continua no banco; categorias e formas de pagamento padrão duplicadas; `category_id` de compras nunca gravado; participantes removidos de evento não são apagados; "testar chave" de IA usa `dart:io` (não deve funcionar na web); colunas duplicadas no schema.
+- **Fechamento:** o cálculo é feito no app de quem fecha e o banco só confere o plano. Levar o cálculo para o banco é um trabalho à parte, adiado para o final por decisão do dono: está descrito em `fechamento_no_banco.md` e não entra mais nas listas de pendências e de inconsistências deste arquivo.
+- **Itens médios da análise ainda abertos:** categorias e formas de pagamento padrão duplicadas; `category_id` de compras nunca gravado; participantes removidos de evento não são apagados; "testar chave" de IA usa `dart:io` (não deve funcionar na web); colunas duplicadas no schema.
 - **Documentação:** `o_que_falta_fazer.md` precisa ser reescrito.
 
 ## Pendente: inconsistências de funcionalidades já implementadas
@@ -123,6 +123,18 @@ Feita depois de corrigir a lista acima, de novo só por leitura do código e das
 - **N8. "Reverter para pendente" deixava a data de baixa no modo demo (corrigido em 13/10/2026).** O demo passou a limpar a data, como o banco.
 
 Os oito itens foram corrigidos em 13/10/2026; falta o teste no app.
+
+## Limites fechados em 13/10/2026 (terceira leva)
+
+Itens que estavam em "limites conhecidos" ou anotados como abertos nas correções. Todos faltam ser testados no app.
+
+- **Aportes fixos e categoria com dono.** A despesa inteira de um responsável único (categoria com dono) deixou de consumir o balde: é cobrada do responsável por cima do aporte fixo, como já acontecia com os sub-itens pessoais.
+- **Caixinha com saldo inicial (migration 0039).** O app cria a caixinha zerada e registra o saldo inicial como depósito, com lançamento no histórico; o banco deixa de aceitar saldo na criação.
+- **Rateio salvo por quem não é dono nem admin.** A tela de Modelos de Rateio mostra o aviso e desabilita o botão, em vez de salvar sem efeito.
+- **Assistente e o dia de início do ciclo.** Usa o dia configurado na casa.
+- **Sobrecarga antiga `delete_house_expense(uuid)`.** Conferido no banco: já não existe; só a versão com escopo.
+
+Continuam abertos: o ciclo reaberto (alterar valor de despesa já acertada não gera acerto); fechar compra do mercado em gravações separadas; o devedor poder excluir o empréstimo inteiro (decisão do dono); trocar o dia de início com ciclos já fechados; fila offline para edições, empréstimos e pagamento de parcela; horizonte fixo de eventos recorrentes; edição de participantes de projeto; série cuja primeira despesa foi excluída com "só esta" sumir da lista de Recorrentes; categorias e formas de pagamento padrão duplicadas; "testar chave" de IA na web; colunas duplicadas no schema.
 
 ## Como trabalhar neste projeto
 

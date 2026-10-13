@@ -968,16 +968,30 @@ class SupabaseFinanceDataSource implements FinanceDataSource {
   @override
   Future<void> createSavingsVault(SavingsVault vault) async {
     try {
-      await client.from('savings_vaults').insert({
-        if (_isUuid(vault.id)) 'id': vault.id,
-        'house_id': _houseId,
-        'name': vault.name,
-        // Caixinha sem meta: a coluna só aceita nulo ou valor positivo
-        'target_amount_cents': vault.targetAmount.cents > 0 ? vault.targetAmount.cents : null,
-        'current_balance_cents': vault.currentBalance.cents,
-        'icon': vault.icon,
-        'color_hex': vault.colorHex,
-      });
+      // A caixinha nasce zerada: o saldo só muda por depósito ou resgate, que
+      // deixam lançamento no histórico
+      final inserted = await client
+          .from('savings_vaults')
+          .insert({
+            if (_isUuid(vault.id)) 'id': vault.id,
+            'house_id': _houseId,
+            'name': vault.name,
+            // Caixinha sem meta: a coluna só aceita nulo ou valor positivo
+            'target_amount_cents': vault.targetAmount.cents > 0 ? vault.targetAmount.cents : null,
+            'icon': vault.icon,
+            'color_hex': vault.colorHex,
+          })
+          .select('id')
+          .single();
+
+      if (vault.currentBalance.cents > 0) {
+        await client.rpc('move_vault_balance', params: {
+          'p_vault_id': inserted['id'],
+          'p_type': 'deposit',
+          'p_amount_cents': vault.currentBalance.cents,
+          'p_description': 'Saldo inicial',
+        });
+      }
     } catch (e) {
       throw ServerFailure('Erro ao criar caixinha: $e');
     }

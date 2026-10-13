@@ -123,6 +123,34 @@ class GlobalClearingEngine {
         }
       }
 
+      // Despesa inteira de um responsável único (categoria com dono): também
+      // não sai do balde, é cobrada do responsável por cima do aporte fixo.
+      for (final expense in expenses) {
+        final ownerId = expense.splitRule.singleResponsibleMemberId;
+        if (expense.items.isNotEmpty ||
+            expense.splitRule.type != SplitType.categoryOwner ||
+            ownerId == null ||
+            !memberIds.contains(ownerId) ||
+            expense.amount.cents <= 0) {
+          continue;
+        }
+        personalItemsCents += expense.amount.cents;
+        contributionTargets[ownerId] = Money(
+          (contributionTargets[ownerId]?.cents ?? 0) + expense.amount.cents,
+        );
+        memberExpenseShares[ownerId]?.add(
+          ExpenseShareAudit(
+            expenseId: expense.id,
+            expenseTitle: expense.title,
+            totalExpenseAmount: expense.amount,
+            allocatedAmount: expense.amount,
+            ruleDescription: 'Responsável exclusivo pela despesa',
+            date: expense.date,
+            isPersonal: true,
+          ),
+        );
+      }
+
       // Gastos acima do balde: a Caixinha escolhida cobre o que puder e o
       // restante é rateado entre os moradores conforme a opção do fechamento.
       final bucketCents = customContributionTargets.values.fold<int>(
