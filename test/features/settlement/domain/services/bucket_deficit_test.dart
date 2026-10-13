@@ -1,6 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:omni_lar/core/domain/value_objects/financial_cycle.dart';
 import 'package:omni_lar/core/domain/value_objects/money.dart';
+import 'package:omni_lar/features/finance/domain/entities/contribution.dart';
 import 'package:omni_lar/features/finance/domain/entities/house_expense.dart';
 import 'package:omni_lar/features/finance/domain/entities/house_expense_item.dart';
 import 'package:omni_lar/features/finance/domain/entities/house_member.dart';
@@ -159,6 +160,37 @@ void main() {
       expect(due(summary, 'caio'), 100000);
       expect(summary.totalPersonalExpensesInBills.cents, 20000);
       expect(summary.auditTrails['ana']!.personalItemsSharesTotal.cents, 20000);
+    });
+    test('Sobra do Caixa conta com o aporte de todos, não só com o que já entrou', () {
+      // Balde de R$ 3.000,00, gastos de R$ 2.500,00 e só a Ana aportou até agora.
+      final summary = engine.computeSettlement(
+        cycle: cycle,
+        members: members,
+        expenses: [
+          HouseExpense(
+            id: 'e1',
+            title: 'Contas do mês',
+            amount: const Money(250000),
+            date: DateTime(2026, 10, 12),
+            categoryId: 'c',
+            paidByMemberId: 'ana',
+            paymentMethodId: 'pm_caixa',
+            splitRule: const SplitRule.percentage(null),
+          ),
+        ],
+        contributions: [
+          Contribution(
+            id: 'c1',
+            memberId: 'ana',
+            amount: const Money(70000),
+            date: DateTime(2026, 10, 12),
+          ),
+        ],
+        loans: const [],
+        customContributionTargets: targets,
+      );
+
+      expect(summary.houseTreasuryBalance.cents, 50000);
     });
   });
 }
