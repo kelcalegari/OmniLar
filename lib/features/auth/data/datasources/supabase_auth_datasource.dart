@@ -1,3 +1,4 @@
+import '../../../../core/domain/value_objects/cycle_schedule.dart';
 import 'dart:async';
 import 'dart:math';
 import 'package:flutter/foundation.dart';
@@ -347,6 +348,7 @@ class SupabaseAuthDataSource implements AuthDataSource {
               id: h['id'] as String,
               name: h['name'] as String,
               cycleStartDay: (h['cycle_start_day'] as num?)?.toInt() ?? 5,
+              cycleDayChanges: CycleDayChange.listFromJson(h['cycle_day_schedule']),
               timezone: h['timezone'] as String? ?? 'America/Sao_Paulo',
               createdBy: h['created_by'] as String? ?? userId,
               pixKey: h['pix_key'] as String?,
@@ -374,9 +376,21 @@ class SupabaseAuthDataSource implements AuthDataSource {
     String? pixKeyBank,
   }) async {
     try {
+      // O dia de início do ciclo não é gravado direto: a troca vale a partir do
+      // fim do ciclo em andamento, e o banco guarda desde quando.
+      final current = _currentHouse?.id == houseId ? _currentHouse : null;
+      if (cycleStartDay != null && cycleStartDay != current?.cycleStartDay) {
+        final schedule = current?.cycleSchedule ?? CycleSchedule(cycleStartDay);
+        final change = schedule.planChange(DateTime.now(), cycleStartDay);
+        await _client.rpc('change_house_cycle_start_day', params: {
+          'p_house_id': houseId,
+          'p_new_day': cycleStartDay,
+          'p_from': change.from.toIso8601String().split('T')[0],
+        });
+      }
+
       final updates = <String, dynamic>{
         if (name != null) 'name': name.trim(),
-        if (cycleStartDay != null) 'cycle_start_day': cycleStartDay,
         if (pixKey != null) 'pix_key': pixKey.trim().isEmpty ? null : pixKey.trim(),
         if (pixKeyType != null) 'pix_key_type': pixKeyType,
         if (pixKeyHolderName != null) 'pix_key_holder_name': pixKeyHolderName.trim().isEmpty ? null : pixKeyHolderName.trim(),
@@ -395,6 +409,7 @@ class SupabaseAuthDataSource implements AuthDataSource {
         id: updatedRow['id'] as String,
         name: updatedRow['name'] as String,
         cycleStartDay: (updatedRow['cycle_start_day'] as num?)?.toInt() ?? 5,
+        cycleDayChanges: CycleDayChange.listFromJson(updatedRow['cycle_day_schedule']),
         timezone: updatedRow['timezone'] as String? ?? 'America/Sao_Paulo',
         createdBy: updatedRow['created_by'] as String?,
         pixKey: updatedRow['pix_key'] as String?,
@@ -441,6 +456,7 @@ class SupabaseAuthDataSource implements AuthDataSource {
             name: houseMap['name'] as String,
             cycleStartDay:
                 (houseMap['cycle_start_day'] as num?)?.toInt() ?? cycleStartDay,
+            cycleDayChanges: CycleDayChange.listFromJson(houseMap['cycle_day_schedule']),
             timezone: houseMap['timezone'] as String? ?? 'America/Sao_Paulo',
             createdBy: userId,
             pixKey: houseMap['pix_key'] as String?,
@@ -618,6 +634,7 @@ class SupabaseAuthDataSource implements AuthDataSource {
         name: houseRow['name'] as String,
         cycleStartDay:
             (houseRow['cycle_start_day'] as num?)?.toInt() ?? cycleStartDay,
+        cycleDayChanges: CycleDayChange.listFromJson(houseRow['cycle_day_schedule']),
         timezone: houseRow['timezone'] as String? ?? 'America/Sao_Paulo',
         createdBy: userId,
         pixKey: houseRow['pix_key'] as String?,
@@ -662,6 +679,7 @@ class SupabaseAuthDataSource implements AuthDataSource {
         id: houseRow['id'] as String,
         name: houseRow['name'] as String,
         cycleStartDay: (houseRow['cycle_start_day'] as num?)?.toInt() ?? 5,
+        cycleDayChanges: CycleDayChange.listFromJson(houseRow['cycle_day_schedule']),
         timezone: houseRow['timezone'] as String? ?? 'America/Sao_Paulo',
         createdBy: houseRow['created_by'] as String? ?? '',
         pixKey: houseRow['pix_key'] as String?,

@@ -1,3 +1,4 @@
+import '../../../../core/domain/value_objects/cycle_schedule.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -2814,6 +2815,11 @@ class SettingsPage extends StatelessWidget {
 
   void _showCycleDayDialog(BuildContext context, int currentDay) {
     int selectedDay = currentDay;
+    bool isSaving = false;
+    final house = sl<AuthRepository>().currentHouse;
+    final schedule = house?.cycleSchedule ?? CycleSchedule(currentDay);
+    String two(int n) => n.toString().padLeft(2, '0');
+    String formatDate(DateTime d) => '${two(d.day)}/${two(d.month)}/${d.year}';
 
     showDialog(
       context: context,
@@ -2875,13 +2881,36 @@ class SettingsPage extends StatelessWidget {
                   },
                 ),
                 const SizedBox(height: 12),
-                Text(
-                  'Período do ciclo: dia $selectedDay ao dia ${selectedDay == 1 ? 31 : selectedDay - 1} do mês seguinte.',
-                  style: const TextStyle(
-                    fontSize: 12,
-                    color: Colors.teal,
-                    fontWeight: FontWeight.w500,
-                  ),
+                Builder(
+                  builder: (_) {
+                    if (selectedDay == currentDay) {
+                      return Text(
+                        'Período do ciclo: dia $selectedDay ao dia ${selectedDay == 1 ? 31 : selectedDay - 1} do mês seguinte.',
+                        style: const TextStyle(
+                          fontSize: 12,
+                          color: Colors.teal,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      );
+                    }
+                    // A troca não mexe no ciclo em andamento nem nos que já passaram
+                    final now = DateTime.now();
+                    final after = schedule.withChange(schedule.planChange(now, selectedDay));
+                    final current = after.cycleFor(now);
+                    final transition = after.next(current);
+                    final regular = after.next(transition);
+                    return Text(
+                      'O ciclo atual não muda: termina em ${formatDate(current.endDate)}. '
+                      'O seguinte vai de ${formatDate(transition.startDate)} a ${formatDate(transition.endDate)}, '
+                      'e a partir de ${formatDate(regular.startDate)} os ciclos começam todo dia $selectedDay. '
+                      'Os ciclos que já passaram continuam como estão.',
+                      style: const TextStyle(
+                        fontSize: 12,
+                        color: Colors.teal,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    );
+                  },
                 ),
               ],
             ),
@@ -2891,16 +2920,38 @@ class SettingsPage extends StatelessWidget {
                 child: const Text('Cancelar'),
               ),
               FilledButton(
-                onPressed: () {
-                  Navigator.pop(dialogCtx);
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text(
-                        'Ciclo financeiro atualizado para o dia $selectedDay! 📅',
-                      ),
-                    ),
-                  );
-                },
+                onPressed: isSaving || house == null || selectedDay == currentDay
+                    ? null
+                    : () async {
+                        setDialogState(() => isSaving = true);
+                        final messenger = ScaffoldMessenger.of(context);
+                        final navigator = Navigator.of(dialogCtx);
+                        final authCubit = context.read<AuthCubit>();
+                        final financeCubit = context.read<FinanceCubit>();
+                        try {
+                          await authCubit.updateHouse(
+                            houseId: house.id,
+                            cycleStartDay: selectedDay,
+                          );
+                          navigator.pop();
+                          financeCubit.loadCycleData();
+                          messenger.showSnackBar(
+                            SnackBar(
+                              content: Text(
+                                'Dia de início alterado para $selectedDay. Vale a partir do próximo ciclo. 📅',
+                              ),
+                            ),
+                          );
+                        } catch (err) {
+                          setDialogState(() => isSaving = false);
+                          messenger.showSnackBar(
+                            SnackBar(
+                              backgroundColor: AppColors.debtRed,
+                              content: Text('Não foi possível alterar o dia de início do ciclo: $err'),
+                            ),
+                          );
+                        }
+                      },
                 style: FilledButton.styleFrom(
                   backgroundColor: AppColors.primary,
                 ),

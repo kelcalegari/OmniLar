@@ -180,7 +180,15 @@ class SupabaseP2PDataSource implements P2PDataSource {
   @override
   Future<void> deleteLoan(String loanId) async {
     try {
-      await client.from('p2p_loans').delete().eq('id', loanId);
+      // O banco só deixa excluir quem emprestou (ou um admin), e só enquanto
+      // nada foi pago. Recusa pela regra de acesso não dá erro: não apaga nada.
+      final deleted = await client.from('p2p_loans').delete().eq('id', loanId).select('id');
+      if (deleted.isEmpty) {
+        throw const ServerFailure(
+          'Só quem emprestou ou um administrador da casa pode excluir, e apenas enquanto nada foi pago. '
+          'Para encerrar uma dívida que já teve pagamento, use Perdoar.',
+        );
+      }
     } catch (e) {
       if (e is Failure) rethrow;
       throw ServerFailure('Erro ao excluir empréstimo P2P: $e');

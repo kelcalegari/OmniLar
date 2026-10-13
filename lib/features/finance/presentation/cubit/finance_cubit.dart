@@ -1,3 +1,4 @@
+import '../../../../core/domain/value_objects/cycle_schedule.dart';
 import '../../domain/services/recurring_series.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../domain/repositories/finance_repository.dart';
@@ -23,29 +24,33 @@ class FinanceCubit extends Cubit<FinanceState> {
   /// Dia de início do ciclo configurado na casa atual (null = casa ainda não carregada).
   final int? Function()? _cycleStartDayOf;
 
+  /// Calendário de ciclos da casa, com as trocas de dia (null = usa só o dia).
+  final CycleSchedule? Function()? _cycleScheduleOf;
+
   FinanceCubit(
     this._repository, [
     this._fundingEstimator = const CycleFundingEstimator(),
     this._cycleStartDayOf,
+    this._cycleScheduleOf,
   ]) : super(
           FinanceState(
-            currentCycle: FinancialCycle.fromDate(
-              date: DateTime.now(),
-              cycleStartDay: _cycleStartDayOf?.call() ?? defaultCycleStartDay,
-            ),
+            currentCycle: (_cycleScheduleOf?.call() ??
+                    CycleSchedule(_cycleStartDayOf?.call() ?? defaultCycleStartDay))
+                .cycleFor(DateTime.now()),
           ),
         );
 
   /// Dia em que o ciclo financeiro da casa começa.
   int get cycleStartDay => _cycleStartDayOf?.call() ?? defaultCycleStartDay;
 
+  /// Calendário de ciclos da casa: sabe em que ciclo cai cada data, inclusive
+  /// em volta de uma troca do dia de início.
+  CycleSchedule get cycleSchedule => _cycleScheduleOf?.call() ?? CycleSchedule(cycleStartDay);
+
   void resetState() {
     emit(
       FinanceState(
-        currentCycle: FinancialCycle.fromDate(
-          date: DateTime.now(),
-          cycleStartDay: cycleStartDay,
-        ),
+        currentCycle: cycleSchedule.cycleFor(DateTime.now()),
       ),
     );
   }
@@ -53,15 +58,12 @@ class FinanceCubit extends Cubit<FinanceState> {
   /// O cubit pode ter nascido antes de a casa ser carregada (ou o dia de início
   /// pode ter mudado nos Ajustes): devolve o ciclo no dia de início atual.
   FinancialCycle _alignToHouse(FinancialCycle cycle) {
-    final startDay = cycleStartDay;
-    if (FinancialCycle.fromDate(date: cycle.startDate, cycleStartDay: startDay) == cycle) {
+    final schedule = cycleSchedule;
+    if (schedule.cycleFor(cycle.startDate) == cycle) {
       return cycle;
     }
     final now = DateTime.now();
-    return FinancialCycle.fromDate(
-      date: cycle.contains(now) ? now : cycle.startDate,
-      cycleStartDay: startDay,
-    );
+    return schedule.cycleFor(cycle.contains(now) ? now : cycle.startDate);
   }
 
   Future<void> loadCycleData({FinancialCycle? cycle}) async {
@@ -94,7 +96,7 @@ class FinanceCubit extends Cubit<FinanceState> {
       // Busca histórico de despesas do ciclo anterior para cálculo de médias de variáveis (ex: Mercado)
       List<HouseExpense> historicalExpenses = [];
       try {
-        final prevCycle = targetCycle.previous(cycleStartDay);
+        final prevCycle = cycleSchedule.previous(targetCycle);
         final prevExpenses = await _repository.getExpensesForCycle(prevCycle);
         historicalExpenses.addAll(prevExpenses);
       } catch (_) {}
@@ -188,12 +190,12 @@ class FinanceCubit extends Cubit<FinanceState> {
   }
 
   void nextCycle() {
-    final next = state.currentCycle.next(cycleStartDay);
+    final next = cycleSchedule.next(state.currentCycle);
     loadCycleData(cycle: next);
   }
 
   void previousCycle() {
-    final prev = state.currentCycle.previous(cycleStartDay);
+    final prev = cycleSchedule.previous(state.currentCycle);
     loadCycleData(cycle: prev);
   }
 

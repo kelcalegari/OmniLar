@@ -82,6 +82,24 @@ class LoanDetailsSheet extends StatelessWidget {
     return false;
   }
 
+  /// Quem pode excluir: quem emprestou ou um administrador da casa (no acordo
+  /// com o Caixa, só o administrador), e só enquanto nada foi pago. O devedor
+  /// não apaga a própria dívida. Sem identificar o usuário (modo demo), nada é escondido.
+  bool _canDelete(BuildContext context) {
+    if (loan.totalPaidAmount.cents > 0) return false;
+    final currentUserId = context.read<P2PCubit>().state.currentUserId;
+    if (currentUserId.isEmpty) return true;
+    if (!loan.isHouseLender && loan.lenderMemberId == currentUserId) return true;
+    try {
+      final members = context.read<FinanceCubit>().state.members;
+      final me = members.where((m) => m.id == currentUserId).firstOrNull;
+      if (me == null) return members.isEmpty;
+      return me.role == 'owner' || me.role == 'admin';
+    } catch (_) {
+      return true;
+    }
+  }
+
   void _confirmDelete(BuildContext context) {
     showDialog(
       context: context,
@@ -566,12 +584,14 @@ class LoanDetailsSheet extends StatelessWidget {
                   ),
                   child: const Text('Renegociado 🤝', style: TextStyle(color: AppColors.accent, fontWeight: FontWeight.bold)),
                 ),
-              const SizedBox(width: 8),
-              IconButton(
-                icon: const Icon(Icons.delete_outline_rounded, color: AppColors.debtRed, size: 22),
-                tooltip: 'Excluir Empréstimo',
-                onPressed: () => _confirmDelete(context),
-              ),
+              if (_canDelete(context)) ...[
+                const SizedBox(width: 8),
+                IconButton(
+                  icon: const Icon(Icons.delete_outline_rounded, color: AppColors.debtRed, size: 22),
+                  tooltip: 'Excluir Empréstimo',
+                  onPressed: () => _confirmDelete(context),
+                ),
+              ],
             ],
           ),
           const SizedBox(height: 4),

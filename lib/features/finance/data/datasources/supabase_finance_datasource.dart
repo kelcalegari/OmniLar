@@ -307,7 +307,7 @@ class SupabaseFinanceDataSource implements FinanceDataSource {
           .eq('house_id', _houseId)
           .neq('status', 'cancelled')
           .lt('cycle_start_date', dateOnly(cycle.startDate))
-          .gte('cycle_start_date', dateOnly(cycle.startDate.subtract(const Duration(days: 32))))
+          .gte('cycle_start_date', dateOnly(cycle.startDate.subtract(const Duration(days: 62))))
           .order('cycle_start_date', ascending: false)
           .limit(1)
           .maybeSingle();

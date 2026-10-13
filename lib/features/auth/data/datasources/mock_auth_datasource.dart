@@ -326,9 +326,16 @@ class MockAuthDataSource implements AuthDataSource {
     final existing = _houses[houseId];
     if (existing == null) throw const NotFoundFailure('Casa não encontrada.');
 
+    // Como no banco: a troca do dia vale a partir do fim do ciclo em andamento
+    var schedule = existing.cycleSchedule;
+    if (cycleStartDay != null && cycleStartDay != existing.cycleStartDay) {
+      schedule = schedule.withChange(schedule.planChange(DateTime.now(), cycleStartDay));
+    }
+
     final updated = existing.copyWith(
       name: name ?? existing.name,
-      cycleStartDay: cycleStartDay ?? existing.cycleStartDay,
+      cycleStartDay: schedule.currentDay,
+      cycleDayChanges: schedule.changes,
       pixKey: pixKey ?? existing.pixKey,
       pixKeyType: pixKeyType ?? existing.pixKeyType,
       pixKeyHolderName: pixKeyHolderName ?? existing.pixKeyHolderName,

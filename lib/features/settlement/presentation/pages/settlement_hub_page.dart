@@ -1,3 +1,4 @@
+import '../../../../core/domain/value_objects/cycle_schedule.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -55,12 +56,12 @@ class SettlementHubPage extends StatelessWidget {
 class _SettlementHubContent extends StatelessWidget {
   const _SettlementHubContent();
 
-  /// Dia de início do ciclo da casa, o mesmo usado no painel financeiro.
-  int _cycleStartDay(BuildContext context) {
+  /// Calendário de ciclos da casa, o mesmo usado no painel financeiro.
+  CycleSchedule _cycleSchedule(BuildContext context) {
     try {
-      return context.read<FinanceCubit>().cycleStartDay;
+      return context.read<FinanceCubit>().cycleSchedule;
     } catch (_) {
-      return FinanceCubit.defaultCycleStartDay;
+      return const CycleSchedule(FinanceCubit.defaultCycleStartDay);
     }
   }
 
@@ -435,7 +436,7 @@ class _SettlementHubContent extends StatelessWidget {
                 tooltip: 'Ciclo anterior',
                 onPressed: () => context
                     .read<SettlementCubit>()
-                    .previousCycle(_cycleStartDay(context)),
+                    .previousCycle(_cycleSchedule(context)),
               ),
               const SizedBox(width: 8),
               Expanded(
@@ -478,7 +479,7 @@ class _SettlementHubContent extends StatelessWidget {
                 tooltip: 'Próximo ciclo',
                 onPressed: () => context
                     .read<SettlementCubit>()
-                    .nextCycle(_cycleStartDay(context)),
+                    .nextCycle(_cycleSchedule(context)),
               ),
             ],
           ),

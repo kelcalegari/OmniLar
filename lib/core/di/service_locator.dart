@@ -150,6 +150,7 @@ Future<void> initServiceLocator() async {
         sl(),
         const CycleFundingEstimator(),
         () => sl<AuthRepository>().currentHouse?.cycleStartDay,
+        () => sl<AuthRepository>().currentHouse?.cycleSchedule,
       ));
 
   // P2P Feature

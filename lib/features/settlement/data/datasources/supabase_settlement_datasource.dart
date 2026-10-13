@@ -501,6 +501,9 @@ class SupabaseSettlementDataSource implements SettlementDataSource {
         'p_plan': {
           'house_id': _houseId,
           'cycle_start_date': dateOnly(cycle.startDate),
+          // O banco usa o fim gravado para travar o ciclo fechado (ciclos de
+          // transição não têm um mês)
+          'cycle_end_date': dateOnly(cycle.endDate),
           'data_version': summary.dataVersion,
           'total_expenses_cents': summary.totalHouseExpenses.cents,
           'total_contributions_cents': summary.totalContributions.cents,

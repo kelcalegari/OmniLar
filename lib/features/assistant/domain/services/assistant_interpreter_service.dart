@@ -1,3 +1,4 @@
+import '../../../../core/domain/value_objects/cycle_schedule.dart';
 import '../../../finance/domain/services/expense_launch_defaults.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../../core/domain/value_objects/money.dart';
@@ -66,10 +67,8 @@ class AssistantInterpreterService {
     final lower = query.toLowerCase().trim();
     final effectiveMemberId = activeMemberId ?? authRepository?.currentUser?.id ?? 'member_carlos';
     final cycle = currentCycle ??
-        FinancialCycle.fromDate(
-          date: DateTime.now(),
-          cycleStartDay: authRepository?.currentHouse?.cycleStartDay ?? 5,
-        );
+        (authRepository?.currentHouse?.cycleSchedule ?? const CycleSchedule(5))
+            .cycleFor(DateTime.now());
 
     // =========================================================================
     // 1. ATALHOS RÁPIDOS SEM IA (Economia de Quota & Velocidade Máxima)

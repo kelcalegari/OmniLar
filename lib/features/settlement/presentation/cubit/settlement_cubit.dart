@@ -1,3 +1,4 @@
+import '../../../../core/domain/value_objects/cycle_schedule.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../../../core/domain/value_objects/financial_cycle.dart';
 import '../../../finance/domain/repositories/finance_repository.dart';
@@ -58,17 +59,17 @@ class SettlementCubit extends BlocBase<SettlementState> {
     }
   }
 
-  void previousCycle(int cycleStartDay) {
+  void previousCycle(CycleSchedule schedule) {
     final cycle = state.currentCycle ?? state.summary?.cycle;
     if (cycle != null) {
-      loadSettlement(cycle.previous(cycleStartDay));
+      loadSettlement(schedule.previous(cycle));
     }
   }
 
-  void nextCycle(int cycleStartDay) {
+  void nextCycle(CycleSchedule schedule) {
     final cycle = state.currentCycle ?? state.summary?.cycle;
     if (cycle != null) {
-      loadSettlement(cycle.next(cycleStartDay));
+      loadSettlement(schedule.next(cycle));
     }
   }
 

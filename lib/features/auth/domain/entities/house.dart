@@ -1,9 +1,13 @@
+import '../../../../core/domain/value_objects/cycle_schedule.dart';
 import 'package:equatable/equatable.dart';
 
 class House extends Equatable {
   final String id;
   final String name;
   final int cycleStartDay;
+
+  /// Trocas do dia de início do ciclo (da mais antiga para a mais recente).
+  final List<CycleDayChange> cycleDayChanges;
   final String timezone;
   final String? createdBy;
   final String? pixKey;
@@ -15,6 +19,7 @@ class House extends Equatable {
     required this.id,
     required this.name,
     this.cycleStartDay = 5,
+    this.cycleDayChanges = const [],
     this.timezone = 'America/Sao_Paulo',
     this.createdBy,
     this.pixKey,
@@ -23,10 +28,14 @@ class House extends Equatable {
     this.pixKeyBank,
   });
 
+  /// Calendário de ciclos da casa, já com as trocas de dia.
+  CycleSchedule get cycleSchedule => CycleSchedule(cycleStartDay, cycleDayChanges);
+
   House copyWith({
     String? id,
     String? name,
     int? cycleStartDay,
+    List<CycleDayChange>? cycleDayChanges,
     String? timezone,
     String? createdBy,
     String? pixKey,
@@ -39,6 +48,7 @@ class House extends Equatable {
       id: id ?? this.id,
       name: name ?? this.name,
       cycleStartDay: cycleStartDay ?? this.cycleStartDay,
+      cycleDayChanges: cycleDayChanges ?? this.cycleDayChanges,
       timezone: timezone ?? this.timezone,
       createdBy: createdBy ?? this.createdBy,
       pixKey: clearPixKey ? null : (pixKey ?? this.pixKey),
@@ -53,6 +63,7 @@ class House extends Equatable {
         id,
         name,
         cycleStartDay,
+        cycleDayChanges,
         timezone,
         createdBy,
         pixKey,
