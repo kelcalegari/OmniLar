@@ -319,7 +319,8 @@ class _ExpenseDetailDesktopPaneState extends State<ExpenseDetailDesktopPane> {
                           child: Row(
                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
-                              Text(it.title, style: const TextStyle(fontSize: 12)),
+                              Expanded(child: Text(it.title, style: const TextStyle(fontSize: 12))),
+                              const SizedBox(width: 8),
                               Text(it.amount.format(), style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
                             ],
                           ),
@@ -419,7 +420,15 @@ class _ExpenseDetailDesktopPaneState extends State<ExpenseDetailDesktopPane> {
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
         Text(label, style: const TextStyle(fontSize: 12, color: Colors.grey)),
-        Text(value, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
+        const SizedBox(width: 8),
+        // Nome ou forma de pagamento longos quebram linha em vez de estourar o painel
+        Flexible(
+          child: Text(
+            value,
+            textAlign: TextAlign.end,
+            style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+          ),
+        ),
       ],
     );
   }
