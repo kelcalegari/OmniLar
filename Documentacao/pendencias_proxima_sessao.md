@@ -191,6 +191,7 @@ Nenhum destes roteiros foi executado com usuário logado.
 - Item de compra: editar pelo lápis. Repetir a edição de tarefa e de item com um morador que não os criou.
 - Projeto: criar, lançar uma despesa, abrir "Participantes", incluir um convidado de fora e desmarcar um morador; o acerto deve mudar na hora.
 - Relatórios: os percentuais do gráfico por categoria devem somar 100%; exportar o CSV.
+- Relatórios, prévia do fechamento (branch `feat/relatorios-previa-ciclo`): abrir com cada morador; "Minha prévia" deve mostrar só o logado e "Todos", os dois. O saldo de cada um deve ser igual ao do Hub de Liquidação aberto sem mexer em nada. Lançar uma compra num cartão com dono e conferir que a fatura aparece como paga pelo dono; lançar uma conta pendente com uma forma de pagamento de um morador e conferir o mesmo. Navegar para um ciclo fechado ("Fechado em…") e para um futuro. Conferir na Home que o planejador mostra a mesma cota pendente do Hub quando há fatura em aberto.
 
 ### Outros
 - Fila offline com o aparelho realmente sem rede: editar tarefa, editar item e criar empréstimo.

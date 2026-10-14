@@ -9,13 +9,37 @@ import '../../../finance/domain/entities/category.dart';
 import '../../../finance/domain/entities/financial_cycle_summary.dart';
 import '../../../finance/presentation/cubit/finance_cubit.dart';
 import '../../../finance/presentation/cubit/finance_state.dart';
+import '../../../../core/di/service_locator.dart';
+import '../../../p2p/presentation/cubit/p2p_cubit.dart';
+import '../cubit/reports_cubit.dart';
+import '../widgets/cycle_preview_section.dart';
 
 class ReportsPage extends StatelessWidget {
   const ReportsPage({super.key});
 
   @override
   Widget build(BuildContext context) {
-    return const _ReportsPageContent();
+    return BlocProvider<ReportsCubit>(
+      create: (context) {
+        final cubit = sl<ReportsCubit>();
+        final finance = context.read<FinanceCubit>().state;
+        if (finance.status == FinanceStatus.success) cubit.loadPreview(finance);
+        return cubit;
+      },
+      // A prévia acompanha o ciclo que o painel carregou (troca de ciclo,
+      // lançamento novo, mudança vinda de outro aparelho)
+      child: BlocListener<FinanceCubit, FinanceState>(
+        listenWhen: (previous, current) =>
+            current.status == FinanceStatus.success &&
+            (previous.status != FinanceStatus.success ||
+                previous.currentCycle != current.currentCycle ||
+                previous.expenses != current.expenses ||
+                previous.contributions != current.contributions ||
+                previous.members != current.members),
+        listener: (context, state) => context.read<ReportsCubit>().loadPreview(state),
+        child: const _ReportsPageContent(),
+      ),
+    );
   }
 }
 
@@ -69,8 +93,16 @@ class _ReportsPageContent extends StatelessWidget {
                     _buildCycleSelector(context, state, cubit),
                     const SizedBox(height: 16),
 
+                    // Prévia do fechamento, por morador
+                    CyclePreviewSection(
+                      currentMemberId: _currentMemberId(context),
+                      membersWithoutFixedContribution: _membersWithoutFixedContribution(state),
+                      onRetry: () => context.read<ReportsCubit>().loadPreview(state),
+                    ),
+                    const SizedBox(height: 20),
+
                     // Cards de Resumo Executivo
-                    _buildExecutiveCards(context, summary),
+                    _buildExecutiveCards(context, state, summary),
                     const SizedBox(height: 20),
 
                     // Seção: Gastos por Categoria
@@ -92,6 +124,35 @@ class _ReportsPageContent extends StatelessWidget {
         },
       ),
     );
+  }
+
+  /// Morador logado (o mesmo usado pelos empréstimos); vazio fora da sessão.
+  String _currentMemberId(BuildContext context) {
+    try {
+      return context.read<P2PCubit>().state.currentUserId;
+    } catch (_) {
+      return '';
+    }
+  }
+
+  /// No modelo de aportes fixos, quem está sem valor definido não é cobrado.
+  List<String> _membersWithoutFixedContribution(FinanceState state) {
+    final usesFixed = state.members.any((m) => (m.defaultFixedAmountCents ?? 0) > 0);
+    if (!usesFixed) return const [];
+    return state.members
+        .where((m) => (m.defaultFixedAmountCents ?? 0) <= 0)
+        .map((m) => m.name.split(' ').first)
+        .toList();
+  }
+
+  /// Rótulo do ciclo mostrado: o de hoje, um que já terminou ou um futuro.
+  String _cycleLabel(FinanceState state) {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final cycle = state.currentCycle;
+    if (cycle.endDate.isBefore(today)) return 'Ciclo encerrado';
+    if (cycle.startDate.isAfter(today)) return 'Próximo ciclo';
+    return 'Ciclo atual';
   }
 
   Widget _buildCycleSelector(
@@ -116,9 +177,9 @@ class _ReportsPageContent extends StatelessWidget {
           ),
           Column(
             children: [
-              const Text(
-                'Ciclo Atual',
-                style: TextStyle(fontSize: 12, color: Colors.grey, fontWeight: FontWeight.w600),
+              Text(
+                _cycleLabel(state),
+                style: const TextStyle(fontSize: 12, color: Colors.grey, fontWeight: FontWeight.w600),
               ),
               Text(
                 state.currentCycle.formattedPeriod,
@@ -136,34 +197,73 @@ class _ReportsPageContent extends StatelessWidget {
     );
   }
 
-  Widget _buildExecutiveCards(BuildContext context, FinancialCycleSummary summary) {
-    return Row(
+  Widget _buildExecutiveCards(
+    BuildContext context,
+    FinanceState state,
+    FinancialCycleSummary summary,
+  ) {
+    // As mesmas despesas do gráfico por categoria: o total fecha com ele.
+    // Compra no cartão fica pendente até a fatura ser paga.
+    final paidCents = state.expenses
+        .where((e) => !e.isPending)
+        .fold<int>(0, (acc, e) => acc + e.amount.cents);
+    final pendingCents = state.expenses
+        .where((e) => e.isPending)
+        .fold<int>(0, (acc, e) => acc + e.amount.cents);
+
+    return Column(
       children: [
-        Expanded(
-          child: _buildMetricTile(
-            title: 'Despesas',
-            amount: summary.totalSpent,
-            color: AppColors.debtRed,
-            icon: Icons.trending_down_rounded,
-          ),
+        Row(
+          children: [
+            Expanded(
+              child: _buildMetricTile(
+                title: 'Pago',
+                amount: Money(paidCents),
+                color: AppColors.debtRed,
+                icon: Icons.check_circle_outline_rounded,
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: _buildMetricTile(
+                title: 'A vencer',
+                amount: Money(pendingCents),
+                color: Colors.orange,
+                icon: Icons.schedule_rounded,
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: _buildMetricTile(
+                title: 'Total do ciclo',
+                amount: Money(paidCents + pendingCents),
+                color: AppColors.primary,
+                icon: Icons.trending_down_rounded,
+              ),
+            ),
+          ],
         ),
-        const SizedBox(width: 12),
-        Expanded(
-          child: _buildMetricTile(
-            title: 'Aportes',
-            amount: summary.totalContributed,
-            color: AppColors.creditGreen,
-            icon: Icons.trending_up_rounded,
-          ),
-        ),
-        const SizedBox(width: 12),
-        Expanded(
-          child: _buildMetricTile(
-            title: 'Fôlego',
-            amount: summary.folego,
-            color: summary.folego.cents >= 0 ? AppColors.creditGreen : AppColors.debtRed,
-            icon: Icons.shield_outlined,
-          ),
+        const SizedBox(height: 12),
+        Row(
+          children: [
+            Expanded(
+              child: _buildMetricTile(
+                title: 'Aportes',
+                amount: summary.totalContributed,
+                color: AppColors.creditGreen,
+                icon: Icons.trending_up_rounded,
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: _buildMetricTile(
+                title: 'Fôlego',
+                amount: summary.folego,
+                color: summary.folego.cents >= 0 ? AppColors.creditGreen : AppColors.debtRed,
+                icon: Icons.shield_outlined,
+              ),
+            ),
+          ],
         ),
       ],
     );

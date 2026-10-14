@@ -15,6 +15,8 @@ import '../../domain/entities/financial_cycle_summary.dart';
 import '../../domain/entities/audit_entry.dart';
 import '../../domain/entities/cycle_funding_estimate.dart';
 import '../../domain/services/cycle_funding_estimator.dart';
+import '../../domain/entities/house_member.dart';
+import '../../../settlement/domain/services/open_invoice_choices.dart';
 import '../../../../core/domain/enums/recurrence.dart';
 import '../../../../core/domain/value_objects/money.dart';
 import '../../../../core/domain/value_objects/financial_cycle.dart';
@@ -186,16 +188,16 @@ class FinanceCubit extends Cubit<FinanceState> {
 
       _historicalExpenses = historicalExpenses.isNotEmpty ? historicalExpenses : expenses;
 
-      final fundingEstimate = _fundingEstimator.calculateEstimate(
+      final fundingEstimate = _estimate(
         cycle: targetCycle,
         members: members,
         categories: categories,
-        currentCycleExpenses: expenses,
-        historicalExpenses: _historicalExpenses,
-        currentCycleContributions: contributions,
-        currentHouseBalance: _openingBalanceOf(summary),
+        expenses: expenses,
+        paymentMethods: paymentMethods,
+        contributions: contributions,
+        summary: summary,
         mode: state.fundingEstimateMode,
-        customCategoryOverrides: state.customCategoryOverrides,
+        overrides: state.customCategoryOverrides,
       );
 
       emit(state.copyWith(
@@ -226,6 +228,33 @@ class FinanceCubit extends Cubit<FinanceState> {
   /// Histórico usado nas médias do planejador (ciclo anterior, quando existe).
   List<HouseExpense> _historicalExpenses = const [];
 
+  /// Planejador de aportes com a mesma visão do fechamento: faturas e contas
+  /// pendentes entram como pagas por quem o fechamento escolheria por padrão.
+  /// O histórico é sempre um ciclo só (o anterior, ou o próprio ciclo).
+  CycleFundingEstimate _estimate({
+    required FinancialCycle cycle,
+    required List<HouseMember> members,
+    required List<ExpenseCategory> categories,
+    required List<HouseExpense> expenses,
+    required List<PaymentMethod> paymentMethods,
+    required List<Contribution> contributions,
+    required FinancialCycleSummary? summary,
+    required FundingEstimateMode mode,
+    required Map<String, Money> overrides,
+  }) =>
+      _fundingEstimator.calculateEstimate(
+        cycle: cycle,
+        members: members,
+        categories: categories,
+        currentCycleExpenses: applyOpenInvoiceChoices(expenses, paymentMethods, const {}),
+        historicalExpenses: _historicalExpenses,
+        currentCycleContributions: contributions,
+        currentHouseBalance: _openingBalanceOf(summary),
+        mode: mode,
+        customCategoryOverrides: overrides,
+        historicalCyclesCount: 1,
+      );
+
   /// Sobra que o ciclo anterior deixou no Caixa. O fôlego já desconta as
   /// contas e soma os aportes do ciclo, então não serve de saldo inicial.
   Money _openingBalanceOf(FinancialCycleSummary? summary) {
@@ -238,16 +267,16 @@ class FinanceCubit extends Cubit<FinanceState> {
   }
 
   void updateFundingEstimateMode(FundingEstimateMode mode) {
-    final updated = _fundingEstimator.calculateEstimate(
+    final updated = _estimate(
       cycle: state.currentCycle,
       members: state.members,
       categories: state.categories,
-      currentCycleExpenses: state.expenses,
-      historicalExpenses: _historicalExpenses,
-      currentCycleContributions: state.contributions,
-      currentHouseBalance: _openingBalanceOf(state.summary),
+      expenses: state.expenses,
+      paymentMethods: state.paymentMethods,
+      contributions: state.contributions,
+      summary: state.summary,
       mode: mode,
-      customCategoryOverrides: state.customCategoryOverrides,
+      overrides: state.customCategoryOverrides,
     );
     emit(state.copyWith(
       fundingEstimateMode: mode,
@@ -258,16 +287,16 @@ class FinanceCubit extends Cubit<FinanceState> {
   void updateCustomCategoryFunding(String categoryId, Money amount) {
     final newOverrides = Map<String, Money>.from(state.customCategoryOverrides);
     newOverrides[categoryId] = amount;
-    final updated = _fundingEstimator.calculateEstimate(
+    final updated = _estimate(
       cycle: state.currentCycle,
       members: state.members,
       categories: state.categories,
-      currentCycleExpenses: state.expenses,
-      historicalExpenses: _historicalExpenses,
-      currentCycleContributions: state.contributions,
-      currentHouseBalance: _openingBalanceOf(state.summary),
+      expenses: state.expenses,
+      paymentMethods: state.paymentMethods,
+      contributions: state.contributions,
+      summary: state.summary,
       mode: state.fundingEstimateMode,
-      customCategoryOverrides: newOverrides,
+      overrides: newOverrides,
     );
     emit(state.copyWith(
       customCategoryOverrides: newOverrides,

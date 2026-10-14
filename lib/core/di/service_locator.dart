@@ -42,6 +42,7 @@ import '../../features/settlement/data/datasources/supabase_settlement_datasourc
 import '../../features/settlement/data/repositories/settlement_repository_impl.dart';
 import '../../features/settlement/domain/repositories/settlement_repository.dart';
 import '../../features/settlement/presentation/cubit/settlement_cubit.dart';
+import '../../features/reports/presentation/cubit/reports_cubit.dart';
 
 import '../../features/shopping/data/datasources/shopping_datasource.dart';
 import '../../features/shopping/data/datasources/mock_shopping_datasource.dart';
@@ -213,6 +214,7 @@ Future<void> initServiceLocator() async {
   });
   sl.registerLazySingleton<SettlementRepository>(() => SettlementRepositoryImpl(sl()));
   sl.registerFactory<SettlementCubit>(() => SettlementCubit(sl(), sl()));
+  sl.registerFactory<ReportsCubit>(() => ReportsCubit(sl()));
 
   // Shopping Feature (Fase 4: Organização do Lar)
   sl.registerLazySingleton<ShoppingDataSource>(() {

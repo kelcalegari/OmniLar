@@ -23,6 +23,7 @@ class CycleFundingEstimator {
     Money currentHouseBalance = const Money.zero(),
     FundingEstimateMode mode = FundingEstimateMode.historicalAverage,
     Map<String, Money>? customCategoryOverrides,
+    int? historicalCyclesCount,
   }) {
     // A conta é a do ciclo inteiro, como no fechamento: tudo o que o ciclo custa
     // (o que já foi pago e o que ainda vence), menos a sobra que veio do ciclo
@@ -38,6 +39,7 @@ class CycleFundingEstimator {
       historicalExpenses: historicalExpenses,
       mode: mode,
       customOverrides: customCategoryOverrides,
+      cyclesCount: historicalCyclesCount,
     );
     final variableCategoryIds = historicalEstimates.map((v) => v.categoryId).toSet();
     final launchedByCategory = <String, int>{};
@@ -117,6 +119,7 @@ class CycleFundingEstimator {
     required List<HouseExpense> historicalExpenses,
     required FundingEstimateMode mode,
     Map<String, Money>? customOverrides,
+    int? cyclesCount,
   }) {
     final List<CategoryFundingEstimate> estimates = [];
 
@@ -156,19 +159,23 @@ class CycleFundingEstimator {
           .toList();
 
       int averageCents = 0;
-      int cyclesCount = 1;
+      int sampleCycles = 1;
 
       if (catExpenses.isNotEmpty) {
-        // Encontra quantos ciclos distintos aparecem no histórico
+        // Quem chama sabe quantos ciclos o histórico cobre. Sem essa
+        // informação, conta os meses: um ciclo que cruza dois meses contaria
+        // como dois e a média sairia pela metade.
         final months = catExpenses
             .map((e) => '${e.date.year}-${e.date.month}')
             .toSet();
-        cyclesCount = months.isNotEmpty ? months.length : 1;
+        sampleCycles = cyclesCount != null && cyclesCount > 0
+            ? cyclesCount
+            : (months.isNotEmpty ? months.length : 1);
         final totalHistoricalCents = catExpenses.fold<int>(
           0,
           (acc, e) => acc + e.amount.cents,
         );
-        averageCents = (totalHistoricalCents / cyclesCount).round();
+        averageCents = (totalHistoricalCents / sampleCycles).round();
       }
 
       final averageAmount = Money(averageCents);
@@ -191,7 +198,7 @@ class CycleFundingEstimator {
           categoryName: cat.name,
           averageMonthlyAmount: averageAmount,
           adjustedAmount: adjustedAmount,
-          sampleCyclesCount: cyclesCount,
+          sampleCyclesCount: sampleCycles,
           isOverridden: isOverridden,
         ),
       );
@@ -301,12 +308,13 @@ class CycleFundingEstimator {
       final alreadyContributed = Money(alreadyContributedCents);
 
       // Conta da casa paga do próprio bolso vale como aporte: o fechamento
-      // reembolsa esse valor abatendo do que o morador deve.
+      // reembolsa esse valor abatendo do que o morador deve. Como no
+      // fechamento, conta também a fatura ou conta pendente que quem chama já
+      // marcou como paga por este morador (escolhas padrão do fechamento).
       final outOfPocketCents = houseExpenses
           .where(
             (e) =>
                 e.paidByMemberId == member.id &&
-                e.isPaid &&
                 e.paidOutOfPocket &&
                 e.settledAt == null &&
                 e.paymentMethodId != 'pm_caixa',
