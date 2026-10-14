@@ -1,4 +1,5 @@
 import '../../../../core/domain/value_objects/money.dart';
+import '../entities/imported_statement_line.dart';
 import '../services/import_session.dart';
 
 /// Uma importação já confirmada, para o histórico.
@@ -30,6 +31,28 @@ class ImportBatch {
   });
 }
 
+/// O que o usuário decidiu para um estabelecimento em um cartão ou conta,
+/// para a próxima importação já vir assim.
+class ImportRule {
+  final String? id;
+
+  /// Nome do estabelecimento sem acento, número de loja nem parcela.
+  final String matchKey;
+  final String merchantName;
+  final LineDestination destination;
+  final String? categoryId;
+  final String? assignedMemberId;
+
+  const ImportRule({
+    required this.matchKey,
+    required this.merchantName,
+    required this.destination,
+    this.id,
+    this.categoryId,
+    this.assignedMemberId,
+  });
+}
+
 abstract class ImportRepository {
   /// Grava tudo o que a revisão decidiu, de uma vez: despesas, empréstimos,
   /// correções e o registro da importação. Se algo falha, nada é gravado.
@@ -45,4 +68,11 @@ abstract class ImportRepository {
   /// Exclui as despesas e os empréstimos que a importação criou. As correções
   /// feitas em despesas que já existiam não são revertidas.
   Future<void> undoImport(String batchId);
+
+  /// Regras aprendidas para um cartão ou conta.
+  Future<List<ImportRule>> getRules(String paymentMethodId);
+
+  /// Guarda as regras; a de um estabelecimento que já tinha regra é trocada.
+  Future<void> saveRules(String paymentMethodId, List<ImportRule> rules);
+  Future<void> deleteRule(String ruleId);
 }

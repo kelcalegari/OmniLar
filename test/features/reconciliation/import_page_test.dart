@@ -152,4 +152,50 @@ void main() {
     expect(find.text('Novas (0)'), findsOneWidget);
     expect(find.text('Ignoradas (5)'), findsOneWidget);
   });
+
+  testWidgets('o que foi decidido em uma importação vem pronto na seguinte', (tester) async {
+    tester.view.physicalSize = const Size(1200, 3400);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+
+    Future<void> loadSample() async {
+      await tester.tap(find.text('Usar fatura de exemplo'));
+      await tester.pumpAndSettle();
+      while (find.text('É a mesma').evaluate().isNotEmpty) {
+        final row = find.ancestor(of: find.text('É a mesma').first, matching: find.byType(Wrap)).first;
+        await tester.tap(find.descendant(of: row, matching: find.text('São diferentes')));
+        await tester.pumpAndSettle();
+      }
+    }
+
+    // Cartão da Marina: sem regras nem importações dos outros testes
+    await tester.pumpWidget(buildPage(sourceId: 'pm_card_marina'));
+    await tester.pumpAndSettle();
+    await loadSample();
+
+    // Steam é gasto pessoal de quem paga
+    final steamRow = find.ancestor(of: find.text('Steam Games'), matching: find.byType(Padding)).first;
+    await tester.tap(find.descendant(of: steamRow, matching: find.text('Casa')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Pessoal de Marina').last);
+    await tester.pumpAndSettle();
+
+    await tester.ensureVisible(find.byKey(const Key('import_confirm')));
+    await tester.tap(find.byKey(const Key('import_confirm')));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('4 despesas lançadas'), findsOneWidget);
+    expect(find.textContaining('Regras aprendidas'), findsOneWidget);
+
+    // Desfaz para o mesmo arquivo voltar a ser novo, e abre de novo
+    await tester.ensureVisible(find.text('Desfazer').first);
+    await tester.tap(find.text('Desfazer').first);
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(FilledButton, 'Desfazer'));
+    await tester.pumpAndSettle();
+    await loadSample();
+
+    expect(find.text('Novas (5)'), findsOneWidget);
+    final steamAgain = find.ancestor(of: find.text('Steam Games'), matching: find.byType(Padding)).first;
+    expect(find.descendant(of: steamAgain, matching: find.text('Pessoal de Marina')), findsOneWidget);
+  });
 }

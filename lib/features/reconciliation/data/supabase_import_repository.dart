@@ -18,6 +18,13 @@ String _destinationToDb(LineDestination destination) => switch (destination) {
       LineDestination.ignored => 'ignored',
     };
 
+LineDestination _destinationFromDb(String? value) => switch (value) {
+      'p2p_loan' => LineDestination.splitP2P,
+      'personal' => LineDestination.cardOwnerPersonal,
+      'ignored' => LineDestination.ignored,
+      _ => LineDestination.house,
+    };
+
 /// Importação no formato da RPC `confirm_import`, que grava tudo em uma transação.
 Map<String, dynamic> importPayload(
   ImportSession session,
@@ -162,6 +169,66 @@ class SupabaseImportRepository implements ImportRepository {
       await client.rpc('undo_import', params: {'p_batch_id': batchId});
     } catch (e) {
       throw _failure('Erro ao desfazer a importação', e);
+    }
+  }
+
+  @override
+  Future<List<ImportRule>> getRules(String paymentMethodId) async {
+    if (!isUuid(paymentMethodId)) return const [];
+    try {
+      final rows = await client
+          .from('import_rules')
+          .select('id, match_key, merchant_name, destination, category_id, assigned_member_id')
+          .eq('house_id', _houseId)
+          .eq('payment_method_id', paymentMethodId)
+          .order('merchant_name');
+      return [
+        for (final row in rows)
+          ImportRule(
+            id: row['id'] as String,
+            matchKey: row['match_key'] as String,
+            merchantName: row['merchant_name'] as String,
+            destination: _destinationFromDb(row['destination'] as String?),
+            categoryId: row['category_id'] as String?,
+            assignedMemberId: row['assigned_member_id'] as String?,
+          ),
+      ];
+    } catch (e) {
+      throw _failure('Erro ao carregar as regras aprendidas', e);
+    }
+  }
+
+  @override
+  Future<void> saveRules(String paymentMethodId, List<ImportRule> rules) async {
+    if (rules.isEmpty || !isUuid(paymentMethodId)) return;
+    try {
+      await client.from('import_rules').upsert(
+        [
+          for (final rule in rules)
+            {
+              'house_id': _houseId,
+              'payment_method_id': paymentMethodId,
+              'match_key': rule.matchKey,
+              'merchant_name': rule.merchantName,
+              'destination': _destinationToDb(rule.destination),
+              'category_id': isUuid(rule.categoryId) ? rule.categoryId : null,
+              'assigned_member_id': isUuid(rule.assignedMemberId) ? rule.assignedMemberId : null,
+              'updated_at': DateTime.now().toUtc().toIso8601String(),
+            },
+        ],
+        onConflict: 'house_id,payment_method_id,match_key',
+      );
+    } catch (e) {
+      throw _failure('Erro ao guardar as regras aprendidas', e);
+    }
+  }
+
+  @override
+  Future<void> deleteRule(String ruleId) async {
+    try {
+      await client.from('import_rules').delete().eq('id', ruleId);
+    } catch (e) {
+      throw _failure('Erro ao excluir a regra', e);
     }
   }
 }

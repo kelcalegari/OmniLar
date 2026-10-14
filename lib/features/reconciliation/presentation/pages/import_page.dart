@@ -62,6 +62,9 @@ class _ImportPageState extends State<ImportPage> {
   Set<String> _selected = const {};
   List<ImportBatch> _history = const [];
 
+  /// Regras aprendidas do cartão ou conta escolhido.
+  List<ImportRule> _rules = const [];
+
   FinanceCubit get _finance => context.read<FinanceCubit>();
 
   @override
@@ -71,6 +74,18 @@ class _ImportPageState extends State<ImportPage> {
     // Aberta direto pelo endereço: a casa pode não estar carregada ainda
     if (_finance.state.paymentMethods.isEmpty) _finance.loadCycleData();
     _loadHistory();
+    if (_sourceId != null) _loadRules(_sourceId!);
+  }
+
+  Future<List<ImportRule>> _loadRules(String sourceId) async {
+    var rules = const <ImportRule>[];
+    try {
+      rules = await sl<ImportRepository>().getRules(sourceId);
+    } catch (_) {
+      // Sem as regras a importação continua funcionando
+    }
+    if (mounted && _sourceId == sourceId) setState(() => _rules = rules);
+    return rules;
   }
 
   Future<void> _loadHistory() async {
@@ -171,12 +186,21 @@ class _ImportPageState extends State<ImportPage> {
         currentUserId ??
         (members.isNotEmpty ? members.first.id : '');
 
+    _sourceId = source.id;
+    final rules = await _loadRules(source.id);
+    if (!mounted) return;
+    final state = _finance.state;
+
     setState(() {
       _session = ImportSession.start(
         source: source,
         fileName: fileName,
         lines: lines,
         payerMemberId: payer,
+      ).withRules(
+        rules,
+        memberIds: {for (final m in state.members) m.id},
+        categoryIds: {for (final c in state.categories) c.id},
       );
       _sourceId = source.id;
       _fileWarning = warning;
@@ -437,6 +461,14 @@ class _ImportPageState extends State<ImportPage> {
       return;
     }
 
+    // O que foi decidido para cada estabelecimento vale para a próxima fatura
+    try {
+      await sl<ImportRepository>().saveRules(session.source.id, session.rulesToLearn());
+    } catch (_) {
+      // Regra não gravada não desfaz a importação
+    }
+    await _loadRules(session.source.id);
+
     // Movimentos do extrato que não são despesa: cada um é gravado à parte, e
     // o que falhar aparece como aviso (a importação em si já está gravada)
     final warnings = <String>[];
@@ -570,6 +602,7 @@ class _ImportPageState extends State<ImportPage> {
                     ],
                   ),
                 if (session != null) ..._review(state, session),
+                if (_rules.isNotEmpty) _rulesCard(state),
                 if (_history.isNotEmpty) _historyCard(),
               ],
             ),
@@ -656,6 +689,8 @@ class _ImportPageState extends State<ImportPage> {
                         _session = null;
                         _fileWarning = null;
                         _failure = null;
+                        _rules = const [];
+                        if (id != null) _loadRules(id);
                       }
                       _sourceId = id;
                     }),
@@ -1149,6 +1184,72 @@ class _ImportPageState extends State<ImportPage> {
     );
   }
 
+  Widget _rulesCard(FinanceState state) {
+    String describe(ImportRule rule) {
+      switch (rule.destination) {
+        case LineDestination.house:
+          final category = state.categories.where((c) => c.id == rule.categoryId).firstOrNull;
+          return category == null ? 'Casa' : 'Casa • ${category.name}';
+        case LineDestination.splitP2P:
+          return '${_memberName(rule.assignedMemberId)} deve';
+        case LineDestination.cardOwnerPersonal:
+          return 'Pessoal';
+        case LineDestination.ignored:
+          return 'Ignorar';
+      }
+    }
+
+    return Padding(
+      padding: const EdgeInsets.only(top: 16),
+      child: Container(
+        decoration: BoxDecoration(
+          color: Theme.of(context).cardColor,
+          border: Border.all(color: Theme.of(context).dividerColor),
+          borderRadius: BorderRadius.circular(16),
+        ),
+        clipBehavior: Clip.antiAlias,
+        child: Material(
+          color: Colors.transparent,
+          child: ExpansionTile(
+            shape: const Border(),
+            collapsedShape: const Border(),
+            title: Text(
+              'Regras aprendidas (${_rules.length})',
+              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+            ),
+            subtitle: const Text(
+              'O que você decidiu para cada estabelecimento deste cartão ou conta já vem assim na próxima importação.',
+              style: TextStyle(fontSize: 12, color: Colors.grey),
+            ),
+            children: [
+              for (final rule in _rules)
+                ListTile(
+                  dense: true,
+                  title: Text(rule.merchantName, style: const TextStyle(fontWeight: FontWeight.w600)),
+                  subtitle: Text(describe(rule), style: const TextStyle(fontSize: 12)),
+                  trailing: IconButton(
+                    icon: const Icon(Icons.delete_outline_rounded, size: 18),
+                    tooltip: 'Esquecer esta regra',
+                    onPressed: _busy || rule.id == null ? null : () => _deleteRule(rule),
+                  ),
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _deleteRule(ImportRule rule) async {
+    try {
+      await sl<ImportRepository>().deleteRule(rule.id!);
+    } catch (e) {
+      _showMessage('$e', error: true);
+    }
+    final sourceId = _sourceId;
+    if (sourceId != null) await _loadRules(sourceId);
+  }
+
   Widget _historyCard() {
     return Padding(
       padding: const EdgeInsets.only(top: 16),
@@ -1338,6 +1439,11 @@ class _ImportPageState extends State<ImportPage> {
                   child: Text(member.name.split(' ').first, style: const TextStyle(fontSize: 12)),
                 ),
             ],
+          ),
+        if (session.ruledLineIds.contains(line.id))
+          const Tooltip(
+            message: 'Veio assim por uma regra aprendida em outra importação',
+            child: Icon(Icons.auto_awesome_outlined, size: 14, color: Colors.grey),
           ),
         if (rejected != null)
           TextButton(

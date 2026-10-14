@@ -798,4 +798,73 @@ date,title,amount
       expect(plan.extraActions, isEmpty);
     });
   });
+
+  group('Regras aprendidas', () {
+    final lines = [
+      _line('a', DateTime(2026, 10, 3), 'POSTO IPIRANGA LJ 0012', 15000),
+      _line('b', DateTime(2026, 10, 9), 'POSTO IPIRANGA LJ 0044', 18000),
+      _line('c', DateTime(2026, 10, 5), 'ENEL ENERGIA', 21000),
+      _line('d', DateTime(2026, 10, 6), 'PADARIA', 2500),
+      _line('e', DateTime(2026, 10, 7), 'FEIRA', 4000),
+      _line('f', DateTime(2026, 10, 8), 'FEIRA', 6000),
+    ];
+    ImportSession start() => ImportSession.start(
+          source: _nubank,
+          fileName: 'fatura.csv',
+          lines: lines,
+          payerMemberId: 'kelvynn',
+        );
+
+    test('aprende a decisão de cada estabelecimento, menos a que não diz nada ou se contradiz', () {
+      final session = start()
+          .withLines({'a', 'b'}, (l) => l.copyWith(destination: LineDestination.splitP2P, assignedMemberId: 'cristiano'))
+          .withLine(lines[2].copyWith(categoryId: 'cat_contas'))
+          // Feira: uma linha da Casa, outra pessoal -> não dá para generalizar
+          .withLine(lines[5].copyWith(destination: LineDestination.cardOwnerPersonal));
+
+      final rules = {for (final rule in session.rulesToLearn()) rule.matchKey: rule};
+
+      expect(rules.keys.toSet(), {'posto ipiranga', 'enel energia'});
+      expect(rules['posto ipiranga']!.destination, LineDestination.splitP2P);
+      expect(rules['posto ipiranga']!.assignedMemberId, 'cristiano');
+      expect(rules['posto ipiranga']!.merchantName, 'Posto Ipiranga');
+      expect(rules['enel energia']!.categoryId, 'cat_contas');
+    });
+
+    test('a próxima fatura já vem classificada, e a regra de quem saiu da casa perde o devedor', () {
+      const rules = [
+        ImportRule(
+          matchKey: 'posto ipiranga',
+          merchantName: 'Posto Ipiranga',
+          destination: LineDestination.splitP2P,
+          assignedMemberId: 'cristiano',
+        ),
+        ImportRule(
+          matchKey: 'enel energia',
+          merchantName: 'Enel Energia',
+          destination: LineDestination.house,
+          categoryId: 'cat_contas',
+        ),
+        ImportRule(matchKey: 'padaria', merchantName: 'Padaria', destination: LineDestination.cardOwnerPersonal),
+      ];
+
+      final session = start().withRules(
+        rules,
+        memberIds: {'kelvynn', 'cristiano'},
+        categoryIds: {'cat_contas', 'cat_mercado'},
+      );
+      expect(session.lines[0].destination, LineDestination.splitP2P);
+      expect(session.lines[1].assignedMemberId, 'cristiano');
+      expect(session.lines[2].categoryId, 'cat_contas');
+      expect(session.lines[3].destination, LineDestination.cardOwnerPersonal);
+      expect(session.lines[4].destination, LineDestination.house);
+      expect(session.ruledLineIds, {'a', 'b', 'c', 'd'});
+      expect(session.blockers, isEmpty);
+
+      final withoutCristiano = start().withRules(rules, memberIds: {'kelvynn'}, categoryIds: const {});
+      expect(withoutCristiano.lines[0].destination, LineDestination.house);
+      expect(withoutCristiano.lines[0].assignedMemberId, isNull);
+      expect(withoutCristiano.lines[2].categoryId, isNull);
+    });
+  });
 }

@@ -22,6 +22,38 @@ class MockImportRepository implements ImportRepository {
 
   final List<_StoredImport> _imports = [];
 
+  /// Regras por cartão ou conta.
+  final Map<String, List<ImportRule>> _rules = {};
+
+  @override
+  Future<List<ImportRule>> getRules(String paymentMethodId) async =>
+      List.of(_rules[paymentMethodId] ?? const []);
+
+  @override
+  Future<void> saveRules(String paymentMethodId, List<ImportRule> rules) async {
+    final stored = _rules.putIfAbsent(paymentMethodId, () => []);
+    for (final rule in rules) {
+      stored.removeWhere((r) => r.matchKey == rule.matchKey);
+      stored.add(
+        ImportRule(
+          id: generateUuidV4(),
+          matchKey: rule.matchKey,
+          merchantName: rule.merchantName,
+          destination: rule.destination,
+          categoryId: rule.categoryId,
+          assignedMemberId: rule.assignedMemberId,
+        ),
+      );
+    }
+  }
+
+  @override
+  Future<void> deleteRule(String ruleId) async {
+    for (final stored in _rules.values) {
+      stored.removeWhere((r) => r.id == ruleId);
+    }
+  }
+
   @override
   Future<void> confirmImport(ImportSession session, ImportPlan plan) async {
     for (final expense in plan.newExpenses) {
@@ -123,4 +155,14 @@ class DynamicImportRepository implements ImportRepository {
 
   @override
   Future<void> undoImport(String batchId) => _active.undoImport(batchId);
+
+  @override
+  Future<List<ImportRule>> getRules(String paymentMethodId) => _active.getRules(paymentMethodId);
+
+  @override
+  Future<void> saveRules(String paymentMethodId, List<ImportRule> rules) =>
+      _active.saveRules(paymentMethodId, rules);
+
+  @override
+  Future<void> deleteRule(String ruleId) => _active.deleteRule(ruleId);
 }

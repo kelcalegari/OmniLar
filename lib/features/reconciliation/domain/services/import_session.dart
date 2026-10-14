@@ -13,6 +13,7 @@ import '../../../finance/domain/services/credit_card_invoice_calculator.dart';
 import '../../../finance/domain/services/expense_launch_defaults.dart';
 import '../../../p2p/domain/entities/p2p_loan.dart';
 import '../entities/imported_statement_line.dart';
+import '../repositories/import_repository.dart';
 import 'statement_extras.dart';
 import 'statement_matcher.dart';
 import 'statement_text.dart';
@@ -155,6 +156,9 @@ class ImportSession {
   /// A opção escolhida pelo usuário (id da linha -> chave da opção).
   final Map<String, String> extraChoices;
 
+  /// Linhas que vieram classificadas por uma regra aprendida (pelo id).
+  final Set<String> ruledLineIds;
+
   const ImportSession({
     required this.source,
     required this.fileName,
@@ -167,6 +171,7 @@ class ImportSession {
     this.forcedLineIds = const {},
     this.extraOptions = const {},
     this.extraChoices = const {},
+    this.ruledLineIds = const {},
   });
 
   static final _dayMonth = DateFormat('dd/MM');
@@ -226,6 +231,7 @@ class ImportSession {
     Set<String>? forcedLineIds,
     Map<String, List<ExtraAction>>? extraOptions,
     Map<String, String>? extraChoices,
+    Set<String>? ruledLineIds,
   }) {
     return ImportSession(
       source: source,
@@ -239,7 +245,83 @@ class ImportSession {
       forcedLineIds: forcedLineIds ?? this.forcedLineIds,
       extraOptions: extraOptions ?? this.extraOptions,
       extraChoices: extraChoices ?? this.extraChoices,
+      ruledLineIds: ruledLineIds ?? this.ruledLineIds,
     );
+  }
+
+  /// Nome que identifica o estabelecimento de uma linha nas regras aprendidas.
+  static String ruleKeyOf(ImportedStatementLine line) =>
+      StatementText.normalize(StatementText.cleanTitle(line.description));
+
+  /// Aplica as regras aprendidas às compras do arquivo. Regra de empréstimo
+  /// cujo devedor saiu da casa (ou virou quem paga) só aproveita a categoria.
+  ImportSession withRules(
+    List<ImportRule> rules, {
+    required Set<String> memberIds,
+    required Set<String> categoryIds,
+  }) {
+    final byKey = {for (final rule in rules) rule.matchKey: rule};
+    final ruled = <String>{};
+    final updated = <ImportedStatementLine>[];
+
+    for (final line in lines) {
+      final rule = line.isPurchase ? byKey[ruleKeyOf(line)] : null;
+      if (rule == null) {
+        updated.add(line);
+        continue;
+      }
+      final debtor = rule.assignedMemberId;
+      final loanStillValid = rule.destination != LineDestination.splitP2P ||
+          (debtor != null && debtor != payerMemberId && memberIds.contains(debtor));
+      ruled.add(line.id);
+      updated.add(
+        line.copyWith(
+          destination: loanStillValid ? rule.destination : LineDestination.house,
+          categoryId: categoryIds.contains(rule.categoryId) ? rule.categoryId : null,
+          assignedMemberId: loanStillValid ? debtor : null,
+          clearAssignedMember: !loanStillValid || debtor == null,
+        ),
+      );
+    }
+    return _copy(lines: updated, ruledLineIds: ruled);
+  }
+
+  /// O que vale a pena lembrar desta revisão: um estabelecimento com a mesma
+  /// decisão em todas as suas linhas. Casa sem categoria não ensina nada.
+  List<ImportRule> rulesToLearn() {
+    final byKey = <String, List<ImportedStatementLine>>{};
+    for (final line in lines) {
+      final status = statusOf(line);
+      if (status != LineStatus.newLine && status != LineStatus.ignored) continue;
+      final key = ruleKeyOf(line);
+      if (key.length < 3) continue;
+      byKey.putIfAbsent(key, () => []).add(line);
+    }
+
+    final rules = <ImportRule>[];
+    for (final entry in byKey.entries) {
+      final first = entry.value.first;
+      final consistent = entry.value.every((line) =>
+          line.destination == first.destination &&
+          line.categoryId == first.categoryId &&
+          line.assignedMemberId == first.assignedMemberId);
+      if (!consistent) continue;
+      if (first.destination == LineDestination.house && first.categoryId == null) continue;
+      if (first.destination == LineDestination.splitP2P && first.assignedMemberId == null) continue;
+
+      final isHouse = first.destination == LineDestination.house;
+      rules.add(
+        ImportRule(
+          matchKey: entry.key,
+          merchantName: StatementText.cleanTitle(first.description),
+          destination: first.destination,
+          categoryId: isHouse ? first.categoryId : null,
+          assignedMemberId:
+              first.destination == LineDestination.splitP2P ? first.assignedMemberId : null,
+        ),
+      );
+    }
+    return rules;
   }
 
   /// Aplica a mesma mudança a várias linhas de uma vez.
