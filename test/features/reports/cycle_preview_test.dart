@@ -586,8 +586,7 @@ void main() {
     Future<void> pump(WidgetTester tester, String currentMemberId) async {
       final cubit = ReportsCubit(
         _FakeSettlementRepository(hubSummary()),
-        null,
-        () => today,
+        now: () => today,
       );
       await cubit.loadPreview(
         FinanceState(

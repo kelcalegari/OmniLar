@@ -14,6 +14,7 @@ import '../../../p2p/presentation/cubit/p2p_cubit.dart';
 import '../cubit/reports_cubit.dart';
 import '../widgets/cycle_preview_section.dart';
 import '../widgets/payment_calendar_section.dart';
+import '../widgets/upcoming_cycles_section.dart';
 
 class ReportsPage extends StatefulWidget {
   const ReportsPage({super.key});
@@ -51,8 +52,17 @@ class _ReportsPageState extends State<ReportsPage> {
                 previous.expenses != current.expenses ||
                 previous.contributions != current.contributions ||
                 previous.members != current.members),
-        listener: (context, state) =>
-            context.read<ReportsCubit>().loadPreview(state),
+        listener: (context, state) {
+          final reports = context.read<ReportsCubit>();
+          reports.loadPreview(state);
+          // Próximos ciclos já abertos: um lançamento novo pode mudar eles
+          if (reports.upcomingRequested) {
+            reports.loadUpcoming(
+              state,
+              context.read<FinanceCubit>().cycleSchedule,
+            );
+          }
+        },
         child: _ReportsPageContent(showAll: _showAll),
       ),
     );
@@ -134,6 +144,16 @@ class _ReportsPageContent extends StatelessWidget {
                           PaymentCalendarSection(
                             currentMemberId: _currentMemberId(context),
                             showAll: all,
+                          ),
+                          const SizedBox(height: 20),
+                          UpcomingCyclesSection(
+                            currentMemberId: _currentMemberId(context),
+                            showAll: all,
+                            onRequested: () =>
+                                context.read<ReportsCubit>().loadUpcoming(
+                                  context.read<FinanceCubit>().state,
+                                  context.read<FinanceCubit>().cycleSchedule,
+                                ),
                           ),
                         ],
                       ),
