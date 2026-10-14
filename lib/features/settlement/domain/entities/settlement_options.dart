@@ -31,6 +31,10 @@ class SettlementOptions extends Equatable {
   /// Sem escolha, vale a baixa como um boleto.
   final Map<String, OpenInvoiceChoice> openInvoiceChoices;
 
+  /// Meio de pagamento de cada conta pendente (id da conta -> id do meio, ou
+  /// [carryOverBill]). Sem escolha, vale o meio que a conta já tinha.
+  final Map<String, String> openBillChoices;
+
   const SettlementOptions({
     this.surplusAction = SurplusAction.toVault,
     this.targetVaultId,
@@ -39,6 +43,7 @@ class SettlementOptions extends Equatable {
     this.deficitSplit = DeficitSplit.proportional,
     this.deficitVaultId,
     this.openInvoiceChoices = const {},
+    this.openBillChoices = const {},
   });
 
   SettlementOptions copyWith({
@@ -50,6 +55,7 @@ class SettlementOptions extends Equatable {
     String? deficitVaultId,
     bool clearDeficitVault = false,
     Map<String, OpenInvoiceChoice>? openInvoiceChoices,
+    Map<String, String>? openBillChoices,
   }) {
     return SettlementOptions(
       surplusAction: surplusAction ?? this.surplusAction,
@@ -59,6 +65,7 @@ class SettlementOptions extends Equatable {
       deficitSplit: deficitSplit ?? this.deficitSplit,
       deficitVaultId: clearDeficitVault ? null : (deficitVaultId ?? this.deficitVaultId),
       openInvoiceChoices: openInvoiceChoices ?? this.openInvoiceChoices,
+      openBillChoices: openBillChoices ?? this.openBillChoices,
     );
   }
 
@@ -68,6 +75,7 @@ class SettlementOptions extends Equatable {
     targetVaultId,
     creditAction,
     openInvoiceChoices,
+    openBillChoices,
     transferResolutions,
     deficitSplit,
     deficitVaultId,

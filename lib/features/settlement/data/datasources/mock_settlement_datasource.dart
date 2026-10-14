@@ -69,6 +69,7 @@ class MockSettlementDataSource implements SettlementDataSource {
       await financeDataSource.getExpensesForCycle(cycle),
       await financeDataSource.getPaymentMethods(),
       options?.openInvoiceChoices ?? const {},
+      billChoices: options?.openBillChoices ?? const {},
     );
     final contributions = await financeDataSource.getContributionsForCycle(
       cycle,
@@ -366,6 +367,7 @@ class MockSettlementDataSource implements SettlementDataSource {
       await financeDataSource.getExpensesForCycle(summary.cycle),
       await financeDataSource.getPaymentMethods(),
       options?.openInvoiceChoices ?? const {},
+      billChoices: options?.openBillChoices ?? const {},
     );
     // Congela o rateio: despesas que usaram o padrão da casa passam a carregar os
     // percentuais deste fechamento.

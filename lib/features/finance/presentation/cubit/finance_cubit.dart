@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import '../../../../core/domain/value_objects/cycle_schedule.dart';
+import '../../domain/services/pending_payment.dart';
 import '../../domain/services/recurring_series.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../domain/repositories/finance_repository.dart';
@@ -387,6 +388,33 @@ class FinanceCubit extends Cubit<FinanceState> {
         status: FinanceStatus.failure,
         errorMessage: 'Erro ao confirmar pagamento: $e',
       ));
+    }
+  }
+
+  /// Registra o pagamento de uma conta pendente no dia [paidOn] com o meio
+  /// [method]. Quem pagou sai do meio: com dono, o dono (reembolsado no
+  /// fechamento); da casa, a casa. Cartão de crédito transforma a conta numa
+  /// compra da fatura, que fica pendente até a fatura ser paga (conta
+  /// recorrente no cartão recebe baixa direto, como antes). Retorna false em
+  /// caso de erro.
+  Future<bool> payPendingExpense(
+    HouseExpense expense, {
+    required DateTime paidOn,
+    required PaymentMethod? method,
+    Money? amount,
+  }) async {
+    final updated = paidWith(expense, paidOn: paidOn, method: method, amount: amount);
+
+    try {
+      await _repository.updateExpense(updated);
+      await loadCycleData(cycle: state.currentCycle);
+      return true;
+    } catch (e) {
+      emit(state.copyWith(
+        status: FinanceStatus.failure,
+        errorMessage: 'Erro ao registrar pagamento: $e',
+      ));
+      return false;
     }
   }
 

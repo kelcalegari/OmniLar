@@ -78,6 +78,9 @@ class CaptureProposal {
   final String title;
   final Money totalAmount;
   final DateTime date;
+
+  /// Vencimento do boleto, quando o código ou a leitura trouxe.
+  final DateTime? dueDate;
   final String? merchantOrBeneficiary;
   final String? rawCode; // Linha digitável ou URL da NFC-e
   final List<InvoiceItemDraft> items;
@@ -90,6 +93,7 @@ class CaptureProposal {
     required this.title,
     required this.totalAmount,
     required this.date,
+    this.dueDate,
     this.merchantOrBeneficiary,
     this.rawCode,
     this.items = const [],
@@ -114,6 +118,7 @@ class CaptureProposal {
     String? title,
     Money? totalAmount,
     DateTime? date,
+    DateTime? dueDate,
     String? merchantOrBeneficiary,
     String? rawCode,
     List<InvoiceItemDraft>? items,
@@ -125,6 +130,7 @@ class CaptureProposal {
       title: title ?? this.title,
       totalAmount: totalAmount ?? this.totalAmount,
       date: date ?? this.date,
+      dueDate: dueDate ?? this.dueDate,
       merchantOrBeneficiary: merchantOrBeneficiary ?? this.merchantOrBeneficiary,
       rawCode: rawCode ?? this.rawCode,
       items: items ?? this.items,

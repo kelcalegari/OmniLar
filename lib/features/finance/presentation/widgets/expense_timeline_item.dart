@@ -17,6 +17,7 @@ import '../cubit/finance_cubit.dart';
 import '../cubit/finance_state.dart';
 import '../pages/add_expense_page.dart';
 import 'audit_log_sheet.dart';
+import 'pay_pending_expense_sheet.dart';
 
 class ExpenseTimelineItem extends StatelessWidget {
   final HouseExpense expense;
@@ -263,14 +264,17 @@ class ExpenseTimelineItem extends StatelessWidget {
                       foregroundColor: Colors.white,
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                     ),
+                    // Segue para o dia e o meio de pagamento (quem pagou sai do meio)
                     onPressed: () {
-                      context.read<FinanceCubit>().markExpenseAsPaid(
-                            expense.id,
-                            actualAmount: confirmedAmount,
-                          );
+                      final financeCubit = context.read<FinanceCubit>();
                       Navigator.pop(modalContext);
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(content: Text('Pagamento de "${expense.title}" confirmado! 🎉')),
+                      showAdaptiveModal(
+                        context: context,
+                        maxWidth: 500,
+                        child: PayPendingExpenseSheet(
+                          expense: expense.copyWith(amount: confirmedAmount),
+                          financeCubit: financeCubit,
+                        ),
                       );
                     },
                     child: const Text('Confirmar Pagamento', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),

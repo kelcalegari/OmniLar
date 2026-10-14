@@ -176,6 +176,7 @@ class SupabaseSettlementDataSource implements SettlementDataSource {
       await financeDataSource.getExpensesForCycle(cycle),
       await financeDataSource.getPaymentMethods(),
       options?.openInvoiceChoices ?? const {},
+      billChoices: options?.openBillChoices ?? const {},
     );
     final contributions = await financeDataSource.getContributionsForCycle(
       cycle,
@@ -305,6 +306,7 @@ class SupabaseSettlementDataSource implements SettlementDataSource {
       await financeDataSource.getExpensesForCycle(cycle),
       await financeDataSource.getPaymentMethods(),
       options?.openInvoiceChoices ?? const {},
+      billChoices: options?.openBillChoices ?? const {},
     );
     final expenseIds = [
       for (final exp in expenses)

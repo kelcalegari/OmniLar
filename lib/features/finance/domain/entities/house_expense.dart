@@ -30,6 +30,7 @@ class HouseExpense extends Equatable {
   final String? projectId; // Vincula esta despesa a um projeto compartilhado (ex: viagem, reforma, meta)
   final DateTime? paidAt; // Quando uma conta que estava pendente recebeu baixa (define o ciclo em que ela conta)
   final DateTime? settledAt; // Quando entrou em um fechamento de ciclo (o reembolso de quem pagou do bolso já foi acertado)
+  final String? barcode; // Linha digitável do boleto, para copiar e pagar depois
 
   const HouseExpense({
     required this.id,
@@ -53,6 +54,7 @@ class HouseExpense extends Equatable {
     this.projectId,
     this.paidAt,
     this.settledAt,
+    this.barcode,
   });
 
   bool get isPaid => status == ExpenseStatus.paid;
@@ -117,6 +119,7 @@ class HouseExpense extends Equatable {
     DateTime? paidAt,
     bool clearPaidAt = false,
     DateTime? settledAt,
+    String? barcode,
   }) {
     return HouseExpense(
       id: id ?? this.id,
@@ -140,6 +143,7 @@ class HouseExpense extends Equatable {
       projectId: clearProjectId ? null : (projectId ?? this.projectId),
       paidAt: clearPaidAt ? null : (paidAt ?? this.paidAt),
       settledAt: settledAt ?? this.settledAt,
+      barcode: barcode ?? this.barcode,
     );
   }
 
@@ -166,5 +170,6 @@ class HouseExpense extends Equatable {
         projectId,
         paidAt,
         settledAt,
+        barcode,
       ];
 }

@@ -110,6 +110,7 @@ class BoletoParser {
         title: title ?? 'Boleto Bancário',
         totalAmount: amount,
         date: dueDate,
+        dueDate: dueDate,
         rawCode: rawLine,
         capturedAt: DateTime.now(),
       );

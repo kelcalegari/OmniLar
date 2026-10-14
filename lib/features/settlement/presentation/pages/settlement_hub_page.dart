@@ -237,6 +237,10 @@ class _SettlementHubContent extends StatelessWidget {
                 _buildOpenInvoices(context, state),
                 const SizedBox(height: 16),
               ],
+              if (!isSettled && state.openBills.isNotEmpty) ...[
+                _buildOpenBills(context, state),
+                const SizedBox(height: 16),
+              ],
 
               // PASSO 1: Resumo do Caixa da Casa
               _buildStep1HouseSummary(context, summary, state),
@@ -490,6 +494,86 @@ class _SettlementHubContent extends StatelessWidget {
                 ),
                 const DropdownMenuItem(
                   value: OpenInvoiceChoice.carryOver,
+                  child: Text('Levar para o próximo ciclo', style: TextStyle(fontSize: 13)),
+                ),
+              ],
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  /// Contas a pagar pendentes do ciclo. Sem mexer, recebem baixa com o meio que
+  /// já tinham (ou o da casa).
+  Widget _buildOpenBills(BuildContext context, SettlementState state) {
+    final theme = Theme.of(context);
+    final finance = context.read<FinanceCubit>().state;
+    final methods = billPaymentMethods(finance.paymentMethods);
+    String day(DateTime d) => '${d.day.toString().padLeft(2, '0')}/${d.month.toString().padLeft(2, '0')}';
+    String whoPays(String methodId) {
+      final method = methods.where((m) => m.id == methodId).firstOrNull;
+      final owner = finance.members.where((m) => m.id == method?.ownerMemberId).firstOrNull;
+      if (method == null) return '';
+      return owner == null ? '${method.name} (casa)' : '${method.name} (${owner.name.split(' ').first}, reembolsado)';
+    }
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: AppColors.folegoWarning.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: AppColors.folegoWarning.withValues(alpha: 0.4)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          const Row(
+            children: [
+              Icon(Icons.receipt_long_outlined, color: AppColors.folegoWarning, size: 20),
+              SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  'Contas sem pagamento registrado',
+                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          Text(
+            'Escolha com que meio cada uma foi paga: o da casa sai do caixa; o de um morador, ele é '
+            'reembolsado. Ou leve a conta para o próximo ciclo.',
+            style: theme.textTheme.bodySmall?.copyWith(fontSize: 12),
+          ),
+          for (final bill in state.openBills) ...[
+            const Divider(height: 20),
+            Text(
+              '${bill.title} • vence ${day(bill.effectiveDueDate)} • ${bill.amount.formatted}',
+              style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
+            ),
+            const SizedBox(height: 4),
+            DropdownButton<String>(
+              key: Key('open_bill_${bill.id}'),
+              isExpanded: true,
+              value: state.options.openBillChoices[bill.id] ??
+                  defaultBillMethodId(bill, finance.paymentMethods) ??
+                  carryOverBill,
+              onChanged: state.status == SettlementCubitStatus.confirming
+                  ? null
+                  : (choice) {
+                      if (choice != null) {
+                        context.read<SettlementCubit>().updateOpenBillChoice(bill.id, choice);
+                      }
+                    },
+              items: [
+                for (final method in methods)
+                  DropdownMenuItem(
+                    value: method.id,
+                    child: Text('Dar baixa: ${whoPays(method.id)}', style: const TextStyle(fontSize: 13)),
+                  ),
+                const DropdownMenuItem(
+                  value: carryOverBill,
                   child: Text('Levar para o próximo ciclo', style: TextStyle(fontSize: 13)),
                 ),
               ],

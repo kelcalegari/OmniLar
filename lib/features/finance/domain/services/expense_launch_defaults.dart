@@ -38,6 +38,12 @@ class ExpenseLaunchDefaults {
   static bool launchPaidOutOfPocket(PaymentMethod? paymentMethod, {String? projectId}) =>
       !waitsForInvoice(paymentMethod, projectId: projectId) && paidOutOfPocket(paymentMethod);
 
+  /// A conta da casa (Caixa): forma sem dono do tipo conta; sem ela, qualquer
+  /// forma sem dono que não seja cartão.
+  static PaymentMethod? houseAccount(List<PaymentMethod> methods) =>
+      methods.where((m) => m.ownerMemberId == null && m.type == PaymentMethodType.account).firstOrNull ??
+      methods.where((m) => m.ownerMemberId == null && !m.isCreditCard).firstOrNull;
+
   /// Categoria real da casa: a indicada (por id ou por nome), senão a primeira
   /// cujo nome contém uma das [nameKeywords], senão a primeira da lista.
   /// Devolve null quando a casa não tem categorias.

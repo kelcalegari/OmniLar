@@ -7,7 +7,9 @@ import '../../domain/entities/settlement_summary.dart';
 import '../../domain/entities/transfer_settlement_resolution.dart';
 import '../../domain/repositories/settlement_repository.dart';
 import '../../domain/services/open_invoice_choices.dart';
+import '../../../finance/domain/entities/house_expense.dart';
 import '../../../finance/domain/services/cycle_expense_grouping.dart';
+import '../../../finance/domain/services/pending_payment.dart';
 import 'settlement_state.dart';
 
 class SettlementCubit extends BlocBase<SettlementState> {
@@ -42,6 +44,7 @@ class SettlementCubit extends BlocBase<SettlementState> {
           state.options.targetVaultId ?? vaults.firstOrNull?.id;
       final options = state.options.copyWith(targetVaultId: defaultVaultId);
       final openInvoices = await _loadOpenInvoices(cycle);
+      final openBills = await _loadOpenBills(cycle);
 
       emit(
         state.copyWith(
@@ -51,6 +54,7 @@ class SettlementCubit extends BlocBase<SettlementState> {
           vaults: vaults,
           options: options,
           openInvoices: openInvoices,
+          openBills: openBills,
         ),
       );
     } catch (e) {
@@ -78,6 +82,27 @@ class SettlementCubit extends BlocBase<SettlementState> {
     }
   }
 
+  Future<List<HouseExpense>> _loadOpenBills(FinancialCycle cycle) async {
+    final finance = _financeRepository;
+    if (finance == null) return const [];
+    try {
+      return openBillsOf(
+        await finance.getExpensesForCycle(cycle),
+        await finance.getPaymentMethods(),
+      );
+    } catch (_) {
+      return const [];
+    }
+  }
+
+  /// Meio de pagamento (ou levar adiante) de uma conta pendente: recalcula o
+  /// fechamento na hora.
+  Future<void> updateOpenBillChoice(String expenseId, String choice) => _applyDeficitOptions(
+        state.options.copyWith(
+          openBillChoices: {...state.options.openBillChoices, expenseId: choice},
+        ),
+      );
+
   /// O que fazer com uma fatura em aberto: recalcula o fechamento na hora.
   Future<void> updateOpenInvoiceChoice(String invoiceKey, OpenInvoiceChoice choice) =>
       _applyDeficitOptions(
@@ -103,6 +128,17 @@ class SettlementCubit extends BlocBase<SettlementState> {
         paidAt: paidAt,
         paidByHouse: choice == OpenInvoiceChoice.paidByHouse,
       );
+    }
+
+    // Contas pendentes que recebem baixa: pagas com o meio escolhido
+    if (state.openBills.isEmpty) return;
+    final methods = await finance.getPaymentMethods();
+    for (final bill in state.openBills) {
+      final choice = state.options.openBillChoices[bill.id] ?? defaultBillMethodId(bill, methods);
+      if (choice == carryOverBill) continue;
+      final method = methods.where((m) => m.id == choice).firstOrNull;
+      if (method == null) continue;
+      await finance.updateExpense(paidWith(bill, paidOn: paidAt, method: method));
     }
   }
 
@@ -251,6 +287,7 @@ class SettlementCubit extends BlocBase<SettlementState> {
           status: SettlementCubitStatus.settled,
           summary: updatedSummary,
           openInvoices: await _loadOpenInvoices(currentSummary.cycle),
+          openBills: await _loadOpenBills(currentSummary.cycle),
         ),
       );
     } catch (e) {

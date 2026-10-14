@@ -4,6 +4,7 @@ import '../../../../core/network/supabase_config.dart';
 import '../../../../core/domain/value_objects/money.dart';
 import '../../../../core/services/ai_config_service.dart';
 import '../entities/capture_proposal.dart';
+import 'boleto_code.dart';
 import 'boleto_parser.dart';
 
 class CaptureService {
@@ -62,17 +63,25 @@ class CaptureService {
               ? analysis['title'] as String
               : (fileName.toLowerCase().endsWith('.pdf') ? 'Fatura / Boleto' : 'Recibo / Cupom');
           final merchant = analysis['merchant_name'] as String?;
-          final barcode = analysis['barcode'] as String? ?? codeProposal?.rawCode;
+          final rawBarcode = analysis['barcode'] as String? ?? codeProposal?.rawCode;
+          // Código conferido vira a linha digitável formatada, pronta para copiar
+          String? barcode = rawBarcode;
+          if (rawBarcode != null) {
+            try {
+              barcode = BoletoCodeReader.read(rawBarcode).digitableLine;
+            } catch (_) {}
+          }
           final isItemized = analysis['is_itemized'] as bool? ?? false;
 
           DateTime date = DateTime.now();
+          DateTime? dueDate;
           final dueDateStr = analysis['due_date'] as String?;
           if (dueDateStr != null && dueDateStr.isNotEmpty) {
-            try {
-              date = DateTime.parse(dueDateStr);
-            } catch (_) {}
+            dueDate = DateTime.tryParse(dueDateStr);
+            if (dueDate != null) date = dueDate;
           } else if (codeProposal != null) {
             date = codeProposal.date;
+            dueDate = codeProposal.dueDate;
           }
 
           final rawItems = analysis['items'] as List<dynamic>? ?? [];
@@ -110,6 +119,7 @@ class CaptureService {
             title: title,
             totalAmount: Money(finalTotalCents),
             date: date,
+            dueDate: dueDate,
             merchantOrBeneficiary: merchant ?? codeProposal?.merchantOrBeneficiary,
             rawCode: barcode,
             items: items,

@@ -83,6 +83,7 @@ Map<String, dynamic> houseExpensePayload(
     if (isUuid(expense.recurringSeriesId)) 'recurring_series_id': expense.recurringSeriesId,
     if (isUuid(expense.projectId)) 'project_id': expense.projectId,
     if (expense.notes != null) 'notes': expense.notes,
+    if (expense.barcode != null) 'barcode': expense.barcode,
     'items': [
       for (final item in expense.items)
         {

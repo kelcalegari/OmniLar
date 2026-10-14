@@ -1,11 +1,11 @@
+import '../../../../core/utils/responsive.dart';
+import 'pay_pending_expense_sheet.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:intl/intl.dart';
 import '../../../../core/theme/app_colors.dart';
-import '../../../../core/widgets/money_input_field.dart';
 import '../../../../core/widgets/recurrence_scope_dialog.dart';
 import '../../../../core/domain/enums/recurrence.dart';
-import '../../../../core/domain/value_objects/money.dart';
 import '../../../finance/domain/entities/house_expense.dart';
 import '../../../finance/domain/entities/category.dart';
 import '../../../finance/domain/entities/payment_method.dart';
@@ -39,22 +39,6 @@ class ExpenseDetailDesktopPane extends StatefulWidget {
 }
 
 class _ExpenseDetailDesktopPaneState extends State<ExpenseDetailDesktopPane> {
-  late Money _confirmedAmount;
-
-  @override
-  void initState() {
-    super.initState();
-    _confirmedAmount = widget.expense.amount;
-  }
-
-  @override
-  void didUpdateWidget(covariant ExpenseDetailDesktopPane oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (oldWidget.expense.id != widget.expense.id) {
-      _confirmedAmount = widget.expense.amount;
-    }
-  }
-
   IconData _getCategoryIcon(String iconName) {
     switch (iconName) {
       case 'shopping_cart_outlined':
@@ -334,15 +318,6 @@ class _ExpenseDetailDesktopPaneState extends State<ExpenseDetailDesktopPane> {
 
             // Ações Rápidas do Desktop
             if (expense.isPending) ...[
-              if (expense.isVariable) ...[
-                MoneyInputField(
-                  label: 'Confirmar Valor Real',
-                  initialValue: _confirmedAmount,
-                  primaryColor: AppColors.primary,
-                  onChanged: (money) => setState(() => _confirmedAmount = money),
-                ),
-                const SizedBox(height: 8),
-              ],
               FilledButton.icon(
                 style: FilledButton.styleFrom(
                   backgroundColor: AppColors.creditGreen,
@@ -352,12 +327,12 @@ class _ExpenseDetailDesktopPaneState extends State<ExpenseDetailDesktopPane> {
                 ),
                 icon: const Icon(Icons.check_rounded, size: 18),
                 label: const Text('Confirmar Pagamento', style: TextStyle(fontWeight: FontWeight.bold)),
-                onPressed: () {
-                  context.read<FinanceCubit>().markExpenseAsPaid(expense.id, actualAmount: _confirmedAmount);
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text('Pagamento de "${expense.title}" confirmado! 🎉')),
-                  );
-                },
+                // Dia, valor e meio de pagamento (quem pagou sai do meio)
+                onPressed: () => showAdaptiveModal(
+                  context: context,
+                  maxWidth: 500,
+                  child: PayPendingExpenseSheet(expense: expense, financeCubit: context.read<FinanceCubit>()),
+                ),
               ),
               const SizedBox(height: 8),
             ],

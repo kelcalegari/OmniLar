@@ -521,6 +521,7 @@ class SupabaseFinanceDataSource implements FinanceDataSource {
         'notes': expense.notes,
         // Nulo desvincula a despesa do projeto
         'project_id': expense.projectId,
+        if (expense.barcode != null) 'barcode': expense.barcode,
       };
 
       await client.from('house_expenses').update(updateData).eq('id', expense.id);
@@ -1147,6 +1148,7 @@ class SupabaseFinanceDataSource implements FinanceDataSource {
       paidAt: r['paid_at'] != null ? DateTime.tryParse(r['paid_at'] as String)?.toLocal() : null,
       paidOutOfPocket: r['paid_out_of_pocket'] as bool? ?? false,
       notes: r['notes'] as String?,
+      barcode: r['barcode'] as String?,
       items: items,
       recurringSeriesId: r['recurring_series_id'] as String?,
       projectId: r['project_id'] as String?,

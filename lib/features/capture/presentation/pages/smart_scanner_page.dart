@@ -1,3 +1,10 @@
+import 'package:intl/intl.dart';
+import '../../../../core/utils/clipboard_helper.dart';
+import '../../../../core/utils/uuid.dart';
+import '../../../finance/domain/repositories/finance_repository.dart';
+import '../../../finance/domain/services/pending_payment.dart';
+import '../../../finance/presentation/cubit/finance_state.dart';
+import '../../domain/services/boleto_code.dart';
 import '../../../finance/domain/services/expense_launch_defaults.dart';
 import 'dart:io' show Platform;
 import 'package:flutter/foundation.dart' show kIsWeb;
@@ -50,6 +57,14 @@ class _SmartScannerPageState extends State<SmartScannerPage> {
   final _titleController = TextEditingController();
   String? _selectedCategoryId;
   String? _reviewedProposalId;
+
+  // Boleto: vencimento, se já foi pago e a conta já prevista no app
+  DateTime? _dueDate;
+  bool _alreadyPaid = false;
+  DateTime _paidOn = DateTime.now();
+  List<HouseExpense> _knownBills = const [];
+  HouseExpense? _useKnownBill;
+  bool _knownBillDismissed = false;
 
   MobileScannerController? _scannerController;
   bool _isCameraActive = false;
@@ -108,8 +123,8 @@ class _SmartScannerPageState extends State<SmartScannerPage> {
             _currentProposal = proposal;
           });
           break;
-        } else if (BoletoParser.isValidLength(raw)) {
-          final proposal = BoletoParser.parseBoletoBancario(rawLine: raw);
+        } else if (const {44, 47, 48}.contains(BoletoCodeReader.digitsOf(raw).length)) {
+          final proposal = _proposalFromCode(raw, quiet: true);
           if (proposal != null) {
             setState(() {
               _currentProposal = proposal;
@@ -216,26 +231,155 @@ class _SmartScannerPageState extends State<SmartScannerPage> {
     final line = _barcodeController.text.trim();
     if (line.isEmpty) return;
 
-    final proposal = BoletoParser.parseBoletoBancario(rawLine: line);
+    final proposal = _proposalFromCode(line);
     if (proposal != null) {
       setState(() {
         _currentProposal = proposal;
       });
-    } else {
-      // Boleto simulado padrão caso linha seja curta ou de teste
-      setState(() {
-        _currentProposal = CaptureProposal(
-          id: 'prop_boleto_${DateTime.now().millisecondsSinceEpoch}',
-          documentType: DocumentType.boleto,
-          title: 'Conta de Energia / Luz',
-          totalAmount: const Money(21540), // R$ 215,40
-          date: DateTime.now().add(const Duration(days: 7)),
-          merchantOrBeneficiary: 'Concessionária de Energia',
-          rawCode: line,
-          capturedAt: DateTime.now(),
-        );
-      });
     }
+  }
+
+  /// Boleto a partir do código (lido pela câmera, digitado ou colado). Código
+  /// com número errado não vira proposta: o usuário é avisado.
+  CaptureProposal? _proposalFromCode(String raw, {bool quiet = false}) {
+    try {
+      final code = BoletoCodeReader.read(raw);
+      return CaptureProposal(
+        id: 'prop_boleto_${DateTime.now().millisecondsSinceEpoch}',
+        documentType: DocumentType.boleto,
+        title: code.suggestedTitle,
+        totalAmount: code.amount ?? const Money(0),
+        date: DateTime.now(),
+        dueDate: code.dueDate,
+        rawCode: code.digitableLine,
+        capturedAt: DateTime.now(),
+      );
+    } on BoletoCodeError catch (e) {
+      if (!quiet && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(backgroundColor: AppColors.debtRed, content: Text(e.message)),
+        );
+      }
+      return null;
+    }
+  }
+
+  /// Procura a conta já prevista no app (ex.: a internet recorrente) que
+  /// parece ser este boleto.
+  Future<void> _lookForKnownBill(CaptureProposal proposal) async {
+    final dueDate = _dueDate;
+    if (dueDate == null || proposal.documentType != DocumentType.boleto) {
+      setState(() {
+        _knownBills = const [];
+        _useKnownBill = null;
+      });
+      return;
+    }
+    final financeCubit = context.read<FinanceCubit>();
+    final cycle = financeCubit.cycleSchedule.cycleFor(dueDate);
+    var expenses = financeCubit.state.expenses;
+    try {
+      expenses = [...expenses, ...await sl<FinanceRepository>().getExpensesForCycle(cycle)];
+    } catch (_) {}
+    if (!mounted || _currentProposal?.id != proposal.id) return;
+    final unique = {for (final e in expenses) e.id: e}.values.toList();
+    final found = knownBillsFor(
+      unique,
+      dueDate: dueDate,
+      amount: proposal.totalAmount,
+      barcode: proposal.rawCode,
+      paymentMethods: financeCubit.state.paymentMethods,
+    );
+    setState(() {
+      _knownBills = found;
+      if (_useKnownBill != null && !found.any((e) => e.id == _useKnownBill!.id)) _useKnownBill = null;
+    });
+  }
+
+  Future<void> _pickDueDate(CaptureProposal proposal) async {
+    final initial = _dueDate ?? DateTime.now();
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: initial,
+      firstDate: DateTime(initial.year - 1),
+      lastDate: DateTime(initial.year + 2, 12, 31),
+      helpText: 'Vencimento do boleto',
+    );
+    if (picked == null || !mounted) return;
+    setState(() => _dueDate = picked);
+    await _lookForKnownBill(proposal);
+  }
+
+  Future<void> _pickPaidOn() async {
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: _paidOn,
+      firstDate: DateTime(_paidOn.year - 1),
+      lastDate: DateTime.now(),
+      helpText: 'Dia do pagamento',
+    );
+    if (picked != null && mounted) setState(() => _paidOn = DateTime(picked.year, picked.month, picked.day, 12));
+  }
+
+  /// Boleto: nasce como conta a pagar (ou já paga, com o meio escolhido), com
+  /// o vencimento e o código. Conta já prevista é atualizada em vez de duplicada.
+  Future<void> _confirmBoleto(CaptureProposal proposal) async {
+    final financeCubit = context.read<FinanceCubit>();
+    final state = financeCubit.state;
+    final dueDate = _dueDate!;
+    final dueAt = DateTime(dueDate.year, dueDate.month, dueDate.day, 12);
+    final method = state.paymentMethods.where((p) => p.id == _selectedPaymentMethodId).firstOrNull ??
+        ExpenseLaunchDefaults.houseAccount(state.paymentMethods) ??
+        state.paymentMethods.firstOrNull;
+    final typedTitle = _titleController.text.trim();
+
+    final known = _useKnownBill;
+    final HouseExpense pending;
+    if (known != null) {
+      pending = known.copyWith(
+        amount: proposal.totalAmount,
+        date: dueAt,
+        dueDate: dueAt,
+        barcode: proposal.rawCode,
+      );
+    } else {
+      final categoryId = state.categories.any((c) => c.id == _selectedCategoryId)
+          ? _selectedCategoryId!
+          : (_suggestedCategoryId(proposal, state.categories) ?? '');
+      final category = state.categories.where((c) => c.id == categoryId).firstOrNull;
+      final payer = sl<AuthRepository>().currentUser?.id ??
+          (state.members.isNotEmpty ? state.members.first.id : 'member_carlos');
+      final house = ExpenseLaunchDefaults.houseAccount(state.paymentMethods);
+      pending = HouseExpense(
+        id: generateUuidV4(),
+        title: typedTitle.isNotEmpty ? typedTitle : proposal.title,
+        amount: proposal.totalAmount,
+        date: dueAt,
+        dueDate: dueAt,
+        categoryId: categoryId,
+        paidByMemberId: payer,
+        // A pagar: o meio é escolhido ao pagar; até lá, o da casa
+        paymentMethodId: house?.id ?? method?.id ?? '',
+        splitRule: ExpenseLaunchDefaults.splitRule(
+          category: category,
+          members: state.members,
+          paidByMemberId: payer,
+        ),
+        status: ExpenseStatus.pending,
+        notes: proposal.merchantOrBeneficiary,
+        barcode: proposal.rawCode,
+      );
+    }
+
+    final expense = _alreadyPaid
+        ? paidWith(pending, paidOn: _paidOn, method: method, amount: proposal.totalAmount)
+        : pending;
+    if (known != null) {
+      await financeCubit.updateExpense(expense);
+    } else {
+      await financeCubit.addExpense(expense);
+    }
+    widget.onProposalReady?.call(proposal);
   }
 
   void _editProposalDetails() {
@@ -716,6 +860,36 @@ class _SmartScannerPageState extends State<SmartScannerPage> {
       _isSubmitting = true;
     });
 
+    if (proposal.documentType == DocumentType.boleto) {
+      try {
+        await _confirmBoleto(proposal);
+        if (!mounted) return;
+        final financeState = context.read<FinanceCubit>().state;
+        if (financeState.status == FinanceStatus.failure && financeState.errorMessage != null) {
+          throw financeState.errorMessage!;
+        }
+        Navigator.pop(context);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            backgroundColor: AppColors.creditGreen,
+            content: Text(
+              _alreadyPaid
+                  ? 'Boleto lançado como pago (${proposal.totalAmount.format()}).'
+                  : 'Boleto lançado como conta a pagar, vence em ${DateFormat('dd/MM').format(_dueDate!)}.',
+            ),
+          ),
+        );
+      } catch (err) {
+        if (mounted) {
+          setState(() => _isSubmitting = false);
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(backgroundColor: AppColors.debtRed, content: Text('Erro ao lançar o boleto: $err')),
+          );
+        }
+      }
+      return;
+    }
+
     try {
       final financeCubit = context.read<FinanceCubit>();
       final state = financeCubit.state;
@@ -1106,10 +1280,22 @@ class _SmartScannerPageState extends State<SmartScannerPage> {
   Widget _buildReviewProposalView(ThemeData theme) {
     final proposal = _currentProposal!;
     final isNfce = proposal.documentType == DocumentType.nfce;
+    final isBoleto = proposal.documentType == DocumentType.boleto;
     if (_reviewedProposalId != proposal.id) {
       _reviewedProposalId = proposal.id;
       _titleController.text = proposal.title;
       _selectedCategoryId = null;
+      _dueDate = isBoleto ? proposal.dueDate : null;
+      _alreadyPaid = false;
+      _paidOn = DateTime.now();
+      _knownBills = const [];
+      _useKnownBill = null;
+      _knownBillDismissed = false;
+      if (isBoleto && _dueDate != null) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) _lookForKnownBill(proposal);
+        });
+      }
     }
 
     return Padding(
@@ -1326,7 +1512,10 @@ class _SmartScannerPageState extends State<SmartScannerPage> {
           ],
           const SizedBox(height: 16),
 
-          // Categoria
+          if (isBoleto) ..._boletoFields(theme, proposal),
+
+          // Categoria (conta já prevista mantém a dela)
+          if (_useKnownBill == null)
           Builder(
             builder: (context) {
               final categories = context.watch<FinanceCubit>().state.categories;
@@ -1354,7 +1543,8 @@ class _SmartScannerPageState extends State<SmartScannerPage> {
             },
           ),
 
-          // Forma de Pagamento
+          // Forma de Pagamento (boleto a pagar: o meio é escolhido ao pagar)
+          if (!isBoleto || _alreadyPaid)
           Builder(
             builder: (context) {
               final paymentMethods = context.watch<FinanceCubit>().state.paymentMethods;
@@ -1406,7 +1596,9 @@ class _SmartScannerPageState extends State<SmartScannerPage> {
                     backgroundColor: AppColors.primary,
                     foregroundColor: Colors.white,
                   ),
-                  onPressed: _isSubmitting ? null : _confirmProposal,
+                  onPressed: _isSubmitting || (isBoleto && (_dueDate == null || proposal.totalAmount.cents <= 0))
+                      ? null
+                      : _confirmProposal,
                   child: _isSubmitting
                       ? const SizedBox(
                           height: 20,
@@ -1421,5 +1613,121 @@ class _SmartScannerPageState extends State<SmartScannerPage> {
         ],
       ),
     );
+  }
+
+  /// Código para copiar, vencimento, situação e conta já prevista.
+  List<Widget> _boletoFields(ThemeData theme, CaptureProposal proposal) {
+    final dayFormat = DateFormat('dd/MM/yyyy');
+    final knownBill = _knownBills.firstOrNull;
+    return [
+      if (proposal.rawCode != null) ...[
+        Container(
+          padding: const EdgeInsets.all(10),
+          decoration: BoxDecoration(
+            color: AppColors.primary.withValues(alpha: 0.08),
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: Row(
+            children: [
+              Expanded(
+                child: SelectableText(
+                  proposal.rawCode!,
+                  style: const TextStyle(fontSize: 12, fontFamily: 'monospace'),
+                ),
+              ),
+              IconButton(
+                icon: const Icon(Icons.copy_rounded, size: 18),
+                tooltip: 'Copiar código',
+                onPressed: () => copyWithFeedback(
+                  context,
+                  proposal.rawCode!,
+                  onCopied: const SnackBar(content: Text('Código do boleto copiado.')),
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 12),
+      ],
+      OutlinedButton.icon(
+        key: const Key('scan_due_date'),
+        icon: const Icon(Icons.event_rounded, size: 18),
+        label: Text(_dueDate == null ? 'Informar vencimento' : 'Vence em ${dayFormat.format(_dueDate!)}'),
+        style: OutlinedButton.styleFrom(
+          foregroundColor: _dueDate == null ? AppColors.debtRed : null,
+        ),
+        onPressed: _isSubmitting ? null : () => _pickDueDate(proposal),
+      ),
+      if (_dueDate == null)
+        const Padding(
+          padding: EdgeInsets.only(top: 4),
+          child: Text(
+            'Este código não traz o vencimento: informe a data impressa no boleto.',
+            style: TextStyle(fontSize: 12, color: AppColors.debtRed),
+          ),
+        ),
+      const SizedBox(height: 12),
+      if (knownBill != null && !_knownBillDismissed)
+        Container(
+          margin: const EdgeInsets.only(bottom: 12),
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: (_useKnownBill != null ? AppColors.creditGreen : AppColors.folegoWarning).withValues(alpha: 0.1),
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text(
+                _useKnownBill != null
+                    ? 'Vai atualizar a conta "${knownBill.title}" já prevista (valor, vencimento e código), sem lançar outra.'
+                    : 'Parece a conta "${knownBill.title}" já prevista '
+                        '(vence ${DateFormat('dd/MM').format(knownBill.effectiveDueDate)}, ${knownBill.amount.format()}).',
+                style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+              ),
+              Wrap(
+                spacing: 8,
+                children: [
+                  if (_useKnownBill == null)
+                    TextButton(
+                      key: const Key('scan_use_known_bill'),
+                      onPressed: () => setState(() => _useKnownBill = knownBill),
+                      child: const Text('É esta conta'),
+                    ),
+                  TextButton(
+                    onPressed: () => setState(() {
+                      _useKnownBill = null;
+                      _knownBillDismissed = true;
+                    }),
+                    child: const Text('É outra conta'),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      SegmentedButton<bool>(
+        segments: const [
+          ButtonSegment(value: false, label: Text('A pagar'), icon: Icon(Icons.schedule_rounded, size: 16)),
+          ButtonSegment(value: true, label: Text('Já paga'), icon: Icon(Icons.check_circle_outline, size: 16)),
+        ],
+        selected: {_alreadyPaid},
+        onSelectionChanged: _isSubmitting ? null : (value) => setState(() => _alreadyPaid = value.first),
+      ),
+      const SizedBox(height: 8),
+      if (_alreadyPaid)
+        OutlinedButton.icon(
+          icon: const Icon(Icons.event_available_rounded, size: 18),
+          label: Text('Paga em ${dayFormat.format(_paidOn)}'),
+          onPressed: _isSubmitting ? null : _pickPaidOn,
+        )
+      else
+        Text(
+          'Fica em "A Vencer" até ser paga. Ao pagar, você escolhe o meio de pagamento: '
+          'o da casa sai do caixa; o de um morador, ele é reembolsado no fechamento.',
+          style: theme.textTheme.bodySmall?.copyWith(fontSize: 12),
+        ),
+      const SizedBox(height: 12),
+    ];
   }
 }
