@@ -85,9 +85,11 @@ void main() {
     final farmRow = find.ancestor(of: find.text('Farm Rio'), matching: find.byType(Padding)).first;
     await tester.tap(find.descendant(of: farmRow, matching: find.text('Casa')));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Outro morador deve').last);
+    // O seletor traz cada morador pelo nome, e não um "outro morador" genérico
+    expect(find.text('Outro morador deve'), findsNothing);
+    await tester.tap(find.text('Marina deve').last);
     await tester.pumpAndSettle();
-    expect(find.text('Marina'), findsWidgets);
+    expect(find.text('Marina deve'), findsOneWidget);
 
     await tester.ensureVisible(find.byKey(const Key('import_confirm')));
     await tester.tap(find.byKey(const Key('import_confirm')));

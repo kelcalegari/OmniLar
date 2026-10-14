@@ -442,6 +442,81 @@ class _ImportPageState extends State<ImportPage> {
       );
   }
 
+  // Destinos de uma linha no seletor: a Casa, cada outro morador (que passa a
+  // dever para quem paga), o gasto pessoal de quem paga, ou ignorar.
+  static const _houseKey = 'house';
+  static const _personalKey = 'personal';
+  static const _ignoredKey = 'ignored';
+  static const _loanPrefix = 'loan:';
+
+  /// Opção marcada para [line]. Null quando é empréstimo ainda sem devedor.
+  static String? _destinationKeyOf(ImportedStatementLine line, List<HouseMember> debtors) {
+    switch (line.destination) {
+      case LineDestination.house:
+        return _houseKey;
+      case LineDestination.cardOwnerPersonal:
+        return _personalKey;
+      case LineDestination.ignored:
+        return _ignoredKey;
+      case LineDestination.splitP2P:
+        return debtors.any((m) => m.id == line.assignedMemberId)
+            ? '$_loanPrefix${line.assignedMemberId}'
+            : null;
+    }
+  }
+
+  static ImportedStatementLine _withDestinationKey(ImportedStatementLine line, String key) {
+    if (key.startsWith(_loanPrefix)) {
+      return line.copyWith(
+        destination: LineDestination.splitP2P,
+        assignedMemberId: key.substring(_loanPrefix.length),
+      );
+    }
+    return line.copyWith(
+      destination: switch (key) {
+        _personalKey => LineDestination.cardOwnerPersonal,
+        _ignoredKey => LineDestination.ignored,
+        _ => LineDestination.house,
+      },
+      clearAssignedMember: true,
+    );
+  }
+
+  static List<DropdownMenuItem<String>> _destinationItems(
+    List<HouseMember> debtors,
+    String payerName, {
+    required bool colored,
+  }) {
+    TextStyle style(Color color, {bool bold = false}) => TextStyle(
+          fontSize: 12,
+          color: colored ? color : null,
+          fontWeight: colored && bold ? FontWeight.bold : null,
+        );
+
+    return [
+      DropdownMenuItem(
+        value: _houseKey,
+        child: Text('Casa', style: style(AppColors.primary, bold: true)),
+      ),
+      for (final member in debtors)
+        DropdownMenuItem(
+          value: '$_loanPrefix${member.id}',
+          child: Text(
+            '${member.name.split(' ').first} deve',
+            style: style(AppColors.debtRed, bold: true),
+          ),
+        ),
+      DropdownMenuItem(
+        value: _personalKey,
+        child: Text('Pessoal de $payerName', style: style(Colors.blueGrey)),
+      ),
+      DropdownMenuItem(
+        value: _ignoredKey,
+        child: Text('Ignorar', style: style(Colors.grey)),
+      ),
+    ];
+  }
+
   /// Aplica uma mudança às linhas marcadas.
   void _bulk(ImportedStatementLine Function(ImportedStatementLine line) change) {
     final session = _session;
@@ -1200,40 +1275,17 @@ class _ImportPageState extends State<ImportPage> {
             _selected.length == 1 ? '1 linha marcada' : '${_selected.length} linhas marcadas',
             style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold),
           ),
-          DropdownButton<LineDestination>(
+          DropdownButton<String>(
             key: const Key('import_bulk_destination'),
             hint: const Text('Destino', style: TextStyle(fontSize: 12)),
             underline: const SizedBox.shrink(),
             isDense: true,
             onChanged: _busy
                 ? null
-                : (destination) {
-                    if (destination == null) return;
-                    _bulk(
-                      (line) => line.copyWith(
-                        destination: destination,
-                        assignedMemberId: destination == LineDestination.splitP2P &&
-                                line.assignedMemberId == null &&
-                                debtors.length == 1
-                            ? debtors.first.id
-                            : null,
-                        clearAssignedMember: destination != LineDestination.splitP2P,
-                      ),
-                    );
+                : (key) {
+                    if (key != null) _bulk((line) => _withDestinationKey(line, key));
                   },
-            items: [
-              const DropdownMenuItem(value: LineDestination.house, child: Text('Casa', style: TextStyle(fontSize: 12))),
-              if (debtors.isNotEmpty)
-                const DropdownMenuItem(
-                  value: LineDestination.splitP2P,
-                  child: Text('Outro morador deve', style: TextStyle(fontSize: 12)),
-                ),
-              DropdownMenuItem(
-                value: LineDestination.cardOwnerPersonal,
-                child: Text('Pessoal de ${_memberName(session.payerMemberId)}', style: const TextStyle(fontSize: 12)),
-              ),
-              const DropdownMenuItem(value: LineDestination.ignored, child: Text('Ignorar', style: TextStyle(fontSize: 12))),
-            ],
+            items: _destinationItems(debtors, _memberName(session.payerMemberId), colored: false),
           ),
           if (state.categories.isNotEmpty)
             DropdownButton<String>(
@@ -1247,24 +1299,6 @@ class _ImportPageState extends State<ImportPage> {
                   DropdownMenuItem(
                     value: category.id,
                     child: Text(category.name, style: const TextStyle(fontSize: 12)),
-                  ),
-              ],
-            ),
-          if (debtors.length > 1)
-            DropdownButton<String>(
-              hint: const Text('Quem deve', style: TextStyle(fontSize: 12)),
-              underline: const SizedBox.shrink(),
-              isDense: true,
-              onChanged: _busy
-                  ? null
-                  : (id) => _bulk(
-                        (line) => line.copyWith(destination: LineDestination.splitP2P, assignedMemberId: id),
-                      ),
-              items: [
-                for (final member in debtors)
-                  DropdownMenuItem(
-                    value: member.id,
-                    child: Text(member.name.split(' ').first, style: const TextStyle(fontSize: 12)),
                   ),
               ],
             ),
@@ -1474,47 +1508,17 @@ class _ImportPageState extends State<ImportPage> {
       spacing: 12,
       crossAxisAlignment: WrapCrossAlignment.center,
       children: [
-        DropdownButton<LineDestination>(
-          value: line.destination,
+        DropdownButton<String>(
+          value: _destinationKeyOf(line, debtors),
+          hint: const Text('Quem deve?', style: TextStyle(fontSize: 12, color: AppColors.debtRed)),
           underline: const SizedBox.shrink(),
           isDense: true,
           onChanged: _busy
               ? null
-              : (destination) {
-                  if (destination == null) return;
-                  _classify(
-                    session,
-                    line.copyWith(
-                      destination: destination,
-                      // Com um só outro morador, é ele quem deve
-                      assignedMemberId: destination == LineDestination.splitP2P &&
-                              line.assignedMemberId == null &&
-                              debtors.length == 1
-                          ? debtors.first.id
-                          : null,
-                      clearAssignedMember: destination != LineDestination.splitP2P,
-                    ),
-                  );
+              : (key) {
+                  if (key != null) _classify(session, _withDestinationKey(line, key));
                 },
-          items: [
-            const DropdownMenuItem(
-              value: LineDestination.house,
-              child: Text('Casa', style: TextStyle(color: AppColors.primary, fontSize: 12, fontWeight: FontWeight.bold)),
-            ),
-            if (debtors.isNotEmpty)
-              const DropdownMenuItem(
-                value: LineDestination.splitP2P,
-                child: Text('Outro morador deve', style: TextStyle(color: AppColors.debtRed, fontSize: 12, fontWeight: FontWeight.bold)),
-              ),
-            DropdownMenuItem(
-              value: LineDestination.cardOwnerPersonal,
-              child: Text('Pessoal de $payerName', style: const TextStyle(color: Colors.blueGrey, fontSize: 12)),
-            ),
-            const DropdownMenuItem(
-              value: LineDestination.ignored,
-              child: Text('Ignorar', style: TextStyle(color: Colors.grey, fontSize: 12)),
-            ),
-          ],
+          items: _destinationItems(debtors, payerName, colored: true),
         ),
         if (line.destination == LineDestination.house && state.categories.isNotEmpty)
           DropdownButton<String>(
@@ -1532,21 +1536,6 @@ class _ImportPageState extends State<ImportPage> {
                 DropdownMenuItem(
                   value: category.id,
                   child: Text(category.name, style: const TextStyle(fontSize: 12)),
-                ),
-            ],
-          ),
-        if (line.destination == LineDestination.splitP2P)
-          DropdownButton<String>(
-            value: debtors.any((m) => m.id == line.assignedMemberId) ? line.assignedMemberId : null,
-            hint: const Text('Quem deve?', style: TextStyle(fontSize: 12, color: AppColors.debtRed)),
-            underline: const SizedBox.shrink(),
-            isDense: true,
-            onChanged: _busy ? null : (id) => _classify(session, line.copyWith(assignedMemberId: id)),
-            items: [
-              for (final member in debtors)
-                DropdownMenuItem(
-                  value: member.id,
-                  child: Text(member.name.split(' ').first, style: const TextStyle(fontSize: 12)),
                 ),
             ],
           ),
