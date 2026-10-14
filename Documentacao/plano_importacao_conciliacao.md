@@ -36,7 +36,7 @@ A tela antiga "Rachar a Fatura" (`split_invoice_modal.dart`) foi substituída pe
 - **O PDF vai inteiro para o provedor de IA**: não dá para mascarar CPF e número de cartão dentro de um arquivo binário. O mascaramento vale para o texto que volta e para as descrições enviadas na sugestão de categoria.
 - **Sem cache da leitura por IA**: ler o mesmo PDF de novo gasta outra chamada.
 - **Mapeamento de colunas guardado só no aparelho**: em outro celular ou computador, o primeiro CSV do mesmo banco pede as colunas de novo.
-- **Sem dividir linha.**
+- **Dividir linha** (feito): uma compra vira duas partes (o usuário digita o valor da primeira; a segunda fica com o resto), cada uma com destino, categoria e devedor próprios. Uma parte pode ser dividida de novo, e "Juntar" volta a linha original. As partes mantêm a assinatura da linha do arquivo, e estabelecimento com partes de decisões diferentes não vira regra aprendida.
 - **Vínculo "já lançado" pode errar** quando duas compras diferentes têm o mesmo valor, no mesmo cartão, em até 3 dias; o usuário desfaz com "São diferentes".
 
 **A verificar**
@@ -166,7 +166,7 @@ Sem IA (limite ou erro), OFX/CSV continuam funcionando e a classificação fica 
 1. **Corrigir os riscos de hoje**: feito.
 2. **Origem e leitura confiável**: feito.
 3. **Rascunho e gravação por linha**: gravação por linha e confirmação atômica feitas. Falta guardar o rascunho da revisão.
-4. **Conciliação**: feita (motor, tela, ciclo fechado, assinatura por linha e edição em lote). Falta dividir linha.
+4. **Conciliação**: feita (motor, tela, ciclo fechado, assinatura por linha, edição em lote e dividir linha).
 5. **Extrato**: pagamento de fatura, aporte e abatimento de empréstimo feitos. Falta o estorno.
 6. **IA e outros formatos**: regras aprendidas, sugestão de categoria, leitura de PDF/foto e mapeamento de colunas de CSV feitos.
 7. **Histórico e desfazer**: feitos (migration 0052).

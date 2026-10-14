@@ -43,6 +43,10 @@ class ImportedStatementLine {
   final int? installmentsTotal;
   final bool isDuplicate;
 
+  /// Linha do arquivo que foi dividida em partes (o id dela), quando esta é
+  /// uma das partes. As partes somam o valor da linha original.
+  final String? splitFrom;
+
   const ImportedStatementLine({
     required this.id,
     required this.date,
@@ -58,6 +62,7 @@ class ImportedStatementLine {
     this.installmentNumber,
     this.installmentsTotal,
     this.isDuplicate = false,
+    this.splitFrom,
   });
 
   bool get isPurchase => kind == StatementLineKind.purchase;
@@ -87,8 +92,29 @@ class ImportedStatementLine {
       installmentNumber: installmentNumber,
       installmentsTotal: installmentsTotal,
       isDuplicate: isDuplicate ?? this.isDuplicate,
+      splitFrom: splitFrom,
     );
   }
+
+  /// A mesma linha com outro id e outro valor: uma parte de uma divisão.
+  ImportedStatementLine asPart({required String id, required Money amount, required String splitFrom}) =>
+      ImportedStatementLine(
+        id: id,
+        date: date,
+        description: description,
+        amount: amount,
+        destination: destination,
+        kind: kind,
+        externalId: externalId,
+        signature: signature,
+        title: title,
+        categoryId: categoryId,
+        assignedMemberId: assignedMemberId,
+        installmentNumber: installmentNumber,
+        installmentsTotal: installmentsTotal,
+        isDuplicate: isDuplicate,
+        splitFrom: splitFrom,
+      );
 }
 
 class InvoiceSplitResult {

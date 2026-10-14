@@ -10,6 +10,7 @@ import '../../../../core/domain/value_objects/financial_cycle.dart';
 import '../../../../core/domain/value_objects/money.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/utils/uuid.dart';
+import '../../../../core/widgets/money_input_field.dart';
 import '../../../../core/widgets/responsive_container.dart';
 import '../../../auth/domain/repositories/auth_repository.dart';
 import '../../../finance/domain/entities/card_invoice.dart';
@@ -643,6 +644,100 @@ class _ImportPageState extends State<ImportPage> {
     if (picked == null || !mounted) return;
     _update(_session!.withInvoiceDueDate(picked));
     await _refresh();
+  }
+
+  /// Divide uma compra em duas: o usuário diz o valor da primeira parte e a
+  /// segunda fica com o resto.
+  Future<void> _splitLine(ImportedStatementLine line) async {
+    var first = Money(line.amount.cents ~/ 2);
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (context, setDialogState) {
+          final valid = first.cents > 0 && first.cents < line.amount.cents;
+          return AlertDialog(
+            title: const Text('Dividir em duas partes', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Text(
+                  '${StatementText.cleanTitle(line.description)} • ${line.amount.format()}',
+                  style: const TextStyle(fontWeight: FontWeight.w600),
+                ),
+                const SizedBox(height: 4),
+                const Text(
+                  'Cada parte pode ir para um destino diferente: parte da Casa, parte de um morador, parte pessoal.',
+                  style: TextStyle(fontSize: 12, color: Colors.grey),
+                ),
+                const SizedBox(height: 12),
+                MoneyInputField(
+                  key: const Key('import_split_amount'),
+                  label: 'Valor da primeira parte',
+                  initialValue: first,
+                  autoFocus: true,
+                  onChanged: (value) => setDialogState(() => first = value),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  valid
+                      ? 'Segunda parte: ${(line.amount - first).format()}'
+                      : 'A primeira parte precisa ser maior que zero e menor que ${line.amount.format()}.',
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    color: valid ? null : AppColors.debtRed,
+                  ),
+                ),
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(dialogContext, false),
+                child: const Text('Cancelar'),
+              ),
+              FilledButton(
+                key: const Key('import_split_confirm'),
+                onPressed: valid ? () => Navigator.pop(dialogContext, true) : null,
+                child: const Text('Dividir'),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+    if (confirmed != true || !mounted || _session == null) return;
+    setState(() => _selected = {
+          for (final id in _selected)
+            if (id != line.id) id,
+        });
+    _update(_session!.splitLine(line.id, first));
+  }
+
+  /// "Parte 1 de 2 de R$ X", com o atalho para juntar as partes de novo.
+  Widget _splitInfo(ImportSession session, ImportedStatementLine line) {
+    final parts = session.partsOf(line.splitFrom!);
+    final index = parts.indexWhere((p) => p.id == line.id) + 1;
+    final total = Money(parts.fold<int>(0, (acc, p) => acc + p.amount.cents));
+    return Row(
+      children: [
+        Text(
+          'Parte $index de ${parts.length} de ${total.format()}',
+          style: const TextStyle(fontSize: 11, color: AppColors.primary, fontWeight: FontWeight.w600),
+        ),
+        const SizedBox(width: 4),
+        InkWell(
+          onTap: _busy ? null : () => _update(session.mergeSplit(line.splitFrom!)),
+          child: const Padding(
+            padding: EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+            child: Text(
+              'Juntar',
+              style: TextStyle(fontSize: 11, color: AppColors.primary, decoration: TextDecoration.underline),
+            ),
+          ),
+        ),
+      ],
+    );
   }
 
   Future<void> _editLine(ImportedStatementLine line) async {
@@ -1313,6 +1408,7 @@ class _ImportPageState extends State<ImportPage> {
                       style: const TextStyle(fontSize: 11, color: Colors.grey),
                       overflow: TextOverflow.ellipsis,
                     ),
+                    if (line.splitFrom != null) _splitInfo(session, line),
                   ],
                 ),
               ),
@@ -1321,13 +1417,19 @@ class _ImportPageState extends State<ImportPage> {
                 line.amount.format(),
                 style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: muted ? Colors.grey : null),
               ),
-              if (editable)
+              if (editable) ...[
+                IconButton(
+                  key: Key('import_split_${line.id}'),
+                  icon: const Icon(Icons.call_split_rounded, size: 18),
+                  tooltip: 'Dividir em duas partes',
+                  onPressed: _busy || line.amount.cents < 2 ? null : () => _splitLine(line),
+                ),
                 IconButton(
                   icon: const Icon(Icons.edit_outlined, size: 18),
                   tooltip: 'Editar nome e data',
                   onPressed: _busy ? null : () => _editLine(line),
-                )
-              else
+                ),
+              ] else
                 const SizedBox(width: 8),
             ],
           ),

@@ -357,12 +357,92 @@ class ImportSession {
   ) =>
       _copy(lines: [for (final line in lines) lineIds.contains(line.id) ? change(line) : line]);
 
+  /// Divide uma compra em duas partes: a primeira com [firstAmount], a segunda
+  /// com o resto. Cada parte recebe destino, categoria e devedor próprios (de
+  /// início, os da linha). Retorna a sessão como estava se o valor não couber.
+  ImportSession splitLine(String lineId, Money firstAmount) {
+    final index = lines.indexWhere((l) => l.id == lineId);
+    if (index < 0) return this;
+    final line = lines[index];
+    if (!line.isPurchase || firstAmount.cents <= 0 || firstAmount.cents >= line.amount.cents) {
+      return this;
+    }
+
+    // Parte de uma parte continua apontando para a linha do arquivo
+    final root = line.splitFrom ?? line.id;
+    final taken = {for (final l in lines) l.id};
+    var next = 1;
+    String newId() {
+      while (taken.contains('$root#$next')) {
+        next++;
+      }
+      taken.add('$root#$next');
+      return '$root#$next';
+    }
+
+    final parts = [
+      line.asPart(id: newId(), amount: firstAmount, splitFrom: root),
+      line.asPart(id: newId(), amount: line.amount - firstAmount, splitFrom: root),
+    ];
+    return _copy(
+      lines: [...lines.sublist(0, index), ...parts, ...lines.sublist(index + 1)],
+      // A linha dividida deixa de casar com uma despesa só
+      matches: {for (final e in matches.entries) if (e.key != lineId) e.key: e.value},
+      decisions: {for (final e in decisions.entries) if (e.key != lineId) e.key: e.value},
+    );
+  }
+
+  /// Junta de novo as partes da linha [rootId] numa linha só, com a decisão da
+  /// primeira parte.
+  ImportSession mergeSplit(String rootId) {
+    final parts = lines.where((l) => l.splitFrom == rootId).toList();
+    if (parts.isEmpty) return this;
+    final total = parts.fold<int>(0, (acc, l) => acc + l.amount.cents);
+    final merged = ImportedStatementLine(
+      id: rootId,
+      date: parts.first.date,
+      description: parts.first.description,
+      amount: Money(total),
+      destination: parts.first.destination,
+      kind: parts.first.kind,
+      externalId: parts.first.externalId,
+      signature: parts.first.signature,
+      title: parts.first.title,
+      categoryId: parts.first.categoryId,
+      assignedMemberId: parts.first.assignedMemberId,
+      installmentNumber: parts.first.installmentNumber,
+      installmentsTotal: parts.first.installmentsTotal,
+    );
+    final updated = <ImportedStatementLine>[];
+    var placed = false;
+    for (final line in lines) {
+      if (line.splitFrom != rootId) {
+        updated.add(line);
+      } else if (!placed) {
+        updated.add(merged);
+        placed = true;
+      }
+    }
+    final partIds = {for (final p in parts) p.id};
+    return _copy(
+      lines: updated,
+      matches: {for (final e in matches.entries) if (!partIds.contains(e.key)) e.key: e.value},
+      decisions: {for (final e in decisions.entries) if (!partIds.contains(e.key)) e.key: e.value},
+    );
+  }
+
+  /// Partes da divisão da linha [rootId], na ordem.
+  List<ImportedStatementLine> partsOf(String rootId) =>
+      [for (final line in lines) if (line.splitFrom == rootId) line];
+
   /// Outras linhas ainda por decidir do mesmo estabelecimento de [line].
   List<ImportedStatementLine> similarLines(ImportedStatementLine line) {
     final name = StatementText.normalize(StatementText.cleanTitle(line.description));
     return [
       for (final other in lines)
         if (other.id != line.id &&
+            // As partes de uma divisão existem justamente para ter decisões diferentes
+            !(line.splitFrom != null && other.splitFrom == line.splitFrom) &&
             (statusOf(other) == LineStatus.newLine || statusOf(other) == LineStatus.ignored) &&
             StatementText.normalize(StatementText.cleanTitle(other.description)) == name)
           other,
