@@ -101,4 +101,15 @@ abstract class FinanceDataSource {
     required String paymentMethodId,
     required DateTime invoiceDueDate,
   });
+
+  /// Códigos de boleto guardados nas faturas recentes da casa.
+  Future<List<CardInvoiceCode>> getCardInvoiceCodes();
+
+  /// Guarda o código do boleto da fatura que vence em [invoiceDueDate];
+  /// [barcode] nulo apaga o código.
+  Future<void> saveCardInvoiceCode({
+    required String paymentMethodId,
+    required DateTime invoiceDueDate,
+    String? barcode,
+  });
 }

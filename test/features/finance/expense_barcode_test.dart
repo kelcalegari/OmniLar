@@ -131,4 +131,33 @@ void main() {
 
     expect(cubit.state.expenses.firstWhere((e) => e.id == 'boleto_apagar').barcode, isNull);
   });
+
+  testWidgets('compra no cartão não mostra o campo do código', (tester) async {
+    tester.view.physicalSize = const Size(800, 1600);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.resetPhysicalSize);
+    final cubit = sl<FinanceCubit>();
+    await cubit.loadCycleData();
+
+    HouseExpense purchase(String method) => HouseExpense(
+          id: 'compra_$method',
+          title: 'Compra',
+          amount: const Money(5000),
+          date: DateTime.now(),
+          categoryId: 'cat_moradia',
+          paymentMethodId: method,
+          paidByMemberId: 'member_carlos',
+          splitRule: const SplitRule.percentage({'member_carlos': 60.0, 'member_marina': 40.0}),
+          status: ExpenseStatus.pending,
+        );
+
+    for (final (method, visible) in [('pm_card_carlos', false), ('pm_caixa', true)]) {
+      await tester.pumpWidget(BlocProvider<FinanceCubit>.value(
+        value: cubit,
+        child: MaterialApp(home: Scaffold(body: AddExpensePage(key: UniqueKey(), expenseToEdit: purchase(method)))),
+      ));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('expense_barcode')), visible ? findsOneWidget : findsNothing, reason: method);
+    }
+  });
 }

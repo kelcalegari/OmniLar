@@ -193,4 +193,19 @@ class DynamicFinanceDataSource implements FinanceDataSource {
         paymentMethodId: paymentMethodId,
         invoiceDueDate: invoiceDueDate,
       );
+
+  @override
+  Future<List<CardInvoiceCode>> getCardInvoiceCodes() => _active.getCardInvoiceCodes();
+
+  @override
+  Future<void> saveCardInvoiceCode({
+    required String paymentMethodId,
+    required DateTime invoiceDueDate,
+    String? barcode,
+  }) =>
+      _active.saveCardInvoiceCode(
+        paymentMethodId: paymentMethodId,
+        invoiceDueDate: invoiceDueDate,
+        barcode: barcode,
+      );
 }

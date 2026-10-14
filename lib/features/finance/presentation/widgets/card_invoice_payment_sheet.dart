@@ -1,3 +1,4 @@
+import 'bill_code_field.dart';
 import '../../domain/services/pending_payment.dart';
 import '../../../../core/domain/value_objects/cycle_schedule.dart';
 import 'package:flutter/material.dart';
@@ -244,6 +245,19 @@ class _CardInvoicePaymentSheetState extends State<CardInvoicePaymentSheet> {
                           ),
                           onTap: _busy ? null : () => setState(() => _selected = invoice),
                         ),
+                      if (selected != null) ...[
+                        const SizedBox(height: 4),
+                        BillCodeField(
+                          key: ValueKey('invoice_code_${selected.dueDate}'),
+                          code: widget.financeCubit.state.invoiceCodeFor(selected.paymentMethodId, selected.dueDate),
+                          enabled: !_busy,
+                          onSave: (line) => widget.financeCubit.saveCardInvoiceCode(
+                            paymentMethodId: selected.paymentMethodId,
+                            invoiceDueDate: selected.dueDate,
+                            barcode: line,
+                          ),
+                        ),
+                      ],
                       const SizedBox(height: 8),
                       OutlinedButton.icon(
                         onPressed: _busy ? null : _pickDate,

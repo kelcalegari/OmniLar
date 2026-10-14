@@ -1,3 +1,4 @@
+import 'cycle_expense_grouping.dart';
 import '../../../../core/domain/value_objects/money.dart';
 import '../entities/house_expense.dart';
 import '../entities/payment_method.dart';
@@ -77,6 +78,43 @@ List<HouseExpense> knownBillsFor(
         expense.amount.cents == amount.cents || expense.isVariable || expense.isRecurring;
     if (days <= 5 && amountFits) found.add(expense);
   }
+  return found;
+}
+
+/// Fatura em aberto que parece ser a do boleto lido: compras de cartão ainda
+/// pendentes com vencimento a até 5 dias do boleto e total parecido (até 30%
+/// de diferença: compras que o app ainda não conhece mudam o total). A de
+/// total mais próximo vem primeiro.
+List<CardInvoiceEntry> knownInvoicesFor(
+  List<HouseExpense> expenses, {
+  required DateTime dueDate,
+  required Money amount,
+  List<PaymentMethod> paymentMethods = const [],
+}) {
+  final methods = {for (final m in paymentMethods) m.id: m};
+  DateTime day(DateTime d) => DateTime(d.year, d.month, d.day);
+  final groups = <String, List<HouseExpense>>{};
+  final cards = <String, PaymentMethod>{};
+  final dues = <String, DateTime>{};
+  for (final expense in expenses) {
+    final card = methods[expense.paymentMethodId];
+    final due = expense.dueDate;
+    if (card == null || due == null || !expense.isPending || expense.isRecurring) continue;
+    if (!ExpenseLaunchDefaults.waitsForInvoice(card, projectId: expense.projectId)) continue;
+    if (day(due).difference(day(dueDate)).inDays.abs() > 5) continue;
+    final key = cardInvoiceKey(card.id, due);
+    groups.putIfAbsent(key, () => []).add(expense);
+    cards[key] = card;
+    dues[key] = day(due);
+  }
+  final found = [
+    for (final entry in groups.entries)
+      CardInvoiceEntry(card: cards[entry.key]!, dueDate: dues[entry.key]!, purchases: entry.value),
+  ].where((invoice) {
+    final total = invoice.total.cents;
+    return amount.cents == 0 || (amount.cents - total).abs() <= total * 0.3;
+  }).toList()
+    ..sort((a, b) => (a.total.cents - amount.cents).abs().compareTo((b.total.cents - amount.cents).abs()));
   return found;
 }
 

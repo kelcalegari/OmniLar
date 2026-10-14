@@ -1,3 +1,5 @@
+import '../cubit/finance_state.dart';
+import 'bill_code_field.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
@@ -29,6 +31,9 @@ class _PayPendingExpenseSheetState extends State<PayPendingExpenseSheet> {
   static final _day = DateFormat('dd/MM/yyyy');
 
   late Money _amount = widget.expense.amount;
+
+  /// Código do boleto como está agora (pode ser informado nesta tela).
+  late String? _barcode = widget.expense.barcode;
   DateTime _paidOn = DateTime.now();
   late String? _methodId = _initialMethodId();
   bool _busy = false;
@@ -76,12 +81,22 @@ class _PayPendingExpenseSheetState extends State<PayPendingExpenseSheet> {
     if (picked != null) setState(() => _paidOn = DateTime(picked.year, picked.month, picked.day, 12));
   }
 
+  /// Guarda o código na conta já, sem esperar o pagamento.
+  Future<bool> _saveBarcode(String? line) async {
+    final cubit = widget.financeCubit;
+    final current = cubit.state.expenses.where((e) => e.id == widget.expense.id).firstOrNull ?? widget.expense;
+    await cubit.updateExpense(current.copyWith(barcode: line, clearBarcode: line == null));
+    if (cubit.state.status == FinanceStatus.failure) return false;
+    if (mounted) setState(() => _barcode = line);
+    return true;
+  }
+
   Future<void> _confirm() async {
     setState(() => _busy = true);
     final messenger = ScaffoldMessenger.of(context);
     final navigator = Navigator.of(context);
     final ok = await widget.financeCubit.payPendingExpense(
-      widget.expense,
+      widget.expense.copyWith(barcode: _barcode, clearBarcode: _barcode == null),
       paidOn: _paidOn,
       method: _method,
       amount: _amount,
@@ -120,33 +135,12 @@ class _PayPendingExpenseSheetState extends State<PayPendingExpenseSheet> {
                 'Vence em ${_day.format(expense.dueDate!)}${expense.isOverdue ? ' (atrasada ${expense.daysOverdue}d)' : ''}',
                 style: TextStyle(fontSize: 13, color: expense.isOverdue ? AppColors.debtRed : Colors.grey),
               ),
-            if (expense.barcode != null) ...[
-              const SizedBox(height: 12),
-              Container(
-                padding: const EdgeInsets.all(10),
-                decoration: BoxDecoration(
-                  color: AppColors.primary.withValues(alpha: 0.08),
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: SelectableText(expense.barcode!, style: const TextStyle(fontSize: 12, fontFamily: 'monospace')),
-                    ),
-                    TextButton.icon(
-                      key: const Key('pay_copy_barcode'),
-                      icon: const Icon(Icons.copy_rounded, size: 16),
-                      label: const Text('Copiar código'),
-                      onPressed: () => copyWithFeedback(
-                        context,
-                        expense.barcode!,
-                        onCopied: const SnackBar(content: Text('Código do boleto copiado.')),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
+            const SizedBox(height: 12),
+            BillCodeField(
+              code: _barcode,
+              enabled: !_busy,
+              onSave: _saveBarcode,
+            ),
             const SizedBox(height: 16),
             if (expense.isVariable)
               MoneyInputField(

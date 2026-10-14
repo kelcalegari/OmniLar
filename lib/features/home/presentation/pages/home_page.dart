@@ -721,6 +721,7 @@ class _HomePageContentState extends State<_HomePageContent> {
                     entry.purchases.any((e) => e.id == _selectedExpenseId);
                 return CardInvoiceGroupTile(
                   invoice: entry,
+                  barcode: state.invoiceCodeFor(entry.card.id, entry.dueDate),
                   expanded: expanded,
                   onToggle: () => setState(() {
                     if (expanded) {

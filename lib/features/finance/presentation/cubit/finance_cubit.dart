@@ -1,3 +1,4 @@
+import '../../domain/entities/card_invoice.dart';
 import 'dart:async';
 
 import '../../../../core/domain/value_objects/cycle_schedule.dart';
@@ -139,6 +140,9 @@ class FinanceCubit extends Cubit<FinanceState> {
         () => _repository.getRecurringExpenses(),
       ).catchError((_) => null);
       // Histórico do ciclo anterior para as médias de variáveis (ex: Mercado)
+      final invoiceCodesFuture = Future<List<CardInvoiceCode>?>.sync(
+        () => _repository.getCardInvoiceCodes(),
+      ).catchError((_) => null);
       final historicalFuture = Future<List<HouseExpense>>.sync(
         () => _repository.getExpensesForCycle(cycleSchedule.previous(targetCycle)),
       ).catchError((_) => <HouseExpense>[]);
@@ -153,6 +157,7 @@ class FinanceCubit extends Cubit<FinanceState> {
         vaultsFuture,
         splitModelFuture,
         recurringFuture,
+        invoiceCodesFuture,
         historicalFuture,
       ]);
       // Outro ciclo foi pedido enquanto este carregava: o dele é que vale
@@ -177,6 +182,7 @@ class FinanceCubit extends Cubit<FinanceState> {
         );
       }
       final historicalExpenses = await historicalFuture;
+      final invoiceCodes = await invoiceCodesFuture;
 
       _historicalExpenses = historicalExpenses.isNotEmpty ? historicalExpenses : expenses;
 
@@ -205,6 +211,7 @@ class FinanceCubit extends Cubit<FinanceState> {
         savingsVaults: vaults,
         splitModel: splitModel,
         recurringSeries: recurringSeries,
+        cardInvoiceCodes: invoiceCodes == null ? null : {for (final c in invoiceCodes) c.key: c.barcode},
       ));
       _watchHouseChanges();
     } catch (e) {
@@ -550,6 +557,36 @@ class FinanceCubit extends Cubit<FinanceState> {
       emit(state.copyWith(
         status: FinanceStatus.failure,
         errorMessage: 'Erro ao registrar pagamento da fatura: $e',
+      ));
+      return false;
+    }
+  }
+
+  /// Guarda (ou apaga, com [barcode] nulo) o código do boleto de uma fatura.
+  Future<bool> saveCardInvoiceCode({
+    required String paymentMethodId,
+    required DateTime invoiceDueDate,
+    String? barcode,
+  }) async {
+    try {
+      await _repository.saveCardInvoiceCode(
+        paymentMethodId: paymentMethodId,
+        invoiceDueDate: invoiceDueDate,
+        barcode: barcode,
+      );
+      final key = CardInvoiceCode.keyOf(paymentMethodId, invoiceDueDate);
+      final codes = Map<String, String>.of(state.cardInvoiceCodes);
+      if (barcode == null || barcode.trim().isEmpty) {
+        codes.remove(key);
+      } else {
+        codes[key] = barcode.trim();
+      }
+      emit(state.copyWith(cardInvoiceCodes: codes));
+      return true;
+    } catch (e) {
+      emit(state.copyWith(
+        status: FinanceStatus.failure,
+        errorMessage: 'Erro ao guardar o código da fatura: $e',
       ));
       return false;
     }

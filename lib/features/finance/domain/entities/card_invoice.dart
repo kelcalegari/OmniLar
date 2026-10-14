@@ -69,3 +69,28 @@ class CardInvoice extends Equatable {
   @override
   List<Object?> get props => [paymentMethodId, dueDate, total, purchasesCount, paidAt];
 }
+
+/// Código do boleto da fatura de um cartão (cartão + vencimento), guardado
+/// para copiar na hora de pagar.
+class CardInvoiceCode extends Equatable {
+  final String paymentMethodId;
+  final DateTime dueDate;
+
+  /// Linha digitável conferida.
+  final String barcode;
+
+  const CardInvoiceCode({
+    required this.paymentMethodId,
+    required this.dueDate,
+    required this.barcode,
+  });
+
+  String get key => keyOf(paymentMethodId, dueDate);
+
+  /// Chave da fatura: o cartão e o dia do vencimento.
+  static String keyOf(String paymentMethodId, DateTime dueDate) =>
+      '$paymentMethodId|${dueDate.year}-${dueDate.month}-${dueDate.day}';
+
+  @override
+  List<Object?> get props => [paymentMethodId, dueDate, barcode];
+}

@@ -1,3 +1,4 @@
+import '../../../../core/utils/clipboard_helper.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../../../../core/theme/app_colors.dart';
@@ -16,6 +17,9 @@ class CardInvoiceGroupTile extends StatelessWidget {
   /// As compras da fatura, já montadas por quem usa o cartão.
   final List<Widget> children;
 
+  /// Código do boleto da fatura, para copiar e pagar no app do banco.
+  final String? barcode;
+
   const CardInvoiceGroupTile({
     super.key,
     required this.invoice,
@@ -23,6 +27,7 @@ class CardInvoiceGroupTile extends StatelessWidget {
     required this.onToggle,
     required this.children,
     this.onRegisterPayment,
+    this.barcode,
   });
 
   static final _day = DateFormat('dd/MM');
@@ -99,6 +104,18 @@ class CardInvoiceGroupTile extends StatelessWidget {
                         ],
                       ),
                     ),
+                    if (paidAt == null && barcode != null)
+                      IconButton(
+                        key: Key('copy_invoice_code_${invoice.key}'),
+                        tooltip: 'Copiar código do boleto',
+                        visualDensity: VisualDensity.compact,
+                        icon: const Icon(Icons.copy_rounded, size: 18),
+                        onPressed: () => copyWithFeedback(
+                          context,
+                          barcode!,
+                          onCopied: const SnackBar(content: Text('Código do boleto da fatura copiado.')),
+                        ),
+                      ),
                     const SizedBox(width: 8),
                     Column(
                       crossAxisAlignment: CrossAxisAlignment.end,

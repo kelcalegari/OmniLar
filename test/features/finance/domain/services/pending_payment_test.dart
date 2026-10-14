@@ -226,4 +226,33 @@ void main() {
       expect(invoicePaymentOptions(houseCard, const []).single.key, InvoicePaymentOption.houseOption);
     });
   });
+
+  group('knownInvoicesFor', () {
+    HouseExpense purchase(String id, int cents, {DateTime? due, bool paid = false, String method = 'pm_card'}) =>
+        _bill(id: id, cents: cents, due: due ?? DateTime(2026, 11, 5), method: method).copyWith(
+          status: paid ? ExpenseStatus.paid : ExpenseStatus.pending,
+          paidAt: paid ? DateTime(2026, 11, 1) : null,
+        );
+
+    test('acha a fatura em aberto com vencimento e total parecidos', () {
+      final found = knownInvoicesFor(
+        [purchase('a', 30000), purchase('b', 20000)],
+        dueDate: DateTime(2026, 11, 5),
+        amount: const Money(52000), // o banco tem uma compra que o app não tem
+        paymentMethods: [_card, _house],
+      );
+      expect(found, hasLength(1));
+      expect(found.single.card.id, 'pm_card');
+      expect(found.single.total.cents, 50000);
+    });
+
+    test('ignora fatura paga, longe do vencimento, de total muito diferente e conta que não é de cartão', () {
+      final methods = [_card, _house];
+      final due = DateTime(2026, 11, 5);
+      expect(knownInvoicesFor([purchase('a', 50000, paid: true)], dueDate: due, amount: const Money(50000), paymentMethods: methods), isEmpty);
+      expect(knownInvoicesFor([purchase('a', 50000, due: DateTime(2026, 11, 20))], dueDate: due, amount: const Money(50000), paymentMethods: methods), isEmpty);
+      expect(knownInvoicesFor([purchase('a', 10000)], dueDate: due, amount: const Money(50000), paymentMethods: methods), isEmpty);
+      expect(knownInvoicesFor([purchase('a', 50000, method: 'pm_caixa')], dueDate: due, amount: const Money(50000), paymentMethods: methods), isEmpty);
+    });
+  });
 }

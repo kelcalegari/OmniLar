@@ -198,4 +198,19 @@ class FinanceRepositoryImpl implements FinanceRepository {
         paymentMethodId: paymentMethodId,
         invoiceDueDate: invoiceDueDate,
       );
+
+  @override
+  Future<List<CardInvoiceCode>> getCardInvoiceCodes() => _dataSource.getCardInvoiceCodes();
+
+  @override
+  Future<void> saveCardInvoiceCode({
+    required String paymentMethodId,
+    required DateTime invoiceDueDate,
+    String? barcode,
+  }) =>
+      _dataSource.saveCardInvoiceCode(
+        paymentMethodId: paymentMethodId,
+        invoiceDueDate: invoiceDueDate,
+        barcode: barcode,
+      );
 }

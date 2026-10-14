@@ -1,4 +1,5 @@
 import 'package:equatable/equatable.dart';
+import '../../domain/entities/card_invoice.dart';
 import '../../domain/entities/house_member.dart';
 import '../../domain/entities/category.dart';
 import '../../domain/entities/payment_method.dart';
@@ -29,6 +30,9 @@ class FinanceState extends Equatable {
   /// Séries recorrentes ativas da casa (a ocorrência mais recente de cada uma).
   final List<HouseExpense> recurringSeries;
   final String splitModel; // 'percentage', 'fixed' ou 'category'
+
+  /// Código do boleto de cada fatura, pela chave [CardInvoiceCode.keyOf].
+  final Map<String, String> cardInvoiceCodes;
   final String? errorMessage;
 
   const FinanceState({
@@ -46,8 +50,13 @@ class FinanceState extends Equatable {
     this.savingsVaults = const [],
     this.recurringSeries = const [],
     this.splitModel = 'percentage',
+    this.cardInvoiceCodes = const {},
     this.errorMessage,
   });
+
+  /// Código do boleto da fatura do cartão [paymentMethodId] que vence em [dueDate].
+  String? invoiceCodeFor(String paymentMethodId, DateTime dueDate) =>
+      cardInvoiceCodes[CardInvoiceCode.keyOf(paymentMethodId, dueDate)];
 
   Money get totalSavings =>
       savingsVaults.fold(const Money.zero(), (total, v) => total + v.currentBalance);
@@ -67,6 +76,7 @@ class FinanceState extends Equatable {
     List<SavingsVault>? savingsVaults,
     List<HouseExpense>? recurringSeries,
     String? splitModel,
+    Map<String, String>? cardInvoiceCodes,
     String? errorMessage,
   }) {
     return FinanceState(
@@ -84,6 +94,7 @@ class FinanceState extends Equatable {
       savingsVaults: savingsVaults ?? this.savingsVaults,
       recurringSeries: recurringSeries ?? this.recurringSeries,
       splitModel: splitModel ?? this.splitModel,
+      cardInvoiceCodes: cardInvoiceCodes ?? this.cardInvoiceCodes,
       errorMessage: errorMessage ?? this.errorMessage,
     );
   }
@@ -104,6 +115,7 @@ class FinanceState extends Equatable {
         savingsVaults,
         recurringSeries,
         splitModel,
+        cardInvoiceCodes,
         errorMessage,
       ];
 }

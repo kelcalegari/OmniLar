@@ -1311,4 +1311,56 @@ class SupabaseFinanceDataSource implements FinanceDataSource {
       throw ServerFailure('Erro ao desfazer pagamento da fatura: $e');
     }
   }
+
+  @override
+  Future<List<CardInvoiceCode>> getCardInvoiceCodes() async {
+    try {
+      // Só faturas recentes, como na lista de faturas do cartão
+      final since = DateTime.now().subtract(const Duration(days: 120));
+      final rows = await client
+          .from('card_invoice_codes')
+          .select('payment_method_id, due_date, barcode')
+          .eq('house_id', _houseId)
+          .gte('due_date', since.toIso8601String().split('T')[0]);
+      return [
+        for (final r in rows)
+          CardInvoiceCode(
+            paymentMethodId: r['payment_method_id'] as String,
+            dueDate: DateTime.parse(r['due_date'] as String),
+            barcode: r['barcode'] as String,
+          ),
+      ];
+    } catch (e) {
+      throw ServerFailure('Erro ao buscar códigos das faturas: $e');
+    }
+  }
+
+  @override
+  Future<void> saveCardInvoiceCode({
+    required String paymentMethodId,
+    required DateTime invoiceDueDate,
+    String? barcode,
+  }) async {
+    try {
+      final dueDate = invoiceDueDate.toIso8601String().split('T')[0];
+      final code = barcode?.trim() ?? '';
+      if (code.isEmpty) {
+        await client
+            .from('card_invoice_codes')
+            .delete()
+            .eq('payment_method_id', paymentMethodId)
+            .eq('due_date', dueDate);
+        return;
+      }
+      await client.from('card_invoice_codes').upsert({
+        'house_id': _houseId,
+        'payment_method_id': paymentMethodId,
+        'due_date': dueDate,
+        'barcode': code,
+        'updated_at': DateTime.now().toUtc().toIso8601String(),
+      }, onConflict: 'payment_method_id,due_date');
+    } catch (e) {
+      throw ServerFailure('Erro ao guardar o código da fatura: $e');
+    }
+  }
 }

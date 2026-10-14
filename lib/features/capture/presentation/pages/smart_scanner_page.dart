@@ -1,3 +1,4 @@
+import '../../../finance/domain/services/cycle_expense_grouping.dart';
 import 'package:intl/intl.dart';
 import '../../../../core/utils/clipboard_helper.dart';
 import '../../../../core/utils/uuid.dart';
@@ -65,6 +66,12 @@ class _SmartScannerPageState extends State<SmartScannerPage> {
   List<HouseExpense> _knownBills = const [];
   HouseExpense? _useKnownBill;
   bool _knownBillDismissed = false;
+
+  /// Fatura de cartão em aberto que parece ser a deste boleto: o código vai
+  /// para a fatura, sem lançar despesa.
+  List<CardInvoiceEntry> _knownInvoices = const [];
+  CardInvoiceEntry? _useInvoice;
+  bool _invoiceDismissed = false;
 
   MobileScannerController? _scannerController;
   bool _isCameraActive = false;
@@ -272,6 +279,8 @@ class _SmartScannerPageState extends State<SmartScannerPage> {
       setState(() {
         _knownBills = const [];
         _useKnownBill = null;
+        _knownInvoices = const [];
+        _useInvoice = null;
       });
       return;
     }
@@ -290,9 +299,17 @@ class _SmartScannerPageState extends State<SmartScannerPage> {
       barcode: proposal.rawCode,
       paymentMethods: financeCubit.state.paymentMethods,
     );
+    final invoices = knownInvoicesFor(
+      unique,
+      dueDate: dueDate,
+      amount: proposal.totalAmount,
+      paymentMethods: financeCubit.state.paymentMethods,
+    );
     setState(() {
       _knownBills = found;
       if (_useKnownBill != null && !found.any((e) => e.id == _useKnownBill!.id)) _useKnownBill = null;
+      _knownInvoices = invoices;
+      if (_useInvoice != null && !invoices.any((i) => i.key == _useInvoice!.key)) _useInvoice = null;
     });
   }
 
@@ -325,6 +342,18 @@ class _SmartScannerPageState extends State<SmartScannerPage> {
   /// o vencimento e o código. Conta já prevista é atualizada em vez de duplicada.
   Future<void> _confirmBoleto(CaptureProposal proposal) async {
     final financeCubit = context.read<FinanceCubit>();
+    final invoice = _useInvoice;
+    if (invoice != null) {
+      // Boleto da fatura: o código fica guardado nela, as compras já estão lá
+      final ok = await financeCubit.saveCardInvoiceCode(
+        paymentMethodId: invoice.card.id,
+        invoiceDueDate: invoice.dueDate,
+        barcode: proposal.rawCode,
+      );
+      if (!ok) throw financeCubit.state.errorMessage ?? 'Não foi possível guardar o código da fatura.';
+      widget.onProposalReady?.call(proposal);
+      return;
+    }
     final state = financeCubit.state;
     final dueDate = _dueDate!;
     final dueAt = DateTime(dueDate.year, dueDate.month, dueDate.day, 12);
@@ -873,7 +902,10 @@ class _SmartScannerPageState extends State<SmartScannerPage> {
           SnackBar(
             backgroundColor: AppColors.creditGreen,
             content: Text(
-              _alreadyPaid
+              _useInvoice != null
+                  ? 'Código guardado na fatura ${_useInvoice!.card.name} que vence em '
+                      '${DateFormat('dd/MM').format(_useInvoice!.dueDate)}.'
+                  : _alreadyPaid
                   ? 'Boleto lançado como pago (${proposal.totalAmount.format()}).'
                   : 'Boleto lançado como conta a pagar, vence em ${DateFormat('dd/MM').format(_dueDate!)}.',
             ),
@@ -1291,6 +1323,9 @@ class _SmartScannerPageState extends State<SmartScannerPage> {
       _knownBills = const [];
       _useKnownBill = null;
       _knownBillDismissed = false;
+      _knownInvoices = const [];
+      _useInvoice = null;
+      _invoiceDismissed = false;
       if (isBoleto && _dueDate != null) {
         WidgetsBinding.instance.addPostFrameCallback((_) {
           if (mounted) _lookForKnownBill(proposal);
@@ -1514,8 +1549,8 @@ class _SmartScannerPageState extends State<SmartScannerPage> {
 
           if (isBoleto) ..._boletoFields(theme, proposal),
 
-          // Categoria (conta já prevista mantém a dela)
-          if (_useKnownBill == null)
+          // Categoria (conta já prevista mantém a dela; fatura não vira despesa)
+          if (_useKnownBill == null && _useInvoice == null)
           Builder(
             builder: (context) {
               final categories = context.watch<FinanceCubit>().state.categories;
@@ -1619,6 +1654,7 @@ class _SmartScannerPageState extends State<SmartScannerPage> {
   List<Widget> _boletoFields(ThemeData theme, CaptureProposal proposal) {
     final dayFormat = DateFormat('dd/MM/yyyy');
     final knownBill = _knownBills.firstOrNull;
+    final knownInvoice = _knownInvoices.firstOrNull;
     return [
       if (proposal.rawCode != null) ...[
         Container(
@@ -1667,7 +1703,51 @@ class _SmartScannerPageState extends State<SmartScannerPage> {
           ),
         ),
       const SizedBox(height: 12),
-      if (knownBill != null && !_knownBillDismissed)
+      if (knownInvoice != null && !_invoiceDismissed)
+        Container(
+          margin: const EdgeInsets.only(bottom: 12),
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: (_useInvoice != null ? AppColors.creditGreen : AppColors.folegoWarning).withValues(alpha: 0.1),
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text(
+                _useInvoice != null
+                    ? 'Vai guardar o código na fatura ${knownInvoice.card.name}, sem lançar despesa: '
+                        'as compras já estão nela. Para pagar, use "Pagar" na fatura.'
+                    : 'Parece o boleto da fatura ${knownInvoice.card.name} '
+                        '(vence ${DateFormat('dd/MM').format(knownInvoice.dueDate)}, ${knownInvoice.total.format()} no app).',
+                style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+              ),
+              Wrap(
+                spacing: 8,
+                children: [
+                  if (_useInvoice == null)
+                    TextButton(
+                      key: const Key('scan_use_invoice'),
+                      onPressed: () => setState(() {
+                        _useInvoice = knownInvoice;
+                        _useKnownBill = null;
+                        _alreadyPaid = false;
+                      }),
+                      child: const Text('É esta fatura'),
+                    ),
+                  TextButton(
+                    onPressed: () => setState(() {
+                      _useInvoice = null;
+                      _invoiceDismissed = true;
+                    }),
+                    child: const Text('Não é fatura'),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      if (_useInvoice == null && knownBill != null && !_knownBillDismissed)
         Container(
           margin: const EdgeInsets.only(bottom: 12),
           padding: const EdgeInsets.all(12),
@@ -1706,6 +1786,7 @@ class _SmartScannerPageState extends State<SmartScannerPage> {
             ],
           ),
         ),
+      if (_useInvoice == null) ...[
       SegmentedButton<bool>(
         segments: const [
           ButtonSegment(value: false, label: Text('A pagar'), icon: Icon(Icons.schedule_rounded, size: 16)),
@@ -1728,6 +1809,7 @@ class _SmartScannerPageState extends State<SmartScannerPage> {
           style: theme.textTheme.bodySmall?.copyWith(fontSize: 12),
         ),
       const SizedBox(height: 12),
+      ],
     ];
   }
 }

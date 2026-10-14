@@ -919,4 +919,27 @@ class MockFinanceDataSource implements FinanceDataSource {
       }
     }
   }
+
+  final Map<String, CardInvoiceCode> _invoiceCodes = {};
+
+  @override
+  Future<List<CardInvoiceCode>> getCardInvoiceCodes() async => _invoiceCodes.values.toList();
+
+  @override
+  Future<void> saveCardInvoiceCode({
+    required String paymentMethodId,
+    required DateTime invoiceDueDate,
+    String? barcode,
+  }) async {
+    final key = CardInvoiceCode.keyOf(paymentMethodId, invoiceDueDate);
+    if (barcode == null || barcode.trim().isEmpty) {
+      _invoiceCodes.remove(key);
+    } else {
+      _invoiceCodes[key] = CardInvoiceCode(
+        paymentMethodId: paymentMethodId,
+        dueDate: DateTime(invoiceDueDate.year, invoiceDueDate.month, invoiceDueDate.day),
+        barcode: barcode.trim(),
+      );
+    }
+  }
 }

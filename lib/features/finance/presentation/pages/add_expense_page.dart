@@ -413,9 +413,10 @@ class _AddExpensePageState extends State<AddExpensePage> {
             ? (sameCard && oldExpense.isPaid ? oldExpense.paidOutOfPocket : false)
             : paidOutOfPocket,
         status: editedStatus,
-        barcode: _barcode,
+        // No cartão o campo some e o código que houver fica como está
+        barcode: waitsForInvoice ? null : _barcode,
         // Campo apagado remove o código; código inválido mantém o que havia
-        clearBarcode: _barcodeController.text.trim().isEmpty,
+        clearBarcode: !waitsForInvoice && _barcodeController.text.trim().isEmpty,
         // Conta que estava pendente e foi marcada como paga agora
         paidAt: editedStatus == ExpenseStatus.paid && oldExpense.isPending && !wasWaitingForInvoice
             ? DateTime.now()
@@ -475,7 +476,7 @@ class _AddExpensePageState extends State<AddExpensePage> {
       splitRule: rule,
       paidOutOfPocket: waitsForInvoice ? false : paidOutOfPocket,
       status: waitsForInvoice ? ExpenseStatus.pending : _expenseStatus,
-      barcode: _barcode,
+      barcode: waitsForInvoice ? null : _barcode,
       isRecurring: _isRecurring,
       isVariable: _isVariable,
       dueDay: _isRecurring ? _dueDay : null,
@@ -580,6 +581,13 @@ class _AddExpensePageState extends State<AddExpensePage> {
           _selectedPaymentMethodId = state.paymentMethods.first.id;
         }
 
+        // Compra no cartão não tem boleto próprio: quem tem é a fatura
+        final codeFits = _isRecurring ||
+            !ExpenseLaunchDefaults.waitsForInvoice(
+              state.paymentMethods.where((p) => p.id == _selectedPaymentMethodId).firstOrNull,
+              projectId: _selectedProjectId,
+            );
+
         final selectedCategory = state.categories.where(
           (c) => c.id == _selectedCategoryId,
         ).firstOrNull ?? (state.categories.isNotEmpty
@@ -638,6 +646,7 @@ class _AddExpensePageState extends State<AddExpensePage> {
               const SizedBox(height: 12),
 
               // Código do boleto: guardado para copiar na hora de pagar
+              if (codeFits) ...[
               TextField(
                 key: const Key('expense_barcode'),
                 controller: _barcodeController,
@@ -652,6 +661,7 @@ class _AddExpensePageState extends State<AddExpensePage> {
                   border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
                 ),
               ),
+              ],
               const SizedBox(height: 20),
 
               // Data e Situação da Despesa (Retroativa, Atual ou Em Atraso) para compras avulsas
