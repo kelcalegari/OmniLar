@@ -20,6 +20,8 @@ A tela antiga "Rachar a Fatura" (`split_invoice_modal.dart`) foi substituída pe
 - **Regras aprendidas** (`import_rules`): o que foi decidido para um estabelecimento (destino, categoria, devedor) é guardado ao confirmar e aplicado na próxima importação do mesmo cartão ou conta. A página lista as regras e deixa excluir. Só vira regra o estabelecimento em que todas as linhas tiveram a mesma decisão.
 - **PDF e foto por IA** (`import-read` e `import_ai_service.dart`): a função devolve as linhas e o cabeçalho (vencimento, total, final do cartão); o app confere a soma das linhas com o total impresso e avisa quando não bate. O vencimento lido preenche o da fatura.
 - **Sugestão de nome e categoria por IA**: botão na revisão, para as linhas da Casa ainda sem categoria; uma chamada para todas. A IA não decide o destino.
+- **Seletor de destino com todos os moradores**: cada morador aparece pelo nome ("Marina deve"), sem um segundo campo para escolher o devedor.
+- **Fatura agrupada na Casa** (`cycle_expense_grouping.dart`, `card_invoice_group_tile.dart`): em "Gastos do Ciclo", compras do mesmo cartão e vencimento aparecem como uma fatura, que abre para mostrar cada compra com a data da compra e o botão de registrar o pagamento. É só exibição.
 - **Ciclo fechado**: as linhas afetadas são avisadas e o usuário escolhe lançar como ajuste no ciclo atual ou deixar de fora.
 - **Testes**: `test/features/reconciliation/` (leitura, duplicidade, plano de gravação e a página).
 
@@ -141,7 +143,7 @@ Mesma escolha: valor diferente em despesa de ciclo fechado (o ajuste lança só 
 O app já trata a fatura como o conjunto das compras com mesmo cartão e mesmo vencimento (`card_invoice.dart`); registrar o pagamento marca todas de uma vez (`pay_card_invoice`) e dá para desfazer. A importação só precisa gravar cada linha da Casa com o cartão e o vencimento corretos.
 
 - **Total do app menor que o do banco**: linhas pessoais e de outro morador não são despesa da Casa. A tela mostra os dois valores e a decomposição (Casa + empréstimos + pessoal = total do banco). O total do banco fica no registro da importação.
-- **Quem paga o banco é o titular**: as despesas ficam como pagas por ele do próprio bolso; o reembolso sai no fechamento do ciclo.
+- **Quem paga o banco**: hoje o app assume o titular (despesas pagas do próprio bolso, reembolso no fechamento). O dono decidiu que a fatura também pode ser paga pelo Caixa da Casa: ver seção 12.
 - **Empréstimo segue separado**: não é quitado ao marcar a fatura como paga. O vencimento da parcela passa a ser o da fatura (hoje é a data atual + 30 dias).
 - **A data do pagamento define o ciclo** em que as compras contam.
 - **Juros, IOF e anuidade** vêm como linhas normais.
@@ -204,3 +206,66 @@ Nem todo banco exporta OFX ou CSV, e os CSV não têm colunas padronizadas; muit
 - A fatura inteira vai para o provedor de IA: no plano gratuito o conteúdo pode ser usado pelo Google, então exige o plano pago antes de convidar outros usuários.
 - Uma chamada por arquivo. O cache pelo conteúdo ainda não existe.
 - Linha lida por IA entra na revisão como as outras, nunca direto no banco.
+
+## 12. A fatura na Casa: em aberto ou paga, e com que dinheiro
+
+Discussão de 14/10/2026 com o dono, depois de ele importar uma fatura real e ver as compras soltas e todas como pagas em "Gastos do Ciclo". O agrupamento por fatura já foi feito (seção 1). O resto desta seção ainda não foi implementado.
+
+### 12.1. Como é hoje
+
+- Compra no cartão nasce com status "paga", mesmo com a fatura em aberto. O que diz se a fatura foi quitada é a data de pagamento da fatura (`paid_at`), registrada pelo menu do cartão em Ajustes ou, agora, pela fatura agrupada na Casa.
+- **Competência**: a compra conta no ciclo do pagamento registrado; sem registro, no ciclo do vencimento. Ex.: ciclo fecha dia 10, fatura vence dia 15. Marcada como paga no dia 9, entra no ciclo que fecha dia 10; marcada no dia 11 ou não marcada, entra no seguinte.
+- **Fôlego**: fatura em aberto aparece em "Despesas Pagas". O saldo está certo (ele desconta pagas e a vencer), mas a coluna engana.
+- **Fechamento**: ao fechar um ciclo, o app dá baixa em todas as contas pendentes dele e reembolsa quem pagou do bolso, sem olhar se a fatura foi paga. O registro de pagamento precisa ser feito antes de fechar; depois, só reabrindo o ciclo.
+- **Quem paga**: se o cartão tem dono, toda compra é "paga do bolso do titular" e vira reembolso no fechamento. Não há como dizer que a fatura saiu do Caixa.
+
+O boleto da internet serve de referência: em aberto, entra no ciclo do vencimento, aparece em "A Vencer", tem botão "Pagar" e, ao ser pago, passa a contar no ciclo do pagamento.
+
+### 12.2. Em aberto ou paga: alternativas
+
+| | O que muda | Risco |
+|---|---|---|
+| A. Só exibição | A fatura mostra "Em aberto" ou "Paga em"; as compras dentro dela deixam de parecer pagas; no Fôlego, fatura em aberto passa de "Despesas Pagas" para "A Vencer". Dados iguais. | Baixo |
+| B. A + fatura como conta a pagar | Além de A: botão "Pagar" na fatura (pede a data e mostra em que ciclo ela cai), marca de atrasada depois do vencimento e aviso no fechamento quando uma fatura entra no ciclo sem pagamento registrado. Dados iguais. | Baixo |
+| C. Só conta quando pagar | Fatura sem pagamento registrado não entra em fechamento nenhum e é carregada para os ciclos seguintes. | Alto |
+| D. Fatura como registro próprio | Tabela de faturas com status, total do banco e pagamento; abre caminho para pagamento parcial e juros. | Alto, maior trabalho |
+
+- **B e C só diferem em um caso**: o ciclo do vencimento fecha e a fatura não foi marcada. Na B ela entra pelo vencimento e o titular é reembolsado; na C fica de fora até alguém marcar.
+- **C não é só trocar o status para pendente**: o fechamento dá baixa em toda conta pendente do ciclo. Exigiria mudar a regra de competência, o fechamento (pular faturas em aberto na baixa e no reembolso), a função do banco que decide se uma despesa conta em ciclo fechado, o planejamento de aportes e os dados já lançados.
+- **Recomendação**: B, que deixa a fatura igual ao boleto. C fica registrada como alternativa; se for escolhida, é um trabalho próprio, planejado junto com o fechamento (`fechamento_no_banco.md`).
+- **Situação**: o dono ainda não confirmou entre B e C.
+
+### 12.3. Com que dinheiro a fatura é paga (decidido)
+
+Decisão do dono em 14/10/2026: **quem paga, paga a fatura inteira**. Ou o titular paga tudo com o próprio dinheiro, ou o Caixa da Casa paga tudo e depois é reembolsado do que não era da casa.
+
+| Linha da fatura | Paga pelo titular (como é hoje) | Paga pelo Caixa da Casa |
+|---|---|---|
+| Da Casa | Despesa paga do bolso: o titular é reembolsado no fechamento | Despesa paga pelo Caixa: sem reembolso |
+| De outro morador | Empréstimo: o morador deve ao titular | Empréstimo: o morador deve ao Caixa |
+| Pessoal do titular | Nada | Empréstimo: o titular deve ao Caixa |
+
+O app já tem empréstimo com o Caixa como credor ("acordo com o Lar"), usado na reposição de Caixinha.
+
+**O que precisa ser feito**
+
+1. **Origem do pagamento**: ao registrar o pagamento da fatura, perguntar "Do bolso de <titular>" (padrão) ou "Caixa da Casa". Na importação, "Quem paga" ganha a opção "Caixa da Casa".
+2. **Despesas da casa**: com o Caixa, deixam de ser "pagas do próprio bolso".
+3. **Linhas de outro morador**: o empréstimo passa a ter o Caixa como credor. Se a origem for escolhida depois da importação, o empréstimo já criado em nome do titular precisa trocar de credor; se já teve pagamento, a troca tem de ser recusada ou tratada à parte.
+4. **Linhas pessoais do titular**: hoje não geram nada, ficam só no histórico da importação (`import_lines`). Com o Caixa pagando, viram um empréstimo do titular com o Caixa. O valor vem do histórico daquela fatura.
+5. **Desfazer o pagamento** reverte a origem e os empréstimos que ela criou ou trocou.
+6. **Banco**: a função `pay_card_invoice` passa a receber a origem e faz tudo em uma transação (migration 0054), respeitando as travas de ciclo fechado.
+7. **Extrato**: pagamento de fatura achado no extrato da conta da casa já sugere "Caixa da Casa" como origem.
+
+**Pontos em aberto**
+
+- **Fatura sem importação**: se as compras foram lançadas à mão, o app não sabe quanto da fatura era pessoal do titular. Opções: pedir o valor total pago ao banco e tratar a diferença como pessoal do titular, ou só permitir "Caixa da Casa" em fatura importada.
+- **Como o titular e os moradores devolvem ao Caixa**: parcela única cobrada no fechamento do ciclo (o padrão dos empréstimos de hoje) ou sem prazo.
+- **Caixa sem saldo** para pagar a fatura inteira: avisar ou só registrar.
+- **Total do banco**: a soma das linhas lidas pode não bater com o que o banco cobrou (juros, saldo anterior, estorno). A diferença precisa de um destino quando o Caixa paga tudo.
+
+### 12.4. Ordem sugerida
+
+1. Confirmar B ou C (12.2).
+2. Implementar a exibição escolhida.
+3. Origem do pagamento (12.3), depois de fechar os pontos em aberto.
