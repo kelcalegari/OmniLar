@@ -5,7 +5,7 @@ Reescrito em 13/10/2026, no fim de uma sessão longa de correções, e atualizad
 ## Estado atual
 
 - **Código:** `main` local e `origin/main` sincronizadas, diretório de trabalho limpo. Confira com `git log --oneline -5` e `git status`.
-- **Banco (Supabase `rygxmpwzofgieodvhpcy`, acessível pelo conector do Supabase):** migrations 0001 a 0056 aplicadas. No histórico de migrations do Supabase constam só as 0022 a 0027 e as 0030 a 0056; as 0001 a 0021, a 0028 e a 0029 foram aplicadas à mão pelo SQL Editor. A próxima migration é a 0057.
+- **Banco (Supabase `rygxmpwzofgieodvhpcy`, acessível pelo conector do Supabase):** migrations 0001 a 0057 aplicadas. No histórico de migrations do Supabase constam só as 0022 a 0027 e as 0030 a 0057; as 0001 a 0021, a 0028 e a 0029 foram aplicadas à mão pelo SQL Editor. A próxima migration é a 0058.
 - **Edge Functions:** `capture-read` versão 8 e `assistant` versão 5, ambas com `verify_jwt=true` e exigindo usuário logado que more na casa.
 - **Qualidade:** `flutter analyze` com 0 erros (4 warnings antigos de import não usado) e 362 testes passando. Os testes automatizados rodam só contra os datasources mock (modo demo); nenhum roda contra o Supabase.
 - **Dados no banco:** em 13/10/2026 o dono apagou todos os dados de teste (todas as tabelas de `public` e as contas de login) e recomeçou do zero; a estrutura, as funções e o histórico de migrations não mudaram. Logo depois foi criada de novo a casa "Nossa Casa", com as contas novas de kelvynn e Cristiano; o dono já lançou algumas despesas de teste nela (entre elas a recorrente "Internet", todo dia 25). Nunca houve um fechamento de ciclo confirmado com sessão real.
@@ -238,7 +238,7 @@ Uma linha por migration, para saber onde está cada regra.
 | 0054 | Compra no cartão fica pendente até a fatura ser paga; pagamento com a origem do dinheiro |
 | 0055 | Fatura paga pelo Caixa: empréstimos passam ao Caixa e os gastos pessoais do titular viram dívida com ele |
 | 0056 | Código de barras do boleto na despesa |
-| 0057 | Código do boleto da fatura do cartão (`card_invoice_codes`) — **criada, ainda não aplicada** |
+| 0057 | Código do boleto da fatura do cartão (`card_invoice_codes`) |
 
 ## Documentos relacionados
 
