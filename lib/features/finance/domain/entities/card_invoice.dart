@@ -34,6 +34,8 @@ class CardInvoice extends Equatable {
       if (expense.paymentMethodId != paymentMethodId) continue;
       if (expense.dueDate == null || expense.isProjectExpense) continue;
       if ((expense.paidAt != null) != paid) continue;
+      // Em aberto: fora de fechamento, como em pay_card_invoice
+      if (!paid && expense.settledAt != null) continue;
       byDueDate.putIfAbsent(_day(expense.dueDate!), () => []).add(expense);
     }
 

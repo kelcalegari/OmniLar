@@ -1231,8 +1231,8 @@ class SupabaseFinanceDataSource implements FinanceDataSource {
     try {
       if (!_isUuid(paymentMethodId)) return const [];
 
-      // Só faturas recentes: compras antigas nunca marcadas não poluem a lista
-      final since = DateTime.now().subtract(const Duration(days: 62));
+      // Sem limite de data: fatura atrasada há muito tempo continua para pagar.
+      // Só compras sem pagamento e fora de fechamento, como em pay_card_invoice
       final rows = await client
           .from('house_expenses')
           .select('*, house_expense_items(*), split_rules(*)')
@@ -1240,8 +1240,9 @@ class SupabaseFinanceDataSource implements FinanceDataSource {
           .eq('payment_method_id', paymentMethodId)
           .isFilter('project_id', null)
           .isFilter('deleted_at', null)
+          .isFilter('settled_at', null)
           .isFilter('paid_at', null)
-          .gte('due_date', since.toIso8601String().split('T')[0]);
+          .not('due_date', 'is', null);
 
       return CardInvoice.groupOpenInvoices(
         paymentMethodId,
@@ -1315,13 +1316,11 @@ class SupabaseFinanceDataSource implements FinanceDataSource {
   @override
   Future<List<CardInvoiceCode>> getCardInvoiceCodes() async {
     try {
-      // Só faturas recentes, como na lista de faturas do cartão
-      final since = DateTime.now().subtract(const Duration(days: 120));
+      // Todos: é uma linha por cartão por mês
       final rows = await client
           .from('card_invoice_codes')
           .select('payment_method_id, due_date, barcode')
-          .eq('house_id', _houseId)
-          .gte('due_date', since.toIso8601String().split('T')[0]);
+          .eq('house_id', _houseId);
       return [
         for (final r in rows)
           CardInvoiceCode(
