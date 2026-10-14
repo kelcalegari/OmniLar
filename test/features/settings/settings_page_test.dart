@@ -416,14 +416,20 @@ void main() {
     expect(themeCubit.state, ThemeMode.light);
   });
 
-  testWidgets('Importar fatura fica na página do grupo de pagamentos', (tester) async {
+  testWidgets('Importar fatura fica no menu de cada cartão, sem painel geral', (tester) async {
     await sl<FinanceCubit>().loadCycleData();
 
     await tester.pumpWidget(buildTestableWidget());
     await tester.pumpAndSettle();
     await openGroup(tester, 'Pagamentos e contas');
 
-    expect(find.text('Importar Fatura e Extratos'), findsOneWidget);
-    expect(find.text('Abrir importação'), findsOneWidget);
+    // A importação geral fica na tela da Casa, junto do fechamento
+    expect(find.text('Importar Fatura e Extratos'), findsNothing);
+
+    final menu = find.byTooltip('Opções').first;
+    await tester.ensureVisible(menu);
+    await tester.tap(menu);
+    await tester.pumpAndSettle();
+    expect(find.textContaining('Importar'), findsWidgets);
   });
 }

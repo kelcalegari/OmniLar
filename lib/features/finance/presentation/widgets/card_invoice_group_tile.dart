@@ -14,6 +14,9 @@ class CardInvoiceGroupTile extends StatelessWidget {
   /// Abre o registro do pagamento da fatura.
   final VoidCallback? onRegisterPayment;
 
+  /// Abre a importação do arquivo deste cartão.
+  final VoidCallback? onImport;
+
   /// As compras da fatura, já montadas por quem usa o cartão.
   final List<Widget> children;
 
@@ -27,6 +30,7 @@ class CardInvoiceGroupTile extends StatelessWidget {
     required this.onToggle,
     required this.children,
     this.onRegisterPayment,
+    this.onImport,
     this.barcode,
   });
 
@@ -178,16 +182,27 @@ class CardInvoiceGroupTile extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
                     ...children,
-                    if (onRegisterPayment != null)
-                      Align(
-                        alignment: Alignment.centerRight,
-                        child: Padding(
-                          padding: const EdgeInsets.only(bottom: 8),
-                          child: TextButton.icon(
-                            icon: const Icon(Icons.receipt_long_outlined, size: 18, color: AppColors.primary),
-                            label: Text(paidAt == null ? 'Pagar a fatura' : 'Ver ou desfazer o pagamento'),
-                            onPressed: onRegisterPayment,
-                          ),
+                    if (onRegisterPayment != null || onImport != null)
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 8),
+                        child: Wrap(
+                          alignment: WrapAlignment.end,
+                          spacing: 4,
+                          children: [
+                            if (onImport != null)
+                              TextButton.icon(
+                                key: Key('import_invoice_${invoice.key}'),
+                                icon: const Icon(Icons.upload_file_rounded, size: 18, color: AppColors.accent),
+                                label: Text('Importar fatura do ${invoice.card.name}'),
+                                onPressed: onImport,
+                              ),
+                            if (onRegisterPayment != null)
+                              TextButton.icon(
+                                icon: const Icon(Icons.receipt_long_outlined, size: 18, color: AppColors.primary),
+                                label: Text(paidAt == null ? 'Pagar a fatura' : 'Ver ou desfazer o pagamento'),
+                                onPressed: onRegisterPayment,
+                              ),
+                          ],
                         ),
                       ),
                   ],

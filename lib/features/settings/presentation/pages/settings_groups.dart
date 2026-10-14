@@ -344,21 +344,6 @@ extension _SettingsGroupViews on _SettingsPageState {
         title: 'Assinaturas & Contas Fixas',
         children: [_recurringExpensesEditor(context)],
       ),
-      _panel(
-        context,
-        title: 'Importar Fatura e Extratos',
-        actionLabel: 'Abrir importação',
-        onAction: () => context.push('/importar'),
-        children: const [
-          Padding(
-            padding: EdgeInsets.fromLTRB(16, 0, 16, 8),
-            child: Text(
-              'Envie o arquivo OFX ou CSV do cartão ou da conta. O app mostra o que já estava lançado e você separa o que é da casa, o que é pessoal e o que outro morador deve.',
-              style: TextStyle(color: Colors.grey, fontSize: 12),
-            ),
-          ),
-        ],
-      ),
     ];
   }
 

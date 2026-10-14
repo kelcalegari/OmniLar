@@ -571,18 +571,6 @@ class _SmartFABContent extends StatelessWidget {
                     );
                   },
                 ),
-                const SizedBox(width: 12),
-                _buildActionButton(
-                  context,
-                  icon: Icons.call_split_rounded,
-                  label: 'Importar Fatura',
-                  subtitle: 'Cartão ou extrato',
-                  color: AppColors.accent,
-                  onTap: () {
-                    Navigator.pop(context);
-                    context.push('/importar');
-                  },
-                ),
               ],
             ),
           ],

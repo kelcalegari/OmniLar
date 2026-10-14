@@ -214,7 +214,7 @@ class _HomePageContentState extends State<_HomePageContent> {
           _dimWhileSwitching(state, CycleFundingPlannerCard(estimate: state.fundingEstimate!)),
         ],
         const SizedBox(height: 16),
-        _buildSettlementCard(context),
+        _buildCycleRoutineCards(context),
         const SizedBox(height: 16),
         _buildQuickShortcuts(context, theme),
         const SizedBox(height: 24),
@@ -262,7 +262,7 @@ class _HomePageContentState extends State<_HomePageContent> {
                       _dimWhileSwitching(state, CycleFundingPlannerCard(estimate: state.fundingEstimate!)),
                     ],
                     const SizedBox(height: 16),
-                    _buildSettlementCard(context),
+                    _buildCycleRoutineCards(context),
                   ],
                 ),
               ),
@@ -371,7 +371,7 @@ class _HomePageContentState extends State<_HomePageContent> {
                     _dimWhileSwitching(state, CycleFundingPlannerCard(estimate: state.fundingEstimate!)),
                   ],
                   const SizedBox(height: 16),
-                  _buildSettlementCard(context),
+                  _buildCycleRoutineCards(context),
                   const SizedBox(height: 16),
                   _buildQuickShortcuts(context, theme),
                 ],
@@ -429,6 +429,63 @@ class _HomePageContentState extends State<_HomePageContent> {
         ),
         const SizedBox(height: 40),
       ],
+    );
+  }
+
+  /// A rotina do ciclo: importar fatura e extrato e depois fechar.
+  Widget _buildCycleRoutineCards(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _buildImportCard(context),
+        const SizedBox(height: 10),
+        _buildSettlementCard(context),
+      ],
+    );
+  }
+
+  Widget _buildImportCard(BuildContext context) {
+    return InkWell(
+      key: const Key('home_import_card'),
+      onTap: () => context.push('/importar'),
+      borderRadius: BorderRadius.circular(16),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        decoration: BoxDecoration(
+          color: AppColors.accent.withValues(alpha: 0.08),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: AppColors.accent.withValues(alpha: 0.3)),
+        ),
+        child: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(9),
+              decoration: BoxDecoration(
+                color: AppColors.accent.withValues(alpha: 0.15),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: const Icon(Icons.upload_file_rounded, color: AppColors.accent, size: 20),
+            ),
+            const SizedBox(width: 14),
+            const Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Importar fatura ou extrato',
+                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                  ),
+                  Text(
+                    'Confira o arquivo do banco com o que já foi lançado',
+                    style: TextStyle(fontSize: 12, color: Colors.grey),
+                  ),
+                ],
+              ),
+            ),
+            const Icon(Icons.chevron_right_rounded, color: AppColors.accent),
+          ],
+        ),
+      ),
     );
   }
 
@@ -733,6 +790,9 @@ class _HomePageContentState extends State<_HomePageContent> {
                       _expandedInvoices.add(entry.key);
                     }
                   }),
+                  onImport: () => context.push(
+                    Uri(path: '/importar', queryParameters: {'origem': entry.card.id}).toString(),
+                  ),
                   onRegisterPayment: () {
                     final financeCubit = context.read<FinanceCubit>();
                     showAdaptiveModal(

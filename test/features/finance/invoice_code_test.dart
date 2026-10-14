@@ -3,7 +3,13 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:omni_lar/core/di/service_locator.dart';
 import 'package:omni_lar/features/capture/domain/services/boleto_code.dart';
 import 'package:omni_lar/features/finance/presentation/cubit/finance_cubit.dart';
+import 'package:omni_lar/core/domain/value_objects/money.dart';
+import 'package:omni_lar/features/finance/domain/entities/house_expense.dart';
+import 'package:omni_lar/features/finance/domain/entities/payment_method.dart';
+import 'package:omni_lar/features/finance/domain/entities/split_rule.dart';
+import 'package:omni_lar/features/finance/domain/services/cycle_expense_grouping.dart';
 import 'package:omni_lar/features/finance/presentation/widgets/bill_code_field.dart';
+import 'package:omni_lar/features/finance/presentation/widgets/card_invoice_group_tile.dart';
 
 /// Código de barras de boleto bancário válido.
 String _bankBarcode({int cents = 50000}) {
@@ -78,5 +84,50 @@ void main() {
     await tester.pumpAndSettle();
     expect(saved, [line, null]);
     expect(find.byKey(const Key('bill_code_add')), findsOneWidget);
+  });
+
+  testWidgets('fatura aberta tem atalho para importar e copiar o código', (tester) async {
+    const card = PaymentMethod(
+      id: 'pm_card_carlos',
+      name: 'Nubank',
+      type: PaymentMethodType.card,
+      ownerMemberId: 'member_carlos',
+      closingDay: 28,
+      dueDay: 5,
+    );
+    final due = DateTime.now().add(const Duration(days: 10));
+    final entry = CardInvoiceEntry(card: card, dueDate: due, purchases: [
+      HouseExpense(
+        id: 'compra',
+        title: 'Mercado',
+        amount: const Money(5000),
+        date: DateTime.now(),
+        dueDate: due,
+        categoryId: 'cat',
+        paymentMethodId: card.id,
+        paidByMemberId: 'member_carlos',
+        splitRule: const SplitRule.percentage(null),
+        status: ExpenseStatus.pending,
+      ),
+    ]);
+    var imported = 0;
+    await tester.pumpWidget(MaterialApp(
+      home: Scaffold(
+        body: CardInvoiceGroupTile(
+          invoice: entry,
+          expanded: true,
+          onToggle: () {},
+          onImport: () => imported++,
+          onRegisterPayment: () {},
+          barcode: BoletoCodeReader.read(_bankBarcode()).digitableLine,
+          children: const [],
+        ),
+      ),
+    ));
+
+    expect(find.byKey(Key('copy_invoice_code_${entry.key}')), findsOneWidget);
+    await tester.tap(find.byKey(Key('import_invoice_${entry.key}')));
+    expect(imported, 1);
+    expect(find.text('Importar fatura do Nubank'), findsOneWidget);
   });
 }
