@@ -7,7 +7,7 @@ Plano de implementação do módulo descrito em [modulo_importacao_conciliacao.m
 A tela antiga "Rachar a Fatura" (`split_invoice_modal.dart`) foi substituída pela página de importação. As migrations 0052 (`import_history_confirm_and_undo`) e 0053 (`import_rules`) estão aplicadas, e a função `import-read` está publicada no servidor.
 
 **Implementado**
-- **Página própria** em `/casa/importar` (`presentation/pages/import_page.dart`), aberta pelo Smart FAB ("Importar Fatura"), por Ajustes > Pagamentos e contas e pelo menu de cada cartão ou conta (chega com a origem escolhida).
+- **Página própria** em `/casa/importar` (`presentation/pages/import_page.dart`), aberta pelo card "Importar fatura ou extrato" na tela da Casa (acima do "Fechamento do Ciclo": a rotina do ciclo é importar e depois fechar), pelo atalho "Importar fatura do <cartão>" dentro da fatura aberta e pelo menu de cada cartão ou conta em Ajustes > Pagamentos e contas (esses dois chegam com a origem escolhida). Não fica mais no Smart FAB nem num painel geral dos Ajustes.
 - **Origem obrigatória**: cartão ou conta cadastrado. Para cartão, o vencimento da fatura é sugerido pelas datas das compras e pode ser trocado; quem paga vem do dono do cartão.
 - **Leitura** (`statement_parser.dart`): OFX de cartão e de conta (com o identificador da transação), CSV com `,`, `;` ou tabulação, datas e valores no formato brasileiro, arquivo em Latin-1. Pagamento, estorno e entrada são reconhecidos pelo sinal e ficam de fora; parcela ("03/10") é identificada. Aviso quando o OFX não é do tipo da origem escolhida.
 - **Detecção do que já foi lançado** (`statement_matcher.dart`): as quatro faixas da seção 3, cada despesa casando com uma linha só. "Já lançado" vem aceito; "provável" e "valor diferente" esperam a resposta do usuário e bloqueiam a confirmação.
@@ -331,6 +331,10 @@ A ideia é reaproveitar o que o app já faz com o boleto da internet: conta pend
 
 - O pagamento pelo Caixa **com os empréstimos** da seção 12.3 (moradores e titular devendo ao Caixa). Nesta etapa, "Caixa da Casa" só tira o reembolso do titular.
 - Pagamento parcial de fatura.
+
+### Código do boleto da fatura
+
+A fatura (cartão + vencimento) guarda a linha digitável do boleto dela (migration 0057, `card_invoice_codes`). A tela "Pagar fatura" informa, troca, apaga e copia; o card da fatura na Casa copia. O escâner reconhece o boleto de uma fatura em aberto (vencimento a até 5 dias, total até 30% diferente) e guarda o código nela, sem lançar despesa. As faturas em aberto e os códigos não têm limite de data; só a lista de pagamentos registrados mostra os últimos 62 dias.
 
 ### Meio de pagamento da fatura
 
