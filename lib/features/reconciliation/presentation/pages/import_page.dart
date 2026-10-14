@@ -843,6 +843,15 @@ class _ImportPageState extends State<ImportPage> {
     // Movimentos do extrato que não são despesa: cada um é gravado à parte, e
     // o que falhar aparece como aviso (a importação em si já está gravada)
     final warnings = <String>[];
+    // Despesas já lançadas que um estorno cobriu por inteiro
+    for (final expense in plan.expenseDeletions) {
+      try {
+        await sl<FinanceRepository>().deleteExpense(expense.id);
+      } catch (e) {
+        warnings.add('Excluir "${expense.title}" pelo estorno: $e');
+      }
+    }
+
     final invoicePayment = plan.invoicePayment;
     if (invoicePayment != null) {
       try {
@@ -1413,10 +1422,29 @@ class _ImportPageState extends State<ImportPage> {
                 ),
               ),
               const SizedBox(width: 8),
-              Text(
-                line.amount.format(),
-                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: muted ? Colors.grey : null),
-              ),
+              if (line.isPurchase && session.effectiveAmountOf(line) != line.amount)
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    Text(
+                      line.amount.format(),
+                      style: const TextStyle(
+                        fontSize: 11,
+                        color: Colors.grey,
+                        decoration: TextDecoration.lineThrough,
+                      ),
+                    ),
+                    Text(
+                      session.effectiveAmountOf(line).format(),
+                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                    ),
+                  ],
+                )
+              else
+                Text(
+                  line.amount.format(),
+                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: muted ? Colors.grey : null),
+                ),
               if (editable) ...[
                 IconButton(
                   key: Key('import_split_${line.id}'),
@@ -1452,6 +1480,8 @@ class _ImportPageState extends State<ImportPage> {
         style: TextStyle(fontSize: 12, color: Colors.grey),
       );
     }
+
+    if (line.kind == StatementLineKind.refund) return _refundRow(session, line);
 
     final label = switch (line.kind) {
       StatementLineKind.payment => 'Pagamento de fatura: não é uma despesa nova',
@@ -1495,6 +1525,54 @@ class _ImportPageState extends State<ImportPage> {
         if (chosen == null && suggestion != null)
           TextButton(
             onPressed: _busy ? null : () => _update(session.withExtraChoice(line.id, suggestion.key)),
+            child: Text('Parece: ${suggestion.label}', style: const TextStyle(fontSize: 12)),
+          ),
+      ],
+    );
+  }
+
+  /// Estorno: de qual compra ele é abatido (desta fatura ou já lançada).
+  Widget _refundRow(ImportSession session, ImportedStatementLine line) {
+    final options = session.refundOptionsOf(line);
+    if (options.isEmpty) {
+      return const Text(
+        'Estorno: nenhuma compra deste cartão com esse valor para abater. Confira no app.',
+        style: TextStyle(fontSize: 12, color: Colors.grey),
+      );
+    }
+
+    final chosen = session.chosenRefund(line);
+    final suggestion = options.where((o) => o.suggested).firstOrNull;
+    return Wrap(
+      spacing: 8,
+      crossAxisAlignment: WrapCrossAlignment.center,
+      children: [
+        DropdownButton<String>(
+          key: Key('import_refund_${line.id}'),
+          value: chosen?.key ?? '',
+          underline: const SizedBox.shrink(),
+          isDense: true,
+          onChanged: _busy
+              ? null
+              : (key) => _update(session.withRefundChoice(line.id, key == null || key.isEmpty ? null : key)),
+          items: [
+            const DropdownMenuItem(
+              value: '',
+              child: Text('Estorno: não abater de nada', style: TextStyle(fontSize: 12, color: Colors.grey)),
+            ),
+            for (final option in options)
+              DropdownMenuItem(
+                value: option.key,
+                child: Text(
+                  option.label,
+                  style: const TextStyle(fontSize: 12, color: AppColors.primary, fontWeight: FontWeight.bold),
+                ),
+              ),
+          ],
+        ),
+        if (chosen == null && suggestion != null)
+          TextButton(
+            onPressed: _busy ? null : () => _update(session.withRefundChoice(line.id, suggestion.key)),
             child: Text('Parece: ${suggestion.label}', style: const TextStyle(fontSize: 12)),
           ),
       ],

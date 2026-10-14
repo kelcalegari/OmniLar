@@ -51,6 +51,33 @@ enum ClosedCyclePolicy {
   skip,
 }
 
+/// Para onde vai um estorno da fatura.
+class RefundOption {
+  /// Identifica a opção entre as de um estorno.
+  final String key;
+  final String label;
+
+  /// Mesmo valor ou descrição parecida: é provável que seja esta.
+  final bool suggested;
+
+  /// Compra da mesma fatura de que o estorno é abatido.
+  final String? lineId;
+
+  /// Despesa já lançada no app de que o estorno é abatido.
+  final HouseExpense? expense;
+
+  const RefundOption({
+    required this.key,
+    required this.label,
+    this.suggested = false,
+    this.lineId,
+    this.expense,
+  });
+
+  /// O estorno cobre a despesa inteira: ela é excluída, e não abatida.
+  bool coversWholeExpense(Money refund) => expense != null && expense!.amount.cents <= refund.cents;
+}
+
 /// O que uma linha do arquivo virou, para o histórico da importação.
 enum LineOutcome {
   /// A importação criou a despesa ou o empréstimo.
@@ -101,6 +128,10 @@ class ImportPlan {
   /// A fatura importada já foi paga: registrar o pagamento depois de gravar.
   final ({DateTime dueDate, DateTime paidAt, bool paidByHouse})? invoicePayment;
 
+  /// Despesas já lançadas que um estorno cobriu por inteiro: excluídas depois
+  /// de gravar a importação.
+  final List<HouseExpense> expenseDeletions;
+
   const ImportPlan({
     this.newExpenses = const [],
     this.expenseUpdates = const [],
@@ -109,6 +140,7 @@ class ImportPlan {
     this.lineRecords = const [],
     this.extraActions = const [],
     this.invoicePayment,
+    this.expenseDeletions = const [],
   });
 
   bool get isEmpty =>
@@ -160,6 +192,12 @@ class ImportSession {
   /// A opção escolhida pelo usuário (id da linha -> chave da opção).
   final Map<String, String> extraChoices;
 
+  /// Despesas do app próximas das linhas, de onde saem as opções de estorno.
+  final List<HouseExpense> knownExpenses;
+
+  /// Para onde vai cada estorno (id da linha do estorno -> chave da opção).
+  final Map<String, String> refundChoices;
+
   /// Linhas que vieram classificadas por uma regra aprendida (pelo id).
   final Set<String> ruledLineIds;
 
@@ -181,6 +219,8 @@ class ImportSession {
     this.forcedLineIds = const {},
     this.extraOptions = const {},
     this.extraChoices = const {},
+    this.knownExpenses = const [],
+    this.refundChoices = const {},
     this.ruledLineIds = const {},
     this.invoicePaidAt,
     this.invoicePaidByHouse = false,
@@ -243,6 +283,8 @@ class ImportSession {
     Set<String>? forcedLineIds,
     Map<String, List<ExtraAction>>? extraOptions,
     Map<String, String>? extraChoices,
+    List<HouseExpense>? knownExpenses,
+    Map<String, String>? refundChoices,
     Set<String>? ruledLineIds,
     ({DateTime? paidAt, bool byHouse})? invoicePayment,
   }) {
@@ -258,6 +300,8 @@ class ImportSession {
       forcedLineIds: forcedLineIds ?? this.forcedLineIds,
       extraOptions: extraOptions ?? this.extraOptions,
       extraChoices: extraChoices ?? this.extraChoices,
+      knownExpenses: knownExpenses ?? this.knownExpenses,
+      refundChoices: refundChoices ?? this.refundChoices,
       ruledLineIds: ruledLineIds ?? this.ruledLineIds,
       invoicePaidAt: invoicePayment != null ? invoicePayment.paidAt : invoicePaidAt,
       invoicePaidByHouse: invoicePayment != null ? invoicePayment.byHouse : invoicePaidByHouse,
@@ -385,6 +429,10 @@ class ImportSession {
       line.asPart(id: newId(), amount: line.amount - firstAmount, splitFrom: root),
     ];
     return _copy(
+      refundChoices: {
+        for (final entry in refundChoices.entries)
+          if (entry.value != 'line:$lineId') entry.key: entry.value,
+      },
       lines: [...lines.sublist(0, index), ...parts, ...lines.sublist(index + 1)],
       // A linha dividida deixa de casar com uma despesa só
       matches: {for (final e in matches.entries) if (e.key != lineId) e.key: e.value},
@@ -525,7 +573,91 @@ class ImportSession {
       for (final entry in decisions.entries)
         if (found[entry.key]?.expense.id == matches[entry.key]?.expense.id) entry.key: entry.value,
     };
-    return _copy(matches: found, decisions: kept);
+    return _copy(matches: found, decisions: kept, knownExpenses: expenses);
+  }
+
+  static final _dayMonthShort = DateFormat('dd/MM');
+
+  /// Para onde um estorno pode ir: uma compra desta fatura ou uma despesa já
+  /// lançada no mesmo cartão ou conta, com valor de pelo menos o estorno e
+  /// anterior a ele. As prováveis (mesmo valor ou descrição parecida) vêm antes.
+  List<RefundOption> refundOptionsOf(ImportedStatementLine refund) {
+    if (refund.kind != StatementLineKind.refund || _wasImported(refund)) return const [];
+    final options = <RefundOption>[];
+    final cents = refund.amount.cents;
+    bool similar(String text) => StatementText.similarity(refund.description, text) >= 0.5;
+
+    for (final line in newLines) {
+      if (line.date.isAfter(refund.date.add(const Duration(days: 1)))) continue;
+      // O que outros estornos já abateram desta compra não pode ser abatido de novo
+      final available = line.amount.cents - _refundedFromLine(line.id, except: refund.id);
+      if (available < cents) continue;
+      options.add(
+        RefundOption(
+          key: 'line:${line.id}',
+          label: 'Abater de "${_titleOf(line)}" (${_dayMonthShort.format(line.date)}, ${line.amount.format()}) desta fatura',
+          suggested: line.amount.cents == cents || similar(line.description),
+          lineId: line.id,
+        ),
+      );
+    }
+
+    final earliest = refund.date.subtract(const Duration(days: 120));
+    for (final expense in knownExpenses) {
+      if (expense.paymentMethodId != source.id || expense.isProjectExpense) continue;
+      if (!canUpdateAmount(expense) || expense.amount.cents < cents) continue;
+      if (expense.date.isAfter(refund.date.add(const Duration(days: 1))) || expense.date.isBefore(earliest)) {
+        continue;
+      }
+      final whole = expense.amount.cents == cents;
+      options.add(
+        RefundOption(
+          key: 'expense:${expense.id}',
+          label: whole
+              ? 'Excluir "${expense.title}" (${_dayMonthShort.format(expense.date)}), já lançada'
+              : 'Abater de "${expense.title}" (${_dayMonthShort.format(expense.date)}, ${expense.amount.format()}), já lançada',
+          suggested: whole || similar(expense.title),
+          expense: expense,
+        ),
+      );
+    }
+
+    options.sort((a, b) => (b.suggested ? 1 : 0) - (a.suggested ? 1 : 0));
+    return options;
+  }
+
+  RefundOption? chosenRefund(ImportedStatementLine refund) {
+    final key = refundChoices[refund.id];
+    if (key == null) return null;
+    return refundOptionsOf(refund).where((o) => o.key == key).firstOrNull;
+  }
+
+  /// Escolhe (ou, com null, desfaz) para onde vai o estorno.
+  ImportSession withRefundChoice(String refundLineId, String? optionKey) => _copy(
+        refundChoices: {
+          for (final entry in refundChoices.entries)
+            if (entry.key != refundLineId) entry.key: entry.value,
+          refundLineId: ?optionKey,
+        },
+      );
+
+  /// Quanto os estornos escolhidos abatem da compra [lineId] desta fatura.
+  int _refundedFromLine(String lineId, {String? except}) {
+    var total = 0;
+    for (final entry in refundChoices.entries) {
+      if (entry.key == except || entry.value != 'line:$lineId') continue;
+      final refund = lines.where((l) => l.id == entry.key).firstOrNull;
+      if (refund != null && refund.kind == StatementLineKind.refund && !_wasImported(refund)) {
+        total += refund.amount.cents;
+      }
+    }
+    return total;
+  }
+
+  /// Valor que a compra vai ter no app: o da fatura menos os estornos abatidos dela.
+  Money effectiveAmountOf(ImportedStatementLine line) {
+    final cents = line.amount.cents - _refundedFromLine(line.id);
+    return Money(cents < 0 ? 0 : cents);
   }
 
   /// Sugere a categoria das linhas ainda sem uma: a de uma despesa parecida já
@@ -608,14 +740,14 @@ class ImportSession {
     var ignored = 0;
     for (final line in lines) {
       if (!line.isPurchase) continue;
-      final cents = line.amount.cents;
-      file += cents;
+      file += line.amount.cents;
+      final cents = effectiveAmountOf(line).cents;
       switch (statusOf(line)) {
         case LineStatus.linked:
         case LineStatus.alreadyImported:
-          linked += cents;
+          linked += line.amount.cents;
         case LineStatus.ignored:
-          ignored += cents;
+          ignored += line.amount.cents;
         case LineStatus.newLine:
           switch (line.destination) {
             case LineDestination.house:
@@ -739,6 +871,11 @@ class ImportSession {
     final loanLines = <String, List<ImportedStatementLine>>{};
 
     for (final line in newLines) {
+      // Estorno que cobriu a compra inteira: não sobra nada para lançar
+      if (effectiveAmountOf(line).isZero) {
+        records.add(ImportLineRecord(line: line, outcome: LineOutcome.ignored));
+        continue;
+      }
       switch (line.destination) {
         case LineDestination.house:
           final inClosedCycle =
@@ -764,7 +901,7 @@ class ImportSession {
             HouseExpense(
               id: expenseId,
               title: inClosedCycle ? '$title (ajuste de ${_dayMonth.format(line.date)})' : title,
-              amount: line.amount,
+              amount: effectiveAmountOf(line),
               // Ajuste de ciclo fechado conta hoje, e não na data da compra
               date: inClosedCycle ? today : line.date,
               dueDate: source.isCreditCard
@@ -814,9 +951,9 @@ class ImportSession {
           id: loanId,
           title: '${source.name}$dueLabel — ${memberNames[entry.key] ?? 'morador'}',
           description: entry.value
-              .map((line) => '${_titleOf(line)} ${line.amount.formatted}')
+              .map((line) => '${_titleOf(line)} ${effectiveAmountOf(line).formatted}')
               .join('; '),
-          totalAmount: Money(entry.value.fold<int>(0, (acc, line) => acc + line.amount.cents)),
+          totalAmount: Money(entry.value.fold<int>(0, (acc, line) => acc + effectiveAmountOf(line).cents)),
           lenderMemberId: payerMemberId,
           borrowerMemberId: entry.key,
           installmentsCount: 1,
@@ -829,12 +966,26 @@ class ImportSession {
 
     final updates = <HouseExpense>[];
     final extraActions = <({ImportedStatementLine line, ExtraAction action})>[];
+    final refundedExpenses = <String, int>{};
     for (final line in lines) {
       final status = statusOf(line);
       // Pessoal, ignorada, pagamento, estorno e entrada: ficam só no histórico
       final leftOut = status == LineStatus.informational ||
           status == LineStatus.ignored ||
           (status == LineStatus.newLine && line.destination == LineDestination.cardOwnerPersonal);
+      final refundTarget = chosenRefund(line);
+      if (refundTarget != null) {
+        records.add(
+          ImportLineRecord(
+            line: line,
+            outcome: LineOutcome.linked,
+            expenseId: refundTarget.expense?.id,
+          ),
+        );
+        final expense = refundTarget.expense;
+        if (expense != null) refundedExpenses[expense.id] = (refundedExpenses[expense.id] ?? 0) + line.amount.cents;
+        continue;
+      }
       if (leftOut && !_wasImported(line)) {
         final extra = chosenExtra(line);
         if (extra != null) extraActions.add((line: line, action: extra));
@@ -871,9 +1022,26 @@ class ImportSession {
       }
     }
 
+    // Despesas já lançadas que receberam estorno: abatidas ou, se cobertas por
+    // inteiro, excluídas
+    final deletions = <HouseExpense>[];
+    for (final entry in refundedExpenses.entries) {
+      final expense = knownExpenses.firstWhere((e) => e.id == entry.key);
+      final updatedIndex = updates.indexWhere((e) => e.id == expense.id);
+      final base = updatedIndex >= 0 ? updates[updatedIndex] : expense;
+      final remaining = base.amount.cents - entry.value;
+      if (updatedIndex >= 0) updates.removeAt(updatedIndex);
+      if (remaining <= 0) {
+        deletions.add(expense);
+      } else {
+        updates.add(base.copyWith(amount: Money(remaining)));
+      }
+    }
+
     return ImportPlan(
       newExpenses: newExpenses,
       expenseUpdates: updates,
+      expenseDeletions: deletions,
       loans: loans,
       skippedClosedCycle: skipped,
       lineRecords: records,

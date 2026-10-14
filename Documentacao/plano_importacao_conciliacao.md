@@ -31,7 +31,7 @@ A tela antiga "Rachar a Fatura" (`split_invoice_modal.dart`) foi substituída pe
 - **A assinatura depende do arquivo**: se o banco mudar a descrição ou a data de uma linha entre um arquivo e outro, ela não é reconhecida como já importada (aí vale a comparação com as despesas do app).
 - **Conta pendente** que casa com uma linha só é vinculada: a baixa continua sendo feita na Casa.
 - **Movimentos do extrato são gravados depois da importação, um a um**: se um falhar (ciclo fechado, por exemplo), a importação continua gravada e a tela avisa qual não entrou. Desfazer a importação não reverte pagamento de fatura, aporte nem abatimento.
-- **Estorno** não gera lançamento: aparece só para conferência.
+- **Estorno** (feito): a linha de estorno pode abater de uma compra desta fatura (que é lançada só com o que sobrou, ou não é lançada se o estorno cobriu tudo) ou de uma despesa já lançada no mesmo cartão ou conta, até 120 dias antes (o valor dela diminui; se o estorno cobre o valor inteiro, ela é excluída depois de gravar a importação). Sem escolha, nada é registrado. Despesa já acertada em fechamento, com sub-itens ou com rateio em valores fixos não recebe estorno. A exclusão por estorno não é desfeita junto com a importação.
 - **A leitura por IA não foi testada com arquivo real**: a função está publicada e recusa quem não está logado, mas nenhuma fatura de verdade passou por ela ainda. PDF com senha não é lido.
 - **O PDF vai inteiro para o provedor de IA**: não dá para mascarar CPF e número de cartão dentro de um arquivo binário. O mascaramento vale para o texto que volta e para as descrições enviadas na sugestão de categoria.
 - **Sem cache da leitura por IA**: ler o mesmo PDF de novo gasta outra chamada.
@@ -167,7 +167,7 @@ Sem IA (limite ou erro), OFX/CSV continuam funcionando e a classificação fica 
 2. **Origem e leitura confiável**: feito.
 3. **Rascunho e gravação por linha**: gravação por linha e confirmação atômica feitas. Falta guardar o rascunho da revisão.
 4. **Conciliação**: feita (motor, tela, ciclo fechado, assinatura por linha, edição em lote e dividir linha).
-5. **Extrato**: pagamento de fatura, aporte e abatimento de empréstimo feitos. Falta o estorno.
+5. **Extrato**: pagamento de fatura, aporte, abatimento de empréstimo e estorno feitos.
 6. **IA e outros formatos**: regras aprendidas, sugestão de categoria, leitura de PDF/foto e mapeamento de colunas de CSV feitos.
 7. **Histórico e desfazer**: feitos (migration 0052).
 
