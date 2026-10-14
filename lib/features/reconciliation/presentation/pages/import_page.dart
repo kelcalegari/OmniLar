@@ -24,7 +24,10 @@ import '../../../p2p/domain/repositories/p2p_repository.dart';
 import '../../../p2p/presentation/cubit/p2p_cubit.dart';
 import '../../../settlement/domain/entities/settlement_summary.dart';
 import '../../../settlement/domain/repositories/settlement_repository.dart';
+import '../../data/csv_mapping_store.dart';
 import '../../data/import_ai_service.dart';
+import '../../domain/entities/csv_mapping.dart';
+import '../widgets/csv_mapping_dialog.dart';
 import '../../domain/entities/imported_statement_line.dart';
 import '../../domain/repositories/import_repository.dart';
 import '../../domain/services/import_session.dart';
@@ -67,6 +70,9 @@ class _ImportPageState extends State<ImportPage> {
 
   /// Regras aprendidas do cartão ou conta escolhido.
   List<ImportRule> _rules = const [];
+
+  /// CSV aberto na revisão, para poder ajustar as colunas depois.
+  ({String content, String fileName})? _csv;
 
   FinanceCubit get _finance => context.read<FinanceCubit>();
 
@@ -144,23 +150,82 @@ class _ImportPageState extends State<ImportPage> {
       }
 
       final content = StatementParser.decodeBytes(bytes);
-      final lines = StatementParser.parseFile(content, filename: file.name, source: sourceType);
+      final isOfx = file.name.toLowerCase().endsWith('.ofx') || content.contains('<STMTTRN>');
+      if (!isOfx) {
+        await _importCsv(source, file.name, content, sourceType);
+        return;
+      }
+
+      final lines = StatementParser.parseOfx(content, source: sourceType);
       if (lines.isEmpty) {
         _showMessage('Nenhum lançamento encontrado no arquivo selecionado.', error: true);
         return;
       }
 
       String? warning;
-      final isOfx = content.contains('<STMTTRN>');
       if (isOfx && StatementParser.isCreditCardOfx(content) != source.isCreditCard) {
         warning = source.isCreditCard
             ? 'Este arquivo parece ser o extrato de uma conta, e não a fatura de um cartão. Confira a origem escolhida.'
             : 'Este arquivo parece ser a fatura de um cartão, e não o extrato de uma conta. Confira a origem escolhida.';
       }
+      _csv = null;
       await _start(source, file.name, lines, warning: warning);
     } catch (e) {
       _showMessage('Erro ao importar arquivo: $e', error: true);
     }
+  }
+
+  /// CSV: lê com as colunas guardadas para este cartão ou conta; sem elas,
+  /// tenta reconhecer sozinho. Se não achar nada, pergunta ao usuário.
+  Future<void> _importCsv(
+    PaymentMethod source,
+    String fileName,
+    String content,
+    StatementSourceType sourceType,
+  ) async {
+    final saved = await sl<CsvMappingStore>().load(source.id);
+    var lines = saved != null
+        ? StatementParser.parseCsvWithMapping(content, saved, source: sourceType)
+        : const <ImportedStatementLine>[];
+    if (lines.isEmpty) lines = StatementParser.parseCsv(content, source: sourceType);
+    if (!mounted) return;
+
+    if (lines.isEmpty) {
+      _showMessage('Não reconheci as colunas deste arquivo. Diga o que é cada uma.');
+      await _mapCsvColumns(source, fileName, content, sourceType, initial: saved);
+      return;
+    }
+    _csv = (content: content, fileName: fileName);
+    await _start(source, fileName, lines);
+  }
+
+  /// Abre a escolha das colunas; com a resposta, lê o arquivo de novo e guarda
+  /// o mapeamento para os próximos arquivos deste cartão ou conta.
+  Future<void> _mapCsvColumns(
+    PaymentMethod source,
+    String fileName,
+    String content,
+    StatementSourceType sourceType, {
+    CsvMapping? initial,
+  }) async {
+    final mapping = await CsvMappingDialog.show(
+      context,
+      content: content,
+      fileName: fileName,
+      initial: initial ?? StatementParser.guessCsvMapping(content),
+      source: sourceType,
+    );
+    if (mapping == null || !mounted) return;
+
+    final lines = StatementParser.parseCsvWithMapping(content, mapping, source: sourceType);
+    if (lines.isEmpty) {
+      _showMessage('Nenhuma linha com data e valor nessas colunas.', error: true);
+      return;
+    }
+    await sl<CsvMappingStore>().save(source.id, mapping);
+    if (!mounted) return;
+    _csv = (content: content, fileName: fileName);
+    await _start(source, fileName, lines);
   }
 
   Future<void> _readWithAi(
@@ -194,6 +259,7 @@ class _ImportPageState extends State<ImportPage> {
       true => 'Lido por IA: a soma das linhas bate com o total impresso. Confira as linhas antes de confirmar.',
       null => 'Lido por IA: o arquivo não traz um total para conferir. Confira as linhas antes de confirmar.',
     };
+    _csv = null;
     await _start(source, fileName, reading.lines, warning: warning, dueDate: reading.dueDate);
   }
 
@@ -294,6 +360,7 @@ class _ImportPageState extends State<ImportPage> {
       );
     }
 
+    _csv = null;
     await _start(source, 'fatura_exemplo.csv', [
       line(1, 2, 'PAO DE ACUCAR LJ 1234', 48560),
       line(2, 4, 'ZARA SHOPPING', 17990),
@@ -980,9 +1047,35 @@ class _ImportPageState extends State<ImportPage> {
             style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
           ),
           const SizedBox(height: 4),
-          Text(
-            '${session.fileName} • ${session.lines.length} linhas',
-            style: const TextStyle(fontSize: 12, color: Colors.grey),
+          Row(
+            children: [
+              Flexible(
+                child: Text(
+                  '${session.fileName} • ${session.lines.length} linhas',
+                  style: const TextStyle(fontSize: 12, color: Colors.grey),
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              if (_csv != null)
+                TextButton.icon(
+                  icon: const Icon(Icons.view_column_outlined, size: 18),
+                  label: const Text('Ajustar colunas'),
+                  onPressed: _busy
+                      ? null
+                      : () async {
+                          final csv = _csv!;
+                          await _mapCsvColumns(
+                            session.source,
+                            csv.fileName,
+                            csv.content,
+                            session.source.isCreditCard
+                                ? StatementSourceType.creditCard
+                                : StatementSourceType.bankAccount,
+                            initial: await sl<CsvMappingStore>().load(session.source.id),
+                          );
+                        },
+                ),
+            ],
           ),
           const SizedBox(height: 8),
           Wrap(

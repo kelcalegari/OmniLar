@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import '../../../../core/domain/value_objects/money.dart';
+import '../entities/csv_mapping.dart';
 import '../entities/imported_statement_line.dart';
 import 'statement_text.dart';
 
@@ -198,6 +199,125 @@ class StatementParser {
     return _classify(raw, source, positiveIsOutflowOnTie: true);
   }
 
+  static List<String> _csvRows(String csvContent) => const LineSplitter()
+      .convert(csvContent.replaceFirst('\uFEFF', ''))
+      .map((line) => line.trim())
+      .where((line) => line.isNotEmpty)
+      .toList();
+
+  /// Primeiras linhas do CSV já separadas em colunas, para o usuário dizer o
+  /// que é cada uma. Todas as linhas ficam com o mesmo número de colunas.
+  static List<List<String>> csvPreview(String csvContent, {String? delimiter, int rows = 8}) {
+    final all = _csvRows(csvContent);
+    if (all.isEmpty) return const [];
+    final separator = delimiter ?? _detectDelimiter(all);
+    final split = [for (final row in all.take(rows)) _splitCsvRow(row, separator).map((c) => c.trim()).toList()];
+    final width = split.fold<int>(0, (max, row) => row.length > max ? row.length : max);
+    return [
+      for (final row in split) [...row, for (var i = row.length; i < width; i++) ''],
+    ];
+  }
+
+  /// Palpite de mapeamento para o CSV: pelo cabeçalho, quando há, senão pelo
+  /// conteúdo da primeira linha de dados. Serve de ponto de partida na tela.
+  static CsvMapping guessCsvMapping(String csvContent) {
+    final all = _csvRows(csvContent);
+    final delimiter = all.isEmpty ? ',' : _detectDelimiter(all);
+    final preview = csvPreview(csvContent, delimiter: delimiter);
+    if (preview.isEmpty) return CsvMapping(delimiter: delimiter, hasHeader: false, roles: const []);
+
+    final width = preview.first.length;
+    final roles = List<CsvColumnRole>.filled(width, CsvColumnRole.ignore);
+    final hasHeader = _looksLikeHeader(preview.first);
+
+    if (hasHeader) {
+      for (var i = 0; i < width; i++) {
+        final name = StatementText.normalize(preview.first[i]);
+        if (!roles.contains(CsvColumnRole.date) && (name.startsWith('data') || name.startsWith('date'))) {
+          roles[i] = CsvColumnRole.date;
+        } else if (RegExp(r'^(debito|saida|saidas)').hasMatch(name)) {
+          roles[i] = CsvColumnRole.debit;
+        } else if (RegExp(r'^(credito|entrada|entradas)').hasMatch(name)) {
+          roles[i] = CsvColumnRole.credit;
+        } else if (!roles.contains(CsvColumnRole.amount) &&
+            (name.startsWith('valor') || name.startsWith('amount') || name.startsWith('quantia'))) {
+          roles[i] = CsvColumnRole.amount;
+        } else if (!roles.contains(CsvColumnRole.description) &&
+            RegExp(r'^(descri|histor|lancamento|title|estabelecimento|memo|nome)').hasMatch(name)) {
+          roles[i] = CsvColumnRole.description;
+        }
+      }
+    }
+
+    // O que o cabeçalho não disse, a primeira linha de dados sugere
+    final sample = preview.length > (hasHeader ? 1 : 0) ? preview[hasHeader ? 1 : 0] : preview.first;
+    if (!roles.contains(CsvColumnRole.date)) {
+      final at = sample.indexWhere((c) => parseDate(c) != null);
+      if (at >= 0) roles[at] = CsvColumnRole.date;
+    }
+    final hasValue = roles.any((r) =>
+        r == CsvColumnRole.amount || r == CsvColumnRole.debit || r == CsvColumnRole.credit);
+    if (!hasValue) {
+      for (var i = width - 1; i >= 0; i--) {
+        if (roles[i] == CsvColumnRole.ignore && parseSignedCents(sample[i]) != null) {
+          roles[i] = CsvColumnRole.amount;
+          break;
+        }
+      }
+    }
+    if (!roles.contains(CsvColumnRole.description)) {
+      var best = -1;
+      for (var i = 0; i < width; i++) {
+        if (roles[i] != CsvColumnRole.ignore || sample[i].isEmpty) continue;
+        if (parseSignedCents(sample[i]) != null) continue;
+        if (best < 0 || sample[i].length > sample[best].length) best = i;
+      }
+      if (best >= 0) roles[best] = CsvColumnRole.description;
+    }
+    return CsvMapping(delimiter: delimiter, hasHeader: hasHeader, roles: roles);
+  }
+
+  /// Lê o CSV como o usuário disse: cada coluna com o seu papel. Linha sem
+  /// data ou sem valor é pulada. Com débito e crédito em colunas separadas, o
+  /// débito é saída (negativo) e o crédito, entrada.
+  static List<ImportedStatementLine> parseCsvWithMapping(
+    String csvContent,
+    CsvMapping mapping, {
+    StatementSourceType source = StatementSourceType.creditCard,
+  }) {
+    if (!mapping.isComplete) return const [];
+    final rows = _csvRows(csvContent);
+    final dateAt = mapping.indexOf(CsvColumnRole.date)!;
+    final descriptionAt = mapping.indexOf(CsvColumnRole.description)!;
+    final amountAt = mapping.indexOf(CsvColumnRole.amount);
+    final debitAt = mapping.indexOf(CsvColumnRole.debit);
+    final creditAt = mapping.indexOf(CsvColumnRole.credit);
+
+    String cell(List<String> cells, int? index) =>
+        index == null || index >= cells.length ? '' : cells[index].trim();
+
+    final raw = <_RawLine>[];
+    for (var r = mapping.hasHeader ? 1 : 0; r < rows.length; r++) {
+      final cells = _splitCsvRow(rows[r], mapping.delimiter);
+      final date = parseDate(cell(cells, dateAt));
+      if (date == null) continue;
+
+      int? cents;
+      if (amountAt != null) {
+        cents = parseSignedCents(cell(cells, amountAt));
+      } else {
+        final debit = parseSignedCents(cell(cells, debitAt))?.abs() ?? 0;
+        final credit = parseSignedCents(cell(cells, creditAt))?.abs() ?? 0;
+        cents = credit - debit;
+      }
+      if (cents == null || cents == 0) continue;
+
+      final description = cell(cells, descriptionAt);
+      raw.add(_RawLine(date, description.isEmpty ? 'Lançamento' : description, cents));
+    }
+    return _classify(raw, source, positiveIsOutflowOnTie: true);
+  }
+
   static bool _looksLikeHeader(List<String> cells) =>
       cells.every((c) => parseDate(c) == null) &&
       cells.any((c) {
@@ -207,7 +327,7 @@ class StatementParser {
 
   static String _detectDelimiter(List<String> rows) {
     final sample = rows.take(5);
-    for (final candidate in const [';', '\t']) {
+    for (final candidate in const [';', '\t', '|']) {
       if (sample.where((row) => row.contains(candidate)).length * 2 > sample.length) {
         return candidate;
       }

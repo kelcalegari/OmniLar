@@ -35,7 +35,7 @@ A tela antiga "Rachar a Fatura" (`split_invoice_modal.dart`) foi substituída pe
 - **A leitura por IA não foi testada com arquivo real**: a função está publicada e recusa quem não está logado, mas nenhuma fatura de verdade passou por ela ainda. PDF com senha não é lido.
 - **O PDF vai inteiro para o provedor de IA**: não dá para mascarar CPF e número de cartão dentro de um arquivo binário. O mascaramento vale para o texto que volta e para as descrições enviadas na sugestão de categoria.
 - **Sem cache da leitura por IA**: ler o mesmo PDF de novo gasta outra chamada.
-- **CSV com colunas fora do comum** pode não ser lido (seção 11).
+- **Mapeamento de colunas guardado só no aparelho**: em outro celular ou computador, o primeiro CSV do mesmo banco pede as colunas de novo.
 - **Sem dividir linha.**
 - **Vínculo "já lançado" pode errar** quando duas compras diferentes têm o mesmo valor, no mesmo cartão, em até 3 dias; o usuário desfaz com "São diferentes".
 
@@ -168,7 +168,7 @@ Sem IA (limite ou erro), OFX/CSV continuam funcionando e a classificação fica 
 3. **Rascunho e gravação por linha**: gravação por linha e confirmação atômica feitas. Falta guardar o rascunho da revisão.
 4. **Conciliação**: feita (motor, tela, ciclo fechado, assinatura por linha e edição em lote). Falta dividir linha.
 5. **Extrato**: pagamento de fatura, aporte e abatimento de empréstimo feitos. Falta o estorno.
-6. **IA e outros formatos**: regras aprendidas, sugestão de categoria e leitura de PDF/foto feitas. Falta o mapeamento de colunas de CSV (seção 11).
+6. **IA e outros formatos**: regras aprendidas, sugestão de categoria, leitura de PDF/foto e mapeamento de colunas de CSV feitos.
 7. **Histórico e desfazer**: feitos (migration 0052).
 
 A etapa 6 exige publicar uma função nova (`import-classify`). O rascunho da revisão (etapa 3) exigiria outra mudança no banco.
@@ -188,11 +188,11 @@ Nem todo banco exporta OFX ou CSV, e os CSV não têm colunas padronizadas; muit
 |---|---|---|
 | OFX | Por código; é um padrão | Feito |
 | CSV com colunas reconhecíveis | Por código, detectando data, descrição e valor | Feito |
-| CSV fora do padrão | Tela de mapear colunas, salva por cartão ou conta | A fazer |
+| CSV fora do padrão | Tela de mapear colunas, salva por cartão ou conta | Feito (guardado neste aparelho) |
 | PDF digital | IA lê e devolve as linhas estruturadas | Feito, sem teste com arquivo real |
 | PDF escaneado ou foto | A mesma função, com leitura de imagem | Feito, sem teste com arquivo real |
 
-**CSV fora do padrão.** Quando o leitor não tiver certeza das colunas, a página mostra as primeiras linhas e o usuário indica qual é data, descrição e valor (e se débito e crédito vêm em colunas separadas). O mapeamento fica salvo para aquele cartão ou conta. Não usa IA.
+**CSV fora do padrão (feito).** Quando o leitor não reconhece as colunas, a página mostra as primeiras linhas e o usuário indica separador, cabeçalho e o que é cada coluna: data, descrição e valor, ou débito e crédito em colunas separadas (`csv_mapping_dialog.dart`). O botão "Ajustar colunas" reabre a escolha em qualquer CSV. O mapeamento é guardado **neste aparelho** (`csv_mapping_store.dart`), por cartão ou conta, e usado nos próximos arquivos; em outro aparelho é preciso escolher de novo. Não usa IA.
 
 **PDF.**
 1. O arquivo vai para a função `import-read` no servidor (mesma estrutura de `capture-read`), que chama a IA. O arquivo é binário e segue como está; CPF e número de cartão são mascarados no texto que volta.
