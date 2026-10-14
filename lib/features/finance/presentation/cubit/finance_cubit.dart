@@ -507,12 +507,14 @@ class FinanceCubit extends Cubit<FinanceState> {
     required String paymentMethodId,
     required DateTime invoiceDueDate,
     required DateTime paidAt,
+    bool paidByHouse = false,
   }) async {
     try {
       await _repository.payCardInvoice(
         paymentMethodId: paymentMethodId,
         invoiceDueDate: invoiceDueDate,
         paidAt: paidAt,
+        paidByHouse: paidByHouse,
       );
       await loadCycleData(cycle: state.currentCycle);
       return true;

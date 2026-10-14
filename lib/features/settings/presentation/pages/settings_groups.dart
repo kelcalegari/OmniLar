@@ -426,6 +426,7 @@ extension _SettingsGroupViews on _SettingsPageState {
                   maxWidth: 480,
                   child: CardInvoicePaymentSheet(
                     card: pm,
+                    memberNames: {for (final m in members) m.id: m.name.split(' ').first},
                     repository: sl<FinanceRepository>(),
                     financeCubit: financeCubit,
                     cycleSchedule: financeCubit.cycleSchedule,

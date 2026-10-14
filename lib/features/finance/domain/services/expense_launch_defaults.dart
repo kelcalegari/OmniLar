@@ -1,4 +1,5 @@
 import '../entities/category.dart';
+import '../entities/house_expense.dart';
 import '../entities/house_member.dart';
 import '../entities/payment_method.dart';
 import '../entities/split_rule.dart';
@@ -15,6 +16,27 @@ class ExpenseLaunchDefaults {
       paymentMethod != null &&
       paymentMethod.ownerMemberId != null &&
       paymentMethod.id != 'pm_caixa';
+
+  /// Compra no cartão (com fechamento e vencimento) fica pendente até a fatura
+  /// ser paga: é a fatura que vira paga, na data do pagamento. Despesa de
+  /// projeto não entra em fatura da casa e nasce paga.
+  static bool waitsForInvoice(PaymentMethod? paymentMethod, {String? projectId}) =>
+      projectId == null &&
+      paymentMethod != null &&
+      paymentMethod.isCreditCard &&
+      paymentMethod.closingDay != null &&
+      paymentMethod.dueDay != null;
+
+  /// Status com que a despesa nasce: pendente quando espera a fatura.
+  static ExpenseStatus launchStatus(PaymentMethod? paymentMethod, {String? projectId}) =>
+      waitsForInvoice(paymentMethod, projectId: projectId)
+          ? ExpenseStatus.pending
+          : ExpenseStatus.paid;
+
+  /// "Pago do bolso" de uma despesa nova: compra que espera a fatura ainda não
+  /// tem quem pagou; isso se decide ao registrar o pagamento da fatura.
+  static bool launchPaidOutOfPocket(PaymentMethod? paymentMethod, {String? projectId}) =>
+      !waitsForInvoice(paymentMethod, projectId: projectId) && paidOutOfPocket(paymentMethod);
 
   /// Categoria real da casa: a indicada (por id ou por nome), senão a primeira
   /// cujo nome contém uma das [nameKeywords], senão a primeira da lista.

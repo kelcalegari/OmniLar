@@ -1,3 +1,4 @@
+import '../../domain/services/open_invoice_choices.dart';
 import '../../../finance/domain/entities/split_rule.dart';
 import 'package:flutter/foundation.dart' show debugPrint;
 import '../../../../core/domain/value_objects/financial_cycle.dart';
@@ -63,7 +64,12 @@ class MockSettlementDataSource implements SettlementDataSource {
     }
 
     final members = await financeDataSource.getMembers();
-    final expenses = await financeDataSource.getExpensesForCycle(cycle);
+    // Faturas em aberto: levadas adiante saem; as demais entram como pagas por quem foi escolhido
+    final expenses = applyOpenInvoiceChoices(
+      await financeDataSource.getExpensesForCycle(cycle),
+      await financeDataSource.getPaymentMethods(),
+      options?.openInvoiceChoices ?? const {},
+    );
     final contributions = await financeDataSource.getContributionsForCycle(
       cycle,
     );
@@ -356,7 +362,11 @@ class MockSettlementDataSource implements SettlementDataSource {
     }
 
     // 4. Baixa as despesas do ciclo que estavam pendentes
-    final expenses = await financeDataSource.getExpensesForCycle(summary.cycle);
+    final expenses = applyOpenInvoiceChoices(
+      await financeDataSource.getExpensesForCycle(summary.cycle),
+      await financeDataSource.getPaymentMethods(),
+      options?.openInvoiceChoices ?? const {},
+    );
     // Congela o rateio: despesas que usaram o padrão da casa passam a carregar os
     // percentuais deste fechamento.
     final members = await financeDataSource.getMembers();

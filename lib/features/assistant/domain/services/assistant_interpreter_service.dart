@@ -824,7 +824,10 @@ class AssistantInterpreterService {
           categoryId: category?.id ?? 'cat_groceries',
           paidByMemberId: payerId,
           paymentMethodId: paymentMethodId,
-          paidOutOfPocket: ExpenseLaunchDefaults.paidOutOfPocket(
+          paidOutOfPocket: ExpenseLaunchDefaults.launchPaidOutOfPocket(
+            paymentMethods.where((pm) => pm.id == paymentMethodId).firstOrNull,
+          ),
+          status: ExpenseLaunchDefaults.launchStatus(
             paymentMethods.where((pm) => pm.id == paymentMethodId).firstOrNull,
           ),
           splitRule: splitRule,

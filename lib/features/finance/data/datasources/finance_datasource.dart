@@ -85,10 +85,12 @@ abstract class FinanceDataSource {
   Future<List<CardInvoice>> getOpenCardInvoices(String paymentMethodId);
 
   /// Registra o dia em que a fatura que vence em [invoiceDueDate] foi paga.
+  /// [paidByHouse]: a fatura saiu do Caixa da Casa (sem reembolso ao titular).
   Future<void> payCardInvoice({
     required String paymentMethodId,
     required DateTime invoiceDueDate,
     required DateTime paidAt,
+    bool paidByHouse = false,
   });
 
   /// Faturas do cartão com pagamento registrado (recentes).

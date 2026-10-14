@@ -33,6 +33,7 @@ class _FakeFinanceRepository implements FinanceRepository {
     required String paymentMethodId,
     required DateTime invoiceDueDate,
     required DateTime paidAt,
+    bool paidByHouse = false,
   }) async {}
   @override
   Future<List<HouseExpense>> getExpensesForCycle(FinancialCycle cycle) async => [];

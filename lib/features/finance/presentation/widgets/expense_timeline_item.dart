@@ -12,6 +12,7 @@ import '../../domain/entities/category.dart';
 import '../../domain/entities/payment_method.dart';
 import '../../domain/entities/house_member.dart';
 import '../../domain/entities/split_rule.dart';
+import '../../domain/services/expense_launch_defaults.dart';
 import '../cubit/finance_cubit.dart';
 import '../cubit/finance_state.dart';
 import '../pages/add_expense_page.dart';
@@ -582,8 +583,12 @@ class ExpenseTimelineItem extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final isPending = expense.isPending;
-    final isOverdue = expense.isOverdue;
+    // Compra no cartão em aberto: quem fica pendente e se paga é a fatura
+    final waitsForInvoice = expense.isPending &&
+        !expense.isRecurring &&
+        ExpenseLaunchDefaults.waitsForInvoice(paymentMethod, projectId: expense.projectId);
+    final isPending = expense.isPending && !waitsForInvoice;
+    final isOverdue = expense.isOverdue && !waitsForInvoice;
     final catColor = _parseColor(category?.colorHex);
     final dateFormatted = DateFormat('dd/MM')
         .format(showPurchaseDate ? expense.date : (expense.dueDate ?? expense.date));

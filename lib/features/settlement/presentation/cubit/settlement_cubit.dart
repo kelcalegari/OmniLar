@@ -6,6 +6,8 @@ import '../../domain/entities/settlement_options.dart';
 import '../../domain/entities/settlement_summary.dart';
 import '../../domain/entities/transfer_settlement_resolution.dart';
 import '../../domain/repositories/settlement_repository.dart';
+import '../../domain/services/open_invoice_choices.dart';
+import '../../../finance/domain/services/cycle_expense_grouping.dart';
 import 'settlement_state.dart';
 
 class SettlementCubit extends BlocBase<SettlementState> {
@@ -39,6 +41,7 @@ class SettlementCubit extends BlocBase<SettlementState> {
       final defaultVaultId =
           state.options.targetVaultId ?? vaults.firstOrNull?.id;
       final options = state.options.copyWith(targetVaultId: defaultVaultId);
+      final openInvoices = await _loadOpenInvoices(cycle);
 
       emit(
         state.copyWith(
@@ -47,6 +50,7 @@ class SettlementCubit extends BlocBase<SettlementState> {
           summary: summary,
           vaults: vaults,
           options: options,
+          openInvoices: openInvoices,
         ),
       );
     } catch (e) {
@@ -55,6 +59,49 @@ class SettlementCubit extends BlocBase<SettlementState> {
           status: SettlementCubitStatus.error,
           errorMessage: 'Erro ao carregar o fechamento do ciclo: $e',
         ),
+      );
+    }
+  }
+
+  /// Faturas de cartão em aberto que pesam no ciclo (sem a fonte das despesas,
+  /// nenhuma).
+  Future<List<CardInvoiceEntry>> _loadOpenInvoices(FinancialCycle cycle) async {
+    final finance = _financeRepository;
+    if (finance == null) return const [];
+    try {
+      return openInvoicesOf(
+        await finance.getExpensesForCycle(cycle),
+        await finance.getPaymentMethods(),
+      );
+    } catch (_) {
+      return const [];
+    }
+  }
+
+  /// O que fazer com uma fatura em aberto: recalcula o fechamento na hora.
+  Future<void> updateOpenInvoiceChoice(String invoiceKey, OpenInvoiceChoice choice) =>
+      _applyDeficitOptions(
+        state.options.copyWith(
+          openInvoiceChoices: {...state.options.openInvoiceChoices, invoiceKey: choice},
+        ),
+      );
+
+  /// Registra o pagamento das faturas em aberto que vão receber baixa neste
+  /// fechamento, dentro do ciclo, por quem foi escolhido.
+  Future<void> _payOpenInvoices(FinancialCycle cycle) async {
+    final finance = _financeRepository;
+    if (finance == null) return;
+    final now = DateTime.now();
+    final paidAt = now.isAfter(cycle.endDate) ? cycle.endDate : now;
+    for (final invoice in state.openInvoices) {
+      final choice = state.options.openInvoiceChoices[invoice.key] ??
+          defaultOpenInvoiceChoice(invoice.card);
+      if (choice == OpenInvoiceChoice.carryOver) continue;
+      await finance.payCardInvoice(
+        paymentMethodId: invoice.card.id,
+        invoiceDueDate: invoice.dueDate,
+        paidAt: paidAt,
+        paidByHouse: choice == OpenInvoiceChoice.paidByHouse,
       );
     }
   }
@@ -161,6 +208,10 @@ class SettlementCubit extends BlocBase<SettlementState> {
 
     emit(state.copyWith(status: SettlementCubitStatus.confirming));
     try {
+      // Faturas em aberto que recebem baixa: o pagamento é registrado antes, e
+      // o fechamento já as calculou como pagas por quem foi escolhido
+      await _payOpenInvoices(currentSummary.cycle);
+
       // Recalcula antes de gravar: se alguém pagou ou lançou algo com a tela
       // aberta (ex: antecipou uma parcela P2P), o Super Pix exibido está defasado.
       final freshSummary = await _repository.getSettlementSummary(
@@ -199,6 +250,7 @@ class SettlementCubit extends BlocBase<SettlementState> {
         state.copyWith(
           status: SettlementCubitStatus.settled,
           summary: updatedSummary,
+          openInvoices: await _loadOpenInvoices(currentSummary.cycle),
         ),
       );
     } catch (e) {

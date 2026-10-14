@@ -72,16 +72,54 @@ void main() {
     expect(entries.whereType<CardInvoiceEntry>().map((i) => i.total.cents), [300, 700, 1100]);
   });
 
-  test('compra sozinha na fatura, conta pendente e despesa fora do cartão ficam soltas', () {
+  test('compra pendente e compra sozinha entram na fatura: é ela que se paga', () {
     final entries = groupCardInvoices([
       _expense('sozinha', 100, DateTime(2026, 10, 1), dueDate: due),
       _expense('pendente1', 200, DateTime(2026, 10, 2), method: 'itau', dueDate: due, status: ExpenseStatus.pending),
       _expense('pendente2', 300, DateTime(2026, 10, 3), method: 'itau', dueDate: due, status: ExpenseStatus.pending),
-      _expense('conta1', 400, DateTime(2026, 10, 4), method: 'caixa', dueDate: due),
-      _expense('conta2', 500, DateTime(2026, 10, 5), method: 'caixa', dueDate: due),
     ], _methods);
 
-    expect(entries, hasLength(5));
+    final invoices = entries.whereType<CardInvoiceEntry>().toList();
+    expect(invoices.map((i) => i.card.id), ['nubank', 'itau']);
+    expect(invoices[0].purchases.single.id, 'sozinha');
+    expect(invoices[1].total.cents, 500);
+    expect(invoices[1].isOpen, isTrue);
+    expect(invoices[1].isOverdue(DateTime(2026, 10, 15)), isTrue);
+    expect(invoices[1].isOverdue(DateTime(2026, 10, 14)), isFalse);
+  });
+
+  test('conta fora do cartão, conta recorrente no cartão e despesa de projeto ficam soltas', () {
+    final entries = groupCardInvoices([
+      _expense('conta1', 400, DateTime(2026, 10, 4), method: 'caixa', dueDate: due),
+      _expense('conta2', 500, DateTime(2026, 10, 5), method: 'caixa', dueDate: due),
+      HouseExpense(
+        id: 'netflix',
+        title: 'Netflix',
+        amount: const Money(5590),
+        date: DateTime(2026, 10, 10),
+        dueDate: due,
+        categoryId: 'cat',
+        paidByMemberId: 'kelvynn',
+        paymentMethodId: 'nubank',
+        splitRule: const SplitRule.percentage(null),
+        status: ExpenseStatus.pending,
+        isRecurring: true,
+      ),
+      HouseExpense(
+        id: 'viagem',
+        title: 'Hotel',
+        amount: const Money(90000),
+        date: DateTime(2026, 10, 10),
+        dueDate: due,
+        categoryId: 'cat',
+        paidByMemberId: 'kelvynn',
+        paymentMethodId: 'nubank',
+        splitRule: const SplitRule.percentage(null),
+        projectId: 'p1',
+      ),
+    ], _methods);
+
+    expect(entries, hasLength(4));
     expect(entries.whereType<CardInvoiceEntry>(), isEmpty);
   });
 

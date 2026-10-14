@@ -1,3 +1,4 @@
+import '../../domain/services/open_invoice_choices.dart';
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../settlement_summary_codec.dart';
@@ -170,7 +171,12 @@ class SupabaseSettlementDataSource implements SettlementDataSource {
     } catch (_) {}
 
     final members = await financeDataSource.getMembers();
-    final expenses = await financeDataSource.getExpensesForCycle(cycle);
+    // Faturas em aberto: levadas adiante saem; as demais entram como pagas por quem foi escolhido
+    final expenses = applyOpenInvoiceChoices(
+      await financeDataSource.getExpensesForCycle(cycle),
+      await financeDataSource.getPaymentMethods(),
+      options?.openInvoiceChoices ?? const {},
+    );
     final contributions = await financeDataSource.getContributionsForCycle(
       cycle,
     );
@@ -294,7 +300,12 @@ class SupabaseSettlementDataSource implements SettlementDataSource {
     ];
 
     // 3. Contas pendentes do ciclo
-    final expenses = await financeDataSource.getExpensesForCycle(cycle);
+    // Faturas em aberto: levadas adiante saem; as demais entram como pagas por quem foi escolhido
+    final expenses = applyOpenInvoiceChoices(
+      await financeDataSource.getExpensesForCycle(cycle),
+      await financeDataSource.getPaymentMethods(),
+      options?.openInvoiceChoices ?? const {},
+    );
     final expenseIds = [
       for (final exp in expenses)
         if (exp.isPending && _isUuid(exp.id)) exp.id,

@@ -2,6 +2,10 @@ import '../../../../core/domain/value_objects/money.dart';
 import '../entities/house_expense.dart';
 import '../entities/payment_method.dart';
 
+/// Identifica a fatura de um cartão pelo vencimento.
+String cardInvoiceKey(String paymentMethodId, DateTime dueDate) =>
+    '$paymentMethodId|${DateTime(dueDate.year, dueDate.month, dueDate.day).toIso8601String()}';
+
 /// Uma entrada da lista de gastos do ciclo: uma despesa solta ou a fatura de
 /// um cartão com as compras dela.
 sealed class CycleExpenseEntry {
@@ -28,17 +32,25 @@ class CardInvoiceEntry extends CycleExpenseEntry {
     required this.purchases,
   });
 
-  String get key => '${card.id}|${dueDate.toIso8601String()}';
+  String get key => cardInvoiceKey(card.id, dueDate);
 
   Money get total => Money(purchases.fold<int>(0, (acc, e) => acc + e.amount.cents));
 
-  /// Dia em que o pagamento da fatura foi registrado (null = não registrado).
+  /// Dia em que o pagamento da fatura foi registrado (null = em aberto).
   DateTime? get paidAt => purchases.every((e) => e.paidAt != null) ? purchases.first.paidAt : null;
+
+  bool get isOpen => paidAt == null;
+
+  /// Em aberto depois do vencimento.
+  bool isOverdue(DateTime now) =>
+      isOpen && dueDate.isBefore(DateTime(now.year, now.month, now.day));
 }
 
 /// Junta em uma fatura as compras de cartão do ciclo, sem mudar nenhuma
 /// despesa: é só a forma de mostrar. A fatura fica no lugar da primeira compra
-/// dela na lista. Compra sozinha em uma fatura continua solta.
+/// dela na lista. É a fatura que se paga, então mesmo uma compra sozinha
+/// aparece dentro dela. Contas recorrentes no cartão seguem soltas: vencem no
+/// dia da própria série.
 List<CycleExpenseEntry> groupCardInvoices(
   List<HouseExpense> expenses,
   List<PaymentMethod> paymentMethods,
@@ -50,7 +62,10 @@ List<CycleExpenseEntry> groupCardInvoices(
 
   String? invoiceKeyOf(HouseExpense expense) {
     final dueDate = expense.dueDate;
-    if (dueDate == null || !expense.isPaid || !cards.containsKey(expense.paymentMethodId)) {
+    if (dueDate == null ||
+        expense.isRecurring ||
+        expense.isProjectExpense ||
+        !cards.containsKey(expense.paymentMethodId)) {
       return null;
     }
     return '${expense.paymentMethodId}|${dueDate.year}-${dueDate.month}-${dueDate.day}';
@@ -67,7 +82,7 @@ List<CycleExpenseEntry> groupCardInvoices(
   for (final expense in expenses) {
     final key = invoiceKeyOf(expense);
     final purchases = key == null ? null : byInvoice[key];
-    if (key == null || purchases == null || purchases.length < 2) {
+    if (key == null || purchases == null) {
       entries.add(SingleExpenseEntry(expense));
       continue;
     }

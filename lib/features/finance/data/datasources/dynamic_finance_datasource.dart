@@ -171,11 +171,13 @@ class DynamicFinanceDataSource implements FinanceDataSource {
     required String paymentMethodId,
     required DateTime invoiceDueDate,
     required DateTime paidAt,
+    bool paidByHouse = false,
   }) =>
       _active.payCardInvoice(
         paymentMethodId: paymentMethodId,
         invoiceDueDate: invoiceDueDate,
         paidAt: paidAt,
+        paidByHouse: paidByHouse,
       );
 
   @override

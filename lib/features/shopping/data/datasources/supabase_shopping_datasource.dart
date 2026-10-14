@@ -295,7 +295,8 @@ class SupabaseShoppingDataSource implements ShoppingDataSource {
             categoryId: category?.id ?? 'cat_mercado',
             paidByMemberId: paidByMemberId,
             paymentMethodId: paymentMethodId,
-            paidOutOfPocket: ExpenseLaunchDefaults.paidOutOfPocket(paymentMethod),
+            paidOutOfPocket: ExpenseLaunchDefaults.launchPaidOutOfPocket(paymentMethod),
+            status: ExpenseLaunchDefaults.launchStatus(paymentMethod),
             splitRule: ExpenseLaunchDefaults.splitRule(
               category: category,
               members: members,

@@ -1,3 +1,4 @@
+import '../services/open_invoice_choices.dart';
 import 'package:equatable/equatable.dart';
 import 'transfer_settlement_resolution.dart';
 
@@ -26,6 +27,10 @@ class SettlementOptions extends Equatable {
   final DeficitSplit deficitSplit;
   final String? deficitVaultId; // Caixinha que cobre o excedente antes do rateio
 
+  /// O que fazer com cada fatura de cartão em aberto (pela chave da fatura).
+  /// Sem escolha, vale a baixa como um boleto.
+  final Map<String, OpenInvoiceChoice> openInvoiceChoices;
+
   const SettlementOptions({
     this.surplusAction = SurplusAction.toVault,
     this.targetVaultId,
@@ -33,6 +38,7 @@ class SettlementOptions extends Equatable {
     this.transferResolutions = const {},
     this.deficitSplit = DeficitSplit.proportional,
     this.deficitVaultId,
+    this.openInvoiceChoices = const {},
   });
 
   SettlementOptions copyWith({
@@ -43,6 +49,7 @@ class SettlementOptions extends Equatable {
     DeficitSplit? deficitSplit,
     String? deficitVaultId,
     bool clearDeficitVault = false,
+    Map<String, OpenInvoiceChoice>? openInvoiceChoices,
   }) {
     return SettlementOptions(
       surplusAction: surplusAction ?? this.surplusAction,
@@ -51,6 +58,7 @@ class SettlementOptions extends Equatable {
       transferResolutions: transferResolutions ?? this.transferResolutions,
       deficitSplit: deficitSplit ?? this.deficitSplit,
       deficitVaultId: clearDeficitVault ? null : (deficitVaultId ?? this.deficitVaultId),
+      openInvoiceChoices: openInvoiceChoices ?? this.openInvoiceChoices,
     );
   }
 
@@ -59,6 +67,7 @@ class SettlementOptions extends Equatable {
     surplusAction,
     targetVaultId,
     creditAction,
+    openInvoiceChoices,
     transferResolutions,
     deficitSplit,
     deficitVaultId,

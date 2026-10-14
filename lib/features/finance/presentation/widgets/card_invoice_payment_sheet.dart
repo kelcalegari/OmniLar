@@ -21,6 +21,12 @@ class CardInvoicePaymentSheet extends StatefulWidget {
   /// tiraria as compras de um acerto já feito ou as cobraria duas vezes.
   final Future<bool> Function(FinancialCycle cycle) isCycleClosed;
 
+  /// Vencimento da fatura que já vem escolhida (a aberta pela Casa).
+  final DateTime? initialDueDate;
+
+  /// Nomes dos moradores, para dizer de quem é o bolso.
+  final Map<String, String> memberNames;
+
   const CardInvoicePaymentSheet({
     super.key,
     required this.card,
@@ -28,6 +34,8 @@ class CardInvoicePaymentSheet extends StatefulWidget {
     required this.financeCubit,
     required this.cycleSchedule,
     required this.isCycleClosed,
+    this.initialDueDate,
+    this.memberNames = const {},
   });
 
   @override
@@ -41,6 +49,9 @@ class _CardInvoicePaymentSheetState extends State<CardInvoicePaymentSheet> {
   CardInvoice? _selected;
   DateTime _paidOn = DateTime.now();
   bool _busy = false;
+
+  /// A fatura saiu do Caixa da Casa (cartão sem dono sempre sai do Caixa).
+  late bool _paidByHouse = widget.card.ownerMemberId == null;
 
   Future<({List<CardInvoice> open, List<CardInvoice> paid})> _load() async {
     final open = await widget.repository.getOpenCardInvoices(widget.card.id);
@@ -127,6 +138,7 @@ class _CardInvoicePaymentSheetState extends State<CardInvoicePaymentSheet> {
       paymentMethodId: invoice.paymentMethodId,
       invoiceDueDate: invoice.dueDate,
       paidAt: _paidOn,
+      paidByHouse: _paidByHouse,
     ),
     successMessage:
         'Pagamento da fatura registrado em ${_dayFormat.format(_paidOn)}. '
@@ -156,7 +168,18 @@ class _CardInvoicePaymentSheetState extends State<CardInvoicePaymentSheet> {
           builder: (context, snapshot) {
             final open = snapshot.data?.open ?? const <CardInvoice>[];
             final paid = snapshot.data?.paid ?? const <CardInvoice>[];
-            final selected = _selected ?? open.firstOrNull;
+            final initial = widget.initialDueDate;
+            final selected = _selected ??
+                (initial == null
+                    ? null
+                    : open
+                        .where((i) =>
+                            i.dueDate.year == initial.year &&
+                            i.dueDate.month == initial.month &&
+                            i.dueDate.day == initial.day)
+                        .firstOrNull) ??
+                open.firstOrNull;
+            final owner = widget.memberNames[widget.card.ownerMemberId] ?? 'titular';
 
             return SingleChildScrollView(
               child: Column(
@@ -217,6 +240,34 @@ class _CardInvoicePaymentSheetState extends State<CardInvoicePaymentSheet> {
                         icon: const Icon(Icons.event_rounded, size: 18),
                         label: Text('Paga em ${_dayFormat.format(_paidOn)}'),
                       ),
+                      if (widget.card.ownerMemberId != null) ...[
+                        const SizedBox(height: 12),
+                        const Text('Com que dinheiro?', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
+                        RadioGroup<bool>(
+                          groupValue: _paidByHouse,
+                          onChanged: (value) {
+                            if (!_busy && value != null) setState(() => _paidByHouse = value);
+                          },
+                          child: Column(
+                            children: [
+                              RadioListTile<bool>(
+                                dense: true,
+                                contentPadding: EdgeInsets.zero,
+                                value: false,
+                                title: Text('Do bolso de $owner'),
+                                subtitle: const Text('É reembolsado no fechamento do ciclo'),
+                              ),
+                              const RadioListTile<bool>(
+                                dense: true,
+                                contentPadding: EdgeInsets.zero,
+                                value: true,
+                                title: Text('Caixa da Casa'),
+                                subtitle: Text('Sai do caixa, sem reembolso'),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
                       const SizedBox(height: 8),
                       Text(
                         'Com essa data, a fatura conta no ciclo ${_cycleOf(_paidOn).label}.',

@@ -159,12 +159,17 @@ class MockFinanceDataSource implements FinanceDataSource {
         title: 'Abastecimento Posto Shell',
         amount: const Money(18000), // R$ 180,00
         date: cycleStart.add(const Duration(days: 1)),
-        dueDate: cycleStart.add(const Duration(days: 1)),
+        // Compra no cartão: fica na fatura (fecha dia 28, vence dia 5) até ela ser paga
+        dueDate: CreditCardInvoiceCalculator.calculateInvoiceDueDate(
+          purchaseDate: cycleStart.add(const Duration(days: 1)),
+          closingDay: 28,
+          dueDay: 5,
+        ),
         categoryId: 'cat_carro', // Dono 100% Carlos
         paidByMemberId: 'member_carlos',
         paymentMethodId: 'pm_card_carlos',
         splitRule: const SplitRule.singleResponsible('member_carlos'),
-        status: ExpenseStatus.paid,
+        status: ExpenseStatus.pending,
       ),
       // Contas recorrentes futuras / provisionadas
       HouseExpense(
@@ -863,17 +868,25 @@ class MockFinanceDataSource implements FinanceDataSource {
     required String paymentMethodId,
     required DateTime invoiceDueDate,
     required DateTime paidAt,
+    bool paidByHouse = false,
   }) async {
     bool sameDay(DateTime a, DateTime b) =>
         a.year == b.year && a.month == b.month && a.day == b.day;
+    final card = _paymentMethods.where((p) => p.id == paymentMethodId).firstOrNull;
 
     for (int i = 0; i < _expenses.length; i++) {
       final e = _expenses[i];
       if (e.paymentMethodId == paymentMethodId &&
           e.dueDate != null &&
           e.paidAt == null &&
+          e.settledAt == null &&
           sameDay(e.dueDate!, invoiceDueDate)) {
-        _expenses[i] = e.copyWith(paidAt: paidAt);
+        // Como no banco: pelo titular há reembolso; pelo Caixa (ou cartão sem dono), não
+        _expenses[i] = e.copyWith(
+          status: ExpenseStatus.paid,
+          paidAt: paidAt,
+          paidOutOfPocket: !paidByHouse && card?.ownerMemberId != null,
+        );
       }
     }
   }
@@ -895,8 +908,14 @@ class MockFinanceDataSource implements FinanceDataSource {
           due != null &&
           due.year == invoiceDueDate.year &&
           due.month == invoiceDueDate.month &&
-          due.day == invoiceDueDate.day) {
-        _expenses[i] = e.copyWith(clearPaidAt: true);
+          due.day == invoiceDueDate.day &&
+          e.settledAt == null) {
+        // A fatura volta a ficar em aberto
+        _expenses[i] = e.copyWith(
+          status: ExpenseStatus.pending,
+          clearPaidAt: true,
+          paidOutOfPocket: false,
+        );
       }
     }
   }

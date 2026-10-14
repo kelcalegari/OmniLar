@@ -386,7 +386,10 @@ date,title,amount
       expect(enel.dueDate, DateTime(2026, 11, 10));
       expect(enel.paymentMethodId, 'pm_nubank');
       expect(enel.paidByMemberId, 'kelvynn');
-      expect(enel.paidOutOfPocket, isTrue);
+      // Fica pendente até a fatura ser paga; quem pagou se decide no pagamento
+      expect(enel.status, ExpenseStatus.pending);
+      expect(enel.paidOutOfPocket, isFalse);
+      expect(plan.invoicePayment, isNull);
       expect(enel.splitRule.percentages, {'kelvynn': 60.0, 'cristiano': 40.0});
 
       // O histórico guarda o que cada linha virou
@@ -414,7 +417,7 @@ date,title,amount
       final farmacia = plan.expenseUpdates.firstWhere((e) => e.id == 'e_farmacia');
       expect(farmacia.paymentMethodId, 'pm_nubank');
       expect(farmacia.dueDate, DateTime(2026, 11, 10));
-      expect(farmacia.paidOutOfPocket, isTrue);
+      expect(farmacia.paidOutOfPocket, isFalse);
       final jantar = plan.expenseUpdates.firstWhere((e) => e.id == 'e_jantar');
       expect(jantar.amount.cents, 15400);
 
@@ -484,7 +487,7 @@ date,title,amount
       final expense = (payload['expenses'] as List).single as Map;
       expect(expense['amount_cents'], 21000);
       expect(expense['due_date'], '2026-11-10');
-      expect(expense['status'], 'paid');
+      expect(expense['status'], 'pending');
       expect((expense['split_rules'] as List).map((r) => (r as Map)['calculated_cents']), [12600, 8400]);
 
       final loan = (payload['loans'] as List).single as Map;
@@ -552,15 +555,68 @@ date,title,amount
       expect(plan.newExpenses.map((e) => e.amount.cents), isNot(contains(6290)));
     });
 
-    test('ciclo fechado: lança como ajuste no ciclo de hoje ou deixa de fora', () {
+    test('fatura em aberto não é travada por ciclo fechado: a compra pendente pesa no ciclo atual', () {
       final session = start()
           .withDecision('farmacia', MatchDecision.accepted)
           .withDecision('jantar', MatchDecision.accepted);
-      final today = DateTime(2026, 12, 10);
-      // No cartão, todas as linhas contam no ciclo do vencimento da fatura
       final closed = {schedule.cycleFor(DateTime(2026, 11, 10))};
-      expect(session.countingCycles(schedule), closed);
-      expect(session.linesInClosedCycles(schedule, closed), hasLength(3));
+
+      expect(session.linesInClosedCycles(schedule, closed), isEmpty);
+      final plan = session.buildPlan(
+        members: _members,
+        categories: _categories,
+        schedule: schedule,
+        closedCycles: closed,
+        closedCyclePolicy: ClosedCyclePolicy.skip,
+        newId: newId,
+      );
+      expect(plan.skippedClosedCycle, isEmpty);
+      final enel = plan.newExpenses.firstWhere((e) => e.amount.cents == 21000);
+      expect(enel.title, 'Enel Energia');
+      expect(enel.dueDate, DateTime(2026, 11, 10));
+    });
+
+    test('fatura já paga informada na importação vira o registro do pagamento', () {
+      final paidAt = DateTime(2026, 11, 8);
+      final session = start()
+          .withDecision('farmacia', MatchDecision.accepted)
+          .withDecision('jantar', MatchDecision.accepted)
+          .withInvoicePayment(paidAt, byHouse: true);
+
+      final plan = session.buildPlan(members: _members, categories: _categories, schedule: schedule, newId: newId);
+      expect(plan.invoicePayment!.dueDate, DateTime(2026, 11, 10));
+      expect(plan.invoicePayment!.paidAt, DateTime(2026, 11, 8, 12));
+      expect(plan.invoicePayment!.paidByHouse, isTrue);
+
+      expect(session.withInvoicePayment(null).buildPlan(
+            members: _members,
+            categories: _categories,
+            schedule: schedule,
+            newId: newId,
+          ).invoicePayment, isNull);
+    });
+
+    test('compra de cartão já lançada e ainda pendente é reconhecida como já lançada', () {
+      final pending = _expense('e_pend', 'Mercado', 48560, DateTime(2026, 10, 11), status: ExpenseStatus.pending);
+      final session = start().withExpenses([pending]);
+      expect(session.statusOf(lines[0]), LineStatus.linked);
+      // Em outra forma de pagamento, pendente continua só "provável"
+      final elsewhere = start().withExpenses([
+        _expense('e_conta', 'Mercado', 48560, DateTime(2026, 10, 11), status: ExpenseStatus.pending, paymentMethodId: 'pm_caixa'),
+      ]);
+      expect(elsewhere.statusOf(lines[0]), LineStatus.needsReview);
+    });
+
+    test('ciclo fechado: em conta (sem fatura), lança como ajuste no ciclo de hoje ou deixa de fora', () {
+      final session = ImportSession.start(
+        source: _account,
+        fileName: 'extrato.ofx',
+        lines: [_line('enel', DateTime(2026, 10, 3), 'ENEL ENERGIA', 21000)],
+        payerMemberId: 'kelvynn',
+      );
+      final today = DateTime(2026, 12, 10);
+      final closed = {schedule.cycleFor(DateTime(2026, 10, 3))};
+      expect(session.linesInClosedCycles(schedule, closed), hasLength(1));
 
       final adjusted = session.buildPlan(
         members: _members,
@@ -570,11 +626,10 @@ date,title,amount
         now: today,
         newId: newId,
       );
-      final enel = adjusted.newExpenses.firstWhere((e) => e.amount.cents == 21000);
+      final enel = adjusted.newExpenses.single;
       expect(enel.title, 'Enel Energia (ajuste de 03/10)');
       expect(enel.date, today);
-      expect(enel.dueDate, today);
-      expect(closed.contains(schedule.cycleFor(enel.dueDate!)), isFalse);
+      expect(enel.status, ExpenseStatus.paid);
 
       final skipped = session.buildPlan(
         members: _members,
@@ -586,7 +641,7 @@ date,title,amount
         newId: newId,
       );
       expect(skipped.newExpenses, isEmpty);
-      expect(skipped.skippedClosedCycle, hasLength(3));
+      expect(skipped.skippedClosedCycle, hasLength(1));
     });
 
     test('extrato de conta: cada linha conta no ciclo da própria data e não tem vencimento de fatura', () {

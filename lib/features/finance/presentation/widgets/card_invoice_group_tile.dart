@@ -31,6 +31,7 @@ class CardInvoiceGroupTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final paidAt = invoice.paidAt;
+    final overdue = invoice.isOverdue(DateTime.now());
     final count = invoice.purchases.length;
 
     return Container(
@@ -38,7 +39,12 @@ class CardInvoiceGroupTile extends StatelessWidget {
       decoration: BoxDecoration(
         color: theme.cardColor,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.orange.withValues(alpha: 0.35)),
+        border: Border.all(
+          color: paidAt != null
+              ? Colors.orange.withValues(alpha: 0.35)
+              : (overdue ? AppColors.debtRed : AppColors.folegoWarning).withValues(alpha: 0.5),
+          width: paidAt != null ? 1 : 1.5,
+        ),
       ),
       clipBehavior: Clip.antiAlias,
       child: Material(
@@ -73,28 +79,71 @@ class CardInvoiceGroupTile extends StatelessWidget {
                           ),
                           const SizedBox(height: 2),
                           Text(
-                            'vence ${_day.format(invoice.dueDate)} • $count compras',
+                            'vence ${_day.format(invoice.dueDate)} • $count ${count == 1 ? 'compra' : 'compras'}',
                             style: theme.textTheme.bodySmall?.copyWith(fontSize: 11, color: Colors.grey),
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                           ),
                           Text(
-                            paidAt == null
-                                ? 'Pagamento não registrado'
-                                : 'Paga em ${_day.format(paidAt)}',
+                            paidAt != null
+                                ? 'Paga em ${_day.format(paidAt)}'
+                                : (overdue ? 'Atrasada' : 'Em aberto'),
                             style: theme.textTheme.bodySmall?.copyWith(
                               fontSize: 11,
                               fontWeight: FontWeight.w600,
-                              color: paidAt == null ? AppColors.folegoWarning : AppColors.creditGreen,
+                              color: paidAt != null
+                                  ? AppColors.creditGreen
+                                  : (overdue ? AppColors.debtRed : AppColors.folegoWarning),
                             ),
                           ),
                         ],
                       ),
                     ),
                     const SizedBox(width: 8),
-                    Text(
-                      invoice.total.format(),
-                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      children: [
+                        Text(
+                          invoice.total.format(),
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 15,
+                            color: paidAt != null
+                                ? null
+                                : (overdue ? AppColors.debtRed : AppColors.folegoWarning),
+                          ),
+                        ),
+                        if (paidAt == null && onRegisterPayment != null) ...[
+                          const SizedBox(height: 4),
+                          InkWell(
+                            onTap: onRegisterPayment,
+                            borderRadius: BorderRadius.circular(6),
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                              decoration: BoxDecoration(
+                                color: AppColors.creditGreen.withValues(alpha: 0.12),
+                                borderRadius: BorderRadius.circular(6),
+                                border: Border.all(color: AppColors.creditGreen.withValues(alpha: 0.3)),
+                              ),
+                              child: const Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(Icons.check_rounded, size: 11, color: AppColors.creditGreen),
+                                  SizedBox(width: 2),
+                                  Text(
+                                    'Pagar',
+                                    style: TextStyle(
+                                      fontSize: 10,
+                                      fontWeight: FontWeight.bold,
+                                      color: AppColors.creditGreen,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ],
+                      ],
                     ),
                     Icon(
                       expanded ? Icons.expand_less_rounded : Icons.expand_more_rounded,
@@ -112,14 +161,14 @@ class CardInvoiceGroupTile extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
                     ...children,
-                    if (paidAt == null && onRegisterPayment != null)
+                    if (onRegisterPayment != null)
                       Align(
                         alignment: Alignment.centerRight,
                         child: Padding(
                           padding: const EdgeInsets.only(bottom: 8),
                           child: TextButton.icon(
                             icon: const Icon(Icons.receipt_long_outlined, size: 18, color: AppColors.primary),
-                            label: const Text('Registrar pagamento da fatura'),
+                            label: Text(paidAt == null ? 'Pagar a fatura' : 'Ver ou desfazer o pagamento'),
                             onPressed: onRegisterPayment,
                           ),
                         ),

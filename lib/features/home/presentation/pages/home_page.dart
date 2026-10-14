@@ -739,6 +739,8 @@ class _HomePageContentState extends State<_HomePageContent> {
                       maxWidth: 480,
                       child: CardInvoicePaymentSheet(
                         card: entry.card,
+                        initialDueDate: entry.dueDate,
+                        memberNames: {for (final m in state.members) m.id: m.name.split(' ').first},
                         repository: sl<FinanceRepository>(),
                         financeCubit: financeCubit,
                         cycleSchedule: financeCubit.cycleSchedule,

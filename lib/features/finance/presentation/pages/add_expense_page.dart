@@ -253,6 +253,10 @@ class _AddExpensePageState extends State<AddExpensePage> {
         ? (pmId == 'pm_caixa')
         : (selectedPm.ownerMemberId == null || selectedPm.id == 'pm_caixa');
     final paidOutOfPocket = !isHouseMethod;
+    // Compra no cartão fica pendente até a fatura ser paga (quem pagou se
+    // decide no pagamento da fatura)
+    final waitsForInvoice = !_isRecurring &&
+        ExpenseLaunchDefaults.waitsForInvoice(selectedPm, projectId: _selectedProjectId);
 
     if (_isRecurring) {
       // Ao editar, o vencimento fica no mês da própria ocorrência (não no mês atual)
@@ -315,6 +319,21 @@ class _AddExpensePageState extends State<AddExpensePage> {
             }).toList()
           : const [];
 
+      final oldPm = state.paymentMethods.where((p) => p.id == oldExpense.paymentMethodId).firstOrNull;
+      final wasWaitingForInvoice = oldExpense.isPending &&
+          ExpenseLaunchDefaults.waitsForInvoice(oldPm, projectId: oldExpense.projectId);
+      final sameCard = oldExpense.paymentMethodId == pmId;
+      final ExpenseStatus editedStatus;
+      if (waitsForInvoice) {
+        // No mesmo cartão vale o que a fatura já disse; em outro, volta a esperar a fatura
+        editedStatus = sameCard ? oldExpense.status : ExpenseStatus.pending;
+      } else if (wasWaitingForInvoice) {
+        // Saiu do cartão: foi paga com a forma escolhida, na data da compra
+        editedStatus = ExpenseStatus.paid;
+      } else {
+        editedStatus = _expenseStatus;
+      }
+
       final updatedExpense = oldExpense.copyWith(
         title: _titleController.text.trim(),
         amount: Money(_cents),
@@ -324,13 +343,15 @@ class _AddExpensePageState extends State<AddExpensePage> {
         paidByMemberId: paidById,
         paymentMethodId: pmId,
         splitRule: splitRuleForEdit(oldExpense, catId, rule),
-        paidOutOfPocket: paidOutOfPocket,
-        status: _expenseStatus,
+        paidOutOfPocket: waitsForInvoice
+            ? (sameCard && oldExpense.isPaid ? oldExpense.paidOutOfPocket : false)
+            : paidOutOfPocket,
+        status: editedStatus,
         // Conta que estava pendente e foi marcada como paga agora
-        paidAt: _expenseStatus == ExpenseStatus.paid && oldExpense.isPending
+        paidAt: editedStatus == ExpenseStatus.paid && oldExpense.isPending && !wasWaitingForInvoice
             ? DateTime.now()
             : null,
-        clearPaidAt: _expenseStatus == ExpenseStatus.pending,
+        clearPaidAt: editedStatus == ExpenseStatus.pending,
         isRecurring: _isRecurring,
         isVariable: _isVariable,
         dueDay: _isRecurring ? _dueDay : null,
@@ -383,8 +404,8 @@ class _AddExpensePageState extends State<AddExpensePage> {
       paidByMemberId: paidById,
       paymentMethodId: pmId,
       splitRule: rule,
-      paidOutOfPocket: paidOutOfPocket,
-      status: _expenseStatus,
+      paidOutOfPocket: waitsForInvoice ? false : paidOutOfPocket,
+      status: waitsForInvoice ? ExpenseStatus.pending : _expenseStatus,
       isRecurring: _isRecurring,
       isVariable: _isVariable,
       dueDay: _isRecurring ? _dueDay : null,

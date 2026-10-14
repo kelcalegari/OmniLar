@@ -271,6 +271,13 @@ O app já tem empréstimo com o Caixa como credor ("acordo com o Lar"), usado na
 
 ## 13. Fatura como conta pendente (decisão C)
 
+**Situação (14/10/2026): implementada na branch `feat/import-reconciliation`, com a migration 0054 aplicada.** Feito: compra no cartão nasce pendente em todos os caminhos de lançamento (importação, formulário, scanner, assistente, mercado e dados do modo demo); pagamento da fatura com a origem do dinheiro (titular ou Caixa da Casa) pela Casa, por Ajustes, pela importação ("Fatura já paga?") e pelo extrato; fatura agrupada com "Em aberto", "Atrasada" ou "Paga em" e botão "Pagar"; passo novo no fechamento com as três escolhas. Testado só no modo demo e em testes; nada disso foi exercitado com conta real.
+
+**Limites do que foi feito**
+- Ao registrar a baixa no fechamento, o app grava o pagamento das faturas antes de confirmar o fechamento. Se a confirmação falhar depois disso, as faturas ficam pagas (o fechamento pode ser confirmado de novo).
+- Despesa que já existia e a importação passou para o cartão ("provável" aceito) continua com o status que tinha; só o "pago do bolso" é zerado até o pagamento da fatura.
+- Pagamento pelo Caixa ainda sem os empréstimos da seção 12.3.
+
 Decisões do dono em 14/10/2026:
 - **C**: a compra no cartão não é tratada como paga até a fatura ser paga. O momento do pagamento define o ciclo.
 - **No fechamento**: o app pergunta, fatura por fatura, o que fazer com a fatura em aberto que vence no ciclo. Se o usuário não mudar nada, ela recebe baixa como um boleto (resposta "2: A B", lida como "b, com a como padrão"; confirmar com o dono).

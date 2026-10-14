@@ -197,6 +197,45 @@ class _ImportPageState extends State<ImportPage> {
     await _start(source, fileName, reading.lines, warning: warning, dueDate: reading.dueDate);
   }
 
+  /// Informa que a fatura importada já foi paga: data e, se o cartão tem
+  /// dono, com que dinheiro.
+  Future<void> _pickInvoicePayment() async {
+    final session = _session;
+    if (session == null) return;
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: session.invoicePaidAt ?? DateTime.now(),
+      firstDate: DateTime(DateTime.now().year - 2),
+      lastDate: DateTime.now(),
+      helpText: 'Dia em que a fatura foi paga',
+    );
+    if (picked == null || !mounted) return;
+
+    var byHouse = session.source.ownerMemberId == null;
+    if (session.source.ownerMemberId != null) {
+      final owner = _memberName(session.source.ownerMemberId);
+      final choice = await showDialog<bool>(
+        context: context,
+        builder: (dialogContext) => SimpleDialog(
+          title: const Text('Com que dinheiro?', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+          children: [
+            SimpleDialogOption(
+              onPressed: () => Navigator.pop(dialogContext, false),
+              child: Text('Do bolso de $owner (reembolsado no fechamento)'),
+            ),
+            SimpleDialogOption(
+              onPressed: () => Navigator.pop(dialogContext, true),
+              child: const Text('Caixa da Casa (sem reembolso)'),
+            ),
+          ],
+        ),
+      );
+      if (choice == null || !mounted) return;
+      byHouse = choice;
+    }
+    _update(_session!.withInvoicePayment(picked, byHouse: byHouse));
+  }
+
   /// Pede à IA nome e categoria para as linhas da Casa que ainda não têm.
   Future<void> _suggestWithAi() async {
     final session = _session;
@@ -642,6 +681,19 @@ class _ImportPageState extends State<ImportPage> {
     // Movimentos do extrato que não são despesa: cada um é gravado à parte, e
     // o que falhar aparece como aviso (a importação em si já está gravada)
     final warnings = <String>[];
+    final invoicePayment = plan.invoicePayment;
+    if (invoicePayment != null) {
+      try {
+        await sl<FinanceRepository>().payCardInvoice(
+          paymentMethodId: session.source.id,
+          invoiceDueDate: invoicePayment.dueDate,
+          paidAt: invoicePayment.paidAt,
+          paidByHouse: invoicePayment.paidByHouse,
+        );
+      } catch (e) {
+        warnings.add('Pagamento da fatura: $e');
+      }
+    }
     final finance = sl<FinanceRepository>();
     for (final extra in plan.extraActions) {
       final action = extra.action;
@@ -652,6 +704,8 @@ class _ImportPageState extends State<ImportPage> {
               paymentMethodId: action.paymentMethodId!,
               invoiceDueDate: action.invoiceDueDate!,
               paidAt: extra.line.date,
+              // Saiu da conta da casa: pago pelo Caixa; da conta de um morador: por ele
+              paidByHouse: session.source.ownerMemberId == null,
             );
           case ExtraActionType.contribution:
             await finance.addContribution(
@@ -945,6 +999,22 @@ class _ImportPageState extends State<ImportPage> {
                         : 'Vence em ${_dayFormat.format(session.invoiceDueDate!)}',
                   ),
                   onPressed: _busy ? null : _pickDueDate,
+                ),
+              if (session.waitsForInvoice && session.invoicePaidAt == null)
+                TextButton.icon(
+                  icon: const Icon(Icons.receipt_long_outlined, size: 18),
+                  label: const Text('Fatura já paga?'),
+                  onPressed: _busy ? null : _pickInvoicePayment,
+                )
+              else if (session.waitsForInvoice)
+                InputChip(
+                  avatar: const Icon(Icons.check_circle_outline_rounded, size: 18, color: AppColors.creditGreen),
+                  label: Text(
+                    'Paga em ${_dayFormat.format(session.invoicePaidAt!)}'
+                    '${session.invoicePaidByHouse ? ' pelo Caixa' : ''}',
+                  ),
+                  onPressed: _busy ? null : _pickInvoicePayment,
+                  onDeleted: _busy ? null : () => _update(session.withInvoicePayment(null)),
                 ),
               Row(
                 mainAxisSize: MainAxisSize.min,

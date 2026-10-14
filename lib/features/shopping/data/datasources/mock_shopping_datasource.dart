@@ -1,3 +1,4 @@
+import '../../../finance/domain/services/expense_launch_defaults.dart';
 import 'dart:async';
 import '../../../../core/domain/value_objects/money.dart';
 import '../../../finance/domain/entities/house_expense.dart';
@@ -182,6 +183,10 @@ class MockShoppingDataSource implements ShoppingDataSource {
         for (final m in members) m.id: m.defaultSplitPercent > 0 ? m.defaultSplitPercent : (100.0 / members.length),
       };
 
+      final paymentMethod = (await financeRepository.getPaymentMethods())
+          .where((p) => p.id == paymentMethodId)
+          .firstOrNull;
+      final waitsForInvoice = ExpenseLaunchDefaults.waitsForInvoice(paymentMethod);
       await financeRepository.addExpense(
         HouseExpense(
           id: createdExpenseId,
@@ -191,7 +196,8 @@ class MockShoppingDataSource implements ShoppingDataSource {
           categoryId: 'cat_mercado',
           paidByMemberId: paidByMemberId,
           paymentMethodId: paymentMethodId,
-          paidOutOfPocket: true,
+          paidOutOfPocket: !waitsForInvoice,
+          status: waitsForInvoice ? ExpenseStatus.pending : ExpenseStatus.paid,
           splitRule: SplitRule.percentage(splitPercentages),
         ),
       );

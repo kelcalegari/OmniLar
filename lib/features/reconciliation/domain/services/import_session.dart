@@ -98,6 +98,9 @@ class ImportPlan {
   /// abatimento de empréstimo. São gravados depois da importação, um a um.
   final List<({ImportedStatementLine line, ExtraAction action})> extraActions;
 
+  /// A fatura importada já foi paga: registrar o pagamento depois de gravar.
+  final ({DateTime dueDate, DateTime paidAt, bool paidByHouse})? invoicePayment;
+
   const ImportPlan({
     this.newExpenses = const [],
     this.expenseUpdates = const [],
@@ -105,6 +108,7 @@ class ImportPlan {
     this.skippedClosedCycle = const [],
     this.lineRecords = const [],
     this.extraActions = const [],
+    this.invoicePayment,
   });
 
   bool get isEmpty =>
@@ -159,6 +163,12 @@ class ImportSession {
   /// Linhas que vieram classificadas por uma regra aprendida (pelo id).
   final Set<String> ruledLineIds;
 
+  /// Dia em que a fatura importada foi paga, se o usuário informou.
+  final DateTime? invoicePaidAt;
+
+  /// A fatura foi paga pelo Caixa da Casa (e não pelo titular).
+  final bool invoicePaidByHouse;
+
   const ImportSession({
     required this.source,
     required this.fileName,
@@ -172,6 +182,8 @@ class ImportSession {
     this.extraOptions = const {},
     this.extraChoices = const {},
     this.ruledLineIds = const {},
+    this.invoicePaidAt,
+    this.invoicePaidByHouse = false,
   });
 
   static final _dayMonth = DateFormat('dd/MM');
@@ -232,6 +244,7 @@ class ImportSession {
     Map<String, List<ExtraAction>>? extraOptions,
     Map<String, String>? extraChoices,
     Set<String>? ruledLineIds,
+    ({DateTime? paidAt, bool byHouse})? invoicePayment,
   }) {
     return ImportSession(
       source: source,
@@ -246,8 +259,21 @@ class ImportSession {
       extraOptions: extraOptions ?? this.extraOptions,
       extraChoices: extraChoices ?? this.extraChoices,
       ruledLineIds: ruledLineIds ?? this.ruledLineIds,
+      invoicePaidAt: invoicePayment != null ? invoicePayment.paidAt : invoicePaidAt,
+      invoicePaidByHouse: invoicePayment != null ? invoicePayment.byHouse : invoicePaidByHouse,
     );
   }
+
+  /// A compra deste cartão fica pendente até a fatura ser paga?
+  bool get waitsForInvoice => ExpenseLaunchDefaults.waitsForInvoice(source);
+
+  /// Informa (ou, com [paidAt] null, desfaz) que a fatura já foi paga.
+  ImportSession withInvoicePayment(DateTime? paidAt, {bool byHouse = false}) => _copy(
+        invoicePayment: (
+          paidAt: paidAt == null ? null : DateTime(paidAt.year, paidAt.month, paidAt.day, 12),
+          byHouse: paidAt != null && byHouse,
+        ),
+      );
 
   /// Nome que identifica o estabelecimento de uma linha nas regras aprendidas.
   static String ruleKeyOf(ImportedStatementLine line) =>
@@ -413,6 +439,7 @@ class ImportSession {
       lines: lines,
       expenses: expenses,
       paymentMethodId: source.id,
+      pendingCountsAsLaunched: ExpenseLaunchDefaults.waitsForInvoice(source),
     );
     final kept = <String, MatchDecision>{
       for (final entry in decisions.entries)
@@ -579,12 +606,16 @@ class ImportSession {
     CycleSchedule schedule,
     Set<FinancialCycle> closedCycles,
   ) =>
-      [
-        for (final line in newLines)
-          if (line.destination == LineDestination.house &&
-              closedCycles.contains(schedule.cycleFor(_countingDate(line))))
-            line,
-      ];
+      // Compra pendente não é travada por ciclo fechado: em aberto, ela pesa
+      // no ciclo atual como conta vencida
+      waitsForInvoice
+          ? const []
+          : [
+              for (final line in newLines)
+                if (line.destination == LineDestination.house &&
+                    closedCycles.contains(schedule.cycleFor(_countingDate(line))))
+                  line,
+            ];
 
   /// Ciclos onde pode haver uma despesa igual a alguma linha do arquivo.
   Set<FinancialCycle> cyclesToSearch(CycleSchedule schedule) {
@@ -630,7 +661,8 @@ class ImportSession {
     for (final line in newLines) {
       switch (line.destination) {
         case LineDestination.house:
-          final inClosedCycle = closedCycles.contains(schedule.cycleFor(_countingDate(line)));
+          final inClosedCycle =
+              !waitsForInvoice && closedCycles.contains(schedule.cycleFor(_countingDate(line)));
           if (inClosedCycle && closedCyclePolicy == ClosedCyclePolicy.skip) {
             skipped.add(line);
             records.add(ImportLineRecord(line: line, outcome: LineOutcome.skipped));
@@ -661,13 +693,14 @@ class ImportSession {
               categoryId: category?.id ?? '',
               paidByMemberId: payerMemberId,
               paymentMethodId: source.id,
-              paidOutOfPocket: outOfPocket,
+              // Pendente até a fatura ser paga: quem pagou se decide no pagamento
+              paidOutOfPocket: waitsForInvoice ? false : outOfPocket,
               splitRule: ExpenseLaunchDefaults.splitRule(
                 category: category,
                 members: members,
                 paidByMemberId: payerMemberId,
               ),
-              status: ExpenseStatus.paid,
+              status: waitsForInvoice ? ExpenseStatus.pending : ExpenseStatus.paid,
               notes: 'Importado de ${source.name}: ${line.description}',
             ),
           );
@@ -751,7 +784,7 @@ class ImportSession {
           expense.copyWith(
             paymentMethodId: source.id,
             paidByMemberId: payerMemberId,
-            paidOutOfPocket: outOfPocket,
+            paidOutOfPocket: waitsForInvoice ? false : outOfPocket,
             dueDate: source.isCreditCard ? invoiceDueDate : null,
           ),
         );
@@ -765,6 +798,9 @@ class ImportSession {
       skippedClosedCycle: skipped,
       lineRecords: records,
       extraActions: extraActions,
+      invoicePayment: waitsForInvoice && invoiceDueDate != null && invoicePaidAt != null
+          ? (dueDate: invoiceDueDate!, paidAt: invoicePaidAt!, paidByHouse: invoicePaidByHouse)
+          : null,
     );
   }
 }

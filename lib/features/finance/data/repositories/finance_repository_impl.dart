@@ -176,11 +176,13 @@ class FinanceRepositoryImpl implements FinanceRepository {
     required String paymentMethodId,
     required DateTime invoiceDueDate,
     required DateTime paidAt,
+    bool paidByHouse = false,
   }) =>
       _dataSource.payCardInvoice(
         paymentMethodId: paymentMethodId,
         invoiceDueDate: invoiceDueDate,
         paidAt: paidAt,
+        paidByHouse: paidByHouse,
       );
 
   @override

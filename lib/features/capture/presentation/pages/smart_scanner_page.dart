@@ -771,18 +771,23 @@ class _SmartScannerPageState extends State<SmartScannerPage> {
       final finalCategoryId = matchedCategoryId ?? (state.categories.isNotEmpty ? state.categories.first.id : 'cat_mercado');
       final finalPaymentMethodId = matchedPaymentMethodId ?? (state.paymentMethods.isNotEmpty ? state.paymentMethods.first.id : 'pm_caixa');
 
+      final scannedMethod =
+          state.paymentMethods.where((p) => p.id == finalPaymentMethodId).firstOrNull;
+      // No cartão, a compra entra na fatura (o vencimento é calculado ao gravar)
+      final waitsForInvoice = ExpenseLaunchDefaults.waitsForInvoice(scannedMethod);
+
       final expense = HouseExpense(
         id: expenseId,
         title: title,
         amount: proposal.totalAmount,
         date: proposal.date,
-        dueDate: proposal.date,
+        dueDate: waitsForInvoice ? null : proposal.date,
         categoryId: finalCategoryId,
         paidByMemberId: paidByMemberId,
         paymentMethodId: finalPaymentMethodId,
         splitRule: splitRule,
-        paidOutOfPocket: paidOutOfPocket,
-        status: ExpenseStatus.paid,
+        paidOutOfPocket: waitsForInvoice ? false : paidOutOfPocket,
+        status: waitsForInvoice ? ExpenseStatus.pending : ExpenseStatus.paid,
         notes: proposal.merchantOrBeneficiary,
         items: expenseItems,
       );

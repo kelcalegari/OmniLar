@@ -12,6 +12,7 @@ import '../../../../core/utils/responsive.dart';
 import '../../../../core/widgets/responsive_container.dart';
 import '../../../../core/widgets/privacy_toggle.dart';
 import '../../domain/entities/settlement_options.dart';
+import '../../domain/services/open_invoice_choices.dart';
 import '../../domain/services/settlement_shortfall.dart';
 import '../../domain/entities/settlement_summary.dart';
 import '../../domain/entities/super_pix_transfer.dart';
@@ -231,6 +232,12 @@ class _SettlementHubContent extends StatelessWidget {
               if (summary.status != SettlementStatus.settled)
                 _buildMissingFixedContributionWarning(context),
 
+              // Faturas de cartão em aberto: o que fazer com cada uma
+              if (!isSettled && state.openInvoices.isNotEmpty) ...[
+                _buildOpenInvoices(context, state),
+                const SizedBox(height: 16),
+              ],
+
               // PASSO 1: Resumo do Caixa da Casa
               _buildStep1HouseSummary(context, summary, state),
               const SizedBox(height: 16),
@@ -408,6 +415,87 @@ class _SettlementHubContent extends StatelessWidget {
             child: settlementColumn,
           );
         },
+      ),
+    );
+  }
+
+  /// Faturas de cartão em aberto que pesam neste ciclo. Sem mexer, cada uma
+  /// recebe baixa como um boleto, paga pelo titular.
+  Widget _buildOpenInvoices(BuildContext context, SettlementState state) {
+    final theme = Theme.of(context);
+    final members = context.read<FinanceCubit>().state.members;
+    String nameOf(String? id) =>
+        members.where((m) => m.id == id).firstOrNull?.name.split(' ').first ?? 'titular';
+    String day(DateTime d) =>
+        '${d.day.toString().padLeft(2, '0')}/${d.month.toString().padLeft(2, '0')}';
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: AppColors.folegoWarning.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: AppColors.folegoWarning.withValues(alpha: 0.4)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          const Row(
+            children: [
+              Icon(Icons.credit_card_rounded, color: AppColors.folegoWarning, size: 20),
+              SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  'Faturas de cartão sem pagamento registrado',
+                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          Text(
+            'Elas pesam neste ciclo. Escolha o que fazer com cada uma antes de fechar: '
+            'sem mexer, recebem baixa como um boleto, pagas pelo titular.',
+            style: theme.textTheme.bodySmall?.copyWith(fontSize: 12),
+          ),
+          for (final invoice in state.openInvoices) ...[
+            const Divider(height: 20),
+            Text(
+              'Fatura ${invoice.card.name} • vence ${day(invoice.dueDate)} • ${invoice.total.formatted}',
+              style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
+            ),
+            const SizedBox(height: 4),
+            DropdownButton<OpenInvoiceChoice>(
+              isExpanded: true,
+              value: state.options.openInvoiceChoices[invoice.key] ??
+                  defaultOpenInvoiceChoice(invoice.card),
+              onChanged: state.status == SettlementCubitStatus.confirming
+                  ? null
+                  : (choice) {
+                      if (choice != null) {
+                        context.read<SettlementCubit>().updateOpenInvoiceChoice(invoice.key, choice);
+                      }
+                    },
+              items: [
+                if (invoice.card.ownerMemberId != null)
+                  DropdownMenuItem(
+                    value: OpenInvoiceChoice.paidByHolder,
+                    child: Text(
+                      'Dar baixa: paga por ${nameOf(invoice.card.ownerMemberId)} (reembolsado)',
+                      style: const TextStyle(fontSize: 13),
+                    ),
+                  ),
+                const DropdownMenuItem(
+                  value: OpenInvoiceChoice.paidByHouse,
+                  child: Text('Dar baixa: paga pelo Caixa da Casa', style: TextStyle(fontSize: 13)),
+                ),
+                const DropdownMenuItem(
+                  value: OpenInvoiceChoice.carryOver,
+                  child: Text('Levar para o próximo ciclo', style: TextStyle(fontSize: 13)),
+                ),
+              ],
+            ),
+          ],
+        ],
       ),
     );
   }

@@ -56,6 +56,7 @@ class StatementMatcher {
     ImportedStatementLine line,
     HouseExpense expense,
     String paymentMethodId,
+    bool pendingCountsAsLaunched,
   ) {
     final days = _distance(line, expense);
     if (days > dateWindowDays) return null;
@@ -63,9 +64,12 @@ class StatementMatcher {
     final sameMethod = expense.paymentMethodId == paymentMethodId;
     final sameAmount = expense.amount.cents == line.amount.cents;
     final similarity = StatementText.similarity(line.description, expense.title);
+    // Compra no cartão fica pendente até a fatura ser paga: no mesmo cartão,
+    // pendente também é "já lançada"
+    final launched = expense.isPaid || (sameMethod && pendingCountsAsLaunched);
     final closeness = (dateWindowDays - days) * 10 + (similarity * 20).round();
 
-    if (sameAmount && sameMethod && expense.isPaid) {
+    if (sameAmount && sameMethod && launched) {
       return LineMatch(
         lineId: line.id,
         expense: expense,
@@ -83,7 +87,7 @@ class StatementMatcher {
       );
     }
 
-    if (!sameAmount && sameMethod && expense.isPaid && days <= 1) {
+    if (!sameAmount && sameMethod && launched && days <= 1) {
       final larger = expense.amount.cents > line.amount.cents ? expense.amount.cents : line.amount.cents;
       final drift = (expense.amount.cents - line.amount.cents).abs() / larger;
       if (drift <= _maxAmountDrift && similarity >= _minSimilarityForDrift) {
@@ -105,13 +109,14 @@ class StatementMatcher {
     required List<ImportedStatementLine> lines,
     required List<HouseExpense> expenses,
     required String paymentMethodId,
+    bool pendingCountsAsLaunched = false,
   }) {
     final candidates = <LineMatch>[];
     for (final line in lines) {
       if (!line.isPurchase) continue;
       for (final expense in expenses) {
         if (expense.isProjectExpense) continue;
-        final match = _evaluate(line, expense, paymentMethodId);
+        final match = _evaluate(line, expense, paymentMethodId, pendingCountsAsLaunched);
         if (match != null) candidates.add(match);
       }
     }

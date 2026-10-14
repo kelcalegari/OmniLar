@@ -1,6 +1,7 @@
 import 'package:equatable/equatable.dart';
 import '../../../../core/domain/value_objects/financial_cycle.dart';
 import '../../../finance/domain/entities/savings_vault.dart';
+import '../../../finance/domain/services/cycle_expense_grouping.dart';
 import '../../domain/entities/settlement_options.dart';
 import '../../domain/entities/settlement_summary.dart';
 
@@ -19,6 +20,9 @@ class SettlementState extends Equatable {
   final SettlementSummary? summary;
   final SettlementOptions options;
   final List<SavingsVault> vaults;
+
+  /// Faturas de cartão em aberto que pesam no ciclo.
+  final List<CardInvoiceEntry> openInvoices;
   final String? errorMessage;
 
   const SettlementState({
@@ -27,6 +31,7 @@ class SettlementState extends Equatable {
     this.summary,
     this.options = const SettlementOptions(),
     this.vaults = const [],
+    this.openInvoices = const [],
     this.errorMessage,
   });
 
@@ -36,6 +41,7 @@ class SettlementState extends Equatable {
     SettlementSummary? summary,
     SettlementOptions? options,
     List<SavingsVault>? vaults,
+    List<CardInvoiceEntry>? openInvoices,
     String? errorMessage,
   }) {
     return SettlementState(
@@ -44,6 +50,7 @@ class SettlementState extends Equatable {
       summary: summary ?? this.summary,
       options: options ?? this.options,
       vaults: vaults ?? this.vaults,
+      openInvoices: openInvoices ?? this.openInvoices,
       errorMessage: errorMessage ?? this.errorMessage,
     );
   }
@@ -55,6 +62,7 @@ class SettlementState extends Equatable {
     summary,
     options,
     vaults,
+    openInvoices,
     errorMessage,
   ];
 }

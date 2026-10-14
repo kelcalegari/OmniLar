@@ -1255,6 +1255,7 @@ class SupabaseFinanceDataSource implements FinanceDataSource {
     required String paymentMethodId,
     required DateTime invoiceDueDate,
     required DateTime paidAt,
+    bool paidByHouse = false,
   }) async {
     try {
       // O banco confere se algum dos ciclos envolvidos já foi fechado
@@ -1262,6 +1263,7 @@ class SupabaseFinanceDataSource implements FinanceDataSource {
         'p_payment_method_id': paymentMethodId,
         'p_due_date': invoiceDueDate.toIso8601String().split('T')[0],
         'p_paid_at': paidAt.toUtc().toIso8601String(),
+        'p_paid_by_house': paidByHouse,
       });
     } catch (e) {
       throw ServerFailure('Erro ao registrar pagamento da fatura: $e');
