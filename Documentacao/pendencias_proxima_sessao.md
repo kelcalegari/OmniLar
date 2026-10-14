@@ -5,7 +5,7 @@ Reescrito em 13/10/2026, no fim de uma sessão longa de correções, e atualizad
 ## Estado atual
 
 - **Código:** `main` local e `origin/main` sincronizadas, diretório de trabalho limpo. Confira com `git log --oneline -5` e `git status`.
-- **Banco (Supabase `rygxmpwzofgieodvhpcy`, acessível pelo conector do Supabase):** migrations 0001 a 0052 aplicadas. No histórico de migrations do Supabase constam só as 0022 a 0027 e as 0030 a 0052; as 0001 a 0021, a 0028 e a 0029 foram aplicadas à mão pelo SQL Editor. A próxima migration é a 0053.
+- **Banco (Supabase `rygxmpwzofgieodvhpcy`, acessível pelo conector do Supabase):** migrations 0001 a 0053 aplicadas. No histórico de migrations do Supabase constam só as 0022 a 0027 e as 0030 a 0053; as 0001 a 0021, a 0028 e a 0029 foram aplicadas à mão pelo SQL Editor. A próxima migration é a 0054.
 - **Edge Functions:** `capture-read` versão 8 e `assistant` versão 5, ambas com `verify_jwt=true` e exigindo usuário logado que more na casa.
 - **Qualidade:** `flutter analyze` com 0 erros (4 warnings antigos de import não usado) e 362 testes passando. Os testes automatizados rodam só contra os datasources mock (modo demo); nenhum roda contra o Supabase.
 - **Dados no banco:** em 13/10/2026 o dono apagou todos os dados de teste (todas as tabelas de `public` e as contas de login) e recomeçou do zero; a estrutura, as funções e o histórico de migrations não mudaram. Logo depois foi criada de novo a casa "Nossa Casa", com as contas novas de kelvynn e Cristiano; o dono já lançou algumas despesas de teste nela (entre elas a recorrente "Internet", todo dia 25). Nunca houve um fechamento de ciclo confirmado com sessão real.
@@ -123,7 +123,7 @@ Itens levantados na segunda sessão de 13/10; ele não pediu nenhum. Perguntar a
 - **Busca nos ajustes:** leva até o grupo, não até o item.
 - **Assistente:** "Assistente Ativo", "Alertas Proativos" e "Horário Silencioso" eram controles de enfeite e foram removidos; implementar de verdade é trabalho à parte.
 - **Lista de moradores desatualizada** depois que alguém entra na casa: corrigido nos Ajustes e, pelo tempo real, no estado financeiro; outras telas (formulário de despesa, agenda) não foram conferidas.
-- **Importação de fatura e extrato:** está na branch `feat/import-reconciliation` (código em `lib/features/reconciliation/`). A confirmação e o desfazer usam as funções `confirm_import` e `undo_import` da migration 0052 (aplicada). Ainda não foi testada com conta real nem com arquivo de banco de verdade. O que falta está na seção "Situação atual" do `plano_importacao_conciliacao.md`.
+- **Importação de fatura e extrato:** está na branch `feat/import-reconciliation` (código em `lib/features/reconciliation/`). A confirmação e o desfazer usam as funções `confirm_import` e `undo_import` da migration 0052; as regras aprendidas ficam em `import_rules` (0053). PDF e foto são lidos pela função `import-read`, publicada no servidor (versão 1), que também sugere nome e categoria. Nada disso foi testado com conta real nem com arquivo de banco de verdade; a leitura por IA só foi conferida até a recusa de quem não está logado. O que falta está na seção "Situação atual" do `plano_importacao_conciliacao.md`.
 
 ### Pontas pequenas, nunca tratadas
 - **`category_id` dos itens de compra** nunca é gravado.
@@ -231,6 +231,7 @@ Uma linha por migration, para saber onde está cada regra.
 | 0050 | Tempo real para despesas e moradores |
 | 0051 | Dono da categoria vale para as despesas em aberto |
 | 0052 | Histórico da importação, confirmação atômica e desfazer |
+| 0053 | Regras aprendidas da importação (`import_rules`) |
 
 ## Documentos relacionados
 

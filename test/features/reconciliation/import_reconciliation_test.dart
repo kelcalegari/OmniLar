@@ -8,6 +8,7 @@ import 'package:omni_lar/features/finance/domain/entities/house_expense.dart';
 import 'package:omni_lar/features/finance/domain/entities/house_member.dart';
 import 'package:omni_lar/features/finance/domain/entities/payment_method.dart';
 import 'package:omni_lar/features/finance/domain/entities/split_rule.dart';
+import 'package:omni_lar/features/reconciliation/data/import_ai_service.dart';
 import 'package:omni_lar/features/reconciliation/data/supabase_import_repository.dart';
 import 'package:omni_lar/features/reconciliation/domain/entities/imported_statement_line.dart';
 import 'package:omni_lar/features/finance/domain/entities/card_invoice.dart';
@@ -865,6 +866,76 @@ date,title,amount
       expect(withoutCristiano.lines[0].destination, LineDestination.house);
       expect(withoutCristiano.lines[0].assignedMemberId, isNull);
       expect(withoutCristiano.lines[2].categoryId, isNull);
+    });
+  });
+
+  group('Leitura por IA (PDF e foto)', () {
+    final response = {
+      'lines': [
+        {'date': '2026-10-03', 'description': 'ENEL ENERGIA', 'amount_cents': 21000, 'type': 'purchase'},
+        {'date': '2026-10-05', 'description': 'MAGALU', 'amount_cents': 9990, 'type': 'purchase', 'installment_number': 3, 'installments_total': 10},
+        {'date': '2026-10-05', 'description': 'PADARIA', 'amount_cents': 2500, 'type': 'purchase'},
+        {'date': '2026-10-05', 'description': 'PADARIA', 'amount_cents': 2500, 'type': 'purchase'},
+        {'date': '2026-10-06', 'description': 'ESTORNO LOJA X', 'amount_cents': 5000, 'type': 'refund'},
+        {'date': '2026-10-01', 'description': 'PAGAMENTO RECEBIDO', 'amount_cents': 120000, 'type': 'payment'},
+        // Linhas que a IA devolveu quebradas ficam de fora
+        {'date': 'ontem', 'description': 'SEM DATA', 'amount_cents': 1000, 'type': 'purchase'},
+        {'date': '2026-10-07', 'description': '', 'amount_cents': 1000, 'type': 'purchase'},
+        {'date': '2026-10-07', 'description': 'SEM VALOR', 'amount_cents': 0, 'type': 'purchase'},
+      ],
+      'due_date': '2026-11-10',
+      'total_cents': 30990,
+      'card_last_digits': '1234',
+    };
+
+    test('a resposta vira as mesmas linhas de um OFX ou CSV, com assinatura e parcela', () {
+      final reading = AiStatementReading.fromJson(response);
+
+      expect(reading.lines, hasLength(6));
+      expect(reading.dueDate, DateTime(2026, 11, 10));
+      expect(reading.lines[0].kind, StatementLineKind.purchase);
+      expect(reading.lines[0].signature, '2026-10-03|21000|enel energia#1');
+      expect(reading.lines[1].installmentNumber, 3);
+      expect(reading.lines[1].installmentsTotal, 10);
+      // Duas compras iguais continuam sendo duas linhas distintas
+      expect(reading.lines[2].signature, isNot(reading.lines[3].signature));
+      expect(reading.lines[4].kind, StatementLineKind.refund);
+      expect(reading.lines[4].destination, LineDestination.ignored);
+      expect(reading.lines[5].kind, StatementLineKind.payment);
+    });
+
+    test('confere a soma das linhas (compras menos estornos) com o total impresso', () {
+      final reading = AiStatementReading.fromJson(response);
+      // 210,00 + 99,90 + 25,00 + 25,00 - 50,00
+      expect(reading.linesSum.cents, 30990);
+      expect(reading.sumMatchesTotal, isTrue);
+
+      expect(AiStatementReading.fromJson({...response, 'total_cents': 35000}).sumMatchesTotal, isFalse);
+      expect(AiStatementReading.fromJson({...response, 'total_cents': null}).sumMatchesTotal, isNull);
+    });
+
+    test('sugestão de categoria fora da lista da casa é descartada', () {
+      final suggestions = ImportAiService.parseSuggestions(
+        [
+          {'id': 'a', 'title': 'Enel', 'category_id': 'cat_contas'},
+          {'id': 'b', 'title': 'Loja', 'category_id': 'cat_inventada'},
+          {'id': 'c', 'title': '', 'category_id': null},
+          'lixo',
+        ],
+        {'cat_contas', 'cat_mercado'},
+      );
+
+      expect(suggestions.keys, ['a', 'b']);
+      expect(suggestions['a']!.categoryId, 'cat_contas');
+      expect(suggestions['b']!.categoryId, isNull);
+      expect(suggestions['b']!.title, 'Loja');
+    });
+
+    test('só PDF e imagem vão para a IA', () {
+      expect(ImportAiService.mimeTypeOf('Fatura Outubro.PDF'), 'application/pdf');
+      expect(ImportAiService.mimeTypeOf('print.jpeg'), 'image/jpeg');
+      expect(ImportAiService.mimeTypeOf('fatura.ofx'), isNull);
+      expect(ImportAiService.mimeTypeOf('extrato.csv'), isNull);
     });
   });
 }

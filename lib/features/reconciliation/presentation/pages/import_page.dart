@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -22,6 +24,7 @@ import '../../../p2p/domain/repositories/p2p_repository.dart';
 import '../../../p2p/presentation/cubit/p2p_cubit.dart';
 import '../../../settlement/domain/entities/settlement_summary.dart';
 import '../../../settlement/domain/repositories/settlement_repository.dart';
+import '../../data/import_ai_service.dart';
 import '../../domain/entities/imported_statement_line.dart';
 import '../../domain/repositories/import_repository.dart';
 import '../../domain/services/import_session.dart';
@@ -124,14 +127,23 @@ class _ImportPageState extends State<ImportPage> {
     try {
       final files = await FilePicker.pickFiles(
         type: FileType.custom,
-        allowedExtensions: ['ofx', 'csv', 'txt'],
+        allowedExtensions: ['ofx', 'csv', 'txt', ...ImportAiService.mimeTypes.keys],
       );
       if (files.isEmpty) return;
 
       final file = files.first;
-      final content = StatementParser.decodeBytes(await file.readAsBytes());
+      final bytes = await file.readAsBytes();
       final sourceType =
           source.isCreditCard ? StatementSourceType.creditCard : StatementSourceType.bankAccount;
+
+      // PDF e foto não têm estrutura: quem lê é a IA, e a revisão confere
+      final mimeType = ImportAiService.mimeTypeOf(file.name);
+      if (mimeType != null) {
+        await _readWithAi(source, file.name, bytes, mimeType, sourceType);
+        return;
+      }
+
+      final content = StatementParser.decodeBytes(bytes);
       final lines = StatementParser.parseFile(content, filename: file.name, source: sourceType);
       if (lines.isEmpty) {
         _showMessage('Nenhum lançamento encontrado no arquivo selecionado.', error: true);
@@ -148,6 +160,84 @@ class _ImportPageState extends State<ImportPage> {
       await _start(source, file.name, lines, warning: warning);
     } catch (e) {
       _showMessage('Erro ao importar arquivo: $e', error: true);
+    }
+  }
+
+  Future<void> _readWithAi(
+    PaymentMethod source,
+    String fileName,
+    Uint8List bytes,
+    String mimeType,
+    StatementSourceType sourceType,
+  ) async {
+    setState(() => _busy = true);
+    _showMessage('Lendo "$fileName" com IA. Isso pode levar alguns segundos...');
+    final AiStatementReading reading;
+    try {
+      reading = await sl<ImportAiService>().readFile(
+        bytes: bytes,
+        mimeType: mimeType,
+        source: sourceType,
+      );
+    } catch (e) {
+      if (mounted) setState(() => _busy = false);
+      _showMessage('$e', error: true);
+      return;
+    }
+    if (!mounted) return;
+    setState(() => _busy = false);
+
+    final warning = switch (reading.sumMatchesTotal) {
+      false =>
+        'Lido por IA: a soma das linhas (${reading.linesSum.format()}) não bate com o total impresso '
+            '(${reading.printedTotal!.format()}). Pode faltar ou sobrar alguma linha: confira com o arquivo.',
+      true => 'Lido por IA: a soma das linhas bate com o total impresso. Confira as linhas antes de confirmar.',
+      null => 'Lido por IA: o arquivo não traz um total para conferir. Confira as linhas antes de confirmar.',
+    };
+    await _start(source, fileName, reading.lines, warning: warning, dueDate: reading.dueDate);
+  }
+
+  /// Pede à IA nome e categoria para as linhas da Casa que ainda não têm.
+  Future<void> _suggestWithAi() async {
+    final session = _session;
+    if (session == null) return;
+    final targets = [
+      for (final line in session.newLines)
+        if (line.destination == LineDestination.house && line.categoryId == null) line,
+    ];
+    if (targets.isEmpty) return;
+
+    setState(() => _busy = true);
+    try {
+      final suggestions = await sl<ImportAiService>().classify(
+        lines: targets,
+        categories: _finance.state.categories,
+      );
+      if (!mounted) return;
+      var updated = _session ?? session;
+      var applied = 0;
+      for (final line in updated.lines) {
+        final suggestion = suggestions[line.id];
+        if (suggestion == null || line.categoryId != null) continue;
+        updated = updated.withLine(
+          line.copyWith(
+            // O nome que o usuário já deu vale mais que o da IA
+            title: line.title ?? suggestion.title,
+            categoryId: suggestion.categoryId,
+          ),
+        );
+        if (suggestion.categoryId != null) applied++;
+      }
+      setState(() => _session = updated);
+      _showMessage(
+        applied == 0
+            ? 'A IA não soube sugerir categoria para essas linhas.'
+            : '$applied ${applied == 1 ? 'linha ganhou' : 'linhas ganharam'} categoria sugerida. Confira antes de confirmar.',
+      );
+    } catch (e) {
+      _showMessage('$e', error: true);
+    } finally {
+      if (mounted) setState(() => _busy = false);
     }
   }
 
@@ -179,6 +269,7 @@ class _ImportPageState extends State<ImportPage> {
     String fileName,
     List<ImportedStatementLine> lines, {
     String? warning,
+    DateTime? dueDate,
   }) async {
     final currentUserId = sl<AuthRepository>().currentUser?.id;
     final members = _finance.state.members;
@@ -202,6 +293,10 @@ class _ImportPageState extends State<ImportPage> {
         memberIds: {for (final m in state.members) m.id},
         categoryIds: {for (final c in state.categories) c.id},
       );
+      // O vencimento impresso na fatura vale mais que o calculado pelas compras
+      if (source.isCreditCard && dueDate != null) {
+        _session = _session!.withInvoiceDueDate(dueDate);
+      }
       _sourceId = source.id;
       _fileWarning = warning;
       _failure = null;
@@ -709,7 +804,7 @@ class _ImportPageState extends State<ImportPage> {
             children: [
               FilledButton.icon(
                 icon: const Icon(Icons.upload_file_rounded, size: 18),
-                label: Text(_session == null ? 'Escolher arquivo OFX ou CSV' : 'Trocar arquivo'),
+                label: Text(_session == null ? 'Escolher arquivo' : 'Trocar arquivo'),
                 onPressed: source == null || _busy ? null : () => _pickFile(source),
               ),
               if (isDemo)
@@ -718,6 +813,11 @@ class _ImportPageState extends State<ImportPage> {
                   child: const Text('Usar fatura de exemplo'),
                 ),
             ],
+          ),
+          const SizedBox(height: 8),
+          const Text(
+            'OFX e CSV são lidos direto. PDF e foto são lidos por IA: o arquivo é enviado ao provedor de IA e as linhas precisam ser conferidas.',
+            style: TextStyle(fontSize: 11, color: Colors.grey),
           ),
         ],
       ],
@@ -859,6 +959,16 @@ class _ImportPageState extends State<ImportPage> {
           ],
         ),
       ),
+      if (!sl<AuthRepository>().isDemoMode &&
+          session.newLines.any((l) => l.destination == LineDestination.house && l.categoryId == null))
+        Align(
+          alignment: Alignment.centerLeft,
+          child: TextButton.icon(
+            icon: const Icon(Icons.auto_awesome_rounded, size: 18),
+            label: const Text('Sugerir nome e categoria com IA para as linhas sem categoria'),
+            onPressed: _busy ? null : _suggestWithAi,
+          ),
+        ),
       _bulkBar(state, session, visible),
       if (_busy) const LinearProgressIndicator(minHeight: 2),
       if (visible.isEmpty)

@@ -1,3 +1,4 @@
+import '../../features/reconciliation/data/import_ai_service.dart';
 import '../../features/reconciliation/data/mock_import_repository.dart';
 import '../../features/reconciliation/data/supabase_import_repository.dart';
 import '../../features/reconciliation/domain/repositories/import_repository.dart';
@@ -341,6 +342,13 @@ Future<void> initServiceLocator() async {
     }
     return mock;
   });
+
+  sl.registerLazySingleton<ImportAiService>(() => ImportAiService(
+        getClient: () => SupabaseConfig.client,
+        aiConfigService: sl(),
+        getCurrentHouseId: () => sl<AuthRepository>().currentHouse?.id,
+        isDemoMode: isDemoModeActive,
+      ));
 
   // Capture Feature
   sl.registerLazySingleton<CaptureService>(() => CaptureService(

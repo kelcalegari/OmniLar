@@ -33,7 +33,7 @@ void main() {
 
     expect(find.text('1. De onde é o arquivo?'), findsOneWidget);
     final pick = tester.widget<FilledButton>(
-      find.widgetWithText(FilledButton, 'Escolher arquivo OFX ou CSV'),
+      find.widgetWithText(FilledButton, 'Escolher arquivo'),
     );
     expect(pick.onPressed, isNull);
     expect(find.byKey(const Key('import_confirm')), findsNothing);
