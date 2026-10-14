@@ -233,7 +233,7 @@ O boleto da internet serve de referência: em aberto, entra no ciclo do vencimen
 - **B e C só diferem em um caso**: o ciclo do vencimento fecha e a fatura não foi marcada. Na B ela entra pelo vencimento e o titular é reembolsado; na C fica de fora até alguém marcar.
 - **C não é só trocar o status para pendente**: o fechamento dá baixa em toda conta pendente do ciclo. Exigiria mudar a regra de competência, o fechamento (pular faturas em aberto na baixa e no reembolso), a função do banco que decide se uma despesa conta em ciclo fechado, o planejamento de aportes e os dados já lançados.
 - **Recomendação**: B, que deixa a fatura igual ao boleto. C fica registrada como alternativa; se for escolhida, é um trabalho próprio, planejado junto com o fechamento (`fechamento_no_banco.md`).
-- **Situação**: o dono ainda não confirmou entre B e C.
+- **Decisão (14/10/2026)**: C, na forma "fatura como conta pendente" (seção 13). A B não será feita.
 
 ### 12.3. Com que dinheiro a fatura é paga (decidido)
 
@@ -264,8 +264,63 @@ O app já tem empréstimo com o Caixa como credor ("acordo com o Lar"), usado na
 - **Caixa sem saldo** para pagar a fatura inteira: avisar ou só registrar.
 - **Total do banco**: a soma das linhas lidas pode não bater com o que o banco cobrou (juros, saldo anterior, estorno). A diferença precisa de um destino quando o Caixa paga tudo.
 
-### 12.4. Ordem sugerida
+### 12.4. Ordem
 
-1. Confirmar B ou C (12.2).
-2. Implementar a exibição escolhida.
-3. Origem do pagamento (12.3), depois de fechar os pontos em aberto.
+1. Fatura como conta pendente (seção 13).
+2. Pagamento pelo Caixa da Casa com os empréstimos da 12.3, depois de fechar os pontos em aberto.
+
+## 13. Fatura como conta pendente (decisão C)
+
+Decisões do dono em 14/10/2026:
+- **C**: a compra no cartão não é tratada como paga até a fatura ser paga. O momento do pagamento define o ciclo.
+- **No fechamento**: o app pergunta, fatura por fatura, o que fazer com a fatura em aberto que vence no ciclo. Se o usuário não mudar nada, ela recebe baixa como um boleto (resposta "2: A B", lida como "b, com a como padrão"; confirmar com o dono).
+
+A ideia é reaproveitar o que o app já faz com o boleto da internet: conta pendente com vencimento, que aparece em "A Vencer", tem botão "Pagar", conta no ciclo do pagamento e, vencida, continua pesando nos ciclos seguintes.
+
+### 13.1. Como fica
+
+| Momento | O que acontece |
+|---|---|
+| Compra lançada no cartão (à mão, importada, scanner, assistente, mercado) | Despesa **pendente**, com o vencimento da fatura e sem pagador definido (não é "paga do bolso" ainda) |
+| Fatura em aberto | "A Vencer" no Fôlego; na lista, a fatura agrupada com o botão "Pagar"; atrasada depois do vencimento |
+| Pagar a fatura | Pede a data e a origem (titular ou Caixa da Casa) e mostra em que ciclo ela vai cair. Todas as compras pendentes da fatura viram pagas naquela data |
+| Desfazer o pagamento | As compras voltam a pendentes |
+| Importação | Pergunta "A fatura já foi paga? Em que data e com que dinheiro?". Sem resposta, entra em aberto |
+| Fechamento com fatura em aberto que vence no ciclo | Para cada fatura: **dar baixa, paga pelo titular** (padrão), **dar baixa, paga pelo Caixa** ou **levar para o próximo ciclo** |
+
+### 13.2. O que foi verificado no código (levantamento de 14/10)
+
+- **Competência** (`cycle_expense_filter.dart`): compra de cartão conta em `paidAt ?? dueDate`; conta pendente vencida pesa nos ciclos seguintes. As duas regras já dão o comportamento acima sem mudança.
+- **Leitura do ciclo** (`getExpensesForCycle`): já traz pendentes vencidas de ciclos anteriores.
+- **Fôlego** (`getCycleSummary`): separa pagas e a vencer pelo status. Fatura pendente vai para "A Vencer" sozinha.
+- **Trava de ciclo fechado no banco** (`expense_counts_in_closed_cycle`): ignora despesa pendente. Fatura antiga importada entra como atrasada no ciclo atual, sem o "lançar como ajuste".
+- **Fechamento** (`global_clearing_engine.dart` e `confirm_cycle_settlement`): divide entre os moradores todas as despesas do ciclo, pagas e pendentes; reembolsa quem pagou do bolso sem olhar o status; e o banco dá baixa nas pendentes cujo id o app manda em `expense_ids`. O banco não exige que todas as pendentes do ciclo estejam no plano, então "levar para o próximo ciclo" é deixar a fatura fora do cálculo e das listas.
+- **Planejamento de aportes** (`cycle_funding_estimator.dart`): só conta como "pago do bolso" despesa paga. Fatura pendente não vira crédito do titular antes do pagamento.
+- **Pagamento de fatura no banco** (`pay_card_invoice`, migration 0028): hoje só grava `paid_at` em compras com `paid_at` nulo; não muda status nem origem.
+- **Contas recorrentes**: o banco gera as ocorrências como pendentes com o vencimento da própria série (não o da fatura), mesmo quando a forma de pagamento é um cartão. Continuam como contas soltas.
+
+### 13.3. O que muda
+
+**Banco (migration 0054)**
+1. `pay_card_invoice` recebe a origem (`p_paid_by_house`): marca as compras da fatura como pagas, grava `paid_at` e define `paid_out_of_pocket` (titular: sim, se o cartão tem dono; Caixa: não). Continua recusando ciclo fechado.
+2. `undo_card_invoice_payment` volta as compras para pendentes, sem `paid_at` e sem "pago do bolso".
+3. Dados existentes: compras de cartão com status pago, sem `paid_at`, sem `settled_at` e cujo ciclo não está fechado passam a pendentes. As já acertadas em fechamento ficam como estão.
+
+**App**
+1. **Caminhos de lançamento** (importação, formulário, scanner, assistente, mercado, dados do modo demo): compra no cartão com fechamento e vencimento nasce pendente. No formulário, o seletor "pago / a pagar" some para cartão e aparece "entra na fatura de dd/MM".
+2. **Fatura agrupada**: passa a incluir as compras pendentes; "Pagar" abre o registro com data, origem e o ciclo em que vai cair; marca de atrasada.
+3. **Compra dentro da fatura**: sem botão "Pagar" próprio (hoje ele trocaria a data da compra pela de hoje); o pagamento é da fatura.
+4. **Fechamento**: passo novo na tela do fechamento listando as faturas em aberto do ciclo, com as três opções. "Dar baixa" registra o pagamento antes do cálculo; "levar para o próximo ciclo" tira as compras do cálculo e das listas do plano.
+5. **Importação**: pergunta opcional "fatura já paga em / com" na revisão do cartão. O detector de duplicidade hoje só chama de "já lançado" despesa paga; precisa aceitar compra de cartão pendente, senão tudo vira "provável".
+6. **Extrato**: o pagamento de fatura achado no extrato passa a origem (conta da casa = Caixa; conta de um morador = titular).
+
+### 13.4. Riscos
+
+- Mexe em dados existentes e no fechamento, a parte com mais regras do app. Migration validada em bloco com rollback antes de aplicar, e testes de fechamento novos (fatura paga antes do fechamento, baixa no fechamento pelo titular e pelo Caixa, fatura levada adiante, reabertura).
+- Instâncias abertas do app com a versão antiga continuam criando compras pagas até serem reiniciadas.
+- A fatura levada adiante continua aparecendo na lista do ciclo fechado (regra de conta vencida); a tela do ciclo fechado usa o retrato gravado no fechamento, então os valores acertados não mudam.
+
+### 13.5. Fora desta etapa
+
+- O pagamento pelo Caixa **com os empréstimos** da seção 12.3 (moradores e titular devendo ao Caixa). Nesta etapa, "Caixa da Casa" só tira o reembolso do titular.
+- Pagamento parcial de fatura.
