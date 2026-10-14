@@ -486,7 +486,7 @@ class _SettlementHubContent extends StatelessWidget {
                   ),
                 const DropdownMenuItem(
                   value: OpenInvoiceChoice.paidByHouse,
-                  child: Text('Dar baixa: paga pelo Caixa da Casa', style: TextStyle(fontSize: 13)),
+                  child: Text('Dar baixa: paga pelo Caixa da Casa (o que não é da casa vira dívida com o Caixa)', style: TextStyle(fontSize: 13)),
                 ),
                 const DropdownMenuItem(
                   value: OpenInvoiceChoice.carryOver,

@@ -262,7 +262,7 @@ class _CardInvoicePaymentSheetState extends State<CardInvoicePaymentSheet> {
                                 contentPadding: EdgeInsets.zero,
                                 value: true,
                                 title: Text('Caixa da Casa'),
-                                subtitle: Text('Sai do caixa, sem reembolso'),
+                                subtitle: Text('Sai do caixa, sem reembolso. Em fatura importada, os gastos pessoais e os de outros moradores viram dívida com o Caixa.'),
                               ),
                             ],
                           ),

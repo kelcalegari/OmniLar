@@ -225,7 +225,7 @@ class _ImportPageState extends State<ImportPage> {
             ),
             SimpleDialogOption(
               onPressed: () => Navigator.pop(dialogContext, true),
-              child: const Text('Caixa da Casa (sem reembolso)'),
+              child: const Text('Caixa da Casa: sem reembolso, e o que não é da casa vira dívida com o Caixa'),
             ),
           ],
         ),
