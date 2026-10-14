@@ -26,7 +26,7 @@ A tela antiga "Rachar a Fatura" (`split_invoice_modal.dart`) foi substituída pe
 - **Testes**: `test/features/reconciliation/` (leitura, duplicidade, plano de gravação e a página).
 
 **Limites do que foi feito**
-- **Sem rascunho**: a revisão vive só na tela; sair da página antes de confirmar perde tudo.
+- **Rascunho da revisão** (feito, sem migration): cada mudança da revisão é guardada **neste aparelho**, por cartão ou conta (`import_draft_store.dart`, `import_draft_codec.dart`). Ao voltar à página, aparece "Revisão em andamento" com Retomar ou Descartar; ao retomar, as despesas parecidas, os ciclos fechados e as importações anteriores são buscados de novo. Confirmar apaga o rascunho. Em outro aparelho a revisão não aparece, e o CSV original não é guardado ("Ajustar colunas" some depois de retomar).
 - **Desfazer não reverte correções**: valor ou cartão trocado em despesa que já existia continua como ficou. Despesa já acertada em um fechamento e empréstimo que já teve pagamento impedem o desfazer; só quem emprestou (ou um administrador) desfaz um empréstimo.
 - **A assinatura depende do arquivo**: se o banco mudar a descrição ou a data de uma linha entre um arquivo e outro, ela não é reconhecida como já importada (aí vale a comparação com as despesas do app).
 - **Conta pendente** que casa com uma linha só é vinculada: a baixa continua sendo feita na Casa.
@@ -165,13 +165,13 @@ Sem IA (limite ou erro), OFX/CSV continuam funcionando e a classificação fica 
 
 1. **Corrigir os riscos de hoje**: feito.
 2. **Origem e leitura confiável**: feito.
-3. **Rascunho e gravação por linha**: gravação por linha e confirmação atômica feitas. Falta guardar o rascunho da revisão.
+3. **Rascunho e gravação por linha**: feitos (o rascunho fica neste aparelho).
 4. **Conciliação**: feita (motor, tela, ciclo fechado, assinatura por linha, edição em lote e dividir linha).
 5. **Extrato**: pagamento de fatura, aporte, abatimento de empréstimo e estorno feitos.
 6. **IA e outros formatos**: regras aprendidas, sugestão de categoria, leitura de PDF/foto e mapeamento de colunas de CSV feitos.
 7. **Histórico e desfazer**: feitos (migration 0052).
 
-A etapa 6 exige publicar uma função nova (`import-classify`). O rascunho da revisão (etapa 3) exigiria outra mudança no banco.
+Todas as etapas estão feitas. Pendente: testar com conta real e arquivos de banco de verdade.
 
 ## 10. Decisões em aberto
 

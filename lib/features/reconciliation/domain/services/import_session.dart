@@ -198,6 +198,10 @@ class ImportSession {
   /// Para onde vai cada estorno (id da linha do estorno -> chave da opção).
   final Map<String, String> refundChoices;
 
+  /// De que despesa era cada resposta em [decisions] (id da linha -> id da
+  /// despesa), para a resposta sobreviver quando a comparação é refeita.
+  final Map<String, String> decisionTargets;
+
   /// Linhas que vieram classificadas por uma regra aprendida (pelo id).
   final Set<String> ruledLineIds;
 
@@ -221,6 +225,7 @@ class ImportSession {
     this.extraChoices = const {},
     this.knownExpenses = const [],
     this.refundChoices = const {},
+    this.decisionTargets = const {},
     this.ruledLineIds = const {},
     this.invoicePaidAt,
     this.invoicePaidByHouse = false,
@@ -285,6 +290,7 @@ class ImportSession {
     Map<String, String>? extraChoices,
     List<HouseExpense>? knownExpenses,
     Map<String, String>? refundChoices,
+    Map<String, String>? decisionTargets,
     Set<String>? ruledLineIds,
     ({DateTime? paidAt, bool byHouse})? invoicePayment,
   }) {
@@ -302,6 +308,7 @@ class ImportSession {
       extraChoices: extraChoices ?? this.extraChoices,
       knownExpenses: knownExpenses ?? this.knownExpenses,
       refundChoices: refundChoices ?? this.refundChoices,
+      decisionTargets: decisionTargets ?? this.decisionTargets,
       ruledLineIds: ruledLineIds ?? this.ruledLineIds,
       invoicePaidAt: invoicePayment != null ? invoicePayment.paidAt : invoicePaidAt,
       invoicePaidByHouse: invoicePayment != null ? invoicePayment.byHouse : invoicePaidByHouse,
@@ -557,8 +564,13 @@ class ImportSession {
   ImportSession withLine(ImportedStatementLine updated) =>
       _copy(lines: [for (final line in lines) line.id == updated.id ? updated : line]);
 
-  ImportSession withDecision(String lineId, MatchDecision decision) =>
-      _copy(decisions: {...decisions, lineId: decision});
+  ImportSession withDecision(String lineId, MatchDecision decision) => _copy(
+        decisions: {...decisions, lineId: decision},
+        decisionTargets: {
+          ...decisionTargets,
+          lineId: ?matches[lineId]?.expense.id,
+        },
+      );
 
   /// Compara as linhas com as despesas do app. Mantém o que o usuário já
   /// respondeu quando a linha continua casada com a mesma despesa.
@@ -571,7 +583,9 @@ class ImportSession {
     );
     final kept = <String, MatchDecision>{
       for (final entry in decisions.entries)
-        if (found[entry.key]?.expense.id == matches[entry.key]?.expense.id) entry.key: entry.value,
+        if (found[entry.key]?.expense.id ==
+            (matches[entry.key]?.expense.id ?? decisionTargets[entry.key]))
+          entry.key: entry.value,
     };
     return _copy(matches: found, decisions: kept, knownExpenses: expenses);
   }

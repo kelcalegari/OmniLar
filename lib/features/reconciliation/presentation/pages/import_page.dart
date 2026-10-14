@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:typed_data';
 
 import 'package:file_picker/file_picker.dart';
@@ -27,6 +28,8 @@ import '../../../settlement/domain/entities/settlement_summary.dart';
 import '../../../settlement/domain/repositories/settlement_repository.dart';
 import '../../data/csv_mapping_store.dart';
 import '../../data/import_ai_service.dart';
+import '../../data/import_draft_store.dart';
+import '../../domain/services/import_draft_codec.dart';
 import '../../domain/entities/csv_mapping.dart';
 import '../widgets/csv_mapping_dialog.dart';
 import '../../domain/entities/imported_statement_line.dart';
@@ -55,7 +58,18 @@ class _ImportPageState extends State<ImportPage> {
   static final _shortDay = DateFormat('dd/MM');
 
   String? _sourceId;
-  ImportSession? _session;
+
+  /// Revisão em andamento. Toda mudança dela é guardada como rascunho.
+  ImportSession? _sessionValue;
+  ImportSession? get _session => _sessionValue;
+  set _session(ImportSession? session) {
+    _sessionValue = session;
+    _scheduleDraftSave();
+  }
+
+  /// Rascunho de outra hora para o cartão ou conta escolhido (sem revisão aberta).
+  ImportDraft? _draft;
+  Timer? _draftTimer;
   bool _busy = false;
   String? _fileWarning;
   Set<FinancialCycle> _closedCycles = const {};
@@ -84,7 +98,69 @@ class _ImportPageState extends State<ImportPage> {
     // Aberta direto pelo endereço: a casa pode não estar carregada ainda
     if (_finance.state.paymentMethods.isEmpty) _finance.loadCycleData();
     _loadHistory();
-    if (_sourceId != null) _loadRules(_sourceId!);
+    if (_sourceId != null) {
+      _loadRules(_sourceId!);
+      _loadDraft(_sourceId!);
+    }
+  }
+
+  @override
+  void dispose() {
+    // O que estava esperando para ser guardado vai agora
+    if (_draftTimer?.isActive ?? false) {
+      _draftTimer!.cancel();
+      _saveDraftNow();
+    }
+    super.dispose();
+  }
+
+  void _scheduleDraftSave() {
+    if (_sessionValue == null) return;
+    _draftTimer?.cancel();
+    _draftTimer = Timer(const Duration(milliseconds: 600), _saveDraftNow);
+  }
+
+  void _saveDraftNow() {
+    final session = _sessionValue;
+    if (session == null) return;
+    sl<ImportDraftStore>().save(session.source.id, session.fileName, ImportDraftCodec.toJson(session));
+  }
+
+  Future<void> _loadDraft(String sourceId) async {
+    final draft = await sl<ImportDraftStore>().load(sourceId);
+    if (!mounted || _sourceId != sourceId) return;
+    setState(() => _draft = draft);
+  }
+
+  Future<void> _resumeDraft(PaymentMethod source) async {
+    final draft = _draft;
+    if (draft == null) return;
+    final session = ImportDraftCodec.fromJson(draft.session, source);
+    if (session == null) {
+      _showMessage('Não foi possível retomar esta revisão. Importe o arquivo de novo.', error: true);
+      await _discardDraft(source);
+      return;
+    }
+    setState(() {
+      _session = session;
+      _draft = null;
+      _csv = null;
+      _fileWarning = null;
+      _failure = null;
+      _resultMessage = null;
+      _resultWarnings = const [];
+      _selected = const {};
+      _filter = null;
+    });
+    // Despesas parecidas, ciclos fechados e importações anteriores são buscados de novo
+    await _refresh();
+  }
+
+  Future<void> _discardDraft(PaymentMethod source) async {
+    _draftTimer?.cancel();
+    setState(() => _draft = null);
+    // A tela não espera o armazenamento do aparelho
+    unawaited(sl<ImportDraftStore>().clear(source.id));
   }
 
   Future<List<ImportRule>> _loadRules(String sourceId) async {
@@ -385,6 +461,7 @@ class _ImportPageState extends State<ImportPage> {
         (members.isNotEmpty ? members.first.id : '');
 
     _sourceId = source.id;
+    _draft = null;
     final rules = await _loadRules(source.id);
     if (!mounted) return;
     final state = _finance.state;
@@ -914,6 +991,8 @@ class _ImportPageState extends State<ImportPage> {
         '${plan.skippedClosedCycle.length} de ciclo fechado ${plan.skippedClosedCycle.length == 1 ? 'ficou' : 'ficaram'} de fora',
     ].join(' • ');
 
+    _draftTimer?.cancel();
+    unawaited(sl<ImportDraftStore>().clear(session.source.id));
     setState(() {
       _session = null;
       _busy = false;
@@ -1085,7 +1164,12 @@ class _ImportPageState extends State<ImportPage> {
                         _fileWarning = null;
                         _failure = null;
                         _rules = const [];
-                        if (id != null) _loadRules(id);
+                        _draft = null;
+                        _draftTimer?.cancel();
+                        if (id != null) {
+                          _loadRules(id);
+                          _loadDraft(id);
+                        }
                       }
                       _sourceId = id;
                     }),
@@ -1114,6 +1198,38 @@ class _ImportPageState extends State<ImportPage> {
                 ),
             ],
           ),
+          if (_draft != null && _session == null && source != null) ...[
+            const SizedBox(height: 12),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: AppColors.primary.withValues(alpha: 0.08),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Wrap(
+                spacing: 8,
+                runSpacing: 4,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                children: [
+                  const Icon(Icons.history_rounded, size: 18, color: AppColors.primary),
+                  Text(
+                    'Revisão em andamento: ${_draft!.fileName} '
+                    '(salva em ${DateFormat('dd/MM HH:mm').format(_draft!.savedAt)})',
+                    style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+                  ),
+                  FilledButton(
+                    key: const Key('import_resume_draft'),
+                    onPressed: _busy ? null : () => _resumeDraft(source),
+                    child: const Text('Retomar'),
+                  ),
+                  TextButton(
+                    onPressed: _busy ? null : () => _discardDraft(source),
+                    child: const Text('Descartar'),
+                  ),
+                ],
+              ),
+            ),
+          ],
           const SizedBox(height: 8),
           const Text(
             'OFX e CSV são lidos direto. PDF e foto são lidos por IA: o arquivo é enviado ao provedor de IA e as linhas precisam ser conferidas.',

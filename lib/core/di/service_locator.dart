@@ -1,5 +1,6 @@
 import '../../features/reconciliation/data/csv_mapping_store.dart';
 import '../../features/reconciliation/data/import_ai_service.dart';
+import '../../features/reconciliation/data/import_draft_store.dart';
 import '../../features/reconciliation/data/mock_import_repository.dart';
 import '../../features/reconciliation/data/supabase_import_repository.dart';
 import '../../features/reconciliation/domain/repositories/import_repository.dart';
@@ -345,6 +346,7 @@ Future<void> initServiceLocator() async {
   });
 
   sl.registerLazySingleton<CsvMappingStore>(() => CsvMappingStore(sl<FlutterSecureStorage>()));
+  sl.registerLazySingleton<ImportDraftStore>(() => ImportDraftStore(sl<FlutterSecureStorage>()));
   sl.registerLazySingleton<ImportAiService>(() => ImportAiService(
         getClient: () => SupabaseConfig.client,
         aiConfigService: sl(),
