@@ -15,9 +15,13 @@ String _date(DateTime d) => '${_day(d)}/${d.year}';
 
 /// Seção "Prévia do fechamento": quanto cada morador paga ou recebe no
 /// fechamento do ciclo, com os mesmos números do Hub de Liquidação.
-class CyclePreviewSection extends StatefulWidget {
+class CyclePreviewSection extends StatelessWidget {
   /// Morador logado (abre a prévia dele); vazio mostra todos.
   final String currentMemberId;
+
+  /// "Todos" escolhido (vale também para o calendário de pagamentos).
+  final bool showAll;
+  final ValueChanged<bool> onShowAllChanged;
 
   /// Moradores sem aporte fixo definido no modelo de aportes fixos.
   final List<String> membersWithoutFixedContribution;
@@ -26,16 +30,11 @@ class CyclePreviewSection extends StatefulWidget {
   const CyclePreviewSection({
     super.key,
     required this.currentMemberId,
+    required this.showAll,
+    required this.onShowAllChanged,
     this.membersWithoutFixedContribution = const [],
     required this.onRetry,
   });
-
-  @override
-  State<CyclePreviewSection> createState() => _CyclePreviewSectionState();
-}
-
-class _CyclePreviewSectionState extends State<CyclePreviewSection> {
-  bool _showAll = false;
 
   @override
   Widget build(BuildContext context) {
@@ -90,7 +89,11 @@ class _CyclePreviewSectionState extends State<CyclePreviewSection> {
     }
     return Row(
       children: [
-        const Icon(Icons.event_available_rounded, color: AppColors.primary, size: 20),
+        const Icon(
+          Icons.event_available_rounded,
+          color: AppColors.primary,
+          size: 20,
+        ),
         const SizedBox(width: 8),
         Expanded(
           child: Column(
@@ -101,7 +104,10 @@ class _CyclePreviewSectionState extends State<CyclePreviewSection> {
                 style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
               ),
               if (subtitle.isNotEmpty)
-                Text(subtitle, style: const TextStyle(fontSize: 12, color: Colors.grey)),
+                Text(
+                  subtitle,
+                  style: const TextStyle(fontSize: 12, color: Colors.grey),
+                ),
             ],
           ),
         ),
@@ -118,7 +124,7 @@ class _CyclePreviewSectionState extends State<CyclePreviewSection> {
             onPressed: () => SettlementAuditSheet.show(
               context: context,
               summary: state.summary!,
-              initialMemberId: _hasMe(preview!) ? widget.currentMemberId : null,
+              initialMemberId: _hasMe(preview!) ? currentMemberId : null,
             ),
           ),
       ],
@@ -134,7 +140,7 @@ class _CyclePreviewSectionState extends State<CyclePreviewSection> {
           style: const TextStyle(fontSize: 12, color: AppColors.debtRed),
         ),
         TextButton.icon(
-          onPressed: widget.onRetry,
+          onPressed: onRetry,
           icon: const Icon(Icons.refresh_rounded, size: 18),
           label: const Text('Tentar de novo'),
         ),
@@ -143,7 +149,7 @@ class _CyclePreviewSectionState extends State<CyclePreviewSection> {
   }
 
   bool _hasMe(CyclePreview preview) =>
-      widget.currentMemberId.isNotEmpty && preview.memberById(widget.currentMemberId) != null;
+      currentMemberId.isNotEmpty && preview.memberById(currentMemberId) != null;
 
   List<Widget> _body(BuildContext context, CyclePreview preview) {
     if (preview.members.isEmpty) {
@@ -156,10 +162,10 @@ class _CyclePreviewSectionState extends State<CyclePreviewSection> {
     }
 
     final hasMe = _hasMe(preview);
-    final showAll = _showAll || !hasMe;
-    final shown = showAll
+    final showEveryone = showAll || !hasMe;
+    final shown = showEveryone
         ? preview.members
-        : [preview.memberById(widget.currentMemberId)!];
+        : [preview.memberById(currentMemberId)!];
 
     return [
       if (hasMe)
@@ -170,23 +176,27 @@ class _CyclePreviewSectionState extends State<CyclePreviewSection> {
               ButtonSegment(value: false, label: Text('Minha prévia')),
               ButtonSegment(value: true, label: Text('Todos')),
             ],
-            selected: {_showAll},
+            selected: {showAll},
             showSelectedIcon: false,
-            onSelectionChanged: (s) => setState(() => _showAll = s.first),
+            onSelectionChanged: (s) => onShowAllChanged(s.first),
           ),
         ),
       if (hasMe) const SizedBox(height: 12),
-      if (widget.membersWithoutFixedContribution.isNotEmpty && !preview.isSettled)
+      if (membersWithoutFixedContribution.isNotEmpty && !preview.isSettled)
         _notice(
-          '${widget.membersWithoutFixedContribution.join(', ')} '
-          '${widget.membersWithoutFixedContribution.length == 1 ? 'está' : 'estão'} sem aporte fixo definido '
-          'e não entra${widget.membersWithoutFixedContribution.length == 1 ? '' : 'm'} no fechamento.',
+          '${membersWithoutFixedContribution.join(', ')} '
+          '${membersWithoutFixedContribution.length == 1 ? 'está' : 'estão'} sem aporte fixo definido '
+          'e não entra${membersWithoutFixedContribution.length == 1 ? '' : 'm'} no fechamento.',
           AppColors.debtRed,
         ),
-      if (preview.usesFixedContributions && !preview.isSettled) _bucketNotice(preview),
-      for (final member in shown) _MemberPreviewCard(member: member, preview: preview),
-      if (showAll && preview.assumedPayments.any((a) => a.paidByHouse))
-        _housePayments(preview.assumedPayments.where((a) => a.paidByHouse).toList()),
+      if (preview.usesFixedContributions && !preview.isSettled)
+        _bucketNotice(preview),
+      for (final member in shown)
+        _MemberPreviewCard(member: member, preview: preview),
+      if (showEveryone && preview.assumedPayments.any((a) => a.paidByHouse))
+        _housePayments(
+          preview.assumedPayments.where((a) => a.paidByHouse).toList(),
+        ),
     ];
   }
 
@@ -254,7 +264,8 @@ class _MemberPreviewCard extends StatelessWidget {
     final headline = net.isNegative
         ? 'paga ${Money(-net.cents).formatted}'
         : (net.isPositive ? 'recebe ${net.formatted}' : 'nada a acertar');
-    final missingCents = member.contributionDue.cents - member.contributionPaid.cents;
+    final missingCents =
+        member.contributionDue.cents - member.contributionPaid.cents;
     final pendingContribution = Money(missingCents > 0 ? missingCents : 0);
 
     return Container(
@@ -273,12 +284,19 @@ class _MemberPreviewCard extends StatelessWidget {
               Expanded(
                 child: Text(
                   member.memberName,
-                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                  style: const TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 14,
+                  ),
                 ),
               ),
               PrivacySensitiveText(
                 headline,
-                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: color),
+                style: TextStyle(
+                  fontWeight: FontWeight.bold,
+                  fontSize: 14,
+                  color: color,
+                ),
               ),
             ],
           ),
@@ -287,19 +305,22 @@ class _MemberPreviewCard extends StatelessWidget {
             'Aporte que falta',
             pendingContribution,
             sign: '+',
-            caption: '${member.contributionDue.formatted} do ciclo, '
+            caption:
+                '${member.contributionDue.formatted} do ciclo, '
                 '${member.contributionPaid.formatted} já aportado',
           ),
           if (member.outOfPocket.isPositive)
             _line('Pagou do bolso (reembolso)', member.outOfPocket, sign: '−'),
           if (member.contributionRefund.isPositive)
             _line('Sobra devolvida', member.contributionRefund, sign: '−'),
-          if (member.p2pToPay.isPositive) _line('Parcelas a pagar', member.p2pToPay, sign: '+'),
+          if (member.p2pToPay.isPositive)
+            _line('Parcelas a pagar', member.p2pToPay, sign: '+'),
           for (final i in member.installmentsToPay) _installment(i),
           if (member.p2pToReceive.isPositive)
             _line('Parcelas a receber', member.p2pToReceive, sign: '−'),
           for (final i in member.installmentsToReceive) _installment(i),
-          if (member.transfersOut.isNotEmpty || member.transfersIn.isNotEmpty) ...[
+          if (member.transfersOut.isNotEmpty ||
+              member.transfersIn.isNotEmpty) ...[
             const SizedBox(height: 6),
             for (final t in member.transfersOut)
               _transfer('Paga a ${t.toMemberName}', t.amount),
@@ -313,7 +334,8 @@ class _MemberPreviewCard extends StatelessWidget {
               '(volta no fechamento):',
               style: const TextStyle(fontSize: 11, color: Colors.grey),
             ),
-            for (final p in member.assumedPayments) _AssumedPaymentRow(payment: p),
+            for (final p in member.assumedPayments)
+              _AssumedPaymentRow(payment: p),
           ],
           if (member.projectedExtraShare.isPositive) ...[
             const SizedBox(height: 8),
@@ -324,7 +346,12 @@ class _MemberPreviewCard extends StatelessWidget {
     );
   }
 
-  Widget _line(String label, Money amount, {required String sign, String? caption}) {
+  Widget _line(
+    String label,
+    Money amount, {
+    required String sign,
+    String? caption,
+  }) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 2),
       child: Row(
@@ -382,7 +409,11 @@ class _MemberPreviewCard extends StatelessWidget {
   Widget _transfer(String label, Money amount) {
     return Row(
       children: [
-        const Icon(Icons.arrow_forward_rounded, size: 14, color: AppColors.primary),
+        const Icon(
+          Icons.arrow_forward_rounded,
+          size: 14,
+          color: AppColors.primary,
+        ),
         const SizedBox(width: 4),
         Expanded(child: Text(label, style: const TextStyle(fontSize: 12))),
         PrivacySensitiveText(
@@ -397,7 +428,9 @@ class _MemberPreviewCard extends StatelessWidget {
     final projected = member.projectedNet;
     final text = projected.isNegative
         ? 'paga ${Money(-projected.cents).formatted}'
-        : (projected.isPositive ? 'recebe ${projected.formatted}' : 'nada a acertar');
+        : (projected.isPositive
+              ? 'recebe ${projected.formatted}'
+              : 'nada a acertar');
     return Container(
       padding: const EdgeInsets.all(8),
       decoration: BoxDecoration(

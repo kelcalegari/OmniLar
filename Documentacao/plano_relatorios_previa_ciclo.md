@@ -1,16 +1,17 @@
 # Plano — Relatórios com prévia do ciclo e calendário de pagamentos
 
-Escrito em 13/10/2026 e revisado duas vezes em 14/10/2026, depois das mudanças no fechamento das migrations 0054 a 0057 (ver "Mudanças no fechamento desde a primeira versão"). Fases 0 e 1 implementadas em 14/10/2026 na branch `feat/relatorios-previa-ciclo` (ver "Situação"); as demais continuam como plano.
+Escrito em 13/10/2026 e revisado duas vezes em 14/10/2026, depois das mudanças no fechamento das migrations 0054 a 0057 (ver "Mudanças no fechamento desde a primeira versão"). Fases 0, 1 e 2 implementadas em 14/10/2026 na branch `feat/relatorios-previa-ciclo` (ver "Situação"); as demais continuam como plano.
 
 ## Situação
 
-**Feito (fases 0 e 1), só com testes automatizados no modo demo; falta o dono testar com sessão real:**
+**Feito (fases 0 a 2).** As fases 0 e 1 foram testadas pelo dono no app em 14/10/2026; a fase 2 só tem testes automatizados e conferência visual no modo demo.
 
 - Fase 0: rótulo do seletor ("Ciclo atual", "Ciclo encerrado", "Próximo ciclo"); cartões "Pago", "A vencer" e "Total do ciclo", somando as mesmas despesas do gráfico, mais "Aportes" e "Fôlego"; a média do planejador divide pelo número de ciclos do histórico (`historicalCyclesCount`); o planejador vê faturas e contas pendentes como o fechamento vê (`FinanceCubit._estimate` aplica `applyOpenInvoiceChoices` com as escolhas padrão, e o estimador abate o que foi pago do bolso sem exigir status pago, como o motor).
 - Fase 1: seção "Prévia do fechamento" no topo dos Relatórios, com "Minha prévia" e "Todos". Código em `lib/features/reports/`: `CyclePreviewBuilder` (domínio), `ReportsCubit` (lê `SettlementRepository.getSettlementSummary` sem opções, o mesmo resumo do Hub) e `CyclePreviewSection`. Mostra por morador o aporte que falta, o reembolso do que pagou do bolso, a sobra devolvida, as parcelas a pagar e a receber (com as atrasadas), para quem paga ou de quem recebe, as faturas e contas em aberto consideradas pagas por ele e a projeção até o fim do ciclo. Abre a memória de cálculo do Hub.
+- Fase 2: seção "Próximos pagamentos" logo abaixo da prévia, que segue a mesma escolha "Minha prévia" ou "Todos". `PaymentCalendarBuilder` junta as faturas e contas em aberto (com o pagador da prévia e "volta no fechamento" quando é um morador), as parcelas de empréstimos que não passam pelo fechamento, os empréstimos sem prazo e o Super Pix no último dia do ciclo. Parcela cobrada no fechamento não vira linha própria. Grupos: atrasados, próximos 7 dias, até o fim do ciclo e sem prazo; na visão do morador, o total que ele paga e recebe até o fechamento. Conta e fatura com código guardado têm o botão "Copiar código". O `ReportsCubit` lê os empréstimos pelo `P2PRepository`; se falhar, o calendário sai sem eles. Não há saldo do Caixa por dia (o "fôlego por data" do plano ficou de fora).
 - Testes em `test/features/reports/cycle_preview_test.dart`.
 
-**Não feito:** CSV (fase 5) e as fases 2 a 4.
+**Não feito:** CSV (fase 5), fôlego do Caixa por data e as fases 3 e 4.
 
 ## Objetivo
 

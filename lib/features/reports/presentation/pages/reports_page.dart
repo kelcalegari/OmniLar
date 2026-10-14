@@ -13,9 +13,24 @@ import '../../../../core/di/service_locator.dart';
 import '../../../p2p/presentation/cubit/p2p_cubit.dart';
 import '../cubit/reports_cubit.dart';
 import '../widgets/cycle_preview_section.dart';
+import '../widgets/payment_calendar_section.dart';
 
-class ReportsPage extends StatelessWidget {
+class ReportsPage extends StatefulWidget {
   const ReportsPage({super.key});
+
+  @override
+  State<ReportsPage> createState() => _ReportsPageState();
+}
+
+class _ReportsPageState extends State<ReportsPage> {
+  /// "Todos" escolhido na prévia; vale também para o calendário.
+  final _showAll = ValueNotifier<bool>(false);
+
+  @override
+  void dispose() {
+    _showAll.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -36,21 +51,27 @@ class ReportsPage extends StatelessWidget {
                 previous.expenses != current.expenses ||
                 previous.contributions != current.contributions ||
                 previous.members != current.members),
-        listener: (context, state) => context.read<ReportsCubit>().loadPreview(state),
-        child: const _ReportsPageContent(),
+        listener: (context, state) =>
+            context.read<ReportsCubit>().loadPreview(state),
+        child: _ReportsPageContent(showAll: _showAll),
       ),
     );
   }
 }
 
 class _ReportsPageContent extends StatelessWidget {
-  const _ReportsPageContent();
+  final ValueNotifier<bool> showAll;
+
+  const _ReportsPageContent({required this.showAll});
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Relatórios e Analytics', style: TextStyle(fontWeight: FontWeight.bold)),
+        title: const Text(
+          'Relatórios e Analytics',
+          style: TextStyle(fontWeight: FontWeight.bold),
+        ),
         actions: [
           IconButton(
             icon: const Icon(Icons.file_download_outlined),
@@ -76,7 +97,9 @@ class _ReportsPageContent extends StatelessWidget {
 
           final summary = state.summary;
           if (summary == null) {
-            return const Center(child: Text('Nenhum dado disponível para este ciclo.'));
+            return const Center(
+              child: Text('Nenhum dado disponível para este ciclo.'),
+            );
           }
 
           final cubit = context.read<FinanceCubit>();
@@ -93,11 +116,27 @@ class _ReportsPageContent extends StatelessWidget {
                     _buildCycleSelector(context, state, cubit),
                     const SizedBox(height: 16),
 
-                    // Prévia do fechamento, por morador
-                    CyclePreviewSection(
-                      currentMemberId: _currentMemberId(context),
-                      membersWithoutFixedContribution: _membersWithoutFixedContribution(state),
-                      onRetry: () => context.read<ReportsCubit>().loadPreview(state),
+                    // Prévia do fechamento e calendário de pagamentos, por morador
+                    ValueListenableBuilder<bool>(
+                      valueListenable: showAll,
+                      builder: (context, all, _) => Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          CyclePreviewSection(
+                            currentMemberId: _currentMemberId(context),
+                            showAll: all,
+                            onShowAllChanged: (value) => showAll.value = value,
+                            membersWithoutFixedContribution:
+                                _membersWithoutFixedContribution(state),
+                            onRetry: () =>
+                                context.read<ReportsCubit>().loadPreview(state),
+                          ),
+                          PaymentCalendarSection(
+                            currentMemberId: _currentMemberId(context),
+                            showAll: all,
+                          ),
+                        ],
+                      ),
                     ),
                     const SizedBox(height: 20),
 
@@ -137,7 +176,9 @@ class _ReportsPageContent extends StatelessWidget {
 
   /// No modelo de aportes fixos, quem está sem valor definido não é cobrado.
   List<String> _membersWithoutFixedContribution(FinanceState state) {
-    final usesFixed = state.members.any((m) => (m.defaultFixedAmountCents ?? 0) > 0);
+    final usesFixed = state.members.any(
+      (m) => (m.defaultFixedAmountCents ?? 0) > 0,
+    );
     if (!usesFixed) return const [];
     return state.members
         .where((m) => (m.defaultFixedAmountCents ?? 0) <= 0)
@@ -179,11 +220,18 @@ class _ReportsPageContent extends StatelessWidget {
             children: [
               Text(
                 _cycleLabel(state),
-                style: const TextStyle(fontSize: 12, color: Colors.grey, fontWeight: FontWeight.w600),
+                style: const TextStyle(
+                  fontSize: 12,
+                  color: Colors.grey,
+                  fontWeight: FontWeight.w600,
+                ),
               ),
               Text(
                 state.currentCycle.formattedPeriod,
-                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                style: const TextStyle(
+                  fontWeight: FontWeight.bold,
+                  fontSize: 14,
+                ),
               ),
             ],
           ),
@@ -259,7 +307,9 @@ class _ReportsPageContent extends StatelessWidget {
               child: _buildMetricTile(
                 title: 'Fôlego',
                 amount: summary.folego,
-                color: summary.folego.cents >= 0 ? AppColors.creditGreen : AppColors.debtRed,
+                color: summary.folego.cents >= 0
+                    ? AppColors.creditGreen
+                    : AppColors.debtRed,
                 icon: Icons.shield_outlined,
               ),
             ),
@@ -311,7 +361,8 @@ class _ReportsPageContent extends StatelessWidget {
     // Agrupa despesas por categoria
     final Map<String, int> catTotals = {};
     for (final exp in expenses) {
-      catTotals[exp.categoryId] = (catTotals[exp.categoryId] ?? 0) + exp.amount.cents;
+      catTotals[exp.categoryId] =
+          (catTotals[exp.categoryId] ?? 0) + exp.amount.cents;
     }
 
     // O gráfico soma pagas e pendentes: o percentual é sobre esse mesmo total
@@ -339,7 +390,11 @@ class _ReportsPageContent extends StatelessWidget {
                   'Gastos por Categoria',
                   style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
                 ),
-                Icon(Icons.pie_chart_outline_rounded, color: AppColors.primary, size: 20),
+                Icon(
+                  Icons.pie_chart_outline_rounded,
+                  color: AppColors.primary,
+                  size: 20,
+                ),
               ],
             ),
             const SizedBox(height: 16),
@@ -354,17 +409,29 @@ class _ReportsPageContent extends StatelessWidget {
                     children: sortedCatIds.map((catId) {
                       final cat = categories.firstWhere(
                         (c) => c.id == catId,
-                        orElse: () => ExpenseCategory(id: catId, name: 'Outros', icon: 'category', colorHex: '#94A3B8'),
+                        orElse: () => ExpenseCategory(
+                          id: catId,
+                          name: 'Outros',
+                          icon: 'category',
+                          colorHex: '#94A3B8',
+                        ),
                       );
                       final cents = catTotals[catId] ?? 0;
-                      final flex = (cents * 100 ~/ (totalSpentCents > 0 ? totalSpentCents : 1)).clamp(1, 100);
-                      final pct = (cents * 100.0) / (totalSpentCents > 0 ? totalSpentCents : 1);
+                      final flex =
+                          (cents *
+                                  100 ~/
+                                  (totalSpentCents > 0 ? totalSpentCents : 1))
+                              .clamp(1, 100);
+                      final pct =
+                          (cents * 100.0) /
+                          (totalSpentCents > 0 ? totalSpentCents : 1);
                       final color = _parseColor(cat.colorHex);
 
                       return Expanded(
                         flex: flex,
                         child: Tooltip(
-                          message: '${cat.name}: ${Money(cents).format()} (${pct.toStringAsFixed(1)}%)',
+                          message:
+                              '${cat.name}: ${Money(cents).format()} (${pct.toStringAsFixed(1)}%)',
                           child: Container(color: color),
                         ),
                       );
@@ -387,10 +454,17 @@ class _ReportsPageContent extends StatelessWidget {
               ...sortedCatIds.map((catId) {
                 final cat = categories.firstWhere(
                   (c) => c.id == catId,
-                  orElse: () => ExpenseCategory(id: catId, name: 'Outros', icon: 'category', colorHex: '#94A3B8'),
+                  orElse: () => ExpenseCategory(
+                    id: catId,
+                    name: 'Outros',
+                    icon: 'category',
+                    colorHex: '#94A3B8',
+                  ),
                 );
                 final cents = catTotals[catId] ?? 0;
-                final percentage = (cents * 100.0) / (totalSpentCents > 0 ? totalSpentCents : 1);
+                final percentage =
+                    (cents * 100.0) /
+                    (totalSpentCents > 0 ? totalSpentCents : 1);
                 final color = _parseColor(cat.colorHex);
 
                 return Padding(
@@ -400,23 +474,35 @@ class _ReportsPageContent extends StatelessWidget {
                       Container(
                         width: 10,
                         height: 10,
-                        decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+                        decoration: BoxDecoration(
+                          color: color,
+                          shape: BoxShape.circle,
+                        ),
                       ),
                       const SizedBox(width: 10),
                       Expanded(
                         child: Text(
                           cat.name,
-                          style: const TextStyle(fontWeight: FontWeight.w500, fontSize: 13),
+                          style: const TextStyle(
+                            fontWeight: FontWeight.w500,
+                            fontSize: 13,
+                          ),
                         ),
                       ),
                       Text(
                         '${percentage.toStringAsFixed(1)}%',
-                        style: const TextStyle(color: Colors.grey, fontSize: 12),
+                        style: const TextStyle(
+                          color: Colors.grey,
+                          fontSize: 12,
+                        ),
                       ),
                       const SizedBox(width: 12),
                       PrivacySensitiveText(
                         Money(cents).formatted,
-                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                        style: const TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 13,
+                        ),
                       ),
                     ],
                   ),
@@ -450,7 +536,11 @@ class _ReportsPageContent extends StatelessWidget {
                   'Aportes Realizados por Membro',
                   style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
                 ),
-                Icon(Icons.people_alt_outlined, color: AppColors.primary, size: 20),
+                Icon(
+                  Icons.people_alt_outlined,
+                  color: AppColors.primary,
+                  size: 20,
+                ),
               ],
             ),
             const SizedBox(height: 16),
@@ -465,7 +555,9 @@ class _ReportsPageContent extends StatelessWidget {
                   children: [
                     CircleAvatar(
                       radius: 16,
-                      backgroundColor: AppColors.primary.withValues(alpha: 0.15),
+                      backgroundColor: AppColors.primary.withValues(
+                        alpha: 0.15,
+                      ),
                       child: Text(
                         member.name[0],
                         style: const TextStyle(
@@ -480,16 +572,28 @@ class _ReportsPageContent extends StatelessWidget {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text(member.name, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                          Text(
+                            member.name,
+                            style: const TextStyle(
+                              fontWeight: FontWeight.bold,
+                              fontSize: 13,
+                            ),
+                          ),
                           if ((member.defaultFixedAmountCents ?? 0) > 0)
                             Text(
                               'Meta de aporte: ${Money(member.defaultFixedAmountCents!).formatted}',
-                              style: const TextStyle(color: Colors.grey, fontSize: 11),
+                              style: const TextStyle(
+                                color: Colors.grey,
+                                fontSize: 11,
+                              ),
                             )
                           else if (member.defaultSplitPercent > 0)
                             Text(
                               'Meta de rateio: ${member.defaultSplitPercent.toStringAsFixed(0)}%',
-                              style: const TextStyle(color: Colors.grey, fontSize: 11),
+                              style: const TextStyle(
+                                color: Colors.grey,
+                                fontSize: 11,
+                              ),
                             ),
                         ],
                       ),
@@ -579,26 +683,48 @@ class _ReportsPageContent extends StatelessWidget {
     buffer.writeln('RELATÓRIO DE DESPESAS DO CICLO — OMNI LAR');
     final cycle = state.currentCycle;
     if (cycle != null) {
-      buffer.writeln('Período;${cycle.startDate.day}/${cycle.startDate.month}/${cycle.startDate.year} até ${cycle.endDate.day}/${cycle.endDate.month}/${cycle.endDate.year}');
+      buffer.writeln(
+        'Período;${cycle.startDate.day}/${cycle.startDate.month}/${cycle.startDate.year} até ${cycle.endDate.day}/${cycle.endDate.month}/${cycle.endDate.year}',
+      );
     }
     buffer.writeln('');
-    buffer.writeln('Data;Descrição;Categoria;Valor (R\$);Quem Pagou;Status;Recorrente');
+    buffer.writeln(
+      'Data;Descrição;Categoria;Valor (R\$);Quem Pagou;Status;Recorrente',
+    );
 
     for (final exp in state.expenses) {
-      final cat = state.categories.where((c) => c.id == exp.categoryId).firstOrNull?.name ?? 'Geral';
-      final payer = state.members.where((m) => m.id == exp.paidByMemberId).firstOrNull?.name ?? 'Membro';
-      final dt = '${exp.date.day.toString().padLeft(2, '0')}/${exp.date.month.toString().padLeft(2, '0')}/${exp.date.year}';
-      final valStr = (exp.amount.cents / 100.0).toStringAsFixed(2).replaceAll('.', ',');
+      final cat =
+          state.categories
+              .where((c) => c.id == exp.categoryId)
+              .firstOrNull
+              ?.name ??
+          'Geral';
+      final payer =
+          state.members
+              .where((m) => m.id == exp.paidByMemberId)
+              .firstOrNull
+              ?.name ??
+          'Membro';
+      final dt =
+          '${exp.date.day.toString().padLeft(2, '0')}/${exp.date.month.toString().padLeft(2, '0')}/${exp.date.year}';
+      final valStr = (exp.amount.cents / 100.0)
+          .toStringAsFixed(2)
+          .replaceAll('.', ',');
       final statusStr = exp.isPending ? 'Pendente' : 'Paga';
-      final recStr = exp.isRecurring ? (exp.isVariable ? 'Recorrente Variável' : 'Recorrente Fixa') : 'Avulsa';
+      final recStr = exp.isRecurring
+          ? (exp.isVariable ? 'Recorrente Variável' : 'Recorrente Fixa')
+          : 'Avulsa';
 
-      buffer.writeln('$dt;"${exp.title}";"$cat";$valStr;"$payer";$statusStr;$recStr');
+      buffer.writeln(
+        '$dt;"${exp.title}";"$cat";$valStr;"$payer";$statusStr;$recStr',
+      );
     }
 
     buffer.writeln('');
     buffer.writeln('RESUMO GERAL');
     // Totais das próprias linhas listadas acima, para o arquivo fechar com ele mesmo
-    String asCsvMoney(int cents) => (cents / 100.0).toStringAsFixed(2).replaceAll('.', ',');
+    String asCsvMoney(int cents) =>
+        (cents / 100.0).toStringAsFixed(2).replaceAll('.', ',');
     final paidCents = state.expenses
         .where((e) => !e.isPending)
         .fold<int>(0, (acc, e) => acc + e.amount.cents);
@@ -607,14 +733,19 @@ class _ReportsPageContent extends StatelessWidget {
         .fold<int>(0, (acc, e) => acc + e.amount.cents);
     buffer.writeln('Total Pago (R\$);${asCsvMoney(paidCents)}');
     buffer.writeln('Total Pendente (R\$);${asCsvMoney(pendingCents)}');
-    buffer.writeln('Total Lançado (R\$);${asCsvMoney(paidCents + pendingCents)}');
+    buffer.writeln(
+      'Total Lançado (R\$);${asCsvMoney(paidCents + pendingCents)}',
+    );
 
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Row(
           children: [
-            Icon(Icons.file_download_done_rounded, color: AppColors.creditGreen),
+            Icon(
+              Icons.file_download_done_rounded,
+              color: AppColors.creditGreen,
+            ),
             SizedBox(width: 8),
             Text('Relatório Gerado'),
           ],
@@ -637,7 +768,10 @@ class _ReportsPageContent extends StatelessWidget {
               ),
               child: Text(
                 'Total de lançamentos: ${state.expenses.length}\nTotal lançado (pagas e pendentes): ${Money(state.expenses.fold<int>(0, (acc, e) => acc + e.amount.cents)).format()}',
-                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                style: const TextStyle(
+                  fontWeight: FontWeight.bold,
+                  fontSize: 13,
+                ),
               ),
             ),
           ],
@@ -653,7 +787,11 @@ class _ReportsPageContent extends StatelessWidget {
             onPressed: () {
               Navigator.pop(ctx);
               ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Relatório pronto para download e compartilhamento! 📊')),
+                const SnackBar(
+                  content: Text(
+                    'Relatório pronto para download e compartilhamento! 📊',
+                  ),
+                ),
               );
             },
           ),

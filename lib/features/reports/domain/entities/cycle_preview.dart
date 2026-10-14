@@ -16,6 +16,9 @@ class AssumedPayment {
   final bool isInvoice;
   final bool isOverdue;
 
+  /// Linha digitável do boleto ou código da fatura, quando foi guardado.
+  final String? barcode;
+
   const AssumedPayment({
     required this.title,
     required this.dueDate,
@@ -23,6 +26,7 @@ class AssumedPayment {
     required this.payerMemberId,
     required this.isInvoice,
     required this.isOverdue,
+    this.barcode,
   });
 
   bool get paidByHouse => payerMemberId == null;
