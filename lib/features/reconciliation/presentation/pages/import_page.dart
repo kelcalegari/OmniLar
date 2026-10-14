@@ -1128,9 +1128,11 @@ class _ImportPageState extends State<ImportPage> {
                       onChanged: _busy
                           ? null
                           : (checked) => setState(() {
-                                _selected = checked == true
-                                    ? {..._selected, line.id}
-                                    : {..._selected}..remove(line.id);
+                                _selected = {
+                                  for (final id in _selected)
+                                    if (id != line.id) id,
+                                  if (checked == true) line.id,
+                                };
                               }),
                     ),
                   ),
