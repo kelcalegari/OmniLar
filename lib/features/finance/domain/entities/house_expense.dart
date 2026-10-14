@@ -120,6 +120,7 @@ class HouseExpense extends Equatable {
     bool clearPaidAt = false,
     DateTime? settledAt,
     String? barcode,
+    bool clearBarcode = false,
   }) {
     return HouseExpense(
       id: id ?? this.id,
@@ -143,7 +144,7 @@ class HouseExpense extends Equatable {
       projectId: clearProjectId ? null : (projectId ?? this.projectId),
       paidAt: clearPaidAt ? null : (paidAt ?? this.paidAt),
       settledAt: settledAt ?? this.settledAt,
-      barcode: barcode ?? this.barcode,
+      barcode: clearBarcode ? null : (barcode ?? this.barcode),
     );
   }
 

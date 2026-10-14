@@ -521,7 +521,7 @@ class SupabaseFinanceDataSource implements FinanceDataSource {
         'notes': expense.notes,
         // Nulo desvincula a despesa do projeto
         'project_id': expense.projectId,
-        if (expense.barcode != null) 'barcode': expense.barcode,
+        'barcode': expense.barcode,
       };
 
       await client.from('house_expenses').update(updateData).eq('id', expense.id);

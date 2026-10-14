@@ -414,6 +414,8 @@ class _AddExpensePageState extends State<AddExpensePage> {
             : paidOutOfPocket,
         status: editedStatus,
         barcode: _barcode,
+        // Campo apagado remove o código; código inválido mantém o que havia
+        clearBarcode: _barcodeController.text.trim().isEmpty,
         // Conta que estava pendente e foi marcada como paga agora
         paidAt: editedStatus == ExpenseStatus.paid && oldExpense.isPending && !wasWaitingForInvoice
             ? DateTime.now()
