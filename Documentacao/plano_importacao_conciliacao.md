@@ -4,7 +4,7 @@ Plano de implementação do módulo descrito em [modulo_importacao_conciliacao.m
 
 ## 1. Situação atual
 
-A tela antiga "Rachar a Fatura" (`split_invoice_modal.dart`) foi substituída pela página de importação. A migration 0052 (`import_history_confirm_and_undo`) foi validada no banco em bloco com rollback, mas **ainda não foi aplicada**: com conta real, confirmar e desfazer só funcionam depois dela.
+A tela antiga "Rachar a Fatura" (`split_invoice_modal.dart`) foi substituída pela página de importação. A migration 0052 (`import_history_confirm_and_undo`) está aplicada no banco.
 
 **Implementado**
 - **Página própria** em `/casa/importar` (`presentation/pages/import_page.dart`), aberta pelo Smart FAB ("Importar Fatura"), por Ajustes > Pagamentos e contas e pelo menu de cada cartão ou conta (chega com a origem escolhida).
@@ -15,6 +15,8 @@ A tela antiga "Rachar a Fatura" (`split_invoice_modal.dart`) foi substituída pe
 - **Gravação atômica** (`confirm_import`): uma despesa por linha da Casa, com cartão, vencimento da fatura e rateio padrão; um empréstimo por devedor, vencendo com a fatura; correção da despesa existente (valor real, ou troca para o cartão do arquivo). Se algo falha, nada é gravado.
 - **Histórico e desfazer**: cada importação confirmada fica em `import_batches`/`import_lines`, com o que cada linha virou, e aparece na página. Desfazer (`undo_import`) exclui as despesas e os empréstimos criados.
 - **Reimportação**: cada linha tem uma assinatura (data, valor, descrição e ordem entre linhas iguais). Linha já importada do mesmo cartão ou conta aparece como "Já importada" e não é lançada de novo, a menos que o usuário mande.
+- **Edição em lote**: marcar várias linhas e trocar destino, categoria ou devedor de uma vez; ao decidir uma linha, o app oferece repetir nas outras do mesmo estabelecimento.
+- **Extrato de conta** (`statement_extras.dart`): a saída que paga uma fatura pode marcar a fatura do cartão como paga (reconhecida pelo total do arquivo importado daquela fatura); a entrada pode virar aporte (só na conta da casa) ou abater um empréstimo de quem é dono da conta. O usuário escolhe; nada disso é automático.
 - **Ciclo fechado**: as linhas afetadas são avisadas e o usuário escolhe lançar como ajuste no ciclo atual ou deixar de fora.
 - **Testes**: `test/features/reconciliation/` (leitura, duplicidade, plano de gravação e a página).
 
@@ -23,8 +25,10 @@ A tela antiga "Rachar a Fatura" (`split_invoice_modal.dart`) foi substituída pe
 - **Desfazer não reverte correções**: valor ou cartão trocado em despesa que já existia continua como ficou. Despesa já acertada em um fechamento e empréstimo que já teve pagamento impedem o desfazer; só quem emprestou (ou um administrador) desfaz um empréstimo.
 - **A assinatura depende do arquivo**: se o banco mudar a descrição ou a data de uma linha entre um arquivo e outro, ela não é reconhecida como já importada (aí vale a comparação com as despesas do app).
 - **Conta pendente** que casa com uma linha só é vinculada: a baixa continua sendo feita na Casa.
-- **Estorno** não gera lançamento; **pagamento de fatura** no extrato não marca a fatura como paga; **Pix recebido** não vira aporte nem parcela.
-- **Sem edição em lote**, sem dividir linha, sem regras aprendidas e sem IA (PDF e foto não são aceitos).
+- **Movimentos do extrato são gravados depois da importação, um a um**: se um falhar (ciclo fechado, por exemplo), a importação continua gravada e a tela avisa qual não entrou. Desfazer a importação não reverte pagamento de fatura, aporte nem abatimento.
+- **Estorno** não gera lançamento: aparece só para conferência.
+- **Só OFX e CSV**: PDF e foto não são aceitos, e CSV com colunas fora do comum pode não ser lido (seção 11).
+- **Sem dividir linha** e sem regras aprendidas entre uma importação e outra.
 - **Vínculo "já lançado" pode errar** quando duas compras diferentes têm o mesmo valor, no mesmo cartão, em até 3 dias; o usuário desfaz com "São diferentes".
 
 **A verificar**
@@ -154,9 +158,9 @@ Sem IA (limite ou erro), OFX/CSV continuam funcionando e a classificação fica 
 1. **Corrigir os riscos de hoje**: feito.
 2. **Origem e leitura confiável**: feito.
 3. **Rascunho e gravação por linha**: gravação por linha e confirmação atômica feitas. Falta guardar o rascunho da revisão.
-4. **Conciliação**: motor, tela, grupo de ciclo fechado e assinatura por linha feitos. Falta a edição em lote.
-5. **Extrato**: só a leitura (saídas viram despesa). Falta pagamento de fatura, Pix recebido e estorno.
-6. **IA**: leitura de PDF/foto, classificação em lote, regras aprendidas.
+4. **Conciliação**: feita (motor, tela, ciclo fechado, assinatura por linha e edição em lote). Falta dividir linha.
+5. **Extrato**: pagamento de fatura, aporte e abatimento de empréstimo feitos. Falta o estorno.
+6. **IA e outros formatos**: classificação em lote, regras aprendidas e, por fim, leitura de PDF/foto e mapeamento de colunas de CSV (seção 11).
 7. **Histórico e desfazer**: feitos (migration 0052).
 
 A etapa 6 exige publicar uma função nova (`import-classify`). O rascunho da revisão (etapa 3) exigiria outra mudança no banco.
@@ -167,3 +171,31 @@ A etapa 6 exige publicar uma função nova (`import-classify`). O rascunho da re
 - **Parcelas futuras**: criar as restantes nos próximos ciclos ou só a da fatura atual (recomendação: só a atual).
 - **Linhas pessoais do titular**: ficam só no histórico da importação, sem virar despesa (como na especificação)?
 - **Dividir a linha**: entra na primeira versão ou depois da conciliação?
+
+## 11. Formatos de arquivo (fim do plano)
+
+Nem todo banco exporta OFX ou CSV, e os CSV não têm colunas padronizadas; muitos só entregam PDF. Só a leitura muda: qualquer formato vira a mesma lista de linhas, e a conciliação, a revisão, a confirmação e o desfazer servem como estão. Fica para o fim do plano, depois das outras etapas.
+
+| Formato | Como é lido | Situação |
+|---|---|---|
+| OFX | Por código; é um padrão | Feito |
+| CSV com colunas reconhecíveis | Por código, detectando data, descrição e valor | Feito |
+| CSV fora do padrão | Tela de mapear colunas, salva por cartão ou conta | A fazer |
+| PDF digital | IA lê e devolve as linhas estruturadas | A fazer |
+| PDF escaneado ou foto | A mesma função, com leitura de imagem | A fazer |
+
+**CSV fora do padrão.** Quando o leitor não tiver certeza das colunas, a página mostra as primeiras linhas e o usuário indica qual é data, descrição e valor (e se débito e crédito vêm em colunas separadas). O mapeamento fica salvo para aquele cartão ou conta. Não usa IA.
+
+**PDF.**
+1. O arquivo vai para uma função no servidor (mesma estrutura de `capture-read`), que mascara CPF e número de cartão e chama a IA.
+2. A resposta é estruturada: linhas (data, descrição, valor, parcela, tipo) e cabeçalho (final do cartão, vencimento, total, período).
+3. O código confere se a soma das linhas bate com o total impresso; se não bater, a página avisa a diferença antes da revisão.
+4. O vencimento lido preenche o da importação e o final do cartão confirma a origem escolhida.
+5. Sem IA (limite, erro ou sem chave), a página avisa e sugere OFX ou CSV.
+
+**Pontos de atenção.**
+- PDF com senha (comum nas faturas enviadas por e-mail) não é aberto pela IA: pedir o PDF baixado pelo app do banco, ou incluir uma biblioteca para destravar.
+- A fatura inteira vai para o provedor de IA: no plano gratuito o conteúdo pode ser usado pelo Google, então exige o plano pago antes de convidar outros usuários.
+- Uma chamada por arquivo, com cache pelo conteúdo.
+- Linha lida por IA entra na revisão como as outras, nunca direto no banco.
+- Exige publicar uma função nova no servidor, a fazer só com aprovação.

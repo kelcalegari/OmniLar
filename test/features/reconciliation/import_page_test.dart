@@ -123,4 +123,33 @@ void main() {
     // Com a importação desfeita, as linhas do arquivo aberto voltam a ser novas
     expect(find.text('Novas (5)'), findsOneWidget);
   });
+
+  testWidgets('edição em lote: marca todas as linhas e muda o destino de uma vez', (tester) async {
+    tester.view.physicalSize = const Size(1200, 3000);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+
+    await tester.pumpWidget(buildPage(sourceId: 'pm_card_carlos'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Usar fatura de exemplo'));
+    await tester.pumpAndSettle();
+    while (find.text('É a mesma').evaluate().isNotEmpty) {
+      final row = find.ancestor(of: find.text('É a mesma').first, matching: find.byType(Wrap)).first;
+      await tester.tap(find.descendant(of: row, matching: find.text('São diferentes')));
+      await tester.pumpAndSettle();
+    }
+    expect(find.text('Novas (5)'), findsOneWidget);
+
+    await tester.tap(find.text('Selecionar as 5 linhas para editar juntas'));
+    await tester.pumpAndSettle();
+    expect(find.text('5 linhas marcadas'), findsOneWidget);
+
+    await tester.tap(find.byKey(const Key('import_bulk_destination')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Ignorar').last);
+    await tester.pumpAndSettle();
+
+    expect(find.text('Novas (0)'), findsOneWidget);
+    expect(find.text('Ignoradas (5)'), findsOneWidget);
+  });
 }

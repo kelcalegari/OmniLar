@@ -10,7 +10,12 @@ import 'package:omni_lar/features/finance/domain/entities/payment_method.dart';
 import 'package:omni_lar/features/finance/domain/entities/split_rule.dart';
 import 'package:omni_lar/features/reconciliation/data/supabase_import_repository.dart';
 import 'package:omni_lar/features/reconciliation/domain/entities/imported_statement_line.dart';
+import 'package:omni_lar/features/finance/domain/entities/card_invoice.dart';
+import 'package:omni_lar/features/p2p/domain/entities/p2p_installment.dart';
+import 'package:omni_lar/features/p2p/domain/entities/p2p_loan.dart';
+import 'package:omni_lar/features/reconciliation/domain/repositories/import_repository.dart';
 import 'package:omni_lar/features/reconciliation/domain/services/import_session.dart';
+import 'package:omni_lar/features/reconciliation/domain/services/statement_extras.dart';
 import 'package:omni_lar/features/reconciliation/domain/services/statement_matcher.dart';
 import 'package:omni_lar/features/reconciliation/domain/services/statement_parser.dart';
 import 'package:omni_lar/features/reconciliation/domain/services/statement_text.dart';
@@ -640,6 +645,157 @@ date,title,amount
       expect(session.lines[0].categoryId, 'cat_contas');
       expect(session.lines[1].categoryId, 'cat_mercado');
       expect(session.lines[2].categoryId, isNull);
+    });
+  });
+
+  group('Edição em lote', () {
+    final lines = [
+      _line('a', DateTime(2026, 10, 3), 'POSTO IPIRANGA LJ 0012', 15000),
+      _line('b', DateTime(2026, 10, 9), 'POSTO IPIRANGA LJ 0044', 18000),
+      _line('c', DateTime(2026, 10, 5), 'PADARIA', 2500),
+    ];
+    final session = ImportSession.start(
+      source: _nubank,
+      fileName: 'fatura.csv',
+      lines: lines,
+      payerMemberId: 'kelvynn',
+    );
+
+    test('acha as outras linhas do mesmo estabelecimento, mesmo com loja diferente', () {
+      expect(session.similarLines(lines[0]).map((l) => l.id), ['b']);
+      expect(session.similarLines(lines[2]), isEmpty);
+    });
+
+    test('aplica a mesma mudança às linhas marcadas e deixa as outras como estão', () {
+      final updated = session.withLines(
+        {'a', 'b'},
+        (line) => line.copyWith(destination: LineDestination.splitP2P, assignedMemberId: 'cristiano'),
+      );
+
+      expect(updated.lines[0].destination, LineDestination.splitP2P);
+      expect(updated.lines[1].assignedMemberId, 'cristiano');
+      expect(updated.lines[2].destination, LineDestination.house);
+      expect(updated.totals.loans.cents, 33000);
+    });
+  });
+
+  group('Extrato de conta: o que não é compra', () {
+    const houseAccount = PaymentMethod(id: 'pm_casa', name: 'Conta da Casa', type: PaymentMethodType.account);
+    final invoice = CardInvoice(
+      paymentMethodId: 'pm_nubank',
+      dueDate: DateTime(2026, 11, 10),
+      total: const Money(101240),
+      purchasesCount: 5,
+    );
+    final history = [
+      ImportBatch(
+        id: 'b1',
+        sourceName: 'Nubank',
+        paymentMethodId: 'pm_nubank',
+        fileName: 'fatura.csv',
+        invoiceDueDate: DateTime(2026, 11, 10),
+        total: const Money(148240),
+        linesCount: 7,
+        createdCount: 4,
+        createdAt: DateTime(2026, 10, 30),
+      ),
+    ];
+    final loan = P2PLoan(
+      id: 'loan1',
+      title: 'Nubank (venc. 10/11) — Cristiano',
+      totalAmount: const Money(32000),
+      lenderMemberId: 'kelvynn',
+      borrowerMemberId: 'cristiano',
+      installmentsCount: 1,
+      createdAt: DateTime(2026, 10, 30),
+      firstDueDate: DateTime(2026, 11, 10),
+      installments: [
+        P2PInstallment(
+          id: 'i1',
+          loanId: 'loan1',
+          number: 1,
+          totalCount: 1,
+          amount: const Money(32000),
+          dueDate: DateTime(2026, 11, 10),
+        ),
+      ],
+    );
+    final lines = [
+      _line('fatura', DateTime(2026, 11, 9), 'PAGTO FATURA NUBANK', 148240, kind: StatementLineKind.payment),
+      _line('pix', DateTime(2026, 11, 8), 'PIX RECEBIDO CRISTIANO SILVA', 32000, kind: StatementLineKind.income),
+      _line('padaria', DateTime(2026, 11, 7), 'PIX ENVIADO PADARIA', 2500),
+    ];
+
+    Map<String, List<ExtraAction>> options(PaymentMethod source) => StatementExtras.optionsFor(
+          lines: lines,
+          source: source,
+          payerMemberId: 'kelvynn',
+          members: _members,
+          cards: const [_nubank],
+          openInvoices: [invoice],
+          history: history,
+          loans: [loan],
+        );
+
+    test('pagamento de fatura é reconhecido pelo total do arquivo importado daquela fatura', () {
+      final found = options(_account)['fatura']!;
+
+      expect(found.single.type, ExtraActionType.payInvoice);
+      expect(found.single.label, 'Pagamento da fatura Nubank de 10/11');
+      // O app só conhece a parte da casa (1.012,40); o banco cobrou 1.482,40
+      expect(found.single.suggested, isTrue);
+      expect(found.single.invoiceDueDate, DateTime(2026, 11, 10));
+    });
+
+    test('Pix recebido na conta de um morador abate o empréstimo dele, e não é aporte', () {
+      final found = options(_account)['pix']!;
+
+      expect(found.map((o) => o.type), [ExtraActionType.loanPayment]);
+      expect(found.single.suggested, isTrue);
+      expect(found.single.loanId, 'loan1');
+    });
+
+    test('Pix recebido na conta da casa pode ser aporte de quem aparece na descrição', () {
+      final found = options(houseAccount)['pix']!;
+      final contributions = found.where((o) => o.type == ExtraActionType.contribution).toList();
+
+      expect(contributions.map((o) => o.memberId), ['kelvynn', 'cristiano']);
+      expect(contributions.firstWhere((o) => o.memberId == 'cristiano').suggested, isTrue);
+      expect(contributions.firstWhere((o) => o.memberId == 'kelvynn').suggested, isFalse);
+    });
+
+    test('compra e fatura de cartão não têm essas opções', () {
+      expect(options(_account).containsKey('padaria'), isFalse);
+      expect(options(_nubank), isEmpty);
+    });
+
+    test('o que o usuário escolhe vai para o plano; linha já importada não oferece de novo', () {
+      var session = ImportSession.start(
+        source: _account,
+        fileName: 'extrato.ofx',
+        lines: lines,
+        payerMemberId: 'kelvynn',
+      ).withExtraOptions(options(_account));
+      final invoiceKey = session.extraOptionsOf(lines[0]).single.key;
+      session = session.withExtraChoice('fatura', invoiceKey);
+
+      var plan = session.buildPlan(members: _members, categories: _categories, schedule: const CycleSchedule(5));
+      expect(plan.extraActions.single.action.type, ExtraActionType.payInvoice);
+      expect(plan.extraActions.single.line.id, 'fatura');
+      // O pagamento não é despesa nova
+      expect(plan.newExpenses.map((e) => e.amount.cents), [2500]);
+      expect(plan.lineRecords.firstWhere((r) => r.line.id == 'fatura').outcome, LineOutcome.linked);
+      expect(plan.lineRecords.firstWhere((r) => r.line.id == 'pix').outcome, LineOutcome.ignored);
+
+      session = session.withExtraChoice('fatura', null);
+      expect(session.chosenExtra(lines[0]), isNull);
+
+      session = session
+          .withExtraChoice('fatura', invoiceKey)
+          .withImportedSignatures({lines[0].signature!});
+      expect(session.extraOptionsOf(lines[0]), isEmpty);
+      plan = session.buildPlan(members: _members, categories: _categories, schedule: const CycleSchedule(5));
+      expect(plan.extraActions, isEmpty);
     });
   });
 }

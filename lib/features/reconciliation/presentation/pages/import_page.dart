@@ -7,20 +7,25 @@ import '../../../../core/di/service_locator.dart';
 import '../../../../core/domain/value_objects/financial_cycle.dart';
 import '../../../../core/domain/value_objects/money.dart';
 import '../../../../core/theme/app_colors.dart';
+import '../../../../core/utils/uuid.dart';
 import '../../../../core/widgets/responsive_container.dart';
 import '../../../auth/domain/repositories/auth_repository.dart';
+import '../../../finance/domain/entities/card_invoice.dart';
+import '../../../finance/domain/entities/contribution.dart';
 import '../../../finance/domain/entities/house_expense.dart';
 import '../../../finance/domain/entities/house_member.dart';
 import '../../../finance/domain/entities/payment_method.dart';
 import '../../../finance/domain/repositories/finance_repository.dart';
 import '../../../finance/presentation/cubit/finance_cubit.dart';
 import '../../../finance/presentation/cubit/finance_state.dart';
+import '../../../p2p/domain/repositories/p2p_repository.dart';
 import '../../../p2p/presentation/cubit/p2p_cubit.dart';
 import '../../../settlement/domain/entities/settlement_summary.dart';
 import '../../../settlement/domain/repositories/settlement_repository.dart';
 import '../../domain/entities/imported_statement_line.dart';
 import '../../domain/repositories/import_repository.dart';
 import '../../domain/services/import_session.dart';
+import '../../domain/services/statement_extras.dart';
 import '../../domain/services/statement_matcher.dart';
 import '../../domain/services/statement_parser.dart';
 import '../../domain/services/statement_text.dart';
@@ -51,6 +56,10 @@ class _ImportPageState extends State<ImportPage> {
   LineStatus? _filter;
   String? _failure;
   String? _resultMessage;
+  List<String> _resultWarnings = const [];
+
+  /// Linhas marcadas para a edição em lote (pelo id).
+  Set<String> _selected = const {};
   List<ImportBatch> _history = const [];
 
   FinanceCubit get _finance => context.read<FinanceCubit>();
@@ -173,6 +182,8 @@ class _ImportPageState extends State<ImportPage> {
       _fileWarning = warning;
       _failure = null;
       _resultMessage = null;
+      _resultWarnings = const [];
+      _selected = const {};
       _filter = null;
     });
     await _refresh(suggestCategories: true);
@@ -182,6 +193,7 @@ class _ImportPageState extends State<ImportPage> {
   Future<void> _refresh({bool suggestCategories = false}) async {
     final session = _session;
     if (session == null) return;
+    final p2pCubit = context.read<P2PCubit>();
     setState(() => _busy = true);
 
     final schedule = _finance.cycleSchedule;
@@ -215,11 +227,38 @@ class _ImportPageState extends State<ImportPage> {
       }
     }
 
+    // Extrato de conta: o que as linhas que não são compra podem ser
+    final openInvoices = <CardInvoice>[];
+    final cards = _finance.state.paymentMethods.where((p) => p.isCreditCard).toList();
+    if (!session.source.isCreditCard) {
+      try {
+        for (final card in cards) {
+          openInvoices.addAll(await sl<FinanceRepository>().getOpenCardInvoices(card.id));
+        }
+        await p2pCubit.loadLoans();
+      } catch (_) {
+        // Sem essas respostas as linhas só ficam sem sugestão
+      }
+    }
+
     if (!mounted) return;
     // A revisão pode ter mudado enquanto a busca corria: parte da atual
-    var updated = (_session ?? session)
+    final current = _session ?? session;
+    var updated = current
         .withImportedSignatures(imported)
-        .withExpenses(byId.values.toList());
+        .withExpenses(byId.values.toList())
+        .withExtraOptions(
+          StatementExtras.optionsFor(
+            lines: current.lines,
+            source: current.source,
+            payerMemberId: current.payerMemberId,
+            members: _finance.state.members,
+            cards: cards,
+            openInvoices: openInvoices,
+            history: _history,
+            loans: p2pCubit.state.allLoans,
+          ),
+        );
     if (suggestCategories) {
       updated = updated.withSuggestedCategories(
         categories: _finance.state.categories,
@@ -234,6 +273,62 @@ class _ImportPageState extends State<ImportPage> {
   }
 
   void _update(ImportSession session) => setState(() => _session = session);
+
+  /// Copia destino, categoria e devedor de [from] para [target].
+  static ImportedStatementLine _sameClassification(
+    ImportedStatementLine target,
+    ImportedStatementLine from,
+  ) =>
+      target.copyWith(
+        destination: from.destination,
+        categoryId: from.categoryId,
+        assignedMemberId: from.assignedMemberId,
+        clearAssignedMember: from.assignedMemberId == null,
+      );
+
+  /// Grava a decisão de uma linha e oferece repetir nas outras do mesmo lugar.
+  void _classify(ImportSession session, ImportedStatementLine changed) {
+    final updated = session.withLine(changed);
+    _update(updated);
+
+    final others = updated.similarLines(changed).where((other) =>
+        other.destination != changed.destination ||
+        other.categoryId != changed.categoryId ||
+        other.assignedMemberId != changed.assignedMemberId);
+    if (others.isEmpty) return;
+
+    final ids = {for (final other in others) other.id};
+    final name = StatementText.cleanTitle(changed.description);
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(
+          duration: const Duration(seconds: 8),
+          content: Text(
+            ids.length == 1
+                ? 'Há outra linha de $name.'
+                : 'Há outras ${ids.length} linhas de $name.',
+          ),
+          action: SnackBarAction(
+            label: 'Aplicar a todas',
+            onPressed: () {
+              final current = _session;
+              if (current == null) return;
+              final source = current.lines.where((l) => l.id == changed.id).firstOrNull;
+              if (source == null) return;
+              _update(current.withLines(ids, (line) => _sameClassification(line, source)));
+            },
+          ),
+        ),
+      );
+  }
+
+  /// Aplica uma mudança às linhas marcadas.
+  void _bulk(ImportedStatementLine Function(ImportedStatementLine line) change) {
+    final session = _session;
+    if (session == null) return;
+    _update(session.withLines(_selected, change));
+  }
 
   Future<void> _pickDueDate() async {
     final session = _session!;
@@ -342,16 +437,51 @@ class _ImportPageState extends State<ImportPage> {
       return;
     }
 
+    // Movimentos do extrato que não são despesa: cada um é gravado à parte, e
+    // o que falhar aparece como aviso (a importação em si já está gravada)
+    final warnings = <String>[];
+    final finance = sl<FinanceRepository>();
+    for (final extra in plan.extraActions) {
+      final action = extra.action;
+      try {
+        switch (action.type) {
+          case ExtraActionType.payInvoice:
+            await finance.payCardInvoice(
+              paymentMethodId: action.paymentMethodId!,
+              invoiceDueDate: action.invoiceDueDate!,
+              paidAt: extra.line.date,
+            );
+          case ExtraActionType.contribution:
+            await finance.addContribution(
+              Contribution(
+                id: generateUuidV4(),
+                memberId: action.memberId!,
+                amount: extra.line.amount,
+                date: extra.line.date,
+                paymentMethodId: session.source.id,
+              ),
+            );
+          case ExtraActionType.loanPayment:
+            await sl<P2PRepository>().payLoan(action.loanId!, extra.line.amount);
+        }
+      } catch (e) {
+        warnings.add('${action.label}: $e');
+      }
+    }
+
     await _finance.loadCycleData();
     await p2pCubit.loadLoans();
     await _loadHistory();
     if (!mounted) return;
 
+    final extrasDone = plan.extraActions.length - warnings.length;
     final linked = session.countOf(LineStatus.linked) + session.countOf(LineStatus.alreadyImported);
     final summary = [
       '${plan.newExpenses.length} ${plan.newExpenses.length == 1 ? 'despesa lançada' : 'despesas lançadas'}',
       if (plan.loans.isNotEmpty)
         '${plan.loans.length} ${plan.loans.length == 1 ? 'empréstimo criado' : 'empréstimos criados'}',
+      if (extrasDone > 0)
+        '$extrasDone ${extrasDone == 1 ? 'movimento registrado' : 'movimentos registrados'}',
       if (linked > 0) '$linked já ${linked == 1 ? 'estava lançada' : 'estavam lançadas'}',
       if (plan.skippedClosedCycle.isNotEmpty)
         '${plan.skippedClosedCycle.length} de ciclo fechado ${plan.skippedClosedCycle.length == 1 ? 'ficou' : 'ficaram'} de fora',
@@ -360,7 +490,9 @@ class _ImportPageState extends State<ImportPage> {
     setState(() {
       _session = null;
       _busy = false;
+      _selected = const {};
       _resultMessage = '${session.fileName} importado: $summary.';
+      _resultWarnings = warnings;
     });
   }
 
@@ -424,6 +556,19 @@ class _ImportPageState extends State<ImportPage> {
               children: [
                 _originCard(state),
                 if (_resultMessage != null) _banner(_resultMessage!, AppColors.creditGreen, Icons.check_circle_outline_rounded),
+                if (_resultWarnings.isNotEmpty)
+                  _banner(
+                    'A importação foi gravada, mas parte dos movimentos não pôde ser registrada:',
+                    AppColors.folegoWarning,
+                    Icons.warning_amber_rounded,
+                    children: [
+                      for (final warning in _resultWarnings)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 6, left: 26),
+                          child: Text(warning, style: const TextStyle(fontSize: 12)),
+                        ),
+                    ],
+                  ),
                 if (session != null) ..._review(state, session),
                 if (_history.isNotEmpty) _historyCard(),
               ],
@@ -679,6 +824,7 @@ class _ImportPageState extends State<ImportPage> {
           ],
         ),
       ),
+      _bulkBar(state, session, visible),
       if (_busy) const LinearProgressIndicator(minHeight: 2),
       if (visible.isEmpty)
         const Padding(
@@ -742,6 +888,7 @@ class _ImportPageState extends State<ImportPage> {
         : StatementText.cleanTitle(line.description);
     final installment = line.isInstallment ? ' • parcela ${line.installmentNumber}/${line.installmentsTotal}' : '';
     final muted = status == LineStatus.informational || status == LineStatus.ignored;
+    final editable = status == LineStatus.newLine || status == LineStatus.ignored;
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(14, 10, 8, 10),
@@ -750,6 +897,24 @@ class _ImportPageState extends State<ImportPage> {
         children: [
           Row(
             children: [
+              if (editable)
+                Padding(
+                  padding: const EdgeInsets.only(right: 6),
+                  child: SizedBox(
+                    width: 24,
+                    height: 24,
+                    child: Checkbox(
+                      value: _selected.contains(line.id),
+                      onChanged: _busy
+                          ? null
+                          : (checked) => setState(() {
+                                _selected = checked == true
+                                    ? {..._selected, line.id}
+                                    : {..._selected}..remove(line.id);
+                              }),
+                    ),
+                  ),
+                ),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -771,7 +936,7 @@ class _ImportPageState extends State<ImportPage> {
                 line.amount.format(),
                 style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: muted ? Colors.grey : null),
               ),
-              if (status == LineStatus.newLine || status == LineStatus.ignored)
+              if (editable)
                 IconButton(
                   icon: const Icon(Icons.edit_outlined, size: 18),
                   tooltip: 'Editar nome e data',
@@ -783,7 +948,7 @@ class _ImportPageState extends State<ImportPage> {
           ),
           const SizedBox(height: 4),
           switch (status) {
-            LineStatus.informational => _informationalRow(line),
+            LineStatus.informational => _informationalRow(session, line),
             LineStatus.alreadyImported => _importedRow(session, line),
             LineStatus.linked || LineStatus.needsReview => _matchRow(state, session, line),
             LineStatus.newLine || LineStatus.ignored => _destinationRow(state, session, line),
@@ -793,14 +958,178 @@ class _ImportPageState extends State<ImportPage> {
     );
   }
 
-  Widget _informationalRow(ImportedStatementLine line) {
+  Widget _informationalRow(ImportSession session, ImportedStatementLine line) {
+    if (session.wasImported(line)) {
+      return const Text(
+        'Já veio em uma importação anterior.',
+        style: TextStyle(fontSize: 12, color: Colors.grey),
+      );
+    }
+
     final label = switch (line.kind) {
       StatementLineKind.payment => 'Pagamento de fatura: não é uma despesa nova',
       StatementLineKind.refund => 'Estorno ou crédito: confira a compra original no app',
       StatementLineKind.income => 'Entrada na conta: não é uma despesa',
       StatementLineKind.purchase => '',
     };
-    return Text(label, style: const TextStyle(fontSize: 12, color: Colors.grey));
+    final options = session.extraOptionsOf(line);
+    if (options.isEmpty) {
+      return Text(label, style: const TextStyle(fontSize: 12, color: Colors.grey));
+    }
+
+    final chosen = session.chosenExtra(line);
+    final suggestion = options.where((o) => o.suggested).firstOrNull;
+    return Wrap(
+      spacing: 8,
+      crossAxisAlignment: WrapCrossAlignment.center,
+      children: [
+        DropdownButton<String>(
+          value: chosen?.key ?? '',
+          underline: const SizedBox.shrink(),
+          isDense: true,
+          onChanged: _busy
+              ? null
+              : (key) => _update(session.withExtraChoice(line.id, key == null || key.isEmpty ? null : key)),
+          items: [
+            const DropdownMenuItem(
+              value: '',
+              child: Text('Não registrar nada', style: TextStyle(fontSize: 12, color: Colors.grey)),
+            ),
+            for (final option in options)
+              DropdownMenuItem(
+                value: option.key,
+                child: Text(
+                  option.label,
+                  style: const TextStyle(fontSize: 12, color: AppColors.primary, fontWeight: FontWeight.bold),
+                ),
+              ),
+          ],
+        ),
+        if (chosen == null && suggestion != null)
+          TextButton(
+            onPressed: _busy ? null : () => _update(session.withExtraChoice(line.id, suggestion.key)),
+            child: Text('Parece: ${suggestion.label}', style: const TextStyle(fontSize: 12)),
+          ),
+      ],
+    );
+  }
+
+  /// Seleção e edição de várias linhas de uma vez.
+  Widget _bulkBar(FinanceState state, ImportSession session, List<ImportedStatementLine> visible) {
+    final selectable = {
+      for (final line in visible)
+        if (session.statusOf(line) == LineStatus.newLine || session.statusOf(line) == LineStatus.ignored)
+          line.id,
+    };
+    if (selectable.isEmpty && _selected.isEmpty) return const SizedBox.shrink();
+
+    final debtors = [
+      for (final member in state.members)
+        if (member.id != session.payerMemberId) member,
+    ];
+
+    if (_selected.isEmpty) {
+      return Align(
+        alignment: Alignment.centerLeft,
+        child: TextButton.icon(
+          icon: const Icon(Icons.checklist_rounded, size: 18),
+          label: Text('Selecionar as ${selectable.length} linhas para editar juntas'),
+          onPressed: _busy ? null : () => setState(() => _selected = selectable),
+        ),
+      );
+    }
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      decoration: BoxDecoration(
+        color: AppColors.primary.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Wrap(
+        spacing: 12,
+        runSpacing: 4,
+        crossAxisAlignment: WrapCrossAlignment.center,
+        children: [
+          Text(
+            _selected.length == 1 ? '1 linha marcada' : '${_selected.length} linhas marcadas',
+            style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold),
+          ),
+          DropdownButton<LineDestination>(
+            key: const Key('import_bulk_destination'),
+            hint: const Text('Destino', style: TextStyle(fontSize: 12)),
+            underline: const SizedBox.shrink(),
+            isDense: true,
+            onChanged: _busy
+                ? null
+                : (destination) {
+                    if (destination == null) return;
+                    _bulk(
+                      (line) => line.copyWith(
+                        destination: destination,
+                        assignedMemberId: destination == LineDestination.splitP2P &&
+                                line.assignedMemberId == null &&
+                                debtors.length == 1
+                            ? debtors.first.id
+                            : null,
+                        clearAssignedMember: destination != LineDestination.splitP2P,
+                      ),
+                    );
+                  },
+            items: [
+              const DropdownMenuItem(value: LineDestination.house, child: Text('Casa', style: TextStyle(fontSize: 12))),
+              if (debtors.isNotEmpty)
+                const DropdownMenuItem(
+                  value: LineDestination.splitP2P,
+                  child: Text('Outro morador deve', style: TextStyle(fontSize: 12)),
+                ),
+              DropdownMenuItem(
+                value: LineDestination.cardOwnerPersonal,
+                child: Text('Pessoal de ${_memberName(session.payerMemberId)}', style: const TextStyle(fontSize: 12)),
+              ),
+              const DropdownMenuItem(value: LineDestination.ignored, child: Text('Ignorar', style: TextStyle(fontSize: 12))),
+            ],
+          ),
+          if (state.categories.isNotEmpty)
+            DropdownButton<String>(
+              key: const Key('import_bulk_category'),
+              hint: const Text('Categoria', style: TextStyle(fontSize: 12)),
+              underline: const SizedBox.shrink(),
+              isDense: true,
+              onChanged: _busy ? null : (id) => _bulk((line) => line.copyWith(categoryId: id)),
+              items: [
+                for (final category in state.categories)
+                  DropdownMenuItem(
+                    value: category.id,
+                    child: Text(category.name, style: const TextStyle(fontSize: 12)),
+                  ),
+              ],
+            ),
+          if (debtors.length > 1)
+            DropdownButton<String>(
+              hint: const Text('Quem deve', style: TextStyle(fontSize: 12)),
+              underline: const SizedBox.shrink(),
+              isDense: true,
+              onChanged: _busy
+                  ? null
+                  : (id) => _bulk(
+                        (line) => line.copyWith(destination: LineDestination.splitP2P, assignedMemberId: id),
+                      ),
+              items: [
+                for (final member in debtors)
+                  DropdownMenuItem(
+                    value: member.id,
+                    child: Text(member.name.split(' ').first, style: const TextStyle(fontSize: 12)),
+                  ),
+              ],
+            ),
+          TextButton(
+            onPressed: () => setState(() => _selected = const {}),
+            child: const Text('Limpar seleção'),
+          ),
+        ],
+      ),
+    );
   }
 
   Widget _importedRow(ImportSession session, ImportedStatementLine line) {
@@ -942,18 +1271,17 @@ class _ImportPageState extends State<ImportPage> {
               ? null
               : (destination) {
                   if (destination == null) return;
-                  _update(
-                    session.withLine(
-                      line.copyWith(
-                        destination: destination,
-                        // Com um só outro morador, é ele quem deve
-                        assignedMemberId: destination == LineDestination.splitP2P &&
-                                line.assignedMemberId == null &&
-                                debtors.length == 1
-                            ? debtors.first.id
-                            : null,
-                        clearAssignedMember: destination != LineDestination.splitP2P,
-                      ),
+                  _classify(
+                    session,
+                    line.copyWith(
+                      destination: destination,
+                      // Com um só outro morador, é ele quem deve
+                      assignedMemberId: destination == LineDestination.splitP2P &&
+                              line.assignedMemberId == null &&
+                              debtors.length == 1
+                          ? debtors.first.id
+                          : null,
+                      clearAssignedMember: destination != LineDestination.splitP2P,
                     ),
                   );
                 },
@@ -987,7 +1315,7 @@ class _ImportPageState extends State<ImportPage> {
             ),
             underline: const SizedBox.shrink(),
             isDense: true,
-            onChanged: _busy ? null : (id) => _update(session.withLine(line.copyWith(categoryId: id))),
+            onChanged: _busy ? null : (id) => _classify(session, line.copyWith(categoryId: id)),
             items: [
               for (final category in state.categories)
                 DropdownMenuItem(
@@ -1002,7 +1330,7 @@ class _ImportPageState extends State<ImportPage> {
             hint: const Text('Quem deve?', style: TextStyle(fontSize: 12, color: AppColors.debtRed)),
             underline: const SizedBox.shrink(),
             isDense: true,
-            onChanged: _busy ? null : (id) => _update(session.withLine(line.copyWith(assignedMemberId: id))),
+            onChanged: _busy ? null : (id) => _classify(session, line.copyWith(assignedMemberId: id)),
             items: [
               for (final member in debtors)
                 DropdownMenuItem(

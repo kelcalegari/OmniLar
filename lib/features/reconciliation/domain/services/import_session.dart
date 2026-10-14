@@ -13,6 +13,7 @@ import '../../../finance/domain/services/credit_card_invoice_calculator.dart';
 import '../../../finance/domain/services/expense_launch_defaults.dart';
 import '../../../p2p/domain/entities/p2p_loan.dart';
 import '../entities/imported_statement_line.dart';
+import 'statement_extras.dart';
 import 'statement_matcher.dart';
 import 'statement_text.dart';
 
@@ -92,15 +93,21 @@ class ImportPlan {
   /// O que cada linha virou. Linhas já importadas antes não entram de novo.
   final List<ImportLineRecord> lineRecords;
 
+  /// Movimentos do extrato que não são despesa: pagamento de fatura, aporte e
+  /// abatimento de empréstimo. São gravados depois da importação, um a um.
+  final List<({ImportedStatementLine line, ExtraAction action})> extraActions;
+
   const ImportPlan({
     this.newExpenses = const [],
     this.expenseUpdates = const [],
     this.loans = const [],
     this.skippedClosedCycle = const [],
     this.lineRecords = const [],
+    this.extraActions = const [],
   });
 
-  bool get isEmpty => newExpenses.isEmpty && expenseUpdates.isEmpty && loans.isEmpty;
+  bool get isEmpty =>
+      newExpenses.isEmpty && expenseUpdates.isEmpty && loans.isEmpty && extraActions.isEmpty;
 }
 
 class ImportTotals {
@@ -142,6 +149,12 @@ class ImportSession {
   /// Linhas já importadas que o usuário mandou lançar de novo (pelo id).
   final Set<String> forcedLineIds;
 
+  /// O que cada linha que não é compra pode virar (por id da linha).
+  final Map<String, List<ExtraAction>> extraOptions;
+
+  /// A opção escolhida pelo usuário (id da linha -> chave da opção).
+  final Map<String, String> extraChoices;
+
   const ImportSession({
     required this.source,
     required this.fileName,
@@ -152,6 +165,8 @@ class ImportSession {
     this.invoiceDueDate,
     this.importedSignatures = const {},
     this.forcedLineIds = const {},
+    this.extraOptions = const {},
+    this.extraChoices = const {},
   });
 
   static final _dayMonth = DateFormat('dd/MM');
@@ -209,6 +224,8 @@ class ImportSession {
     String? payerMemberId,
     Set<String>? importedSignatures,
     Set<String>? forcedLineIds,
+    Map<String, List<ExtraAction>>? extraOptions,
+    Map<String, String>? extraChoices,
   }) {
     return ImportSession(
       source: source,
@@ -220,8 +237,62 @@ class ImportSession {
       payerMemberId: payerMemberId ?? this.payerMemberId,
       importedSignatures: importedSignatures ?? this.importedSignatures,
       forcedLineIds: forcedLineIds ?? this.forcedLineIds,
+      extraOptions: extraOptions ?? this.extraOptions,
+      extraChoices: extraChoices ?? this.extraChoices,
     );
   }
+
+  /// Aplica a mesma mudança a várias linhas de uma vez.
+  ImportSession withLines(
+    Set<String> lineIds,
+    ImportedStatementLine Function(ImportedStatementLine line) change,
+  ) =>
+      _copy(lines: [for (final line in lines) lineIds.contains(line.id) ? change(line) : line]);
+
+  /// Outras linhas ainda por decidir do mesmo estabelecimento de [line].
+  List<ImportedStatementLine> similarLines(ImportedStatementLine line) {
+    final name = StatementText.normalize(StatementText.cleanTitle(line.description));
+    return [
+      for (final other in lines)
+        if (other.id != line.id &&
+            (statusOf(other) == LineStatus.newLine || statusOf(other) == LineStatus.ignored) &&
+            StatementText.normalize(StatementText.cleanTitle(other.description)) == name)
+          other,
+    ];
+  }
+
+  /// Guarda o que as linhas que não são compra podem virar; a escolha feita
+  /// continua valendo enquanto a opção existir.
+  ImportSession withExtraOptions(Map<String, List<ExtraAction>> options) => _copy(
+        extraOptions: options,
+        extraChoices: {
+          for (final entry in extraChoices.entries)
+            if (options[entry.key]?.any((o) => o.key == entry.value) ?? false) entry.key: entry.value,
+        },
+      );
+
+  /// Escolhe (ou, com null, desfaz a escolha de) o que a linha vira.
+  ImportSession withExtraChoice(String lineId, String? optionKey) => _copy(
+        extraChoices: {
+          for (final entry in extraChoices.entries)
+            if (entry.key != lineId) entry.key: entry.value,
+          lineId: ?optionKey,
+        },
+      );
+
+  /// Opções de uma linha que não é compra. Linha que já veio em outra
+  /// importação não tem opções: o movimento já foi registrado.
+  List<ExtraAction> extraOptionsOf(ImportedStatementLine line) =>
+      line.isPurchase || _wasImported(line) ? const [] : (extraOptions[line.id] ?? const []);
+
+  ExtraAction? chosenExtra(ImportedStatementLine line) {
+    final key = extraChoices[line.id];
+    if (key == null) return null;
+    return extraOptionsOf(line).where((o) => o.key == key).firstOrNull;
+  }
+
+  /// A linha que não é compra já veio em uma importação anterior?
+  bool wasImported(ImportedStatementLine line) => _wasImported(line);
 
   ImportSession withImportedSignatures(Set<String> signatures) =>
       _copy(importedSignatures: signatures);
@@ -562,13 +633,23 @@ class ImportSession {
     }
 
     final updates = <HouseExpense>[];
+    final extraActions = <({ImportedStatementLine line, ExtraAction action})>[];
     for (final line in lines) {
       final status = statusOf(line);
       // Pessoal, ignorada, pagamento, estorno e entrada: ficam só no histórico
       final leftOut = status == LineStatus.informational ||
           status == LineStatus.ignored ||
           (status == LineStatus.newLine && line.destination == LineDestination.cardOwnerPersonal);
-      if (leftOut) records.add(ImportLineRecord(line: line, outcome: LineOutcome.ignored));
+      if (leftOut && !_wasImported(line)) {
+        final extra = chosenExtra(line);
+        if (extra != null) extraActions.add((line: line, action: extra));
+        records.add(
+          ImportLineRecord(
+            line: line,
+            outcome: extra != null ? LineOutcome.linked : LineOutcome.ignored,
+          ),
+        );
+      }
       if (status != LineStatus.linked) continue;
 
       final match = matches[line.id]!;
@@ -601,6 +682,7 @@ class ImportSession {
       loans: loans,
       skippedClosedCycle: skipped,
       lineRecords: records,
+      extraActions: extraActions,
     );
   }
 }
