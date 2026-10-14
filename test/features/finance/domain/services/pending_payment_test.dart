@@ -177,4 +177,53 @@ void main() {
       expect(standard.totalHouseExpenses.cents - carried.totalHouseExpenses.cents, 40000);
     });
   });
+
+  group('invoicePaymentOptions', () {
+    const names = {'kelvynn': 'Kelvynn'};
+
+    test('cartão com dono: primeiro os meios do titular, depois os da casa', () {
+      final options = invoicePaymentOptions(
+        _card,
+        [_house, _pixHouse, _pixKelvynn, _pixMarina, _card],
+        memberNames: names,
+      );
+      expect(options.map((o) => o.key), ['pm_pix_k', 'pm_caixa', 'pm_pix']);
+      expect(options.first.byHouse, isFalse);
+      expect(options.skip(1).every((o) => o.byHouse), isTrue);
+    });
+
+    test('meio de outro morador e outro cartão não entram', () {
+      const other = PaymentMethod(
+        id: 'pm_card2',
+        name: 'Inter',
+        type: PaymentMethodType.card,
+        ownerMemberId: 'kelvynn',
+        closingDay: 10,
+        dueDay: 20,
+      );
+      final keys = invoicePaymentOptions(_card, [_house, _pixMarina, other]).map((o) => o.key);
+      expect(keys, isNot(contains('pm_pix_m')));
+      expect(keys, isNot(contains('pm_card2')));
+    });
+
+    test('titular sem meio próprio: opção genérica do titular', () {
+      final options = invoicePaymentOptions(_card, [_house], memberNames: names);
+      expect(options.first.key, InvoicePaymentOption.holderOption);
+      expect(options.first.label, contains('Kelvynn'));
+      expect(options.first.byHouse, isFalse);
+    });
+
+    test('cartão da casa: só meios da casa', () {
+      const houseCard = PaymentMethod(
+        id: 'pm_card_house',
+        name: 'Cartão da Casa',
+        type: PaymentMethodType.card,
+        closingDay: 28,
+        dueDay: 5,
+      );
+      final options = invoicePaymentOptions(houseCard, [_house, _pixKelvynn]);
+      expect(options.map((o) => o.key), ['pm_caixa']);
+      expect(invoicePaymentOptions(houseCard, const []).single.key, InvoicePaymentOption.houseOption);
+    });
+  });
 }

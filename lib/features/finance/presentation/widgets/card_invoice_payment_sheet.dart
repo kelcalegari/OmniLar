@@ -1,3 +1,4 @@
+import '../../domain/services/pending_payment.dart';
 import '../../../../core/domain/value_objects/cycle_schedule.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
@@ -50,8 +51,17 @@ class _CardInvoicePaymentSheetState extends State<CardInvoicePaymentSheet> {
   DateTime _paidOn = DateTime.now();
   bool _busy = false;
 
-  /// A fatura saiu do Caixa da Casa (cartão sem dono sempre sai do Caixa).
-  late bool _paidByHouse = widget.card.ownerMemberId == null;
+  late final List<InvoicePaymentOption> _options = invoicePaymentOptions(
+    widget.card,
+    widget.financeCubit.state.paymentMethods,
+    memberNames: widget.memberNames,
+  );
+
+  /// Meio escolhido para pagar a fatura.
+  late String _optionKey = _options.first.key;
+
+  bool get _paidByHouse =>
+      _options.where((o) => o.key == _optionKey).firstOrNull?.byHouse ?? widget.card.ownerMemberId == null;
 
   Future<({List<CardInvoice> open, List<CardInvoice> paid})> _load() async {
     final open = await widget.repository.getOpenCardInvoices(widget.card.id);
@@ -240,34 +250,25 @@ class _CardInvoicePaymentSheetState extends State<CardInvoicePaymentSheet> {
                         icon: const Icon(Icons.event_rounded, size: 18),
                         label: Text('Paga em ${_dayFormat.format(_paidOn)}'),
                       ),
-                      if (widget.card.ownerMemberId != null) ...[
-                        const SizedBox(height: 12),
-                        const Text('Com que dinheiro?', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
-                        RadioGroup<bool>(
-                          groupValue: _paidByHouse,
-                          onChanged: (value) {
-                            if (!_busy && value != null) setState(() => _paidByHouse = value);
-                          },
-                          child: Column(
-                            children: [
-                              RadioListTile<bool>(
-                                dense: true,
-                                contentPadding: EdgeInsets.zero,
-                                value: false,
-                                title: Text('Do bolso de $owner'),
-                                subtitle: const Text('É reembolsado no fechamento do ciclo'),
-                              ),
-                              const RadioListTile<bool>(
-                                dense: true,
-                                contentPadding: EdgeInsets.zero,
-                                value: true,
-                                title: Text('Caixa da Casa'),
-                                subtitle: Text('Sai do caixa, sem reembolso. Em fatura importada, os gastos pessoais e os de outros moradores viram dívida com o Caixa.'),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
+                      const SizedBox(height: 12),
+                      const Text('Meio de pagamento', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
+                      DropdownButton<String>(
+                        key: const Key('invoice_payment_method'),
+                        isExpanded: true,
+                        value: _optionKey,
+                        onChanged: _busy ? null : (key) => setState(() => _optionKey = key ?? _optionKey),
+                        items: [
+                          for (final option in _options)
+                            DropdownMenuItem(value: option.key, child: Text(option.label, overflow: TextOverflow.ellipsis)),
+                        ],
+                      ),
+                      Text(
+                        _paidByHouse
+                            ? 'Paga pela casa: sai do caixa, sem reembolso. Em fatura importada, os gastos pessoais '
+                                'e os de outros moradores viram dívida com o Caixa.'
+                            : 'Paga por $owner, que é reembolsado no fechamento do ciclo.',
+                        style: const TextStyle(fontSize: 12),
+                      ),
                       const SizedBox(height: 8),
                       Text(
                         'Com essa data, a fatura conta no ciclo ${_cycleOf(_paidOn).label}.',

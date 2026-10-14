@@ -1,3 +1,4 @@
+import '../../../../core/utils/clipboard_helper.dart';
 import '../../../../core/utils/responsive.dart';
 import 'pay_pending_expense_sheet.dart';
 import 'package:flutter/material.dart';
@@ -309,6 +310,36 @@ class _ExpenseDetailDesktopPaneState extends State<ExpenseDetailDesktopPane> {
                             ],
                           ),
                         )),
+                  ],
+                ),
+              ),
+            ],
+
+            if (expense.barcode != null) ...[
+              const SizedBox(height: 16),
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: AppColors.primary.withValues(alpha: 0.08),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: SelectableText(
+                        expense.barcode!,
+                        style: const TextStyle(fontSize: 12, fontFamily: 'monospace'),
+                      ),
+                    ),
+                    TextButton.icon(
+                      icon: const Icon(Icons.copy_rounded, size: 16),
+                      label: const Text('Copiar código'),
+                      onPressed: () => copyWithFeedback(
+                        context,
+                        expense.barcode!,
+                        onCopied: const SnackBar(content: Text('Código do boleto copiado.')),
+                      ),
+                    ),
                   ],
                 ),
               ),

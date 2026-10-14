@@ -1,3 +1,4 @@
+import '../../../capture/domain/services/boleto_code.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:intl/intl.dart';
@@ -70,6 +71,15 @@ class _AddExpensePageState extends State<AddExpensePage> {
 
   int _cents = 0;
 
+  /// Código do boleto colado no formulário (linha digitável conferida).
+  final _barcodeController = TextEditingController();
+  String? _barcode;
+  String? _barcodeInfo;
+  String? _barcodeError;
+
+  /// Muda quando o código preenche o valor, para o campo de valor se refazer.
+  int _amountFieldVersion = 0;
+
   bool _isItemized = false;
   final List<_DraftExpenseItem> _draftItems = [];
   String? _attachedReceiptName;
@@ -99,6 +109,8 @@ class _AddExpensePageState extends State<AddExpensePage> {
       _isVariable = edit.isVariable;
       _dueDay = edit.dueDay ?? (edit.dueDate ?? edit.date).day;
       _expenseStatus = edit.status;
+      _barcode = edit.barcode;
+      _barcodeController.text = edit.barcode ?? '';
       _isItemized = edit.items.isNotEmpty;
       if (edit.items.isNotEmpty) {
         _draftItems.addAll(edit.items.map((it) => _DraftExpenseItem(
@@ -115,6 +127,59 @@ class _AddExpensePageState extends State<AddExpensePage> {
       }
     }
     _loadAvailableProjects();
+  }
+
+  /// Confere o código colado e usa o que ele traz: valor (se ainda vazio) e
+  /// vencimento (a conta passa a "A Vencer").
+  void _onBarcodeChanged(String text) {
+    final digits = BoletoCodeReader.digitsOf(text);
+    if (digits.isEmpty) {
+      setState(() {
+        _barcode = null;
+        _barcodeInfo = null;
+        _barcodeError = null;
+      });
+      return;
+    }
+    if (!const {44, 47, 48}.contains(digits.length)) {
+      setState(() {
+        _barcode = null;
+        _barcodeInfo = null;
+        _barcodeError = digits.length < 44 ? null : 'Código com ${digits.length} dígitos: confira.';
+      });
+      return;
+    }
+    try {
+      final code = BoletoCodeReader.read(digits);
+      setState(() {
+        _barcode = code.digitableLine;
+        _barcodeError = null;
+        final parts = [
+          if (code.amount != null) 'valor ${code.amount!.format()}',
+          if (code.dueDate != null) 'vence ${DateFormat('dd/MM/yyyy').format(code.dueDate!)}',
+        ];
+        _barcodeInfo = parts.isEmpty ? 'Código conferido.' : 'Código conferido: ${parts.join(', ')}.';
+        if (_cents == 0 && code.amount != null) {
+          _cents = code.amount!.cents;
+          _amountFieldVersion++;
+        }
+        final dueDate = code.dueDate;
+        if (dueDate != null) {
+          if (_isRecurring) {
+            _dueDay = dueDate.day;
+          } else if (widget.expenseToEdit == null) {
+            _selectedDate = dueDate;
+            _expenseStatus = ExpenseStatus.pending;
+          }
+        }
+      });
+    } on BoletoCodeError catch (e) {
+      setState(() {
+        _barcode = null;
+        _barcodeInfo = null;
+        _barcodeError = e.message;
+      });
+    }
   }
 
   Future<void> _loadAvailableProjects() async {
@@ -135,6 +200,7 @@ class _AddExpensePageState extends State<AddExpensePage> {
   @override
   void dispose() {
     _titleController.dispose();
+    _barcodeController.dispose();
     for (final item in _draftItems) {
       item.dispose();
     }
@@ -347,6 +413,7 @@ class _AddExpensePageState extends State<AddExpensePage> {
             ? (sameCard && oldExpense.isPaid ? oldExpense.paidOutOfPocket : false)
             : paidOutOfPocket,
         status: editedStatus,
+        barcode: _barcode,
         // Conta que estava pendente e foi marcada como paga agora
         paidAt: editedStatus == ExpenseStatus.paid && oldExpense.isPending && !wasWaitingForInvoice
             ? DateTime.now()
@@ -406,6 +473,7 @@ class _AddExpensePageState extends State<AddExpensePage> {
       splitRule: rule,
       paidOutOfPocket: waitsForInvoice ? false : paidOutOfPocket,
       status: waitsForInvoice ? ExpenseStatus.pending : _expenseStatus,
+      barcode: _barcode,
       isRecurring: _isRecurring,
       isVariable: _isVariable,
       dueDay: _isRecurring ? _dueDay : null,
@@ -542,6 +610,7 @@ class _AddExpensePageState extends State<AddExpensePage> {
             children: [
               // Campo ATM Contínuo de Valor
               MoneyInputField(
+                key: ValueKey('expense_amount_$_amountFieldVersion'),
                 label: _isRecurring && _isVariable ? 'Valor Estimado do Mês' : 'Valor da Despesa',
                 initialValue: Money(_cents),
                 primaryColor: AppColors.primary,
@@ -561,6 +630,23 @@ class _AddExpensePageState extends State<AddExpensePage> {
                   labelText: 'O que foi pago?',
                   hintText: 'Ex: Supermercado, Aluguel, Luz, Netflix',
                   prefixIcon: const Icon(Icons.receipt_long_outlined),
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                ),
+              ),
+              const SizedBox(height: 12),
+
+              // Código do boleto: guardado para copiar na hora de pagar
+              TextField(
+                key: const Key('expense_barcode'),
+                controller: _barcodeController,
+                keyboardType: TextInputType.number,
+                onChanged: _onBarcodeChanged,
+                decoration: InputDecoration(
+                  labelText: 'Código do boleto (opcional)',
+                  hintText: 'Cole a linha digitável',
+                  prefixIcon: const Icon(Icons.qr_code_2_rounded),
+                  helperText: _barcodeError == null ? _barcodeInfo : null,
+                  errorText: _barcodeError,
                   border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
                 ),
               ),

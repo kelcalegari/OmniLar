@@ -331,3 +331,7 @@ A ideia é reaproveitar o que o app já faz com o boleto da internet: conta pend
 
 - O pagamento pelo Caixa **com os empréstimos** da seção 12.3 (moradores e titular devendo ao Caixa). Nesta etapa, "Caixa da Casa" só tira o reembolso do titular.
 - Pagamento parcial de fatura.
+
+### Meio de pagamento da fatura
+
+Pagar a fatura (pela Casa ou ao importar a fatura como paga) pede o meio de pagamento, como a baixa de um boleto. Meio da casa: paga pelo Caixa, sem reembolso, e na fatura importada o que não é da casa vira dívida com o Caixa (0055). Meio do titular do cartão: paga por ele, reembolsado no fechamento. Sem meio cadastrado, ficam as opções genéricas "Dinheiro de <titular>" e "Caixa da Casa". Meio de outro morador não aparece: quem paga a fatura de outra pessoa fica para depois.

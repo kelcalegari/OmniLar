@@ -1,3 +1,4 @@
+import '../../../finance/domain/services/pending_payment.dart';
 import 'dart:async';
 import 'dart:typed_data';
 
@@ -354,27 +355,32 @@ class _ImportPageState extends State<ImportPage> {
     );
     if (picked == null || !mounted) return;
 
-    var byHouse = session.source.ownerMemberId == null;
-    if (session.source.ownerMemberId != null) {
-      final owner = _memberName(session.source.ownerMemberId);
-      final choice = await showDialog<bool>(
+    final options = invoicePaymentOptions(
+      session.source,
+      _finance.state.paymentMethods,
+      memberNames: {for (final m in _finance.state.members) m.id: m.name.split(' ').first},
+    );
+    var byHouse = options.first.byHouse;
+    if (options.length > 1) {
+      final choice = await showDialog<InvoicePaymentOption>(
         context: context,
         builder: (dialogContext) => SimpleDialog(
-          title: const Text('Com que dinheiro?', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+          title: const Text('Com que meio foi paga?', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
           children: [
-            SimpleDialogOption(
-              onPressed: () => Navigator.pop(dialogContext, false),
-              child: Text('Do bolso de $owner (reembolsado no fechamento)'),
-            ),
-            SimpleDialogOption(
-              onPressed: () => Navigator.pop(dialogContext, true),
-              child: const Text('Caixa da Casa: sem reembolso, e o que não é da casa vira dívida com o Caixa'),
-            ),
+            for (final option in options)
+              SimpleDialogOption(
+                onPressed: () => Navigator.pop(dialogContext, option),
+                child: Text(
+                  option.byHouse
+                      ? '${option.label}: sem reembolso; o que não é da casa vira dívida com o Caixa'
+                      : '${option.label}: reembolsado no fechamento',
+                ),
+              ),
           ],
         ),
       );
       if (choice == null || !mounted) return;
-      byHouse = choice;
+      byHouse = choice.byHouse;
     }
     _update(_session!.withInvoicePayment(picked, byHouse: byHouse));
   }

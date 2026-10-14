@@ -46,7 +46,7 @@ void main() {
       expect(find.text('Valor Variável'), findsOneWidget);
       expect(find.text('Dia do Vencimento'), findsOneWidget);
       expect(find.text('Situação no Ciclo Atual'), findsOneWidget);
-      await tester.ensureVisible(find.text('Salvar Despesa Recorrente'));
+      await tester.scrollUntilVisible(find.text('Salvar Despesa Recorrente'), 300, scrollable: find.byType(Scrollable).first);
       expect(find.text('Salvar Despesa Recorrente'), findsOneWidget);
     });
 
@@ -63,7 +63,7 @@ void main() {
       expect(find.text('Nova Despesa Recorrente'), findsOneWidget);
       expect(find.text('Valor Fixo'), findsOneWidget);
       expect(find.text('Valor Variável'), findsOneWidget);
-      await tester.ensureVisible(find.text('Salvar Despesa Recorrente'));
+      await tester.scrollUntilVisible(find.text('Salvar Despesa Recorrente'), 300, scrollable: find.byType(Scrollable).first);
       expect(find.text('Salvar Despesa Recorrente'), findsOneWidget);
     });
 

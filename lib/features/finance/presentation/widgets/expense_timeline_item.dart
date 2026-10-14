@@ -16,6 +16,7 @@ import '../../domain/services/expense_launch_defaults.dart';
 import '../cubit/finance_cubit.dart';
 import '../cubit/finance_state.dart';
 import '../pages/add_expense_page.dart';
+import '../../../../core/utils/clipboard_helper.dart';
 import 'audit_log_sheet.dart';
 import 'pay_pending_expense_sheet.dart';
 
@@ -820,6 +821,19 @@ class ExpenseTimelineItem extends StatelessWidget {
                     ],
                   ],
                 ),
+                // Boleto a pagar: o código fica à mão para colar no app do banco
+                if (expense.isPending && expense.barcode != null)
+                  IconButton(
+                    key: Key('copy_barcode_${expense.id}'),
+                    icon: const Icon(Icons.copy_rounded, size: 18, color: AppColors.primary),
+                    tooltip: 'Copiar código do boleto',
+                    visualDensity: VisualDensity.compact,
+                    onPressed: () => copyWithFeedback(
+                      context,
+                      expense.barcode!,
+                      onCopied: const SnackBar(content: Text('Código do boleto copiado.')),
+                    ),
+                  ),
                 PopupMenuButton<String>(
                   padding: EdgeInsets.zero,
                   icon: const Icon(Icons.more_vert_rounded, size: 20, color: Colors.grey),
