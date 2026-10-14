@@ -4,7 +4,7 @@ Plano de implementação do módulo descrito em [modulo_importacao_conciliacao.m
 
 ## 1. Situação atual
 
-A tela antiga "Rachar a Fatura" (`split_invoice_modal.dart`) foi substituída pela página de importação. Nenhuma mudança de banco foi feita.
+A tela antiga "Rachar a Fatura" (`split_invoice_modal.dart`) foi substituída pela página de importação. A migration 0052 (`import_history_confirm_and_undo`) foi validada no banco em bloco com rollback, mas **ainda não foi aplicada**: com conta real, confirmar e desfazer só funcionam depois dela.
 
 **Implementado**
 - **Página própria** em `/casa/importar` (`presentation/pages/import_page.dart`), aberta pelo Smart FAB ("Importar Fatura"), por Ajustes > Pagamentos e contas e pelo menu de cada cartão ou conta (chega com a origem escolhida).
@@ -12,14 +12,16 @@ A tela antiga "Rachar a Fatura" (`split_invoice_modal.dart`) foi substituída pe
 - **Leitura** (`statement_parser.dart`): OFX de cartão e de conta (com o identificador da transação), CSV com `,`, `;` ou tabulação, datas e valores no formato brasileiro, arquivo em Latin-1. Pagamento, estorno e entrada são reconhecidos pelo sinal e ficam de fora; parcela ("03/10") é identificada. Aviso quando o OFX não é do tipo da origem escolhida.
 - **Detecção do que já foi lançado** (`statement_matcher.dart`): as quatro faixas da seção 3, cada despesa casando com uma linha só. "Já lançado" vem aceito; "provável" e "valor diferente" esperam a resposta do usuário e bloqueiam a confirmação.
 - **Revisão** (`import_session.dart`): destino por linha, categoria (sugerida por despesa parecida ou pelo nome da categoria), devedor entre todos os moradores, nome e data da compra, filtros por situação e totais.
-- **Gravação**: uma despesa por linha da Casa, com cartão, vencimento da fatura e rateio padrão; um empréstimo por devedor, vencendo com a fatura; correção da despesa existente (valor real, ou troca para o cartão do arquivo).
+- **Gravação atômica** (`confirm_import`): uma despesa por linha da Casa, com cartão, vencimento da fatura e rateio padrão; um empréstimo por devedor, vencendo com a fatura; correção da despesa existente (valor real, ou troca para o cartão do arquivo). Se algo falha, nada é gravado.
+- **Histórico e desfazer**: cada importação confirmada fica em `import_batches`/`import_lines`, com o que cada linha virou, e aparece na página. Desfazer (`undo_import`) exclui as despesas e os empréstimos criados.
+- **Reimportação**: cada linha tem uma assinatura (data, valor, descrição e ordem entre linhas iguais). Linha já importada do mesmo cartão ou conta aparece como "Já importada" e não é lançada de novo, a menos que o usuário mande.
 - **Ciclo fechado**: as linhas afetadas são avisadas e o usuário escolhe lançar como ajuste no ciclo atual ou deixar de fora.
 - **Testes**: `test/features/reconciliation/` (leitura, duplicidade, plano de gravação e a página).
 
 **Limites do que foi feito**
-- **Sem rascunho nem histórico**: a revisão vive só na tela; sair da página perde tudo, e não há como desfazer uma importação.
-- **Gravação não é atômica**: cada despesa e empréstimo é gravado em sequência. Se algo falha, o que deu certo sai da lista e o erro aparece para tentar de novo.
-- **Reimportação** depende da detecção de duplicidade (mesmo valor, mesmo cartão, data próxima), e não de uma assinatura guardada. Linha lançada como ajuste de ciclo fechado e linha que virou empréstimo não são reconhecidas na segunda vez.
+- **Sem rascunho**: a revisão vive só na tela; sair da página antes de confirmar perde tudo.
+- **Desfazer não reverte correções**: valor ou cartão trocado em despesa que já existia continua como ficou. Despesa já acertada em um fechamento e empréstimo que já teve pagamento impedem o desfazer; só quem emprestou (ou um administrador) desfaz um empréstimo.
+- **A assinatura depende do arquivo**: se o banco mudar a descrição ou a data de uma linha entre um arquivo e outro, ela não é reconhecida como já importada (aí vale a comparação com as despesas do app).
 - **Conta pendente** que casa com uma linha só é vinculada: a baixa continua sendo feita na Casa.
 - **Estorno** não gera lançamento; **pagamento de fatura** no extrato não marca a fatura como paga; **Pix recebido** não vira aporte nem parcela.
 - **Sem edição em lote**, sem dividir linha, sem regras aprendidas e sem IA (PDF e foto não são aceitos).
@@ -151,13 +153,13 @@ Sem IA (limite ou erro), OFX/CSV continuam funcionando e a classificação fica 
 
 1. **Corrigir os riscos de hoje**: feito.
 2. **Origem e leitura confiável**: feito.
-3. **Rascunho e gravação por linha**: gravação por linha feita. Falta salvar o rascunho em `import_batches`/`import_lines` e a confirmação atômica.
-4. **Conciliação**: motor, tela e grupo de ciclo fechado feitos. Falta a assinatura por linha para a reimportação e a edição em lote.
+3. **Rascunho e gravação por linha**: gravação por linha e confirmação atômica feitas. Falta guardar o rascunho da revisão.
+4. **Conciliação**: motor, tela, grupo de ciclo fechado e assinatura por linha feitos. Falta a edição em lote.
 5. **Extrato**: só a leitura (saídas viram despesa). Falta pagamento de fatura, Pix recebido e estorno.
 6. **IA**: leitura de PDF/foto, classificação em lote, regras aprendidas.
-7. **Histórico e desfazer**.
+7. **Histórico e desfazer**: feitos (migration 0052).
 
-O que falta nas etapas 3, 4 e 7 exige mudança no banco (colunas em `import_lines` para vínculo, assinatura e status; total do banco e origem em `import_batches`; função de confirmação), a fazer só com aprovação. A etapa 6 exige publicar uma função nova (`import-classify`).
+A etapa 6 exige publicar uma função nova (`import-classify`). O rascunho da revisão (etapa 3) exigiria outra mudança no banco.
 
 ## 10. Decisões em aberto
 

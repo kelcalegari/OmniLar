@@ -103,7 +103,7 @@ Resumo dos mecanismos que mudaram nesta sessão, para localizar as coisas.
 - **Sem rede as listas não carregam:** o app não guarda cópia local. A fila offline só ajuda quando a conexão cai no meio do uso.
 - **Fora da fila offline:** pagamento de parcela (de propósito), marcar item como comprado, concluir tarefa e exclusões.
 - **Mensagem de sucesso antes da hora:** várias telas mostram "adicionado com sucesso" sem esperar a gravação terminar; se der erro, o aviso aparece depois.
-- **Importar fatura ou extrato:** página própria em `/casa/importar` (Smart FAB, Ajustes > Pagamentos e contas, e o menu de cada cartão ou conta). Escolhe-se a origem e o arquivo OFX/CSV; o app compara com o que já foi lançado, e cada linha nova da Casa vira uma despesa. Nada é guardado no banco antes de confirmar e a revisão se perde ao sair da página. A fatura de exemplo aparece só no modo demo.
+- **Importar fatura ou extrato:** página própria em `/casa/importar` (Smart FAB, Ajustes > Pagamentos e contas, e o menu de cada cartão ou conta). Escolhe-se a origem e o arquivo OFX/CSV; o app compara com o que já foi lançado, e cada linha nova da Casa vira uma despesa. A confirmação grava tudo de uma vez e entra no histórico da página, de onde pode ser desfeita; a revisão em si não é guardada e se perde ao sair da página. A fatura de exemplo aparece só no modo demo.
 - **Série de eventos já criada** não pode ser estendida nem encurtada; só excluindo "esta e as próximas" e criando de novo.
 - **Fatura de cartão:** só funciona para cartão com fechamento e vencimento cadastrados; gravar `paid_at` direto na tabela de despesas continua possível para qualquer morador.
 - **Ciclo reaberto:** trocar a divisão do excedente do balde no segundo fechamento redistribui o excedente inteiro; parcelas e acordos do primeiro fechamento não são desfeitos.
@@ -123,7 +123,7 @@ Itens levantados na segunda sessão de 13/10; ele não pediu nenhum. Perguntar a
 - **Busca nos ajustes:** leva até o grupo, não até o item.
 - **Assistente:** "Assistente Ativo", "Alertas Proativos" e "Horário Silencioso" eram controles de enfeite e foram removidos; implementar de verdade é trabalho à parte.
 - **Lista de moradores desatualizada** depois que alguém entra na casa: corrigido nos Ajustes e, pelo tempo real, no estado financeiro; outras telas (formulário de despesa, agenda) não foram conferidas.
-- **Importação de fatura e extrato:** etapas 1 e 2 e a parte sem banco das etapas 3 e 4 do `plano_importacao_conciliacao.md` estão na branch `feat/import-reconciliation` (código em `lib/features/reconciliation/`). O que falta está na seção "Situação atual" do plano; o restante depende de mudança no banco.
+- **Importação de fatura e extrato:** está na branch `feat/import-reconciliation` (código em `lib/features/reconciliation/`). A confirmação e o desfazer usam as funções `confirm_import` e `undo_import` da migration 0052, que **ainda não foi aplicada no banco**: com conta real a importação só funciona depois dela. O que falta está na seção "Situação atual" do `plano_importacao_conciliacao.md`.
 
 ### Pontas pequenas, nunca tratadas
 - **`category_id` dos itens de compra** nunca é gravado.
@@ -230,6 +230,7 @@ Uma linha por migration, para saber onde está cada regra.
 | 0049 | Contas recorrentes geradas até três meses à frente |
 | 0050 | Tempo real para despesas e moradores |
 | 0051 | Dono da categoria vale para as despesas em aberto |
+| 0052 | Histórico da importação, confirmação atômica e desfazer (**ainda não aplicada**) |
 
 ## Documentos relacionados
 

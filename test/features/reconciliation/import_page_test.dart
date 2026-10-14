@@ -100,10 +100,27 @@ void main() {
     expect(await tester.runAsync(importedCount), 4);
     expect(sl<P2PCubit>().state.allLoans.length, loansBefore + 1);
 
-    // Importar o mesmo arquivo de novo não duplica: as linhas já estão lançadas
+    // A importação entra no histórico
+    expect(find.text('Importações anteriores'), findsOneWidget);
+    expect(find.textContaining('5 lançamentos criados'), findsOneWidget);
+
+    // Importar o mesmo arquivo de novo não duplica: todas as linhas já vieram
     await tester.tap(find.text('Usar fatura de exemplo'));
     await tester.pumpAndSettle();
-    expect(find.text('Já lançadas (4)'), findsOneWidget);
-    expect(find.textContaining('Já lançado:'), findsNWidgets(4));
+    expect(find.text('Já importadas (5)'), findsOneWidget);
+    expect(find.text('Novas (0)'), findsOneWidget);
+
+    // Desfazer exclui o que a importação criou
+    await tester.ensureVisible(find.text('Desfazer'));
+    await tester.tap(find.text('Desfazer'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(FilledButton, 'Desfazer'));
+    await tester.pumpAndSettle();
+
+    expect(await tester.runAsync(importedCount), 0);
+    expect(sl<P2PCubit>().state.allLoans.length, loansBefore);
+    expect(find.textContaining('desfeita'), findsWidgets);
+    // Com a importação desfeita, as linhas do arquivo aberto voltam a ser novas
+    expect(find.text('Novas (5)'), findsOneWidget);
   });
 }

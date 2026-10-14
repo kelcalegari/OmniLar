@@ -320,9 +320,12 @@ class StatementParser {
     }
 
     final lines = <ImportedStatementLine>[];
+    final seen = <String, int>{};
     for (var i = 0; i < raw.length; i++) {
       final line = raw[i];
       final isOutflow = (line.signedCents > 0) == positiveIsOutflow;
+      final content = signatureContent(line.date, line.signedCents.abs(), line.description);
+      final occurrence = seen[content] = (seen[content] ?? 0) + 1;
 
       final StatementLineKind kind;
       if (source == StatementSourceType.creditCard) {
@@ -350,6 +353,7 @@ class StatementParser {
           amount: Money(line.signedCents.abs()),
           kind: kind,
           externalId: line.externalId,
+          signature: '$content#$occurrence',
           installmentNumber: installment?.number,
           installmentsTotal: installment?.total,
           // Só compra vira lançamento; o resto fica de fora até alguém decidir
@@ -360,6 +364,13 @@ class StatementParser {
       );
     }
     return lines;
+  }
+
+  /// Parte da assinatura que vem do conteúdo da linha. Duas linhas iguais no
+  /// mesmo arquivo se distinguem pela ordem ("#1", "#2").
+  static String signatureContent(DateTime date, int cents, String description) {
+    final day = '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
+    return '$day|$cents|${StatementText.normalize(description)}';
   }
 
   /// Calcula o fechamento da fatura com divisão matemática por destino (RN09)

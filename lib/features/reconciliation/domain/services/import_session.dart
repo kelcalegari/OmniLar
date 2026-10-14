@@ -27,6 +27,9 @@ enum LineStatus {
   /// Casada com uma despesa do app: não lança de novo.
   linked,
 
+  /// Já veio em uma importação anterior deste cartão ou conta.
+  alreadyImported,
+
   /// O app achou uma despesa parecida e espera a resposta do usuário.
   needsReview,
 
@@ -46,6 +49,37 @@ enum ClosedCyclePolicy {
   skip,
 }
 
+/// O que uma linha do arquivo virou, para o histórico da importação.
+enum LineOutcome {
+  /// A importação criou a despesa ou o empréstimo.
+  created,
+
+  /// Já existia no app.
+  linked,
+
+  /// Pessoal, ignorada ou só informativa.
+  ignored,
+
+  /// Ficou de fora por cair em ciclo fechado: pode ser importada depois.
+  skipped,
+}
+
+class ImportLineRecord {
+  final ImportedStatementLine line;
+  final LineOutcome outcome;
+  final String? title;
+  final String? expenseId;
+  final String? loanId;
+
+  const ImportLineRecord({
+    required this.line,
+    required this.outcome,
+    this.title,
+    this.expenseId,
+    this.loanId,
+  });
+}
+
 /// Tudo o que a confirmação vai gravar.
 class ImportPlan {
   final List<HouseExpense> newExpenses;
@@ -55,16 +89,15 @@ class ImportPlan {
   /// Linhas deixadas de fora por caírem em ciclo fechado.
   final List<ImportedStatementLine> skippedClosedCycle;
 
-  /// Linhas do arquivo por trás de cada despesa nova, atualização ou
-  /// empréstimo (pelo id dele), para saber o que já foi gravado.
-  final Map<String, List<String>> lineIdsByRecord;
+  /// O que cada linha virou. Linhas já importadas antes não entram de novo.
+  final List<ImportLineRecord> lineRecords;
 
   const ImportPlan({
     this.newExpenses = const [],
     this.expenseUpdates = const [],
     this.loans = const [],
     this.skippedClosedCycle = const [],
-    this.lineIdsByRecord = const {},
+    this.lineRecords = const [],
   });
 
   bool get isEmpty => newExpenses.isEmpty && expenseUpdates.isEmpty && loans.isEmpty;
@@ -103,6 +136,12 @@ class ImportSession {
   /// Quem paga a fatura ou é dono da conta.
   final String payerMemberId;
 
+  /// Assinaturas das linhas já importadas deste cartão ou conta.
+  final Set<String> importedSignatures;
+
+  /// Linhas já importadas que o usuário mandou lançar de novo (pelo id).
+  final Set<String> forcedLineIds;
+
   const ImportSession({
     required this.source,
     required this.fileName,
@@ -111,6 +150,8 @@ class ImportSession {
     this.matches = const {},
     this.decisions = const {},
     this.invoiceDueDate,
+    this.importedSignatures = const {},
+    this.forcedLineIds = const {},
   });
 
   static final _dayMonth = DateFormat('dd/MM');
@@ -166,6 +207,8 @@ class ImportSession {
     Map<String, MatchDecision>? decisions,
     DateTime? invoiceDueDate,
     String? payerMemberId,
+    Set<String>? importedSignatures,
+    Set<String>? forcedLineIds,
   }) {
     return ImportSession(
       source: source,
@@ -175,8 +218,22 @@ class ImportSession {
       decisions: decisions ?? this.decisions,
       invoiceDueDate: invoiceDueDate ?? this.invoiceDueDate,
       payerMemberId: payerMemberId ?? this.payerMemberId,
+      importedSignatures: importedSignatures ?? this.importedSignatures,
+      forcedLineIds: forcedLineIds ?? this.forcedLineIds,
     );
   }
+
+  ImportSession withImportedSignatures(Set<String> signatures) =>
+      _copy(importedSignatures: signatures);
+
+  /// Lança de novo uma linha que já veio em outra importação.
+  ImportSession withForcedLine(String lineId) =>
+      _copy(forcedLineIds: {...forcedLineIds, lineId});
+
+  bool _wasImported(ImportedStatementLine line) =>
+      line.signature != null &&
+      importedSignatures.contains(line.signature) &&
+      !forcedLineIds.contains(line.id);
 
   ImportSession withInvoiceDueDate(DateTime dueDate) =>
       _copy(invoiceDueDate: DateTime(dueDate.year, dueDate.month, dueDate.day));
@@ -262,6 +319,7 @@ class ImportSession {
 
   LineStatus statusOf(ImportedStatementLine line) {
     if (!line.isPurchase) return LineStatus.informational;
+    if (_wasImported(line)) return LineStatus.alreadyImported;
     if (matches.containsKey(line.id)) {
       switch (decisionOf(line.id)) {
         case MatchDecision.accepted:
@@ -294,6 +352,7 @@ class ImportSession {
       file += cents;
       switch (statusOf(line)) {
         case LineStatus.linked:
+        case LineStatus.alreadyImported:
           linked += cents;
         case LineStatus.ignored:
           ignored += cents;
@@ -411,7 +470,7 @@ class ImportSession {
     final outOfPocket = ExpenseLaunchDefaults.paidOutOfPocket(source);
 
     final newExpenses = <HouseExpense>[];
-    final lineIdsByRecord = <String, List<String>>{};
+    final records = <ImportLineRecord>[];
     final skipped = <ImportedStatementLine>[];
     final loanLines = <String, List<ImportedStatementLine>>{};
 
@@ -421,13 +480,21 @@ class ImportSession {
           final inClosedCycle = closedCycles.contains(schedule.cycleFor(_countingDate(line)));
           if (inClosedCycle && closedCyclePolicy == ClosedCyclePolicy.skip) {
             skipped.add(line);
+            records.add(ImportLineRecord(line: line, outcome: LineOutcome.skipped));
             continue;
           }
           final category =
               categories.where((c) => c.id == line.categoryId).firstOrNull ?? defaultCategory;
           final title = _titleOf(line);
           final expenseId = newId();
-          lineIdsByRecord[expenseId] = [line.id];
+          records.add(
+            ImportLineRecord(
+              line: line,
+              outcome: LineOutcome.created,
+              title: title,
+              expenseId: expenseId,
+            ),
+          );
           newExpenses.add(
             HouseExpense(
               id: expenseId,
@@ -466,7 +533,16 @@ class ImportSession {
     final loans = <P2PLoan>[];
     for (final entry in loanLines.entries) {
       final loanId = newId();
-      lineIdsByRecord[loanId] = [for (final line in entry.value) line.id];
+      for (final line in entry.value) {
+        records.add(
+          ImportLineRecord(
+            line: line,
+            outcome: LineOutcome.created,
+            title: _titleOf(line),
+            loanId: loanId,
+          ),
+        );
+      }
       loans.add(
         P2PLoan(
           id: loanId,
@@ -487,11 +563,20 @@ class ImportSession {
 
     final updates = <HouseExpense>[];
     for (final line in lines) {
-      if (statusOf(line) != LineStatus.linked) continue;
+      final status = statusOf(line);
+      // Pessoal, ignorada, pagamento, estorno e entrada: ficam só no histórico
+      final leftOut = status == LineStatus.informational ||
+          status == LineStatus.ignored ||
+          (status == LineStatus.newLine && line.destination == LineDestination.cardOwnerPersonal);
+      if (leftOut) records.add(ImportLineRecord(line: line, outcome: LineOutcome.ignored));
+      if (status != LineStatus.linked) continue;
+
       final match = matches[line.id]!;
       final expense = match.expense;
+      records.add(
+        ImportLineRecord(line: line, outcome: LineOutcome.linked, expenseId: expense.id),
+      );
       if (expense.settledAt != null) continue;
-      lineIdsByRecord[expense.id] = [line.id];
 
       if (match.kind == LineMatchKind.amountDiffers && canUpdateAmount(expense)) {
         updates.add(expense.copyWith(amount: line.amount));
@@ -515,7 +600,7 @@ class ImportSession {
       expenseUpdates: updates,
       loans: loans,
       skippedClosedCycle: skipped,
-      lineIdsByRecord: lineIdsByRecord,
+      lineRecords: records,
     );
   }
 }

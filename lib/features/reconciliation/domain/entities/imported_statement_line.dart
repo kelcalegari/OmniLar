@@ -31,6 +31,10 @@ class ImportedStatementLine {
   /// Identificador da transação no arquivo (FITID do OFX), quando existe.
   final String? externalId;
 
+  /// Identifica a linha entre importações do mesmo cartão ou conta: data,
+  /// valor e descrição do arquivo, mais a ordem entre linhas iguais.
+  final String? signature;
+
   /// Nome dado pelo usuário na revisão (null = usa a descrição limpa).
   final String? title;
   final String? categoryId;
@@ -47,6 +51,7 @@ class ImportedStatementLine {
     this.destination = LineDestination.house,
     this.kind = StatementLineKind.purchase,
     this.externalId,
+    this.signature,
     this.title,
     this.categoryId,
     this.assignedMemberId,
@@ -75,6 +80,7 @@ class ImportedStatementLine {
       destination: destination ?? this.destination,
       kind: kind,
       externalId: externalId,
+      signature: signature,
       title: title ?? this.title,
       categoryId: categoryId ?? this.categoryId,
       assignedMemberId: clearAssignedMember ? null : (assignedMemberId ?? this.assignedMemberId),

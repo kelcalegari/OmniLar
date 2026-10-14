@@ -15,11 +15,11 @@ import '../../../finance/domain/entities/payment_method.dart';
 import '../../../finance/domain/repositories/finance_repository.dart';
 import '../../../finance/presentation/cubit/finance_cubit.dart';
 import '../../../finance/presentation/cubit/finance_state.dart';
-import '../../../p2p/domain/repositories/p2p_repository.dart';
 import '../../../p2p/presentation/cubit/p2p_cubit.dart';
 import '../../../settlement/domain/entities/settlement_summary.dart';
 import '../../../settlement/domain/repositories/settlement_repository.dart';
 import '../../domain/entities/imported_statement_line.dart';
+import '../../domain/repositories/import_repository.dart';
 import '../../domain/services/import_session.dart';
 import '../../domain/services/statement_matcher.dart';
 import '../../domain/services/statement_parser.dart';
@@ -49,8 +49,9 @@ class _ImportPageState extends State<ImportPage> {
   Set<FinancialCycle> _closedCycles = const {};
   ClosedCyclePolicy _closedCyclePolicy = ClosedCyclePolicy.adjustInCurrentCycle;
   LineStatus? _filter;
-  List<String> _failures = const [];
+  String? _failure;
   String? _resultMessage;
+  List<ImportBatch> _history = const [];
 
   FinanceCubit get _finance => context.read<FinanceCubit>();
 
@@ -60,6 +61,16 @@ class _ImportPageState extends State<ImportPage> {
     _sourceId = widget.initialSourceId;
     // Aberta direto pelo endereço: a casa pode não estar carregada ainda
     if (_finance.state.paymentMethods.isEmpty) _finance.loadCycleData();
+    _loadHistory();
+  }
+
+  Future<void> _loadHistory() async {
+    try {
+      final history = await sl<ImportRepository>().getHistory();
+      if (mounted) setState(() => _history = history);
+    } catch (_) {
+      // Sem o histórico a importação continua funcionando
+    }
   }
 
   static bool _canImport(PaymentMethod method) =>
@@ -119,13 +130,16 @@ class _ImportPageState extends State<ImportPage> {
   /// Fatura de exemplo do modo demo, para ver a tela sem ter um arquivo.
   Future<void> _useSample(PaymentMethod source) async {
     final now = DateTime.now();
-    ImportedStatementLine line(int index, int daysAgo, String description, int cents) =>
-        ImportedStatementLine(
-          id: 'sample_$index',
-          date: now.subtract(Duration(days: daysAgo)),
-          description: description,
-          amount: Money(cents),
-        );
+    ImportedStatementLine line(int index, int daysAgo, String description, int cents) {
+      final date = now.subtract(Duration(days: daysAgo));
+      return ImportedStatementLine(
+        id: 'sample_$index',
+        date: date,
+        description: description,
+        amount: Money(cents),
+        signature: '${StatementParser.signatureContent(date, cents, description)}#1',
+      );
+    }
 
     await _start(source, 'fatura_exemplo.csv', [
       line(1, 2, 'PAO DE ACUCAR LJ 1234', 48560),
@@ -157,7 +171,7 @@ class _ImportPageState extends State<ImportPage> {
       );
       _sourceId = source.id;
       _fileWarning = warning;
-      _failures = const [];
+      _failure = null;
       _resultMessage = null;
       _filter = null;
     });
@@ -184,6 +198,13 @@ class _ImportPageState extends State<ImportPage> {
       _showMessage('Não foi possível comparar com os lançamentos do app: $e', error: true);
     }
 
+    var imported = session.importedSignatures;
+    try {
+      imported = await sl<ImportRepository>().importedSignatures(session.source.id);
+    } catch (_) {
+      // Sem a resposta, vale a comparação com as despesas do app
+    }
+
     final settlements = sl<SettlementRepository>();
     for (final cycle in session.countingCycles(schedule)) {
       try {
@@ -196,7 +217,9 @@ class _ImportPageState extends State<ImportPage> {
 
     if (!mounted) return;
     // A revisão pode ter mudado enquanto a busca corria: parte da atual
-    var updated = (_session ?? session).withExpenses(byId.values.toList());
+    var updated = (_session ?? session)
+        .withImportedSignatures(imported)
+        .withExpenses(byId.values.toList());
     if (suggestCategories) {
       updated = updated.withSuggestedCategories(
         categories: _finance.state.categories,
@@ -304,37 +327,27 @@ class _ImportPageState extends State<ImportPage> {
 
     setState(() {
       _busy = true;
-      _failures = const [];
+      _failure = null;
     });
 
-    final failures = <String>[];
-    final savedLineIds = <String>{};
-    Future<void> save(String recordId, String label, Future<void> Function() action) async {
-      try {
-        await action();
-        savedLineIds.addAll(plan.lineIdsByRecord[recordId] ?? const []);
-      } catch (e) {
-        failures.add('$label: $e');
-      }
-    }
-
-    final finance = sl<FinanceRepository>();
-    final p2p = sl<P2PRepository>();
-    for (final expense in plan.newExpenses) {
-      await save(expense.id, expense.title, () => finance.addExpense(expense));
-    }
-    for (final expense in plan.expenseUpdates) {
-      await save(expense.id, expense.title, () => finance.updateExpense(expense));
-    }
-    for (final loan in plan.loans) {
-      await save(loan.id, loan.title, () => p2p.createLoan(loan));
+    try {
+      // Tudo ou nada: se algo falha, nenhuma linha é gravada
+      await sl<ImportRepository>().confirmImport(session, plan);
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _busy = false;
+        _failure = '$e';
+      });
+      return;
     }
 
     await _finance.loadCycleData();
     await p2pCubit.loadLoans();
+    await _loadHistory();
     if (!mounted) return;
 
-    final linked = session.countOf(LineStatus.linked);
+    final linked = session.countOf(LineStatus.linked) + session.countOf(LineStatus.alreadyImported);
     final summary = [
       '${plan.newExpenses.length} ${plan.newExpenses.length == 1 ? 'despesa lançada' : 'despesas lançadas'}',
       if (plan.loans.isNotEmpty)
@@ -344,27 +357,51 @@ class _ImportPageState extends State<ImportPage> {
         '${plan.skippedClosedCycle.length} de ciclo fechado ${plan.skippedClosedCycle.length == 1 ? 'ficou' : 'ficaram'} de fora',
     ].join(' • ');
 
-    if (failures.isEmpty) {
-      setState(() {
-        _session = null;
-        _busy = false;
-        _resultMessage = '${session.fileName} importado: $summary.';
-      });
-      return;
-    }
-
-    // O que já foi gravado sai da lista, para tentar de novo só o que falhou
-    var remaining = session;
-    for (final line in session.lines) {
-      if (savedLineIds.contains(line.id) && session.statusOf(line) == LineStatus.newLine) {
-        remaining = remaining.withLine(line.copyWith(destination: LineDestination.ignored));
-      }
-    }
     setState(() {
-      _session = remaining;
+      _session = null;
       _busy = false;
-      _failures = failures;
+      _resultMessage = '${session.fileName} importado: $summary.';
     });
+  }
+
+  Future<void> _undo(ImportBatch batch) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Desfazer importação?', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+        content: Text(
+          'As despesas e os empréstimos criados por "${batch.fileName}" serão excluídos. '
+          'Correções feitas em despesas que já existiam continuam como estão.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Cancelar'),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: AppColors.debtRed),
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('Desfazer'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+
+    final p2pCubit = context.read<P2PCubit>();
+    setState(() => _busy = true);
+    try {
+      await sl<ImportRepository>().undoImport(batch.id);
+      await _finance.loadCycleData();
+      await p2pCubit.loadLoans();
+      _showMessage('Importação de "${batch.fileName}" desfeita.');
+    } catch (e) {
+      _showMessage('$e', error: true);
+    }
+    await _loadHistory();
+    if (!mounted) return;
+    setState(() => _busy = false);
+    // As linhas desfeitas voltam a ser novas na revisão aberta
     await _refresh();
   }
 
@@ -388,6 +425,7 @@ class _ImportPageState extends State<ImportPage> {
                 _originCard(state),
                 if (_resultMessage != null) _banner(_resultMessage!, AppColors.creditGreen, Icons.check_circle_outline_rounded),
                 if (session != null) ..._review(state, session),
+                if (_history.isNotEmpty) _historyCard(),
               ],
             ),
           );
@@ -472,7 +510,7 @@ class _ImportPageState extends State<ImportPage> {
                       if (id != _sourceId) {
                         _session = null;
                         _fileWarning = null;
-                        _failures = const [];
+                        _failure = null;
                       }
                       _sourceId = id;
                     }),
@@ -592,18 +630,11 @@ class _ImportPageState extends State<ImportPage> {
         ],
       ),
       if (_fileWarning != null) _banner(_fileWarning!, AppColors.folegoWarning, Icons.warning_amber_rounded),
-      if (_failures.isNotEmpty)
+      if (_failure != null)
         _banner(
-          'Parte da importação não foi gravada. O que deu certo saiu da lista; corrija e confirme de novo.',
+          'Nada foi gravado. $_failure',
           AppColors.debtRed,
           Icons.error_outline_rounded,
-          children: [
-            for (final failure in _failures)
-              Padding(
-                padding: const EdgeInsets.only(top: 6, left: 26),
-                child: Text(failure, style: const TextStyle(fontSize: 12)),
-              ),
-          ],
         ),
       if (closedLines.isNotEmpty)
         _banner(
@@ -642,6 +673,8 @@ class _ImportPageState extends State<ImportPage> {
             filterChip('Novas', LineStatus.newLine),
             filterChip('Para revisar', LineStatus.needsReview),
             filterChip('Já lançadas', LineStatus.linked),
+            if (session.countOf(LineStatus.alreadyImported) > 0)
+              filterChip('Já importadas', LineStatus.alreadyImported),
             filterChip('Ignoradas', LineStatus.ignored),
           ],
         ),
@@ -751,6 +784,7 @@ class _ImportPageState extends State<ImportPage> {
           const SizedBox(height: 4),
           switch (status) {
             LineStatus.informational => _informationalRow(line),
+            LineStatus.alreadyImported => _importedRow(session, line),
             LineStatus.linked || LineStatus.needsReview => _matchRow(state, session, line),
             LineStatus.newLine || LineStatus.ignored => _destinationRow(state, session, line),
           },
@@ -767,6 +801,65 @@ class _ImportPageState extends State<ImportPage> {
       StatementLineKind.purchase => '',
     };
     return Text(label, style: const TextStyle(fontSize: 12, color: Colors.grey));
+  }
+
+  Widget _importedRow(ImportSession session, ImportedStatementLine line) {
+    return Wrap(
+      crossAxisAlignment: WrapCrossAlignment.center,
+      spacing: 4,
+      children: [
+        const Text(
+          'Já veio em uma importação anterior. Não será lançada de novo.',
+          style: TextStyle(fontSize: 12, color: AppColors.creditGreen, fontWeight: FontWeight.w600),
+        ),
+        TextButton(
+          onPressed: _busy ? null : () => _update(session.withForcedLine(line.id)),
+          child: const Text('Lançar de novo'),
+        ),
+      ],
+    );
+  }
+
+  Widget _historyCard() {
+    return Padding(
+      padding: const EdgeInsets.only(top: 16),
+      child: _card(
+        children: [
+          const Text('Importações anteriores', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+          const SizedBox(height: 4),
+          for (final batch in _history)
+            ListTile(
+              dense: true,
+              contentPadding: EdgeInsets.zero,
+              title: Text(
+                '${batch.sourceName} • ${batch.fileName}',
+                style: TextStyle(
+                  fontWeight: FontWeight.w600,
+                  color: batch.isUndone ? Colors.grey : null,
+                  decoration: batch.isUndone ? TextDecoration.lineThrough : null,
+                ),
+                overflow: TextOverflow.ellipsis,
+              ),
+              subtitle: Text(
+                [
+                  'Importado em ${_dayFormat.format(batch.createdAt)}',
+                  if (batch.invoiceDueDate != null) 'fatura de ${_dayFormat.format(batch.invoiceDueDate!)}',
+                  batch.total.format(),
+                  '${batch.createdCount} ${batch.createdCount == 1 ? 'lançamento criado' : 'lançamentos criados'}',
+                  if (batch.isUndone) 'desfeita',
+                ].join(' • '),
+                style: const TextStyle(fontSize: 12),
+              ),
+              trailing: batch.isUndone
+                  ? null
+                  : TextButton(
+                      onPressed: _busy ? null : () => _undo(batch),
+                      child: const Text('Desfazer'),
+                    ),
+            ),
+        ],
+      ),
+    );
   }
 
   Widget _matchRow(FinanceState state, ImportSession session, ImportedStatementLine line) {

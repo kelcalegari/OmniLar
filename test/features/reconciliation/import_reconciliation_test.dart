@@ -8,6 +8,7 @@ import 'package:omni_lar/features/finance/domain/entities/house_expense.dart';
 import 'package:omni_lar/features/finance/domain/entities/house_member.dart';
 import 'package:omni_lar/features/finance/domain/entities/payment_method.dart';
 import 'package:omni_lar/features/finance/domain/entities/split_rule.dart';
+import 'package:omni_lar/features/reconciliation/data/supabase_import_repository.dart';
 import 'package:omni_lar/features/reconciliation/domain/entities/imported_statement_line.dart';
 import 'package:omni_lar/features/reconciliation/domain/services/import_session.dart';
 import 'package:omni_lar/features/reconciliation/domain/services/statement_matcher.dart';
@@ -53,6 +54,7 @@ ImportedStatementLine _line(
       description: description,
       amount: Money(cents),
       kind: kind,
+      signature: '${StatementParser.signatureContent(date, cents, description)}#1',
       destination: kind == StatementLineKind.purchase ? LineDestination.house : LineDestination.ignored,
     );
 
@@ -161,6 +163,15 @@ date,title,amount
       expect(lines[0].destination, LineDestination.ignored);
       expect(lines[3].destination, LineDestination.ignored);
       expect(lines[1].destination, LineDestination.house);
+    });
+
+    test('linhas iguais no mesmo arquivo ganham assinaturas diferentes, estáveis entre leituras', () {
+      const csv = '2026-10-05,PADARIA,25.00\n2026-10-05,PADARIA,25.00\n2026-10-06,PADARIA,25.00';
+      final first = StatementParser.parseCsv(csv).map((l) => l.signature).toList();
+      final second = StatementParser.parseCsv(csv).map((l) => l.signature).toList();
+
+      expect(first, ['2026-10-05|2500|padaria#1', '2026-10-05|2500|padaria#2', '2026-10-06|2500|padaria#1']);
+      expect(second, first);
     });
 
     test('reconhece a parcela no fim da descrição', () {
@@ -371,7 +382,18 @@ date,title,amount
       expect(enel.paidByMemberId, 'kelvynn');
       expect(enel.paidOutOfPocket, isTrue);
       expect(enel.splitRule.percentages, {'kelvynn': 60.0, 'cristiano': 40.0});
-      expect(plan.lineIdsByRecord[enel.id], ['enel']);
+
+      // O histórico guarda o que cada linha virou
+      String outcome(String lineId) =>
+          plan.lineRecords.firstWhere((r) => r.line.id == lineId).outcome.name;
+      expect(plan.lineRecords, hasLength(lines.length));
+      expect(plan.lineRecords.firstWhere((r) => r.line.id == 'enel').expenseId, enel.id);
+      expect(outcome('enel'), 'created');
+      expect(outcome('mercado'), 'linked');
+      expect(outcome('farmacia'), 'linked');
+      expect(outcome('steam'), 'ignored');
+      expect(outcome('pagamento'), 'ignored');
+      expect(plan.lineRecords.firstWhere((r) => r.line.id == 'farm').loanId, plan.loans.single.id);
 
       expect(plan.loans, hasLength(1));
       final loan = plan.loans.single;
@@ -396,6 +418,82 @@ date,title,amount
         totals.house.cents + totals.loans.cents + totals.personal.cents + totals.alreadyLaunched.cents,
         totals.file.cents,
       );
+    });
+
+    test('linha que já veio em outra importação não é lançada, a menos que o usuário mande', () {
+      var session = start()
+          .withDecision('farmacia', MatchDecision.accepted)
+          .withDecision('jantar', MatchDecision.accepted)
+          .withImportedSignatures({lines[4].signature!, lines[3].signature!});
+
+      expect(session.statusOf(lines[4]), LineStatus.alreadyImported);
+      expect(session.statusOf(lines[3]), LineStatus.alreadyImported);
+      var plan = session.buildPlan(members: _members, categories: _categories, schedule: schedule, newId: newId);
+      // Só o Steam continua novo; as já importadas nem entram no histórico de novo
+      expect(plan.newExpenses.map((e) => e.amount.cents), [15000]);
+      expect(plan.lineRecords.any((r) => r.line.id == 'enel' || r.line.id == 'farm'), isFalse);
+
+      session = session.withForcedLine('enel');
+      expect(session.statusOf(lines[4]), LineStatus.newLine);
+      plan = session.buildPlan(members: _members, categories: _categories, schedule: schedule, newId: newId);
+      expect(plan.newExpenses.map((e) => e.amount.cents), containsAll([15000, 21000]));
+    });
+
+    test('o que vai para o banco: despesas, empréstimo, correções e linhas em um pacote só', () {
+      const house = '11111111-1111-4111-8111-111111111111';
+      const card = PaymentMethod(
+        id: '22222222-2222-4222-8222-222222222222',
+        name: 'Nubank',
+        type: PaymentMethodType.card,
+        ownerMemberId: '33333333-3333-4333-8333-333333333333',
+        closingDay: 28,
+        dueDay: 10,
+      );
+      const members = [
+        HouseMember(id: '33333333-3333-4333-8333-333333333333', name: 'Kelvynn', defaultSplitPercent: 60),
+        HouseMember(id: '44444444-4444-4444-8444-444444444444', name: 'Cristiano', defaultSplitPercent: 40),
+      ];
+      final session = ImportSession.start(
+        source: card,
+        fileName: 'fatura.csv',
+        lines: [
+          _line('enel', DateTime(2026, 10, 3), 'ENEL ENERGIA', 21000),
+          _line('farm', DateTime(2026, 10, 7), 'FARM RIO', 32000)
+              .copyWith(destination: LineDestination.splitP2P, assignedMemberId: members[1].id),
+          _line('steam', DateTime(2026, 10, 4), 'STEAM GAMES', 15000)
+              .copyWith(destination: LineDestination.cardOwnerPersonal),
+        ],
+        payerMemberId: members[0].id,
+      );
+      final plan = session.buildPlan(members: members, categories: const [], schedule: schedule);
+      final payload = importPayload(session, plan, houseId: house, currentUserId: members[0].id);
+
+      final batch = payload['batch'] as Map;
+      expect(batch['house_id'], house);
+      expect(batch['source_type'], 'credit_card');
+      expect(batch['payment_method_id'], card.id);
+      expect(batch['invoice_due_date'], '2026-11-10');
+      expect(batch['total_cents'], 68000);
+
+      final expense = (payload['expenses'] as List).single as Map;
+      expect(expense['amount_cents'], 21000);
+      expect(expense['due_date'], '2026-11-10');
+      expect(expense['status'], 'paid');
+      expect((expense['split_rules'] as List).map((r) => (r as Map)['calculated_cents']), [12600, 8400]);
+
+      final loan = (payload['loans'] as List).single as Map;
+      expect(loan['total_amount_cents'], 32000);
+      expect(loan['borrower_id'], members[1].id);
+      expect(((loan['installments'] as List).single as Map)['due_date'], '2026-11-10');
+
+      final rows = {for (final row in payload['lines'] as List) (row as Map)['description']: row};
+      expect(rows['ENEL ENERGIA']!['decision'], 'created');
+      expect(rows['ENEL ENERGIA']!['expense_id'], expense['id']);
+      expect(rows['ENEL ENERGIA']!['signature'], '2026-10-03|21000|enel energia#1');
+      expect(rows['FARM RIO']!['split_destination'], 'p2p_loan');
+      expect(rows['FARM RIO']!['loan_id'], loan['id']);
+      expect(rows['STEAM GAMES']!['decision'], 'ignored');
+      expect(rows['STEAM GAMES']!['split_destination'], 'personal');
     });
 
     test('"são diferentes" faz a linha virar lançamento novo', () {

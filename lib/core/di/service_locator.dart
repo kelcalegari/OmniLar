@@ -1,3 +1,6 @@
+import '../../features/reconciliation/data/mock_import_repository.dart';
+import '../../features/reconciliation/data/supabase_import_repository.dart';
+import '../../features/reconciliation/domain/repositories/import_repository.dart';
 import '../../features/p2p/data/offline/p2p_loan_offline_codec.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:get_it/get_it.dart';
@@ -321,6 +324,23 @@ Future<void> initServiceLocator() async {
       OfflineActionType.createLoan,
       (payload) => sl<P2PDataSource>().createLoan(p2pLoanFromJson(payload)),
     );
+
+  // Importação de fatura e extrato
+  sl.registerLazySingleton<ImportRepository>(() {
+    final client = SupabaseConfig.client;
+    final mock = MockImportRepository(finance: sl(), p2p: sl());
+    if (client != null) {
+      return DynamicImportRepository(
+        remote: SupabaseImportRepository(
+          client: client,
+          getCurrentHouseId: () => sl<AuthRepository>().currentHouse?.id ?? '',
+        ),
+        mock: mock,
+        isDemoMode: isDemoModeActive,
+      );
+    }
+    return mock;
+  });
 
   // Capture Feature
   sl.registerLazySingleton<CaptureService>(() => CaptureService(
