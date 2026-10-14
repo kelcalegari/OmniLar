@@ -7,14 +7,36 @@ enum LineDestination {
   ignored, // Ignorado / duplicado
 }
 
+/// De onde veio o arquivo: muda a leitura do sinal dos valores.
+enum StatementSourceType { creditCard, bankAccount }
+
+/// O que a linha representa no arquivo. Só [purchase] vira lançamento.
+enum StatementLineKind {
+  purchase, // Compra no cartão ou saída da conta
+  refund, // Estorno ou crédito na fatura
+  payment, // Pagamento da fatura (na fatura ou no extrato da conta)
+  income, // Entrada na conta
+}
+
 class ImportedStatementLine {
   final String id;
   final DateTime date;
   final String description;
+
+  /// Sempre positivo: o sentido da linha está em [kind].
   final Money amount;
   final LineDestination destination;
+  final StatementLineKind kind;
+
+  /// Identificador da transação no arquivo (FITID do OFX), quando existe.
+  final String? externalId;
+
+  /// Nome dado pelo usuário na revisão (null = usa a descrição limpa).
+  final String? title;
   final String? categoryId;
   final String? assignedMemberId; // Devedor no caso de splitP2P
+  final int? installmentNumber;
+  final int? installmentsTotal;
   final bool isDuplicate;
 
   const ImportedStatementLine({
@@ -23,25 +45,41 @@ class ImportedStatementLine {
     required this.description,
     required this.amount,
     this.destination = LineDestination.house,
+    this.kind = StatementLineKind.purchase,
+    this.externalId,
+    this.title,
     this.categoryId,
     this.assignedMemberId,
+    this.installmentNumber,
+    this.installmentsTotal,
     this.isDuplicate = false,
   });
 
+  bool get isPurchase => kind == StatementLineKind.purchase;
+  bool get isInstallment => installmentNumber != null && installmentsTotal != null;
+
   ImportedStatementLine copyWith({
+    DateTime? date,
     LineDestination? destination,
+    String? title,
     String? categoryId,
     String? assignedMemberId,
+    bool clearAssignedMember = false,
     bool? isDuplicate,
   }) {
     return ImportedStatementLine(
       id: id,
-      date: date,
+      date: date ?? this.date,
       description: description,
       amount: amount,
       destination: destination ?? this.destination,
+      kind: kind,
+      externalId: externalId,
+      title: title ?? this.title,
       categoryId: categoryId ?? this.categoryId,
-      assignedMemberId: assignedMemberId ?? this.assignedMemberId,
+      assignedMemberId: clearAssignedMember ? null : (assignedMemberId ?? this.assignedMemberId),
+      installmentNumber: installmentNumber,
+      installmentsTotal: installmentsTotal,
       isDuplicate: isDuplicate ?? this.isDuplicate,
     );
   }
@@ -59,4 +97,7 @@ class InvoiceSplitResult {
     required this.personalOwnerAmount,
     required this.p2pDebtsByMember,
   });
+
+  Money get p2pAmount =>
+      p2pDebtsByMember.values.fold(const Money.zero(), (total, m) => total + m);
 }

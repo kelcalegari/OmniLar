@@ -24,6 +24,7 @@ import '../../features/finance/presentation/pages/savings_vaults_page.dart';
 import '../../features/projects/presentation/cubit/projects_cubit.dart';
 import '../../features/projects/presentation/pages/projects_hub_page.dart';
 import '../../features/routine/presentation/pages/tasks_and_shopping_page.dart';
+import '../../features/reconciliation/presentation/pages/import_page.dart';
 
 class GoRouterRefreshStream extends ChangeNotifier {
   late final StreamSubscription<dynamic> _subscription;
@@ -160,6 +161,13 @@ class AppRouter {
                     builder: (context, state) => const SavingsVaultsPage(),
                   ),
                   GoRoute(
+                    path: 'importar',
+                    name: 'import',
+                    builder: (context, state) => ImportPage(
+                      initialSourceId: state.uri.queryParameters['origem'],
+                    ),
+                  ),
+                  GoRoute(
                     path: 'projetos',
                     name: 'projects_hub',
                     builder: (context, state) => BlocProvider(
@@ -177,6 +185,10 @@ class AppRouter {
               GoRoute(
                 path: '/caixinhas',
                 redirect: (context, state) => '/casa/caixinhas',
+              ),
+              GoRoute(
+                path: '/importar',
+                redirect: (context, state) => state.uri.replace(path: '/casa/importar').toString(),
               ),
               GoRoute(
                 path: '/projetos',

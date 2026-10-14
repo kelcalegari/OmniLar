@@ -89,7 +89,7 @@ Resumo dos mecanismos que mudaram nesta sessão, para localizar as coisas.
 - **Planejador de aportes da Home:** `cycle_funding_estimator.dart`, com a mesma conta do fechamento.
 
 ### Demais
-- **Ajustes:** quatro grupos (Casa, Divisão das despesas, Pagamentos e contas, Aplicativo). No celular e no tablet o índice abre uma página por grupo; a partir de 1024 px os grupos ficam à esquerda e o conteúdo ao lado. Moradores e convites, categorias, modelo de rateio, formas de pagamento e contas fixas ficam dentro da página, assim como a chave de IA, o tema, a auditoria e o "Rachar Fatura" (os três últimos widgets têm o parâmetro `embedded`). Só ciclo, chave Pix e perfil abrem janela (formulários curtos). Os interruptores "Assistente Ativo", "Alertas Proativos" e "Horário Silencioso" foram removidos: não gravavam nada. O código de convite só é criado quando o dono ou um administrador toca em "Gerar código de convite". O editor do rateio guarda a edição em variáveis do método que o cria, por isso é mantido pelo `_KeptEditor` e só é recriado quando moradores, categorias ou o modelo mudam. A busca do índice ignora acentos e acha as opções (por título ou sinônimo) e o que a casa cadastrou: moradores, categorias, formas de pagamento e contas fixas. O índice e o esqueleto ficam em `settings_page.dart`; o conteúdo dos grupos, em `settings_groups.dart`.
+- **Ajustes:** quatro grupos (Casa, Divisão das despesas, Pagamentos e contas, Aplicativo). No celular e no tablet o índice abre uma página por grupo; a partir de 1024 px os grupos ficam à esquerda e o conteúdo ao lado. Moradores e convites, categorias, modelo de rateio, formas de pagamento e contas fixas ficam dentro da página, assim como a chave de IA, o tema, a auditoria e o atalho da importação de fatura (os três últimos widgets têm o parâmetro `embedded`). Só ciclo, chave Pix e perfil abrem janela (formulários curtos). Os interruptores "Assistente Ativo", "Alertas Proativos" e "Horário Silencioso" foram removidos: não gravavam nada. O código de convite só é criado quando o dono ou um administrador toca em "Gerar código de convite". O editor do rateio guarda a edição em variáveis do método que o cria, por isso é mantido pelo `_KeptEditor` e só é recriado quando moradores, categorias ou o modelo mudam. A busca do índice ignora acentos e acha as opções (por título ou sinônimo) e o que a casa cadastrou: moradores, categorias, formas de pagamento e contas fixas. O índice e o esqueleto ficam em `settings_page.dart`; o conteúdo dos grupos, em `settings_groups.dart`.
 - **Tempo real:** tarefas, itens de compra, despesas e moradores avisam os outros aparelhos (migrations 0015 e 0050). Despesas e moradores recarregam o ciclo pelo `FinanceCubit` (`watchHouseChanges`); aportes, empréstimos, agenda e caixinhas só atualizam ao recarregar.
 - **Caixinhas:** nascem zeradas (o saldo inicial vira depósito), toda casa nova recebe a "Reserva da Casa", e cada caixinha tem o histórico de entradas e saídas.
 - **Projetos compartilhados:** usam a casa e o usuário da sessão; o acerto divide entre os participantes (`project_settlement_service.dart`); há um diálogo para editar participantes e percentuais.
@@ -103,7 +103,7 @@ Resumo dos mecanismos que mudaram nesta sessão, para localizar as coisas.
 - **Sem rede as listas não carregam:** o app não guarda cópia local. A fila offline só ajuda quando a conexão cai no meio do uso.
 - **Fora da fila offline:** pagamento de parcela (de propósito), marcar item como comprado, concluir tarefa e exclusões.
 - **Mensagem de sucesso antes da hora:** várias telas mostram "adicionado com sucesso" sem esperar a gravação terminar; se der erro, o aviso aparece depois.
-- **Rachar Fatura:** com conta real a tela começa vazia e só mostra lançamentos depois de importar um arquivo; a fatura de exemplo aparece só no modo demo.
+- **Importar fatura ou extrato:** página própria em `/casa/importar` (Smart FAB, Ajustes > Pagamentos e contas, e o menu de cada cartão ou conta). Escolhe-se a origem e o arquivo OFX/CSV; o app compara com o que já foi lançado, e cada linha nova da Casa vira uma despesa. Nada é guardado no banco antes de confirmar e a revisão se perde ao sair da página. A fatura de exemplo aparece só no modo demo.
 - **Série de eventos já criada** não pode ser estendida nem encurtada; só excluindo "esta e as próximas" e criando de novo.
 - **Fatura de cartão:** só funciona para cartão com fechamento e vencimento cadastrados; gravar `paid_at` direto na tabela de despesas continua possível para qualquer morador.
 - **Ciclo reaberto:** trocar a divisão do excedente do balde no segundo fechamento redistribui o excedente inteiro; parcelas e acordos do primeiro fechamento não são desfeitos.
@@ -123,7 +123,7 @@ Itens levantados na segunda sessão de 13/10; ele não pediu nenhum. Perguntar a
 - **Busca nos ajustes:** leva até o grupo, não até o item.
 - **Assistente:** "Assistente Ativo", "Alertas Proativos" e "Horário Silencioso" eram controles de enfeite e foram removidos; implementar de verdade é trabalho à parte.
 - **Lista de moradores desatualizada** depois que alguém entra na casa: corrigido nos Ajustes e, pelo tempo real, no estado financeiro; outras telas (formulário de despesa, agenda) não foram conferidas.
-- **Importação de fatura ("Rachar Fatura"):** o dono está planejando esse trabalho em outra sessão, no documento `plano_importacao_conciliacao.md`. Quem mexer nisso parte do `split_invoice_modal.dart` atual (começa vazio com conta real e tem o modo `embedded`).
+- **Importação de fatura e extrato:** etapas 1 e 2 e a parte sem banco das etapas 3 e 4 do `plano_importacao_conciliacao.md` estão na branch `feat/import-reconciliation` (código em `lib/features/reconciliation/`). O que falta está na seção "Situação atual" do plano; o restante depende de mudança no banco.
 
 ### Pontas pequenas, nunca tratadas
 - **`category_id` dos itens de compra** nunca é gravado.
@@ -147,7 +147,7 @@ Nenhum destes roteiros foi executado com usuário logado.
 - **Categorias:** editar nome e dono; excluir uma sem lançamentos; tentar excluir uma com lançamentos (deve recusar dizendo quantos são); repetir como morador comum (deve recusar por permissão).
 - **Dono da categoria:** definir um dono e conferir que as despesas em aberto viram 100% dele; tirar o dono e conferir a volta ao percentual da casa; despesa com sub-itens em aportes fixos deve ser cobrada do dono no fechamento.
 - **Tempo real:** com dois aparelhos, lançar, pagar e excluir uma despesa em um e ver mudar no outro; entrar na casa com convite e aparecer na lista dos outros.
-- **Ajustes:** índice com quatro grupos e busca ("cartao" sem acento, nome de um cartão, algo inexistente); no PC, grupos à esquerda e conteúdo ao lado; salvar o modelo de rateio dentro da página; editar forma de pagamento e conta fixa na lista; "Gerar código de convite" só cria o código ao tocar; trocar o tema pelos três botões; importar um OFX em "Rachar Fatura" (com conta real a tela começa vazia).
+- **Ajustes:** índice com quatro grupos e busca ("cartao" sem acento, nome de um cartão, algo inexistente); no PC, grupos à esquerda e conteúdo ao lado; salvar o modelo de rateio dentro da página; editar forma de pagamento e conta fixa na lista; "Gerar código de convite" só cria o código ao tocar; trocar o tema pelos três botões; abrir a importação de fatura pelo bloco "Importar Fatura e Extratos" e pelo menu de um cartão (já chega com o cartão escolhido).
 - **Visibilidade do evento:** a linha de ajuda abaixo de Casa / Restrito / Privado muda conforme a opção.
 
 ### Fechamento do ciclo
@@ -234,6 +234,6 @@ Uma linha por migration, para saber onde está cada regra.
 ## Documentos relacionados
 
 - `fechamento_no_banco.md`: o trabalho adiado de levar o cálculo do fechamento para o banco.
-- `plano_importacao_conciliacao.md`: plano do dono para a importação de fatura e conciliação, escrito em outra sessão. Não é desta linha de trabalho; não alterar sem ele pedir.
+- `plano_importacao_conciliacao.md`: plano da importação de fatura e conciliação, com o que já foi feito e o que falta.
 - `arquitetura_tecnica.md` e os `modulo_*.md`: especificação original de cada módulo. Podem divergir do que está implementado; em caso de dúvida, vale o código.
 - `plano_diretor_unificado.md` e `README_documento_mestre.md`: visão geral do produto.

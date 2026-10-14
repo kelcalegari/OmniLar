@@ -346,8 +346,18 @@ extension _SettingsGroupViews on _SettingsPageState {
       ),
       _panel(
         context,
-        title: 'Rachar Fatura e Extratos',
-        children: const [SplitInvoiceModal(embedded: true)],
+        title: 'Importar Fatura e Extratos',
+        actionLabel: 'Abrir importação',
+        onAction: () => context.push('/importar'),
+        children: const [
+          Padding(
+            padding: EdgeInsets.fromLTRB(16, 0, 16, 8),
+            child: Text(
+              'Envie o arquivo OFX ou CSV do cartão ou da conta. O app mostra o que já estava lançado e você separa o que é da casa, o que é pessoal e o que outro morador deve.',
+              style: TextStyle(color: Colors.grey, fontSize: 12),
+            ),
+          ),
+        ],
       ),
     ];
   }
@@ -408,7 +418,9 @@ extension _SettingsGroupViews on _SettingsPageState {
             icon: const Icon(Icons.more_vert, size: 20, color: Colors.grey),
             tooltip: 'Opções',
             onSelected: (action) {
-              if (action == 'invoice') {
+              if (action == 'import') {
+                context.push(Uri(path: '/importar', queryParameters: {'origem': pm.id}).toString());
+              } else if (action == 'invoice') {
                 showAdaptiveModal(
                   context: context,
                   maxWidth: 480,
@@ -429,6 +441,17 @@ extension _SettingsGroupViews on _SettingsPageState {
               }
             },
             itemBuilder: (context) => [
+              if (pm.type == PaymentMethodType.card || pm.type == PaymentMethodType.account)
+                PopupMenuItem(
+                  value: 'import',
+                  child: Row(
+                    children: [
+                      const Icon(Icons.upload_file_rounded, size: 18, color: AppColors.primary),
+                      const SizedBox(width: 8),
+                      Text(pm.type == PaymentMethodType.card ? 'Importar fatura' : 'Importar extrato'),
+                    ],
+                  ),
+                ),
               if (pm.type == PaymentMethodType.card)
                 const PopupMenuItem(
                   value: 'invoice',
@@ -1023,7 +1046,7 @@ extension _SettingsSearch on _SettingsPageState {
       option(_SettingsGroup.payments, 'Assinaturas & Contas Fixas', Icons.repeat_rounded, const [
         'recorrente', 'conta fixa', 'mensalidade', 'aluguel', 'internet',
       ]),
-      option(_SettingsGroup.payments, 'Rachar Fatura e Extratos', Icons.call_split_rounded, const [
+      option(_SettingsGroup.payments, 'Importar Fatura e Extratos', Icons.upload_file_rounded, const [
         'importar', 'extrato', 'conciliacao', 'dividir fatura',
       ]),
       option(_SettingsGroup.app, 'Assistente IA', Icons.auto_awesome_rounded, const [

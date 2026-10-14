@@ -50,15 +50,15 @@ DATA:OFXSGML
       expect(lines[0].date.month, equals(10));
       expect(lines[0].date.day, equals(5));
 
-      // 2. Zara -> P2P Parceiro
+      // 2 e 3. Toda compra começa na Casa: quem decide o destino é o usuário
       expect(lines[1].description, equals('Zara Shopping'));
       expect(lines[1].amount.cents, equals(18000));
-      expect(lines[1].destination, equals(LineDestination.splitP2P));
+      expect(lines[1].destination, equals(LineDestination.house));
+      expect(lines[1].assignedMemberId, isNull);
 
-      // 3. Steam -> Pessoal Titular
       expect(lines[2].description, equals('Steam Games'));
       expect(lines[2].amount.cents, equals(15000));
-      expect(lines[2].destination, equals(LineDestination.cardOwnerPersonal));
+      expect(lines[2].destination, equals(LineDestination.house));
     });
 
     test('parseFile detecta automaticamente OFX vs CSV', () {
@@ -72,7 +72,7 @@ Data,Descricao,Valor
       expect(csvLines.length, equals(2));
       expect(csvLines[0].description, equals('Enel Energia'));
       expect(csvLines[0].destination, equals(LineDestination.house));
-      expect(csvLines[1].destination, equals(LineDestination.splitP2P));
+      expect(csvLines[1].destination, equals(LineDestination.house));
     });
 
     test('calculateSplit apura os saldos corretamente por destino e membro devedor (RN09)', () {
@@ -82,7 +82,12 @@ Data,Descricao,Valor
 2026-10-03,Steam Pessoal,100.00
 ''';
 
-      final lines = StatementParser.parseCsv(sampleCsv);
+      final parsed = StatementParser.parseCsv(sampleCsv);
+      final lines = [
+        parsed[0],
+        parsed[1].copyWith(destination: LineDestination.splitP2P, assignedMemberId: 'member_marina'),
+        parsed[2].copyWith(destination: LineDestination.cardOwnerPersonal),
+      ];
       final split = StatementParser.calculateSplit(lines);
 
       expect(split.totalAmount.cents, equals(80000)); // R$ 800,00

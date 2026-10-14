@@ -11,7 +11,6 @@ import '../../features/calendar/presentation/widgets/add_event_sheet.dart';
 import '../../features/calendar/presentation/widgets/add_task_sheet.dart';
 import '../../features/shopping/presentation/cubit/shopping_cubit.dart';
 import '../../features/capture/presentation/pages/smart_scanner_page.dart';
-import '../../features/reconciliation/presentation/widgets/split_invoice_modal.dart';
 import '../../features/assistant/presentation/pages/assistant_chat_page.dart';
 
 enum QuickActionFocus {
@@ -576,12 +575,12 @@ class _SmartFABContent extends StatelessWidget {
                 _buildActionButton(
                   context,
                   icon: Icons.call_split_rounded,
-                  label: 'Rachar Fatura',
-                  subtitle: 'Dividir cartão',
+                  label: 'Importar Fatura',
+                  subtitle: 'Cartão ou extrato',
                   color: AppColors.accent,
                   onTap: () {
                     Navigator.pop(context);
-                    SplitInvoiceModal.show(context);
+                    context.push('/importar');
                   },
                 ),
               ],

@@ -46,7 +46,7 @@ void main() {
       expect(calculatedSum, split.totalAmount.cents);
     });
 
-    test('CSV Parser extrai linhas de fatura com detecção preliminar de destino', () {
+    test('CSV Parser extrai linhas de fatura, todas com destino Casa até o usuário decidir', () {
       const csv = '''
 Data,Descrição,Valor
 2026-10-01,Supermercado Pão de Açúcar,350.00
@@ -58,8 +58,8 @@ Data,Descrição,Valor
       expect(lines.length, 3);
       expect(lines[0].amount.cents, 35000);
       expect(lines[0].destination, LineDestination.house);
-      expect(lines[1].destination, LineDestination.splitP2P);
-      expect(lines[2].destination, LineDestination.cardOwnerPersonal);
+      expect(lines[1].destination, LineDestination.house);
+      expect(lines[2].destination, LineDestination.house);
     });
   });
 }

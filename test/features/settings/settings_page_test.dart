@@ -416,14 +416,14 @@ void main() {
     expect(themeCubit.state, ThemeMode.light);
   });
 
-  testWidgets('Rachar Fatura fica na página do grupo de pagamentos', (tester) async {
+  testWidgets('Importar fatura fica na página do grupo de pagamentos', (tester) async {
     await sl<FinanceCubit>().loadCycleData();
 
     await tester.pumpWidget(buildTestableWidget());
     await tester.pumpAndSettle();
     await openGroup(tester, 'Pagamentos e contas');
 
-    expect(find.text('Rachar Fatura e Extratos'), findsOneWidget);
-    expect(find.text('Importar OFX/CSV'), findsOneWidget);
+    expect(find.text('Importar Fatura e Extratos'), findsOneWidget);
+    expect(find.text('Abrir importação'), findsOneWidget);
   });
 }

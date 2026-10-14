@@ -1,105 +1,365 @@
+import 'dart:convert';
+
 import '../../../../core/domain/value_objects/money.dart';
 import '../entities/imported_statement_line.dart';
+import 'statement_text.dart';
+
+/// Linha lida do arquivo, ainda com o sinal original do valor.
+class _RawLine {
+  final DateTime date;
+  final String description;
+  final int signedCents;
+  final String? externalId;
+
+  const _RawLine(this.date, this.description, this.signedCents, [this.externalId]);
+}
 
 class StatementParser {
   StatementParser._();
 
-  /// Parser para extratos/faturas em formato CSV simples (data,descrição,valor)
-  static List<ImportedStatementLine> parseCsv(String csvContent) {
-    final lines = csvContent.split('\n');
-    final result = <ImportedStatementLine>[];
+  static final _paymentWords = RegExp(r'\b(pagamento|pagto|pgto|payment)\b', caseSensitive: false);
+  static final _invoiceWords = RegExp(
+    r'\b(fatura|cartao de credito|cartão de crédito|pagto cartao|pgto cartao)\b',
+    caseSensitive: false,
+  );
 
-    for (int i = 0; i < lines.length; i++) {
-      final rawLine = lines[i].trim();
-      if (rawLine.isEmpty || rawLine.toLowerCase().startsWith('data') || rawLine.toLowerCase().startsWith('date')) {
-        continue;
-      }
+  /// Texto do arquivo: UTF-8 quando válido, senão Latin-1 (padrão dos OFX de banco).
+  static String decodeBytes(List<int> bytes) {
+    try {
+      return utf8.decode(bytes);
+    } on FormatException {
+      return latin1.decode(bytes);
+    }
+  }
 
-      final parts = rawLine.split(',');
-      if (parts.length >= 3) {
-        final dateStr = parts[0].trim();
-        final desc = parts[1].trim();
-        final amountStr = parts[2].trim();
+  /// Valor em centavos com sinal, aceitando "1.234,56", "1234.56", "R$ 10,00",
+  /// "-10,00", "10,00-" e "(10,00)". Null quando o texto não é um valor.
+  static int? parseSignedCents(String text) {
+    var value = text.replaceAll('R\$', '').replaceAll(RegExp(r'[\s "]'), '');
+    if (value.isEmpty) return null;
 
-        DateTime date = DateTime.tryParse(dateStr) ?? DateTime.now();
-        final cleanAmount = amountStr.replaceAll(RegExp(r'[^0-9.-]'), '');
-        final doubleVal = double.tryParse(cleanAmount) ?? 0.0;
-        final cents = (doubleVal.abs() * 100).round();
+    var negative = false;
+    if (value.startsWith('(') && value.endsWith(')')) {
+      negative = true;
+      value = value.substring(1, value.length - 1);
+    }
+    if (value.startsWith('-') || value.endsWith('-')) {
+      negative = true;
+      value = value.replaceAll('-', '');
+    }
+    value = value.replaceAll('+', '');
+    if (!RegExp(r'^\d[\d.,]*$').hasMatch(value)) return null;
 
-        result.add(
-          ImportedStatementLine(
-            id: 'line_${DateTime.now().millisecondsSinceEpoch}_$i',
-            date: date,
-            description: desc,
-            amount: Money(cents),
-            destination: _inferDestination(desc),
-            assignedMemberId: _inferAssignedMember(desc),
-          ),
-        );
+    final lastDot = value.lastIndexOf('.');
+    final lastComma = value.lastIndexOf(',');
+    var decimalAt = -1;
+    if (lastDot >= 0 && lastComma >= 0) {
+      decimalAt = lastDot > lastComma ? lastDot : lastComma;
+    } else {
+      final at = lastDot >= 0 ? lastDot : lastComma;
+      if (at >= 0) {
+        final separator = value[at];
+        final single = value.indexOf(separator) == at;
+        final digitsAfter = value.length - at - 1;
+        // "1.234" é milhar; "12.5" e "12,50" são decimais
+        if (single && digitsAfter != 3) decimalAt = at;
       }
     }
 
-    return result;
+    final integerPart = (decimalAt >= 0 ? value.substring(0, decimalAt) : value)
+        .replaceAll(RegExp(r'[.,]'), '');
+    var fraction = decimalAt >= 0 ? value.substring(decimalAt + 1) : '';
+    if (fraction.length > 2) fraction = fraction.substring(0, 2);
+    fraction = fraction.padRight(2, '0');
+
+    final cents = (int.tryParse(integerPart.isEmpty ? '0' : integerPart) ?? 0) * 100 +
+        (int.tryParse(fraction) ?? 0);
+    return negative ? -cents : cents;
   }
 
+  /// Data em "2026-10-05", "05/10/2026", "05/10/26" ou "05/10" (sem ano vale o
+  /// ano corrente, ou o anterior se cairia no futuro).
+  static DateTime? parseDate(String text, {DateTime? now}) {
+    final value = text.replaceAll('"', '').trim();
+
+    final iso = RegExp(r'^(\d{4})-(\d{2})-(\d{2})').firstMatch(value);
+    if (iso != null) {
+      return _validDate(int.parse(iso.group(1)!), int.parse(iso.group(2)!), int.parse(iso.group(3)!));
+    }
+
+    final br = RegExp(r'^(\d{1,2})[/.\-](\d{1,2})(?:[/.\-](\d{2}|\d{4}))?$').firstMatch(value);
+    if (br == null) return null;
+    final day = int.parse(br.group(1)!);
+    final month = int.parse(br.group(2)!);
+    final yearText = br.group(3);
+    if (yearText != null) {
+      final year = int.parse(yearText);
+      return _validDate(year < 100 ? 2000 + year : year, month, day);
+    }
+
+    final today = now ?? DateTime.now();
+    final sameYear = _validDate(today.year, month, day);
+    if (sameYear == null) return null;
+    return sameYear.isAfter(today.add(const Duration(days: 31)))
+        ? _validDate(today.year - 1, month, day)
+        : sameYear;
+  }
+
+  static DateTime? _validDate(int year, int month, int day) {
+    if (month < 1 || month > 12 || day < 1 || day > 31) return null;
+    final date = DateTime(year, month, day);
+    return date.month == month ? date : null;
+  }
+
+  /// Parser para faturas e extratos em CSV. Aceita `,`, `;` ou tabulação como
+  /// separador, datas e valores no formato brasileiro e cabeçalho opcional.
+  static List<ImportedStatementLine> parseCsv(
+    String csvContent, {
+    StatementSourceType source = StatementSourceType.creditCard,
+  }) {
+    final rows = const LineSplitter()
+        .convert(csvContent.replaceFirst('﻿', ''))
+        .map((line) => line.trim())
+        .where((line) => line.isNotEmpty)
+        .toList();
+    if (rows.isEmpty) return const [];
+
+    final delimiter = _detectDelimiter(rows);
+    int? dateColumn;
+    int? descriptionColumn;
+    int? amountColumn;
+    int? headerLength;
+    final raw = <_RawLine>[];
+
+    for (final row in rows) {
+      var cells = _splitCsvRow(row, delimiter);
+
+      // Cabeçalho: diz em que coluna está cada campo
+      if (raw.isEmpty && headerLength == null && _looksLikeHeader(cells)) {
+        headerLength = cells.length;
+        for (var i = 0; i < cells.length; i++) {
+          final name = StatementText.normalize(cells[i]);
+          if (dateColumn == null && (name.startsWith('data') || name.startsWith('date'))) {
+            dateColumn = i;
+          } else if (amountColumn == null &&
+              (name.startsWith('valor') || name.startsWith('amount') || name.startsWith('quantia'))) {
+            amountColumn = i;
+          } else if (descriptionColumn == null &&
+              RegExp(r'^(descri|histor|lancamento|title|estabelecimento|memo|nome)').hasMatch(name)) {
+            descriptionColumn = i;
+          }
+        }
+        continue;
+      }
+
+      // "05/10/2026,Mercado,485,60": a vírgula do valor partiu a última coluna
+      if (delimiter == ',' && cells.length >= 4 && cells.length != headerLength) {
+        final last = cells[cells.length - 1].trim();
+        final beforeLast = cells[cells.length - 2].trim();
+        if (RegExp(r'^\d{2}$').hasMatch(last) && RegExp(r'^-?\d[\d.]*$').hasMatch(beforeLast)) {
+          cells = [...cells.sublist(0, cells.length - 2), '$beforeLast,$last'];
+        }
+      }
+
+      final dateAt = dateColumn ?? cells.indexWhere((c) => parseDate(c) != null);
+      if (dateAt < 0 || dateAt >= cells.length) continue;
+      final date = parseDate(cells[dateAt]);
+      if (date == null) continue;
+
+      var amountAt = amountColumn ?? -1;
+      if (amountAt < 0 || amountAt >= cells.length) {
+        amountAt = -1;
+        for (var i = cells.length - 1; i > dateAt; i--) {
+          if (parseSignedCents(cells[i]) != null) {
+            amountAt = i;
+            break;
+          }
+        }
+      }
+      if (amountAt < 0) continue;
+      final cents = parseSignedCents(cells[amountAt]);
+      if (cents == null || cents == 0) continue;
+
+      var descriptionAt = descriptionColumn ?? -1;
+      if (descriptionAt < 0 || descriptionAt >= cells.length) {
+        descriptionAt = -1;
+        for (var i = 0; i < cells.length; i++) {
+          if (i == dateAt || i == amountAt || cells[i].trim().isEmpty) continue;
+          if (descriptionAt < 0 || cells[i].trim().length > cells[descriptionAt].trim().length) {
+            descriptionAt = i;
+          }
+        }
+      }
+      final description = descriptionAt >= 0 ? cells[descriptionAt].trim() : '';
+
+      raw.add(_RawLine(date, description.isEmpty ? 'Lançamento' : description, cents));
+    }
+
+    return _classify(raw, source, positiveIsOutflowOnTie: true);
+  }
+
+  static bool _looksLikeHeader(List<String> cells) =>
+      cells.every((c) => parseDate(c) == null) &&
+      cells.any((c) {
+        final name = StatementText.normalize(c);
+        return name.startsWith('data') || name.startsWith('date');
+      });
+
+  static String _detectDelimiter(List<String> rows) {
+    final sample = rows.take(5);
+    for (final candidate in const [';', '\t']) {
+      if (sample.where((row) => row.contains(candidate)).length * 2 > sample.length) {
+        return candidate;
+      }
+    }
+    return ',';
+  }
+
+  static List<String> _splitCsvRow(String row, String delimiter) {
+    final cells = <String>[];
+    final current = StringBuffer();
+    var quoted = false;
+    for (var i = 0; i < row.length; i++) {
+      final char = row[i];
+      if (char == '"') {
+        if (quoted && i + 1 < row.length && row[i + 1] == '"') {
+          current.write('"');
+          i++;
+        } else {
+          quoted = !quoted;
+        }
+      } else if (char == delimiter && !quoted) {
+        cells.add(current.toString());
+        current.clear();
+      } else {
+        current.write(char);
+      }
+    }
+    cells.add(current.toString());
+    return cells;
+  }
+
+  /// O arquivo OFX é de cartão de crédito? (senão, de conta)
+  static bool isCreditCardOfx(String content) =>
+      RegExp(r'<(CREDITCARDMSGSRSV1|CCSTMTRS|CCACCTFROM)>', caseSensitive: false).hasMatch(content);
+
   /// Parser para arquivos OFX (Open Financial Exchange) padrão de bancos e cartões brasileiros
-  static List<ImportedStatementLine> parseOfx(String ofxContent) {
-    final result = <ImportedStatementLine>[];
+  static List<ImportedStatementLine> parseOfx(String ofxContent, {StatementSourceType? source}) {
+    final raw = <_RawLine>[];
 
     // Localiza blocos <STMTTRN>...</STMTTRN>
     final trnMatches = RegExp(r'<STMTTRN>([\s\S]*?)<\/STMTTRN>', caseSensitive: false).allMatches(ofxContent);
-    int index = 0;
 
     for (final match in trnMatches) {
       final block = match.group(1) ?? '';
 
       // Extrai DTPOSTED (ex: 20261010120000 ou 20261010)
-      final dtMatch = RegExp(r'<DTPOSTED>(\d{8})', caseSensitive: false).firstMatch(block);
-      DateTime date = DateTime.now();
-      if (dtMatch != null) {
-        final dStr = dtMatch.group(1)!;
-        final year = int.tryParse(dStr.substring(0, 4)) ?? 2026;
-        final month = int.tryParse(dStr.substring(4, 6)) ?? 1;
-        final day = int.tryParse(dStr.substring(6, 8)) ?? 1;
-        date = DateTime(year, month, day);
-      }
+      final dtMatch = RegExp(r'<DTPOSTED>(\d{4})(\d{2})(\d{2})', caseSensitive: false).firstMatch(block);
+      final date = dtMatch == null
+          ? null
+          : _validDate(
+              int.parse(dtMatch.group(1)!),
+              int.parse(dtMatch.group(2)!),
+              int.parse(dtMatch.group(3)!),
+            );
 
       // Extrai TRNAMT (ex: -180.50 ou 180.50)
-      final amtMatch = RegExp(r'<TRNAMT>([-\d.,]+)', caseSensitive: false).firstMatch(block);
-      int cents = 0;
-      if (amtMatch != null) {
-        final rawAmt = amtMatch.group(1)!.replaceAll(',', '.');
-        final doubleVal = double.tryParse(rawAmt) ?? 0.0;
-        cents = (doubleVal.abs() * 100).round();
-      }
+      final amtMatch = RegExp(r'<TRNAMT>\s*([-+\d.,]+)', caseSensitive: false).firstMatch(block);
+      final cents = amtMatch == null ? null : parseSignedCents(amtMatch.group(1)!);
+      if (date == null || cents == null || cents == 0) continue;
 
-      // Extrai MEMO ou NAME
-      final memoMatch = RegExp(r'<(?:MEMO|NAME)>([^\r\n<]+)', caseSensitive: false).firstMatch(block);
-      final desc = memoMatch?.group(1)?.trim() ?? 'Lançamento Fatura';
+      String? tag(String name) => RegExp('<$name>([^\\r\\n<]+)', caseSensitive: false)
+          .firstMatch(block)
+          ?.group(1)
+          ?.trim();
+      final description = [tag('MEMO'), tag('NAME')]
+          .where((text) => text != null && text.isNotEmpty)
+          .firstOrNull;
 
-      result.add(
-        ImportedStatementLine(
-          id: 'ofx_${DateTime.now().millisecondsSinceEpoch}_$index',
-          date: date,
-          description: desc,
-          amount: Money(cents),
-          destination: _inferDestination(desc),
-          assignedMemberId: _inferAssignedMember(desc),
-        ),
-      );
-      index++;
+      raw.add(_RawLine(date, description ?? 'Lançamento Fatura', cents, tag('FITID')));
     }
 
-    return result;
+    final resolvedSource = source ??
+        (isCreditCardOfx(ofxContent) ? StatementSourceType.creditCard : StatementSourceType.bankAccount);
+    return _classify(raw, resolvedSource, positiveIsOutflowOnTie: false);
   }
 
   /// Detecta automaticamente se o arquivo é OFX ou CSV e processa as linhas
-  static List<ImportedStatementLine> parseFile(String content, {String? filename}) {
+  static List<ImportedStatementLine> parseFile(
+    String content, {
+    String? filename,
+    StatementSourceType? source,
+  }) {
     final lowerName = filename?.toLowerCase() ?? '';
     if (lowerName.endsWith('.ofx') || content.contains('<OFX>') || content.contains('<STMTTRN>')) {
-      return parseOfx(content);
+      return parseOfx(content, source: source);
     }
-    return parseCsv(content);
+    return parseCsv(content, source: source ?? StatementSourceType.creditCard);
+  }
+
+  /// Decide o que cada linha é a partir do sinal do valor.
+  ///
+  /// Na conta, valor negativo é saída. No cartão o sinal muda de banco para
+  /// banco, então vale o da maioria das linhas: compra é o que mais aparece.
+  static List<ImportedStatementLine> _classify(
+    List<_RawLine> raw,
+    StatementSourceType source, {
+    required bool positiveIsOutflowOnTie,
+  }) {
+    final positives = raw.where((l) => l.signedCents > 0).length;
+    final negatives = raw.length - positives;
+
+    final bool positiveIsOutflow;
+    if (source == StatementSourceType.bankAccount) {
+      // Arquivo sem sinal nenhum: tudo é saída
+      positiveIsOutflow = negatives == 0;
+    } else if (positives == negatives) {
+      positiveIsOutflow = positiveIsOutflowOnTie;
+    } else {
+      positiveIsOutflow = positives > negatives;
+    }
+
+    final lines = <ImportedStatementLine>[];
+    for (var i = 0; i < raw.length; i++) {
+      final line = raw[i];
+      final isOutflow = (line.signedCents > 0) == positiveIsOutflow;
+
+      final StatementLineKind kind;
+      if (source == StatementSourceType.creditCard) {
+        kind = isOutflow
+            ? StatementLineKind.purchase
+            : (_paymentWords.hasMatch(line.description)
+                ? StatementLineKind.payment
+                : StatementLineKind.refund);
+      } else if (!isOutflow) {
+        kind = StatementLineKind.income;
+      } else {
+        kind = _invoiceWords.hasMatch(line.description)
+            ? StatementLineKind.payment
+            : StatementLineKind.purchase;
+      }
+
+      final installment =
+          kind == StatementLineKind.purchase ? StatementText.installmentOf(line.description) : null;
+
+      lines.add(
+        ImportedStatementLine(
+          id: 'line_$i',
+          date: line.date,
+          description: line.description,
+          amount: Money(line.signedCents.abs()),
+          kind: kind,
+          externalId: line.externalId,
+          installmentNumber: installment?.number,
+          installmentsTotal: installment?.total,
+          // Só compra vira lançamento; o resto fica de fora até alguém decidir
+          destination: kind == StatementLineKind.purchase
+              ? LineDestination.house
+              : LineDestination.ignored,
+        ),
+      );
+    }
+    return lines;
   }
 
   /// Calcula o fechamento da fatura com divisão matemática por destino (RN09)
@@ -122,7 +382,8 @@ class StatementParser {
           personalOwnerCents += line.amount.cents;
           break;
         case LineDestination.splitP2P:
-          final debtor = line.assignedMemberId ?? 'member_marina';
+          // Sem devedor escolhido a linha fica na chave vazia, à espera de um
+          final debtor = line.assignedMemberId ?? '';
           p2pMap[debtor] = (p2pMap[debtor] ?? 0) + line.amount.cents;
           break;
         case LineDestination.ignored:
@@ -141,24 +402,5 @@ class StatementParser {
       personalOwnerAmount: Money(personalOwnerCents),
       p2pDebtsByMember: p2pMoneyMap,
     );
-  }
-
-  static LineDestination _inferDestination(String desc) {
-    final lower = desc.toLowerCase();
-    if (lower.contains('zara') || lower.contains('shein') || lower.contains('farm')) {
-      return LineDestination.splitP2P;
-    }
-    if (lower.contains('steam') || lower.contains('playstation') || lower.contains('uber pessoal')) {
-      return LineDestination.cardOwnerPersonal;
-    }
-    return LineDestination.house;
-  }
-
-  static String? _inferAssignedMember(String desc) {
-    final lower = desc.toLowerCase();
-    if (lower.contains('zara') || lower.contains('shein') || lower.contains('farm')) {
-      return 'member_marina';
-    }
-    return null;
   }
 }
