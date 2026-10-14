@@ -26,6 +26,10 @@ class ExpenseTimelineItem extends StatelessWidget {
   final bool isSelected;
   final VoidCallback? onSelect;
 
+  /// Mostra a data da compra em vez do vencimento (dentro de uma fatura, onde
+  /// o vencimento é o mesmo para todas as compras).
+  final bool showPurchaseDate;
+
   const ExpenseTimelineItem({
     super.key,
     required this.expense,
@@ -35,6 +39,7 @@ class ExpenseTimelineItem extends StatelessWidget {
     this.members,
     this.isSelected = false,
     this.onSelect,
+    this.showPurchaseDate = false,
   });
 
   IconData _getCategoryIcon(String iconName) {
@@ -580,7 +585,8 @@ class ExpenseTimelineItem extends StatelessWidget {
     final isPending = expense.isPending;
     final isOverdue = expense.isOverdue;
     final catColor = _parseColor(category?.colorHex);
-    final dateFormatted = DateFormat('dd/MM').format(expense.dueDate ?? expense.date);
+    final dateFormatted = DateFormat('dd/MM')
+        .format(showPurchaseDate ? expense.date : (expense.dueDate ?? expense.date));
 
     return InkWell(
       borderRadius: BorderRadius.circular(16),

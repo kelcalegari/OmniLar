@@ -13,6 +13,12 @@ import '../../../auth/presentation/cubit/auth_state.dart';
 import '../../../finance/presentation/cubit/finance_cubit.dart';
 import '../../../finance/presentation/cubit/finance_state.dart';
 import '../../../finance/domain/entities/house_expense.dart';
+import '../../../finance/domain/repositories/finance_repository.dart';
+import '../../../finance/domain/services/cycle_expense_grouping.dart';
+import '../../../finance/presentation/widgets/card_invoice_group_tile.dart';
+import '../../../finance/presentation/widgets/card_invoice_payment_sheet.dart';
+import '../../../settlement/domain/entities/settlement_summary.dart';
+import '../../../settlement/domain/repositories/settlement_repository.dart';
 import '../../../finance/presentation/widgets/folego_gauge_card.dart';
 import '../../../finance/presentation/widgets/cycle_funding_planner_card.dart';
 import '../../../finance/presentation/widgets/expense_timeline_item.dart';
@@ -56,6 +62,9 @@ class _HomePageContent extends StatefulWidget {
 class _HomePageContentState extends State<_HomePageContent> {
   String _selectedExpenseFilter = 'all'; // 'all', 'mine', 'recurring', 'bills'
   String? _selectedExpenseId;
+
+  /// Faturas abertas na lista de gastos (pela chave da fatura).
+  final Set<String> _expandedInvoices = {};
 
   @override
   Widget build(BuildContext context) {
@@ -699,7 +708,62 @@ class _HomePageContentState extends State<_HomePageContent> {
             ),
           )
         else
-          ...filteredExpenses.map((expense) {
+          ...groupCardInvoices(filteredExpenses, state.paymentMethods).map((entry) {
+            Widget item(HouseExpense expense, {bool inInvoice = false}) =>
+                _buildExpenseItem(state, expense, isDesktop: isDesktop, inInvoice: inInvoice);
+
+            switch (entry) {
+              case SingleExpenseEntry(:final expense):
+                return item(expense);
+              case CardInvoiceEntry():
+                // A fatura que guarda a despesa selecionada fica aberta
+                final expanded = _expandedInvoices.contains(entry.key) ||
+                    entry.purchases.any((e) => e.id == _selectedExpenseId);
+                return CardInvoiceGroupTile(
+                  invoice: entry,
+                  expanded: expanded,
+                  onToggle: () => setState(() {
+                    if (expanded) {
+                      _expandedInvoices.remove(entry.key);
+                      if (entry.purchases.any((e) => e.id == _selectedExpenseId)) {
+                        _selectedExpenseId = null;
+                      }
+                    } else {
+                      _expandedInvoices.add(entry.key);
+                    }
+                  }),
+                  onRegisterPayment: () {
+                    final financeCubit = context.read<FinanceCubit>();
+                    showAdaptiveModal(
+                      context: context,
+                      maxWidth: 480,
+                      child: CardInvoicePaymentSheet(
+                        card: entry.card,
+                        repository: sl<FinanceRepository>(),
+                        financeCubit: financeCubit,
+                        cycleSchedule: financeCubit.cycleSchedule,
+                        isCycleClosed: (cycle) async =>
+                            (await sl<SettlementRepository>().getSettlementSummary(cycle)).status ==
+                            SettlementStatus.settled,
+                      ),
+                    );
+                  },
+                  children: [
+                    for (final expense in entry.purchases) item(expense, inInvoice: true),
+                  ],
+                );
+            }
+          }),
+      ],
+    );
+  }
+
+  Widget _buildExpenseItem(
+    FinanceState state,
+    HouseExpense expense, {
+    required bool isDesktop,
+    bool inInvoice = false,
+  }) {
             final category =
                 state.categories
                     .where((c) => c.id == expense.categoryId)
@@ -725,6 +789,7 @@ class _HomePageContentState extends State<_HomePageContent> {
               paidByMember: paidByMember,
               members: state.members,
               isSelected: isSelected,
+              showPurchaseDate: inInvoice,
               onSelect: isDesktop
                   ? () {
                       setState(() {
@@ -737,9 +802,6 @@ class _HomePageContentState extends State<_HomePageContent> {
                     }
                   : null,
             );
-          }),
-      ],
-    );
   }
 
   Widget _buildFilterChip(String filterKey, String label, ThemeData theme) {
