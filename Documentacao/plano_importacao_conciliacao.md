@@ -235,7 +235,7 @@ O boleto da internet serve de referência: em aberto, entra no ciclo do vencimen
 - **Recomendação**: B, que deixa a fatura igual ao boleto. C fica registrada como alternativa; se for escolhida, é um trabalho próprio, planejado junto com o fechamento (`fechamento_no_banco.md`).
 - **Decisão (14/10/2026)**: C, na forma "fatura como conta pendente" (seção 13). A B não será feita.
 
-### 12.3. Com que dinheiro a fatura é paga (decidido)
+### 12.3. Com que dinheiro a fatura é paga (decidido; implementado na migration 0055)
 
 Decisão do dono em 14/10/2026: **quem paga, paga a fatura inteira**. Ou o titular paga tudo com o próprio dinheiro, ou o Caixa da Casa paga tudo e depois é reembolsado do que não era da casa.
 
@@ -257,12 +257,12 @@ O app já tem empréstimo com o Caixa como credor ("acordo com o Lar"), usado na
 6. **Banco**: a função `pay_card_invoice` passa a receber a origem e faz tudo em uma transação (migration 0054), respeitando as travas de ciclo fechado.
 7. **Extrato**: pagamento de fatura achado no extrato da conta da casa já sugere "Caixa da Casa" como origem.
 
-**Pontos em aberto**
+**Pontos em aberto (padrões adotados em 14/10/2026, a confirmar com o dono)**
 
-- **Fatura sem importação**: se as compras foram lançadas à mão, o app não sabe quanto da fatura era pessoal do titular. Opções: pedir o valor total pago ao banco e tratar a diferença como pessoal do titular, ou só permitir "Caixa da Casa" em fatura importada.
-- **Como o titular e os moradores devolvem ao Caixa**: parcela única cobrada no fechamento do ciclo (o padrão dos empréstimos de hoje) ou sem prazo.
-- **Caixa sem saldo** para pagar a fatura inteira: avisar ou só registrar.
-- **Total do banco**: a soma das linhas lidas pode não bater com o que o banco cobrou (juros, saldo anterior, estorno). A diferença precisa de um destino quando o Caixa paga tudo.
+- **Fatura sem importação**: o app não sabe quanto era pessoal do titular. Padrão adotado: o Caixa paga e nenhuma dívida é criada.
+- **Como o titular e os moradores devolvem ao Caixa**: padrão adotado: parcela única cobrada no fechamento do ciclo do pagamento; o empréstimo de outro morador mantém o vencimento que já tinha.
+- **Caixa sem saldo**: padrão adotado: só registrar.
+- **Total do banco**: padrão adotado: a diferença entre as linhas importadas e o que o banco cobrou não é registrada.
 
 ### 12.4. Ordem
 
@@ -276,7 +276,7 @@ O app já tem empréstimo com o Caixa como credor ("acordo com o Lar"), usado na
 **Limites do que foi feito**
 - Ao registrar a baixa no fechamento, o app grava o pagamento das faturas antes de confirmar o fechamento. Se a confirmação falhar depois disso, as faturas ficam pagas (o fechamento pode ser confirmado de novo).
 - Despesa que já existia e a importação passou para o cartão ("provável" aceito) continua com o status que tinha; só o "pago do bolso" é zerado até o pagamento da fatura.
-- Pagamento pelo Caixa ainda sem os empréstimos da seção 12.3.
+- Pagamento pelo Caixa com os empréstimos da seção 12.3: feito na migration 0055, só no banco (no modo demo o Caixa paga sem criar dívidas).
 
 Decisões do dono em 14/10/2026:
 - **C**: a compra no cartão não é tratada como paga até a fatura ser paga. O momento do pagamento define o ciclo.
