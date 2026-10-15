@@ -12,6 +12,7 @@ import '../../features/calendar/presentation/widgets/add_task_sheet.dart';
 import '../../features/shopping/presentation/cubit/shopping_cubit.dart';
 import '../../features/capture/presentation/pages/smart_scanner_page.dart';
 import '../../features/assistant/presentation/pages/assistant_chat_page.dart';
+import 'save_feedback.dart';
 
 enum QuickActionFocus {
   home,
@@ -186,15 +187,17 @@ class _SmartFABContent extends StatelessWidget {
                     prefixIcon: const Icon(Icons.add_shopping_cart_rounded),
                     border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
                   ),
-                  onSubmitted: (val) {
+                  onSubmitted: (val) async {
                     if (val.trim().isNotEmpty) {
-                      context.read<ShoppingCubit>().addItem(
-                            name: val.trim(),
-                            isPersonal: isPersonal,
-                          );
+                      final cubit = context.read<ShoppingCubit>();
+                      final messenger = ScaffoldMessenger.of(context);
                       Navigator.pop(dialogCtx);
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(content: Text('"$val" adicionado à lista de compras!')),
+                      final ok = await cubit.addItem(name: val.trim(), isPersonal: isPersonal);
+                      showSaveFeedback(
+                        messenger,
+                        ok: ok,
+                        success: '"$val" adicionado à lista de compras!',
+                        failure: cubit.state.errorMessage,
                       );
                     }
                   },
@@ -209,16 +212,18 @@ class _SmartFABContent extends StatelessWidget {
                 ),
                 const SizedBox(height: 16),
                 FilledButton.icon(
-                  onPressed: () {
+                  onPressed: () async {
                     final text = controller.text.trim();
                     if (text.isNotEmpty) {
-                      context.read<ShoppingCubit>().addItem(
-                            name: text,
-                            isPersonal: isPersonal,
-                          );
+                      final cubit = context.read<ShoppingCubit>();
+                      final messenger = ScaffoldMessenger.of(context);
                       Navigator.pop(dialogCtx);
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(content: Text('"$text" adicionado à lista de compras!')),
+                      final ok = await cubit.addItem(name: text, isPersonal: isPersonal);
+                      showSaveFeedback(
+                        messenger,
+                        ok: ok,
+                        success: '"$text" adicionado à lista de compras!',
+                        failure: cubit.state.errorMessage,
                       );
                     }
                   },

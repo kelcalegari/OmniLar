@@ -280,7 +280,6 @@ void main() {
             name: 'Pão de forma',
             quantity: 1,
             unit: 'un',
-            category: 'Padaria',
             isBought: false,
           ),
         ],

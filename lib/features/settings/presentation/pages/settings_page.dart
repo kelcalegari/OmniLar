@@ -29,6 +29,7 @@ import '../../../../core/widgets/recurrence_scope_dialog.dart';
 import '../../../../core/theme/theme_cubit.dart';
 import '../../../../core/widgets/theme_toggle_button.dart';
 import '../widgets/ai_key_config_sheet.dart';
+import '../../../../core/widgets/save_feedback.dart';
 
 part 'settings_groups.dart';
 
@@ -552,14 +553,13 @@ class _SettingsPageState extends State<SettingsPage> {
                     ownerMemberId: selectedOwnerId,
                   );
 
-                  financeCubit.addCategory(newCat);
                   Navigator.pop(dialogCtx);
-                  messenger.showSnackBar(
-                    SnackBar(
-                      content: Text(
-                        'Categoria "$name" cadastrada com sucesso! 🎉',
-                      ),
-                    ),
+                  final ok = await financeCubit.addCategory(newCat);
+                  showSaveFeedback(
+                    messenger,
+                    ok: ok,
+                    success: 'Categoria "$name" cadastrada com sucesso! 🎉',
+                    failure: financeCubit.state.errorMessage,
                   );
                 },
                 style: FilledButton.styleFrom(
@@ -1288,7 +1288,7 @@ class _SettingsPageState extends State<SettingsPage> {
                               (selectedModel == 'fixed' &&
                                   fixedAmountsByMember.values.every((v) => v <= 0)))
                           ? null
-                          : () {
+                          : () async {
                         // Monta os percentuais e quantias nominais para persistência
                         final percentages = <String, double>{};
                         final fixedAmounts = <String, int>{};
@@ -1325,7 +1325,8 @@ class _SettingsPageState extends State<SettingsPage> {
                         }
 
                         // Persiste no Cubit / Banco / Mock
-                        financeCubit.updateHouseSplitModel(
+                        final messenger = ScaffoldMessenger.of(context);
+                        final saving = financeCubit.updateHouseSplitModel(
                           splitModel: selectedModel,
                           percentages: percentages,
                           fixedAmountsCents: fixedAmounts,
@@ -1354,9 +1355,13 @@ class _SettingsPageState extends State<SettingsPage> {
                               'Rateio atualizado para: Por Categoria de Gasto.';
                         }
 
-                        ScaffoldMessenger.of(
-                          context,
-                        ).showSnackBar(SnackBar(content: Text(feedback)));
+                        final ok = await saving;
+                        showSaveFeedback(
+                          messenger,
+                          ok: ok,
+                          success: feedback,
+                          failure: financeCubit.state.errorMessage,
+                        );
                       },
                       style: FilledButton.styleFrom(
                         backgroundColor: AppColors.primary,
@@ -1413,9 +1418,9 @@ class _SettingsPageState extends State<SettingsPage> {
             ),
             onPressed: () async {
               Navigator.pop(dialogCtx);
-              await financeCubit.deletePaymentMethod(pm.id);
+              final ok = await financeCubit.deletePaymentMethod(pm.id);
               if (context.mounted) {
-                if (financeCubit.state.status == FinanceStatus.failure) {
+                if (!ok) {
                   ScaffoldMessenger.of(context).showSnackBar(
                     SnackBar(
                       content: Text(
@@ -1683,7 +1688,7 @@ class _SettingsPageState extends State<SettingsPage> {
                 child: const Text('Cancelar'),
               ),
               FilledButton(
-                onPressed: () {
+                onPressed: () async {
                   final name = nameController.text.trim();
                   if (name.isEmpty) return;
 
@@ -1703,14 +1708,14 @@ class _SettingsPageState extends State<SettingsPage> {
                       clearDueDay: selectedType != PaymentMethodType.card,
                     );
 
-                    financeCubit.updatePaymentMethod(updatedPm);
+                    final messenger = ScaffoldMessenger.of(context);
                     Navigator.pop(dialogCtx);
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text(
-                          'Forma de pagamento "$name" atualizada com sucesso! ✨',
-                        ),
-                      ),
+                    final ok = await financeCubit.updatePaymentMethod(updatedPm);
+                    showSaveFeedback(
+                      messenger,
+                      ok: ok,
+                      success: 'Forma de pagamento "$name" atualizada com sucesso! ✨',
+                      failure: financeCubit.state.errorMessage,
                     );
                   } else {
                     final newPm = PaymentMethod(
@@ -1726,14 +1731,14 @@ class _SettingsPageState extends State<SettingsPage> {
                           : null,
                     );
 
-                    financeCubit.addPaymentMethod(newPm);
+                    final messenger = ScaffoldMessenger.of(context);
                     Navigator.pop(dialogCtx);
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text(
-                          'Forma de pagamento "$name" cadastrada com sucesso! 🎉',
-                        ),
-                      ),
+                    final ok = await financeCubit.addPaymentMethod(newPm);
+                    showSaveFeedback(
+                      messenger,
+                      ok: ok,
+                      success: 'Forma de pagamento "$name" cadastrada com sucesso! 🎉',
+                      failure: financeCubit.state.errorMessage,
                     );
                   }
                 },
@@ -1907,23 +1912,18 @@ class _SettingsPageState extends State<SettingsPage> {
                                               );
                                           if (scope != null) {
                                             if (!context.mounted) return;
-                                            await context
-                                                .read<FinanceCubit>()
-                                                .deleteExpense(
-                                                  item.id,
-                                                  scope: scope,
-                                                );
-                                            if (context.mounted) {
-                                              ScaffoldMessenger.of(
-                                                context,
-                                              ).showSnackBar(
-                                                SnackBar(
-                                                  content: Text(
-                                                    'Assinatura "${item.title}" atualizada.',
-                                                  ),
-                                                ),
-                                              );
-                                            }
+                                            final cubit = context.read<FinanceCubit>();
+                                            final messenger = ScaffoldMessenger.of(context);
+                                            final ok = await cubit.deleteExpense(
+                                              item.id,
+                                              scope: scope,
+                                            );
+                                            showSaveFeedback(
+                                              messenger,
+                                              ok: ok,
+                                              success: 'Assinatura "${item.title}" excluída.',
+                                              failure: cubit.state.errorMessage,
+                                            );
                                           }
                                         },
                                         child: const Padding(

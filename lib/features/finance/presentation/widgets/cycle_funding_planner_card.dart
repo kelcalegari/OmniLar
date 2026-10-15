@@ -6,7 +6,6 @@ import '../../../../core/widgets/privacy_toggle.dart';
 import '../../domain/entities/cycle_funding_estimate.dart';
 import '../cubit/finance_cubit.dart';
 import '../pages/add_contribution_page.dart';
-import '../cubit/finance_state.dart';
 
 /// Card interativo para planejamento e sugestão inteligente de aportes no início do ciclo financeiro.
 class CycleFundingPlannerCard extends StatelessWidget {

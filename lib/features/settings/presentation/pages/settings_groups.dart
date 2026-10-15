@@ -1032,9 +1032,14 @@ extension _SettingsSearch on _SettingsPageState {
       option(_SettingsGroup.payments, 'Assinaturas & Contas Fixas', Icons.repeat_rounded, const [
         'recorrente', 'conta fixa', 'mensalidade', 'aluguel', 'internet',
       ]),
-      option(_SettingsGroup.payments, 'Importar Fatura e Extratos', Icons.upload_file_rounded, const [
-        'importar', 'extrato', 'conciliacao', 'dividir fatura',
-      ]),
+      // A importação tem página própria: o resultado leva direto a ela
+      _SearchEntry(
+        title: 'Importar Fatura e Extratos',
+        where: 'Página de importação',
+        icon: Icons.upload_file_rounded,
+        keywords: const ['importar', 'extrato', 'conciliacao', 'dividir fatura', 'ofx', 'csv'],
+        action: () => context.push('/importar'),
+      ),
       option(_SettingsGroup.app, 'Assistente IA', Icons.auto_awesome_rounded, const [
         'inteligencia artificial', 'chave', 'gemini', 'privacidade',
       ]),

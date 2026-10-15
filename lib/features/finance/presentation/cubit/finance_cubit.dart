@@ -313,34 +313,38 @@ class FinanceCubit extends Cubit<FinanceState> {
     loadCycleData(cycle: cycleSchedule.cycleFor(DateTime.now()));
   }
 
-  Future<void> addExpense(HouseExpense expense) async {
+  Future<bool> addExpense(HouseExpense expense) async {
     try {
       await _repository.addExpense(expense);
       await loadCycleData(cycle: state.currentCycle);
+      return true;
     } catch (e) {
       emit(state.copyWith(
         status: FinanceStatus.failure,
         errorMessage: 'Erro ao adicionar despesa: $e',
       ));
+      return false;
     }
   }
 
-  Future<void> updateExpense(
+  Future<bool> updateExpense(
     HouseExpense expense, {
     RecurrenceScope scope = RecurrenceScope.thisInstanceOnly,
   }) async {
     try {
       await _repository.updateExpense(expense, scope: scope);
       await loadCycleData(cycle: state.currentCycle);
+      return true;
     } catch (e) {
       emit(state.copyWith(
         status: FinanceStatus.failure,
         errorMessage: 'Erro ao atualizar despesa: $e',
       ));
+      return false;
     }
   }
 
-  Future<void> deleteExpense(
+  Future<bool> deleteExpense(
     String expenseId, {
     RecurrenceScope scope = RecurrenceScope.thisInstanceOnly,
   }) async {
@@ -393,31 +397,14 @@ class FinanceCubit extends Cubit<FinanceState> {
 
       await _repository.deleteExpense(expenseId, scope: scope);
       await loadCycleData(cycle: state.currentCycle);
+      return true;
     } catch (e) {
       // A exclusão não aconteceu: a despesa volta para a lista
       emit(before.copyWith(
         status: FinanceStatus.failure,
         errorMessage: 'Erro ao excluir despesa: $e',
       ));
-    }
-  }
-
-  Future<void> markExpenseAsPaid(String expenseId, {Money? actualAmount}) async {
-    try {
-      final expense = state.expenses.firstWhere((e) => e.id == expenseId);
-      final updated = expense.copyWith(
-        status: ExpenseStatus.paid,
-        amount: actualAmount ?? expense.amount,
-        date: DateTime.now(),
-        paidAt: DateTime.now(),
-      );
-      await _repository.updateExpense(updated);
-      await loadCycleData(cycle: state.currentCycle);
-    } catch (e) {
-      emit(state.copyWith(
-        status: FinanceStatus.failure,
-        errorMessage: 'Erro ao confirmar pagamento: $e',
-      ));
+      return false;
     }
   }
 
@@ -448,27 +435,31 @@ class FinanceCubit extends Cubit<FinanceState> {
     }
   }
 
-  Future<void> addContribution(Contribution contribution) async {
+  Future<bool> addContribution(Contribution contribution) async {
     try {
       await _repository.addContribution(contribution);
       await loadCycleData(cycle: state.currentCycle);
+      return true;
     } catch (e) {
       emit(state.copyWith(
         status: FinanceStatus.failure,
         errorMessage: 'Erro ao registrar aporte: $e',
       ));
+      return false;
     }
   }
 
-  Future<void> addCategory(ExpenseCategory category) async {
+  Future<bool> addCategory(ExpenseCategory category) async {
     try {
       await _repository.addCategory(category);
       await loadCycleData(cycle: state.currentCycle);
+      return true;
     } catch (e) {
       emit(state.copyWith(
         status: FinanceStatus.failure,
         errorMessage: 'Erro ao cadastrar categoria: $e',
       ));
+      return false;
     }
   }
 
@@ -494,21 +485,23 @@ class FinanceCubit extends Cubit<FinanceState> {
     }
   }
 
-  Future<void> addPaymentMethod(PaymentMethod paymentMethod) async {
+  Future<bool> addPaymentMethod(PaymentMethod paymentMethod) async {
     try {
       await _repository.addPaymentMethod(paymentMethod);
       final updatedList = [...state.paymentMethods, paymentMethod];
       emit(state.copyWith(paymentMethods: updatedList));
       await loadCycleData(cycle: state.currentCycle);
+      return true;
     } catch (e) {
       emit(state.copyWith(
         status: FinanceStatus.failure,
         errorMessage: 'Erro ao cadastrar forma de pagamento: $e',
       ));
+      return false;
     }
   }
 
-  Future<void> updatePaymentMethod(PaymentMethod paymentMethod) async {
+  Future<bool> updatePaymentMethod(PaymentMethod paymentMethod) async {
     try {
       await _repository.updatePaymentMethod(paymentMethod);
       final updatedList = state.paymentMethods
@@ -516,15 +509,17 @@ class FinanceCubit extends Cubit<FinanceState> {
           .toList();
       emit(state.copyWith(paymentMethods: updatedList));
       await loadCycleData(cycle: state.currentCycle);
+      return true;
     } catch (e) {
       emit(state.copyWith(
         status: FinanceStatus.failure,
         errorMessage: 'Erro ao atualizar forma de pagamento: $e',
       ));
+      return false;
     }
   }
 
-  Future<void> deletePaymentMethod(String paymentMethodId) async {
+  Future<bool> deletePaymentMethod(String paymentMethodId) async {
     try {
       await _repository.deletePaymentMethod(paymentMethodId);
       final updatedList = state.paymentMethods
@@ -532,15 +527,17 @@ class FinanceCubit extends Cubit<FinanceState> {
           .toList();
       emit(state.copyWith(paymentMethods: updatedList));
       await loadCycleData(cycle: state.currentCycle);
+      return true;
     } catch (e) {
       emit(state.copyWith(
         status: FinanceStatus.failure,
         errorMessage: 'Erro ao excluir forma de pagamento: $e',
       ));
+      return false;
     }
   }
 
-  Future<void> updateHouseSplitModel({
+  Future<bool> updateHouseSplitModel({
     required String splitModel,
     required Map<String, double> percentages,
     required Map<String, int> fixedAmountsCents,
@@ -552,11 +549,13 @@ class FinanceCubit extends Cubit<FinanceState> {
         fixedAmountsCents: fixedAmountsCents,
       );
       await loadCycleData(cycle: state.currentCycle);
+      return true;
     } catch (e) {
       emit(state.copyWith(
         status: FinanceStatus.failure,
         errorMessage: 'Erro ao salvar modelo de rateio: $e',
       ));
+      return false;
     }
   }
 
@@ -637,19 +636,21 @@ class FinanceCubit extends Cubit<FinanceState> {
   }
 
   // --- Ações de Caixinhas & Metas da Casa (Dinheiro Blindado) ---
-  Future<void> createSavingsVault(SavingsVault vault) async {
+  Future<bool> createSavingsVault(SavingsVault vault) async {
     try {
       await _repository.createSavingsVault(vault);
       await loadCycleData(cycle: state.currentCycle);
+      return true;
     } catch (e) {
       emit(state.copyWith(
         status: FinanceStatus.failure,
         errorMessage: 'Erro ao criar caixinha: $e',
       ));
+      return false;
     }
   }
 
-  Future<void> depositToVault({
+  Future<bool> depositToVault({
     required String vaultId,
     required String memberId,
     required Money amount,
@@ -663,15 +664,17 @@ class FinanceCubit extends Cubit<FinanceState> {
         description: description,
       );
       await loadCycleData(cycle: state.currentCycle);
+      return true;
     } catch (e) {
       emit(state.copyWith(
         status: FinanceStatus.failure,
         errorMessage: 'Erro ao guardar dinheiro na caixinha: $e',
       ));
+      return false;
     }
   }
 
-  Future<void> withdrawFromVault({
+  Future<bool> withdrawFromVault({
     required String vaultId,
     required String memberId,
     required Money amount,
@@ -685,11 +688,13 @@ class FinanceCubit extends Cubit<FinanceState> {
         description: description,
       );
       await loadCycleData(cycle: state.currentCycle);
+      return true;
     } catch (e) {
       emit(state.copyWith(
         status: FinanceStatus.failure,
         errorMessage: 'Erro ao resgatar dinheiro da caixinha: $e',
       ));
+      return false;
     }
   }
 

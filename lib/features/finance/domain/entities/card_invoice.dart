@@ -32,7 +32,8 @@ class CardInvoice extends Equatable {
     final byDueDate = <DateTime, List<HouseExpense>>{};
     for (final expense in expenses) {
       if (expense.paymentMethodId != paymentMethodId) continue;
-      if (expense.dueDate == null || expense.isProjectExpense) continue;
+      // Despesa de projeto e conta recorrente no cartão não fazem parte da fatura
+      if (expense.dueDate == null || expense.isProjectExpense || expense.isRecurring) continue;
       if ((expense.paidAt != null) != paid) continue;
       // Em aberto: fora de fechamento, como em pay_card_invoice
       if (!paid && expense.settledAt != null) continue;

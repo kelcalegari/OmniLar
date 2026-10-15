@@ -2,6 +2,7 @@ import '../../../finance/domain/services/cycle_expense_grouping.dart';
 import 'package:intl/intl.dart';
 import '../../../../core/utils/clipboard_helper.dart';
 import '../../../../core/utils/uuid.dart';
+import '../../../../core/errors/failures.dart';
 import '../../../finance/domain/repositories/finance_repository.dart';
 import '../../../finance/domain/services/pending_payment.dart';
 import '../../../finance/presentation/cubit/finance_state.dart';
@@ -28,6 +29,7 @@ import '../../../finance/domain/entities/category.dart';
 import '../../../finance/domain/entities/house_expense.dart';
 import '../../../finance/domain/entities/house_expense_item.dart';
 import '../../../finance/domain/entities/split_rule.dart';
+import '../../../../core/widgets/save_feedback.dart';
 
 class SmartScannerPage extends StatefulWidget {
   final void Function(CaptureProposal proposal)? onProposalReady;
@@ -403,10 +405,11 @@ class _SmartScannerPageState extends State<SmartScannerPage> {
     final expense = _alreadyPaid
         ? paidWith(pending, paidOn: _paidOn, method: method, amount: proposal.totalAmount)
         : pending;
-    if (known != null) {
-      await financeCubit.updateExpense(expense);
-    } else {
-      await financeCubit.addExpense(expense);
+    final ok = known != null
+        ? await financeCubit.updateExpense(expense)
+        : await financeCubit.addExpense(expense);
+    if (!ok) {
+      throw ValidationFailure(financeCubit.state.errorMessage ?? kSaveFailedMessage);
     }
     widget.onProposalReady?.call(proposal);
   }
@@ -974,8 +977,11 @@ class _SmartScannerPageState extends State<SmartScannerPage> {
         );
       }).toList();
 
-      final finalCategoryId = matchedCategoryId ?? (state.categories.isNotEmpty ? state.categories.first.id : 'cat_mercado');
-      final finalPaymentMethodId = matchedPaymentMethodId ?? (state.paymentMethods.isNotEmpty ? state.paymentMethods.first.id : 'pm_caixa');
+      final finalCategoryId = matchedCategoryId ?? (state.categories.isNotEmpty ? state.categories.first.id : '');
+      final finalPaymentMethodId = matchedPaymentMethodId ?? state.paymentMethods.firstOrNull?.id;
+      if (finalPaymentMethodId == null) {
+        throw const ValidationFailure('Cadastre uma forma de pagamento em Ajustes antes de lançar.');
+      }
 
       final scannedMethod =
           state.paymentMethods.where((p) => p.id == finalPaymentMethodId).firstOrNull;
@@ -999,7 +1005,9 @@ class _SmartScannerPageState extends State<SmartScannerPage> {
       );
 
       // Persistir no repositório (espera o Supabase concluir)
-      await financeCubit.addExpense(expense);
+      if (!await financeCubit.addExpense(expense)) {
+        throw ValidationFailure(financeCubit.state.errorMessage ?? kSaveFailedMessage);
+      }
 
       widget.onProposalReady?.call(proposal);
 

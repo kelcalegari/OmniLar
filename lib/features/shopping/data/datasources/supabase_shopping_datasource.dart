@@ -90,13 +90,11 @@ class SupabaseShoppingDataSource implements ShoppingDataSource {
     try {
       final rows = await client
           .from('shopping_items')
-          .select('*, category:categories(name)')
+          .select()
           .eq('list_id', listId)
           .order('created_at', ascending: false);
 
       return rows.map((r) {
-        final categoryMap = r['category'] as Map<String, dynamic>?;
-        final categoryName = categoryMap?['name'] as String? ?? 'Geral';
         final estCents = r['estimated_cents'] as int?;
         final actCents = r['actual_cents'] as int?;
 
@@ -106,7 +104,6 @@ class SupabaseShoppingDataSource implements ShoppingDataSource {
           name: r['name'] as String,
           quantity: (r['quantity'] as num?)?.toDouble() ?? 1.0,
           unit: r['unit'] as String? ?? 'un',
-          category: categoryName,
           isPersonal: (r['is_personal'] as bool?) ?? false,
           assignedMemberId: r['assigned_member_id'] as String?,
           isBought: (r['is_bought'] as bool?) ?? false,
@@ -139,7 +136,6 @@ class SupabaseShoppingDataSource implements ShoppingDataSource {
               name: r['name'] as String,
               quantity: (r['quantity'] as num?)?.toDouble() ?? 1.0,
               unit: r['unit'] as String? ?? 'un',
-              category: (r['category_name'] as String?) ?? 'Geral',
               isPersonal: (r['is_personal'] as bool?) ?? false,
               assignedMemberId: r['assigned_member_id'] as String?,
               isBought: (r['is_bought'] as bool?) ?? false,

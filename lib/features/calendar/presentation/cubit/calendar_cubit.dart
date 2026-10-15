@@ -203,33 +203,39 @@ class CalendarCubit extends Cubit<CalendarState> {
     }
   }
 
-  Future<void> addTask(TaskItem task) async {
+  Future<bool> addTask(TaskItem task) async {
     try {
       await _repository.addTask(task);
       final tasks = await _repository.getTasks(includeArchived: state.isShowingHistory);
       emit(state.copyWith(tasks: tasks));
+      return true;
     } catch (e) {
       emit(state.copyWith(errorMessage: 'Erro ao criar tarefa: $e'));
+      return false;
     }
   }
 
-  Future<void> updateTask(TaskItem task) async {
+  Future<bool> updateTask(TaskItem task) async {
     try {
       await _repository.updateTask(task);
       final tasks = await _repository.getTasks(includeArchived: state.isShowingHistory);
       emit(state.copyWith(tasks: tasks));
+      return true;
     } catch (e) {
       emit(state.copyWith(errorMessage: 'Erro ao atualizar tarefa: $e'));
+      return false;
     }
   }
 
-  Future<void> deleteTask(String taskId) async {
+  Future<bool> deleteTask(String taskId) async {
     try {
       await _repository.deleteTask(taskId);
       final tasks = await _repository.getTasks(includeArchived: state.isShowingHistory);
       emit(state.copyWith(tasks: tasks));
+      return true;
     } catch (e) {
       emit(state.copyWith(errorMessage: 'Erro ao remover tarefa: $e'));
+      return false;
     }
   }
 

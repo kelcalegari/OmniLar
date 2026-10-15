@@ -5,9 +5,9 @@ Reescrito em 13/10/2026, no fim de uma sessão longa de correções, e atualizad
 ## Estado atual
 
 - **Código:** `main` local e `origin/main` sincronizadas, diretório de trabalho limpo. Confira com `git log --oneline -5` e `git status`.
-- **Banco (Supabase `rygxmpwzofgieodvhpcy`, acessível pelo conector do Supabase):** migrations 0001 a 0057 aplicadas. No histórico de migrations do Supabase constam só as 0022 a 0027 e as 0030 a 0057; as 0001 a 0021, a 0028 e a 0029 foram aplicadas à mão pelo SQL Editor. A próxima migration é a 0058.
+- **Banco (Supabase `rygxmpwzofgieodvhpcy`, acessível pelo conector do Supabase):** migrations 0001 a 0058 aplicadas. No histórico de migrations do Supabase constam só as 0022 a 0027 e as 0030 a 0058; as 0001 a 0021, a 0028 e a 0029 foram aplicadas à mão pelo SQL Editor. A próxima migration é a 0059.
 - **Edge Functions:** `capture-read` versão 8 e `assistant` versão 5, ambas com `verify_jwt=true` e exigindo usuário logado que more na casa.
-- **Qualidade:** `flutter analyze` com 0 erros (4 warnings antigos de import não usado) e 362 testes passando. Os testes automatizados rodam só contra os datasources mock (modo demo); nenhum roda contra o Supabase.
+- **Qualidade:** `flutter analyze` com 0 erros e 0 warnings, e 515 testes passando (14/10/2026). Os testes automatizados rodam só contra os datasources mock (modo demo); nenhum roda contra o Supabase.
 - **Dados no banco:** em 13/10/2026 o dono apagou todos os dados de teste (todas as tabelas de `public` e as contas de login) e recomeçou do zero; a estrutura, as funções e o histórico de migrations não mudaram. Logo depois foi criada de novo a casa "Nossa Casa", com as contas novas de kelvynn e Cristiano; o dono já lançou algumas despesas de teste nela (entre elas a recorrente "Internet", todo dia 25). Nunca houve um fechamento de ciclo confirmado com sessão real.
 
 ## O ponto mais importante
@@ -43,6 +43,7 @@ A lista completa de roteiros está em "Testes manuais pendentes", mais abaixo.
 - **Depois de mudar código que depende de migration:** a migration entra antes do push, ou junto, e o dono precisa reiniciar as instâncias abertas do app.
 - **Não há Deno nem Supabase CLI na máquina.** As Edge Functions são publicadas pelo conector, enviando o conteúdo dos arquivos (inclusive os de `_shared`, com os mesmos nomes de pasta).
 - **A migration 0024 (fuso horário) só pode rodar uma vez.**
+- **Ids do modo demo** (`member_carlos`, `pm_caixa`, `cat_mercado` etc.) só existem no modo demo. O envio ao banco descarta o que não é UUID, então nunca usar um deles como valor de reserva num caminho que grava: sem forma de pagamento ou categoria da casa, a tela avisa em vez de inventar.
 
 ## Trabalho adiado por decisão do dono
 
@@ -89,7 +90,11 @@ Resumo dos mecanismos que mudaram nesta sessão, para localizar as coisas.
 - **Planejador de aportes da Home:** `cycle_funding_estimator.dart`, com a mesma conta do fechamento.
 
 ### Demais
-- **Ajustes:** quatro grupos (Casa, Divisão das despesas, Pagamentos e contas, Aplicativo). No celular e no tablet o índice abre uma página por grupo; a partir de 1024 px os grupos ficam à esquerda e o conteúdo ao lado. Moradores e convites, categorias, modelo de rateio, formas de pagamento e contas fixas ficam dentro da página, assim como a chave de IA, o tema, a auditoria e o atalho da importação de fatura (os três últimos widgets têm o parâmetro `embedded`). Só ciclo, chave Pix e perfil abrem janela (formulários curtos). Os interruptores "Assistente Ativo", "Alertas Proativos" e "Horário Silencioso" foram removidos: não gravavam nada. O código de convite só é criado quando o dono ou um administrador toca em "Gerar código de convite". O editor do rateio guarda a edição em variáveis do método que o cria, por isso é mantido pelo `_KeptEditor` e só é recriado quando moradores, categorias ou o modelo mudam. A busca do índice ignora acentos e acha as opções (por título ou sinônimo) e o que a casa cadastrou: moradores, categorias, formas de pagamento e contas fixas. O índice e o esqueleto ficam em `settings_page.dart`; o conteúdo dos grupos, em `settings_groups.dart`.
+- **Resultado das gravações:** os métodos de escrita do `FinanceCubit`, as tarefas do `CalendarCubit` e o `ShoppingCubit` devolvem `true` ou `false`; as telas esperam a resposta e mostram o resultado com `showSaveFeedback` (`lib/core/widgets/save_feedback.dart`). Formulário de despesa, de tarefa e de aporte ficam abertos quando a gravação falha. Eventos da agenda avisam por exceção (`addEvent`, `updateEvent`, `deleteEvent` relançam o erro).
+- **Despesa de projeto:** o formulário grava sem rateio da casa (`SplitRule.percentage(null)`, sem linhas em `split_rules`) e sem aplicar o dono da categoria; o acerto do projeto usa os percentuais dos participantes. Mover uma despesa para dentro ou para fora de um projeto refaz o rateio.
+- **Item de compra** não tem categoria: a compra fechada vira uma despesa na categoria de mercado da casa.
+- **Participantes de evento:** editar um evento grava a lista inteira; quem foi desmarcado sai de `event_participants`.
+- **Ajustes:** quatro grupos (Casa, Divisão das despesas, Pagamentos e contas, Aplicativo). No celular e no tablet o índice abre uma página por grupo; a partir de 1024 px os grupos ficam à esquerda e o conteúdo ao lado. Moradores e convites, categorias, modelo de rateio, formas de pagamento e contas fixas ficam dentro da página, assim como a chave de IA, o tema e a auditoria (a chave de IA e a auditoria usam o parâmetro `embedded`). A importação de fatura tem página própria (`/importar`): nos Ajustes ela aparece no menu de cada cartão ou conta, e o resultado da busca leva direto a ela. Só ciclo, chave Pix e perfil abrem janela (formulários curtos). Os interruptores "Assistente Ativo", "Alertas Proativos" e "Horário Silencioso" foram removidos: não gravavam nada. O código de convite só é criado quando o dono ou um administrador toca em "Gerar código de convite". O editor do rateio guarda a edição em variáveis do método que o cria, por isso é mantido pelo `_KeptEditor` e só é recriado quando moradores, categorias ou o modelo mudam. A busca do índice ignora acentos e acha as opções (por título ou sinônimo) e o que a casa cadastrou: moradores, categorias, formas de pagamento e contas fixas. O índice e o esqueleto ficam em `settings_page.dart`; o conteúdo dos grupos, em `settings_groups.dart`.
 - **Tempo real:** tarefas, itens de compra, despesas e moradores avisam os outros aparelhos (migrations 0015 e 0050). Despesas e moradores recarregam o ciclo pelo `FinanceCubit` (`watchHouseChanges`); aportes, empréstimos, agenda e caixinhas só atualizam ao recarregar.
 - **Caixinhas:** nascem zeradas (o saldo inicial vira depósito), toda casa nova recebe a "Reserva da Casa", e cada caixinha tem o histórico de entradas e saídas.
 - **Projetos compartilhados:** usam a casa e o usuário da sessão; o acerto divide entre os participantes (`project_settlement_service.dart`); há um diálogo para editar participantes e percentuais.
@@ -102,12 +107,10 @@ Resumo dos mecanismos que mudaram nesta sessão, para localizar as coisas.
 ### Limites conhecidos
 - **Sem rede as listas não carregam:** o app não guarda cópia local. A fila offline só ajuda quando a conexão cai no meio do uso.
 - **Fora da fila offline:** pagamento de parcela (de propósito), marcar item como comprado, concluir tarefa e exclusões.
-- **Mensagem de sucesso antes da hora:** várias telas mostram "adicionado com sucesso" sem esperar a gravação terminar; se der erro, o aviso aparece depois.
 - **Importar fatura ou extrato:** página própria em `/casa/importar` (Smart FAB, Ajustes > Pagamentos e contas, e o menu de cada cartão ou conta). Escolhe-se a origem e o arquivo OFX/CSV; o app compara com o que já foi lançado, e cada linha nova da Casa vira uma despesa. A confirmação grava tudo de uma vez e entra no histórico da página, de onde pode ser desfeita; a revisão em si não é guardada e se perde ao sair da página. A fatura de exemplo aparece só no modo demo.
 - **Série de eventos já criada** não pode ser estendida nem encurtada; só excluindo "esta e as próximas" e criando de novo.
 - **Fatura de cartão:** só funciona para cartão com fechamento e vencimento cadastrados; gravar `paid_at` direto na tabela de despesas continua possível para qualquer morador.
 - **Ciclo reaberto:** trocar a divisão do excedente do balde no segundo fechamento redistribui o excedente inteiro; parcelas e acordos do primeiro fechamento não são desfeitos.
-- **Despesa de projeto** é lançada pelo formulário comum, que ainda grava o rateio da casa nela. O acerto do projeto ignora esse rateio, então o resultado está certo, mas o dado gravado não reflete a divisão real.
 - **Acordos de reposição criados antes da migration 0037** não têm caixinha de origem (não havia nenhum no banco).
 
 ### Oferecido ao dono e ainda sem decisão
@@ -130,8 +133,6 @@ Itens levantados na segunda sessão de 13/10; ele não pediu nenhum. Perguntar a
 - **Acesso à importação:** card "Importar fatura ou extrato" na Casa, acima do fechamento; atalho dentro de cada fatura; menu de cada cartão ou conta nos Ajustes. Saiu do Smart FAB e do painel geral dos Ajustes.
 
 ### Pontas pequenas, nunca tratadas
-- **`category_id` dos itens de compra** nunca é gravado.
-- **Participantes removidos de um evento** não são apagados ao editar (a edição só acrescenta ou atualiza).
 - **Conferência do banco contra as migrations:** gatilhos e funções foram conferidos e batem (só faltava um gatilho da 0017, criado na 0046), e todas as tabelas têm RLS ligado. Não foi conferido o conteúdo das regras de acesso nem os índices; como as migrations 0001 a 0021 foram aplicadas à mão, pode haver outra diferença.
 - **Telas novas sem teste automatizado:** diálogo de participantes de projeto, "repetir até" do evento, diálogo do dia de início do ciclo, histórico da caixinha e diálogo de fechar compra. A regra de cada uma tem teste; a tela não.
 
@@ -241,6 +242,7 @@ Uma linha por migration, para saber onde está cada regra.
 | 0055 | Fatura paga pelo Caixa: empréstimos passam ao Caixa e os gastos pessoais do titular viram dívida com ele |
 | 0056 | Código de barras do boleto na despesa |
 | 0057 | Código do boleto da fatura do cartão (`card_invoice_codes`) |
+| 0058 | Compra no cartão nasce pendente também no banco; pagar e desfazer a fatura só mexem nas compras dela (sem projeto e sem recorrente) |
 
 ## Documentos relacionados
 

@@ -20,6 +20,7 @@ import '../../../../core/domain/enums/recurrence.dart';
 import '../../../../core/widgets/recurrence_scope_dialog.dart';
 import '../cubit/finance_cubit.dart';
 import '../cubit/finance_state.dart';
+import '../../../../core/widgets/save_feedback.dart';
 
 class _DraftExpenseItem {
   final TextEditingController titleController;
@@ -60,6 +61,8 @@ class _AddExpensePageState extends State<AddExpensePage> {
   String? _selectedPaidByMemberId;
   String? _selectedPaymentMethodId;
   String? _selectedProjectId;
+  // Gravação em andamento: evita lançar a mesma despesa duas vezes
+  bool _isSaving = false;
   List<SharedProject> _availableProjects = [];
   final SplitType _selectedSplitType = SplitType.percentage;
   DateTime _selectedDate = DateTime.now();
@@ -288,15 +291,23 @@ class _AddExpensePageState extends State<AddExpensePage> {
 
     // Determina a regra de rateio de forma resiliente
     final category = state.categories.where((c) => c.id == catId).firstOrNull;
+    // Despesa de projeto é dividida entre os participantes do projeto: não leva
+    // o rateio da casa nem o dono da categoria
+    final isProjectExpense = _selectedProjectId != null;
     // Sub-item em categoria com dono é do dono, salvo se outro morador foi marcado
-    String? itemResponsibleOf(_DraftExpenseItem draft) => ExpenseLaunchDefaults.itemResponsible(
-          chosenMemberId: draft.responsibleMemberId,
-          itemCategory: state.categories
-              .where((c) => c.id == (draft.categoryId ?? catId))
-              .firstOrNull,
-        );
+    String? itemResponsibleOf(_DraftExpenseItem draft) => isProjectExpense
+        ? draft.responsibleMemberId
+        : ExpenseLaunchDefaults.itemResponsible(
+            chosenMemberId: draft.responsibleMemberId,
+            itemCategory: state.categories
+                .where((c) => c.id == (draft.categoryId ?? catId))
+                .firstOrNull,
+          );
     SplitRule rule;
-    if (category != null && (category.hasOwner || _selectedSplitType == SplitType.categoryOwner)) {
+    if (isProjectExpense) {
+      // Sem percentuais gravados: o acerto do projeto usa os dos participantes
+      rule = const SplitRule.percentage(null);
+    } else if (category != null && (category.hasOwner || _selectedSplitType == SplitType.categoryOwner)) {
       rule = SplitRule.singleResponsible(category.ownerMemberId ?? paidById);
     } else {
       if (state.members.isNotEmpty) {
@@ -408,7 +419,7 @@ class _AddExpensePageState extends State<AddExpensePage> {
         categoryId: catId,
         paidByMemberId: paidById,
         paymentMethodId: pmId,
-        splitRule: splitRuleForEdit(oldExpense, catId, rule),
+        splitRule: splitRuleForEdit(oldExpense, catId, rule, newProjectId: _selectedProjectId),
         paidOutOfPocket: waitsForInvoice
             ? (sameCard && oldExpense.isPaid ? oldExpense.paidOutOfPocket : false)
             : paidOutOfPocket,
@@ -431,13 +442,16 @@ class _AddExpensePageState extends State<AddExpensePage> {
       );
 
       if (!mounted) return;
-      await context.read<FinanceCubit>().updateExpense(updatedExpense, scope: chosenScope);
+      final cubit = context.read<FinanceCubit>();
+      final ok = await cubit.updateExpense(updatedExpense, scope: chosenScope);
       if (!mounted) return;
-      Navigator.pop(context);
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Despesa atualizada com sucesso! ✏️'),
-        ),
+      // Falhou: o formulário fica aberto, com o que foi digitado
+      if (ok) Navigator.pop(context);
+      showSaveFeedback(
+        ScaffoldMessenger.of(context),
+        ok: ok,
+        success: 'Despesa atualizada com sucesso! ✏️',
+        failure: cubit.state.errorMessage,
       );
       return;
     }
@@ -484,16 +498,23 @@ class _AddExpensePageState extends State<AddExpensePage> {
       projectId: _selectedProjectId,
     );
 
-    context.read<FinanceCubit>().addExpense(expense);
-    Navigator.pop(context);
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(_isRecurring
-            ? 'Despesa recorrente cadastrada com sucesso! 🔁'
-            : (_isItemized
-                ? 'Boleto composto lançado com ${items.length} sub-itens! 🏢'
-                : 'Gasto da casa lançado com sucesso! 🎉')),
-      ),
+    if (_isSaving) return;
+    setState(() => _isSaving = true);
+    final cubit = context.read<FinanceCubit>();
+    final ok = await cubit.addExpense(expense);
+    if (!mounted) return;
+    setState(() => _isSaving = false);
+    // Falhou: o formulário fica aberto, com o que foi digitado
+    if (ok) Navigator.pop(context);
+    showSaveFeedback(
+      ScaffoldMessenger.of(context),
+      ok: ok,
+      success: _isRecurring
+          ? 'Despesa recorrente cadastrada com sucesso! 🔁'
+          : (_isItemized
+              ? 'Boleto composto lançado com ${items.length} sub-itens! 🏢'
+              : 'Gasto da casa lançado com sucesso! 🎉'),
+      failure: cubit.state.errorMessage,
     );
   }
 
@@ -541,13 +562,13 @@ class _AddExpensePageState extends State<AddExpensePage> {
     final messenger = ScaffoldMessenger.of(context);
     final cubit = context.read<FinanceCubit>();
 
-    await cubit.deleteExpense(exp.id, scope: scope);
+    final ok = await cubit.deleteExpense(exp.id, scope: scope);
     if (mounted) {
-      if (cubit.state.status == FinanceStatus.failure && cubit.state.errorMessage != null) {
+      if (!ok) {
         messenger.showSnackBar(
           SnackBar(
             backgroundColor: AppColors.debtRed,
-            content: Text(cubit.state.errorMessage!),
+            content: Text(cubit.state.errorMessage ?? kSaveFailedMessage),
           ),
         );
         return;
@@ -1683,8 +1704,15 @@ DateTime editableDateOfExpense(HouseExpense expense, PaymentMethod? paymentMetho
 }
 
 /// Rateio ao salvar a edição de uma despesa: mantém o que foi gravado no
-/// lançamento. Só é refeito pelo padrão atual quando a categoria muda, porque
-/// a categoria pode ter dono.
+/// lançamento. Só é refeito pelo padrão atual quando a categoria muda (ela pode
+/// ter dono) ou quando a despesa entra ou sai de um projeto.
 @visibleForTesting
-SplitRule splitRuleForEdit(HouseExpense old, String newCategoryId, SplitRule defaultRule) =>
-    newCategoryId == old.categoryId ? old.splitRule : defaultRule;
+SplitRule splitRuleForEdit(
+  HouseExpense old,
+  String newCategoryId,
+  SplitRule defaultRule, {
+  String? newProjectId,
+}) =>
+    newCategoryId == old.categoryId && newProjectId == old.projectId
+        ? old.splitRule
+        : defaultRule;

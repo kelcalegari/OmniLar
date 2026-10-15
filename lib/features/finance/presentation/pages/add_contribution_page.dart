@@ -6,6 +6,7 @@ import '../../../../core/widgets/money_input_field.dart';
 import '../../domain/entities/contribution.dart';
 import '../cubit/finance_cubit.dart';
 import '../cubit/finance_state.dart';
+import '../../../../core/widgets/save_feedback.dart';
 
 class AddContributionPage extends StatefulWidget {
   final String? initialMemberId;
@@ -21,7 +22,7 @@ class _AddContributionPageState extends State<AddContributionPage> {
   late String? _selectedMemberId = widget.initialMemberId;
   late int _cents = widget.initialAmount?.cents ?? 0;
 
-  void _submit() {
+  Future<void> _submit() async {
     if (_cents <= 0) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('O valor deve ser maior que zero')),
@@ -39,8 +40,20 @@ class _AddContributionPageState extends State<AddContributionPage> {
       date: DateTime.now(),
     );
 
-    context.read<FinanceCubit>().addContribution(contribution);
-    Navigator.pop(context);
+    final cubit = context.read<FinanceCubit>();
+    final ok = await cubit.addContribution(contribution);
+    if (!mounted) return;
+    if (ok) {
+      Navigator.pop(context);
+    } else {
+      // Falhou: a tela fica aberta, com o valor digitado
+      showSaveFeedback(
+        ScaffoldMessenger.of(context),
+        ok: false,
+        success: '',
+        failure: cubit.state.errorMessage,
+      );
+    }
   }
 
   @override

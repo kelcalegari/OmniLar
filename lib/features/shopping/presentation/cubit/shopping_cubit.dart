@@ -77,16 +77,15 @@ class ShoppingCubit extends BlocBase<ShoppingState> {
     emit(state.copyWith(isShoppingMode: !state.isShoppingMode));
   }
 
-  Future<void> addItem({
+  Future<bool> addItem({
     required String name,
     double quantity = 1,
     String unit = 'un',
-    String category = 'Geral',
     bool isPersonal = false,
     String? assignedMemberId,
     Money? estimatedPrice,
   }) async {
-    if (state.selectedList == null) return;
+    if (state.selectedList == null) return false;
     try {
       final item = ShoppingItem(
         id: 'item_${DateTime.now().millisecondsSinceEpoch}',
@@ -94,7 +93,6 @@ class ShoppingCubit extends BlocBase<ShoppingState> {
         name: name,
         quantity: quantity,
         unit: unit,
-        category: category,
         isPersonal: isPersonal,
         assignedMemberId: assignedMemberId,
         estimatedPrice: estimatedPrice,
@@ -103,8 +101,10 @@ class ShoppingCubit extends BlocBase<ShoppingState> {
       await _repository.addItem(item);
       final updatedItems = await _repository.getItems(state.selectedList!.id);
       emit(state.copyWith(items: updatedItems));
+      return true;
     } catch (e) {
       emit(state.copyWith(errorMessage: 'Erro ao adicionar item: $e'));
+      return false;
     }
   }
 
@@ -141,14 +141,14 @@ class ShoppingCubit extends BlocBase<ShoppingState> {
     }
   }
 
-  Future<void> completeTrip({
+  Future<bool> completeTrip({
     required Money totalAmount,
     required String paymentMethodId,
     required String paidByMemberId,
     Money? personalItemsAmount,
     String? personalDebtorMemberId,
   }) async {
-    if (state.selectedList == null) return;
+    if (state.selectedList == null) return false;
     emit(state.copyWith(status: ShoppingCubitStatus.submitting));
     try {
       await _repository.completeTrip(
@@ -166,11 +166,13 @@ class ShoppingCubit extends BlocBase<ShoppingState> {
         items: updatedItems,
         isShoppingMode: false,
       ));
+      return true;
     } catch (e) {
       emit(state.copyWith(
         status: ShoppingCubitStatus.error,
         errorMessage: 'Erro ao finalizar compra: $e',
       ));
+      return false;
     }
   }
 

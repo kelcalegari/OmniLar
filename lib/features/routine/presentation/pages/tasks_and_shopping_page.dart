@@ -17,6 +17,7 @@ import '../../../p2p/presentation/cubit/p2p_cubit.dart';
 import '../../../shopping/domain/entities/shopping_item.dart';
 import '../../../shopping/presentation/cubit/shopping_cubit.dart';
 import '../../../shopping/presentation/cubit/shopping_state.dart';
+import '../../../../core/widgets/save_feedback.dart';
 
 class TasksAndShoppingPage extends StatefulWidget {
   final int initialTabIndex;
@@ -793,11 +794,16 @@ class _TasksAndShoppingPageState extends State<TasksAndShoppingPage> with Single
           trailing: PopupMenuButton<String>(
             icon: const Icon(Icons.more_vert_rounded, size: 20, color: Colors.grey),
             tooltip: 'Editar ou excluir tarefa',
-            onSelected: (action) {
+            onSelected: (action) async {
               if (action == 'edit') {
                 AddTaskSheet.show(context, task.createdByMemberId, taskToEdit: task);
               } else {
-                cubit.deleteTask(task.id);
+                final messenger = ScaffoldMessenger.of(context);
+                final ok = await cubit.deleteTask(task.id);
+                // A tarefa some da lista; só a falha precisa de aviso
+                if (!ok) {
+                  showSaveFeedback(messenger, ok: false, success: '', failure: cubit.state.errorMessage);
+                }
               }
             },
             itemBuilder: (_) => const [
@@ -1081,11 +1087,20 @@ class _TasksAndShoppingPageState extends State<TasksAndShoppingPage> with Single
     final isDemo = authRepo.isDemoMode;
     final defaultMemberId = isDemo ? 'member_marina' : currentUserId;
 
-    context.read<ShoppingCubit>().addItem(
+    final shoppingCubit = context.read<ShoppingCubit>();
+    final messenger = ScaffoldMessenger.of(context);
+    shoppingCubit
+        .addItem(
           name: text,
           isPersonal: _isPersonalShoppingItem,
           assignedMemberId: _isPersonalShoppingItem ? defaultMemberId : null,
-        );
+        )
+        .then((ok) {
+          // O item aparece na lista; só a falha precisa de aviso
+          if (!ok) {
+            showSaveFeedback(messenger, ok: false, success: '', failure: shoppingCubit.state.errorMessage);
+          }
+        });
 
     _addShoppingController.clear();
     setState(() => _isPersonalShoppingItem = false);
@@ -1362,6 +1377,15 @@ class _TasksAndShoppingPageState extends State<TasksAndShoppingPage> with Single
                   onPressed: () {
                     final total = amountController.money;
                     if (total.isZero) return;
+                    final paymentMethodId = selectedPmId;
+                    if (paymentMethodId == null) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('Cadastre uma forma de pagamento em Ajustes antes de fechar a compra.'),
+                        ),
+                      );
+                      return;
+                    }
 
                     Money? personalMoney;
                     if (personalAmountController.text.isNotEmpty && personalAmountController.cents > 0) {
@@ -1369,26 +1393,27 @@ class _TasksAndShoppingPageState extends State<TasksAndShoppingPage> with Single
                     }
 
                     Navigator.pop(dialogCtx);
+                    final shoppingCubit = context.read<ShoppingCubit>();
+                    final messenger = ScaffoldMessenger.of(context);
 
-                    context.read<ShoppingCubit>().completeTrip(
+                    shoppingCubit.completeTrip(
                           totalAmount: total,
-                          paymentMethodId: selectedPmId ?? 'pm_caixa',
+                          paymentMethodId: paymentMethodId,
                           paidByMemberId: selectedPayerId,
                           personalItemsAmount: personalMoney,
                           personalDebtorMemberId: selectedDebtorId,
-                        ).then((_) {
-                      if (context.mounted) {
+                        ).then((ok) {
+                      if (ok && context.mounted) {
                         context.read<FinanceCubit>().loadCycleData();
                         context.read<P2PCubit>().loadLoans();
                       }
+                      showSaveFeedback(
+                        messenger,
+                        ok: ok,
+                        success: 'Compra de ${total.formatted} lançada! 🛒🎉',
+                        failure: shoppingCubit.state.errorMessage,
+                      );
                     });
-
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        backgroundColor: AppColors.creditGreen,
-                        content: Text('Compra de ${total.formatted} lançada com sucesso no Caixa da Casa! 🛒🎉'),
-                      ),
-                    );
                   },
                   child: const Text('Confirmar e Lançar'),
                 ),

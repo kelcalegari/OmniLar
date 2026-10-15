@@ -148,6 +148,23 @@ void main() {
     test('refaz pelo padrão quando a categoria muda', () {
       expect(splitRuleForEdit(old, 'c-mercado', currentDefault), currentDefault);
     });
+
+    test('refaz quando a despesa entra ou sai de um projeto', () {
+      const projectRule = SplitRule.percentage(null);
+      // Entrou num projeto: deixa o rateio da casa
+      expect(
+        splitRuleForEdit(old, 'c-casa', projectRule, newProjectId: 'p1'),
+        projectRule,
+      );
+      // Saiu do projeto: volta ao rateio da casa
+      final inProject = old.copyWith(projectId: 'p1', splitRule: projectRule);
+      expect(splitRuleForEdit(inProject, 'c-casa', currentDefault), currentDefault);
+      // Continua no mesmo projeto: mantém
+      expect(
+        splitRuleForEdit(inProject, 'c-casa', currentDefault, newProjectId: 'p1'),
+        projectRule,
+      );
+    });
   });
 
   group('Projetos compartilhados', () {

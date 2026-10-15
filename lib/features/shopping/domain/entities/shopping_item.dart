@@ -1,13 +1,14 @@
 import 'package:equatable/equatable.dart';
 import '../../../../core/domain/value_objects/money.dart';
 
+/// Item da lista de compras. Não tem categoria própria: a compra fechada vira
+/// uma despesa na categoria de mercado da casa (ver `completeShoppingTrip`).
 class ShoppingItem extends Equatable {
   final String id;
   final String listId;
   final String name;
   final double quantity;
   final String unit;
-  final String category;
   final bool isPersonal;
   final String? assignedMemberId;
   final bool isBought;
@@ -22,7 +23,6 @@ class ShoppingItem extends Equatable {
     required this.name,
     this.quantity = 1,
     this.unit = 'un',
-    this.category = 'Geral',
     this.isPersonal = false,
     this.assignedMemberId,
     this.isBought = false,
@@ -38,7 +38,6 @@ class ShoppingItem extends Equatable {
     String? name,
     double? quantity,
     String? unit,
-    String? category,
     bool? isPersonal,
     String? assignedMemberId,
     bool? isBought,
@@ -53,7 +52,6 @@ class ShoppingItem extends Equatable {
       name: name ?? this.name,
       quantity: quantity ?? this.quantity,
       unit: unit ?? this.unit,
-      category: category ?? this.category,
       isPersonal: isPersonal ?? this.isPersonal,
       assignedMemberId: assignedMemberId ?? this.assignedMemberId,
       isBought: isBought ?? this.isBought,
@@ -71,7 +69,6 @@ class ShoppingItem extends Equatable {
         name,
         quantity,
         unit,
-        category,
         isPersonal,
         assignedMemberId,
         isBought,

@@ -1,11 +1,9 @@
-import '../cubit/finance_state.dart';
 import 'bill_code_field.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
 import '../../../../core/domain/value_objects/money.dart';
 import '../../../../core/theme/app_colors.dart';
-import '../../../../core/utils/clipboard_helper.dart';
 import '../../../../core/widgets/money_input_field.dart';
 import '../../domain/entities/house_expense.dart';
 import '../../domain/entities/house_member.dart';
@@ -85,8 +83,8 @@ class _PayPendingExpenseSheetState extends State<PayPendingExpenseSheet> {
   Future<bool> _saveBarcode(String? line) async {
     final cubit = widget.financeCubit;
     final current = cubit.state.expenses.where((e) => e.id == widget.expense.id).firstOrNull ?? widget.expense;
-    await cubit.updateExpense(current.copyWith(barcode: line, clearBarcode: line == null));
-    if (cubit.state.status == FinanceStatus.failure) return false;
+    final ok = await cubit.updateExpense(current.copyWith(barcode: line, clearBarcode: line == null));
+    if (!ok) return false;
     if (mounted) setState(() => _barcode = line);
     return true;
   }

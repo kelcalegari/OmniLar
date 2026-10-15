@@ -166,15 +166,24 @@ class SupabaseCalendarDataSource implements CalendarDataSource {
         },
   ];
 
+  /// Deixa os participantes do evento iguais a [participants]: grava os que
+  /// vieram e remove quem foi desmarcado na edição.
   Future<void> _upsertParticipants(
     String eventId,
     List<EventParticipant> participants,
   ) async {
     final rows = _participantRows(eventId, _houseId, participants);
-    if (rows.isEmpty) return;
-    await client
-        .from('event_participants')
-        .upsert(rows, onConflict: 'event_id,user_id');
+    if (rows.isNotEmpty) {
+      await client
+          .from('event_participants')
+          .upsert(rows, onConflict: 'event_id,user_id');
+    }
+
+    final keptIds = rows.map((r) => r['user_id'] as String).toList();
+    final removal = client.from('event_participants').delete().eq('event_id', eventId);
+    await (keptIds.isEmpty
+        ? removal
+        : removal.not('user_id', 'in', '(${keptIds.join(',')})'));
   }
 
   @override

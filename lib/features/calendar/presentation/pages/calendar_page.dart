@@ -19,6 +19,7 @@ import '../widgets/add_event_sheet.dart';
 import '../widgets/mini_calendar_card.dart';
 import '../widgets/month_calendar_view.dart';
 import '../widgets/week_calendar_view.dart';
+import '../../../../core/widgets/save_feedback.dart';
 
 enum CalendarViewMode {
   day,
@@ -1330,14 +1331,18 @@ class _CalendarPageState extends State<CalendarPage> {
       if (confirmed != true) return;
     }
 
-    await cubit.deleteEvent(event.id, scope: scope);
-    if (context.mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Compromisso "${event.title}" excluído.'),
-          backgroundColor: AppColors.debtRed,
-        ),
-      );
+    final messenger = ScaffoldMessenger.of(context);
+    var ok = true;
+    try {
+      await cubit.deleteEvent(event.id, scope: scope);
+    } catch (_) {
+      ok = false;
     }
+    showSaveFeedback(
+      messenger,
+      ok: ok,
+      success: 'Compromisso "${event.title}" excluído.',
+      failure: cubit.state.errorMessage,
+    );
   }
 }

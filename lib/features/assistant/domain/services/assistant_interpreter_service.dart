@@ -2,6 +2,7 @@ import '../../../../core/domain/value_objects/cycle_schedule.dart';
 import '../../../finance/domain/services/expense_launch_defaults.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../../core/domain/value_objects/money.dart';
+import '../../../../core/errors/failures.dart';
 import '../../../../core/domain/value_objects/financial_cycle.dart';
 import '../../../../core/services/ai_config_service.dart';
 import '../../../auth/domain/repositories/auth_repository.dart';
@@ -765,7 +766,6 @@ class AssistantInterpreterService {
           name: proposal.arguments['name'] as String? ?? 'Item',
           quantity: (proposal.arguments['quantity'] as num?)?.toDouble() ?? 1.0,
           unit: proposal.arguments['unit'] as String? ?? 'un',
-          category: 'Geral',
           isBought: false,
         );
         await shoppingRepository.addItem(item);
@@ -799,7 +799,8 @@ class AssistantInterpreterService {
                 members: members,
                 paidByMemberId: payerId,
               )
-            : const SplitRule.percentage({'member_carlos': 50.0, 'member_marina': 50.0});
+            // Sem moradores carregados: rateio padrão da casa, decidido no fechamento
+            : const SplitRule.percentage(null);
 
         // 1. Tenta usar paymentMethodId explícito passado nos argumentos da proposta
         String? paymentMethodId = proposal.arguments['paymentMethodId'] as String?;
@@ -813,7 +814,10 @@ class AssistantInterpreterService {
         // 2. Se ainda não encontrado, tenta o método padrão do pagador ou o primeiro método
         if (paymentMethodId == null || paymentMethodId.isEmpty) {
           final payerMethod = paymentMethods.where((pm) => pm.ownerMemberId == payerId).firstOrNull;
-          paymentMethodId = payerMethod?.id ?? (paymentMethods.isNotEmpty ? paymentMethods.first.id : 'pm_card_carlos');
+          paymentMethodId = payerMethod?.id ?? paymentMethods.firstOrNull?.id;
+        }
+        if (paymentMethodId == null) {
+          throw const ValidationFailure('Cadastre uma forma de pagamento em Ajustes antes de lançar.');
         }
 
         final expense = HouseExpense(
@@ -821,7 +825,7 @@ class AssistantInterpreterService {
           title: proposal.arguments['title'] as String? ?? 'Despesa',
           amount: Money(proposal.arguments['cents'] as int? ?? 0),
           date: DateTime.now(),
-          categoryId: category?.id ?? 'cat_groceries',
+          categoryId: category?.id ?? '',
           paidByMemberId: payerId,
           paymentMethodId: paymentMethodId,
           paidOutOfPocket: ExpenseLaunchDefaults.launchPaidOutOfPocket(

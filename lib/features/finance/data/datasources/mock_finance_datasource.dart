@@ -880,6 +880,8 @@ class MockFinanceDataSource implements FinanceDataSource {
           e.dueDate != null &&
           e.paidAt == null &&
           e.settledAt == null &&
+          !e.isProjectExpense &&
+          !e.isRecurring &&
           sameDay(e.dueDate!, invoiceDueDate)) {
         // Como no banco: pelo titular há reembolso; pelo Caixa (ou cartão sem dono), não
         _expenses[i] = e.copyWith(
@@ -909,7 +911,9 @@ class MockFinanceDataSource implements FinanceDataSource {
           due.year == invoiceDueDate.year &&
           due.month == invoiceDueDate.month &&
           due.day == invoiceDueDate.day &&
-          e.settledAt == null) {
+          e.settledAt == null &&
+          !e.isProjectExpense &&
+          !e.isRecurring) {
         // A fatura volta a ficar em aberto
         _expenses[i] = e.copyWith(
           status: ExpenseStatus.pending,

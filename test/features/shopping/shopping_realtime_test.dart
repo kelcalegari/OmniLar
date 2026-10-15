@@ -41,7 +41,6 @@ void main() {
           listId: 'list_mercado',
           name: 'Pão de Queijo Realtime',
           quantity: 1,
-          category: 'Padaria',
           estimatedPrice: Money(1500),
         ),
       );

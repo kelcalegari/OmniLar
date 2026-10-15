@@ -13,9 +13,9 @@ import '../../../finance/domain/entities/payment_method.dart';
 import '../../../finance/domain/entities/house_member.dart';
 import '../../../finance/domain/entities/split_rule.dart';
 import '../../../finance/presentation/cubit/finance_cubit.dart';
-import '../../../finance/presentation/cubit/finance_state.dart';
 import '../../../finance/presentation/pages/add_expense_page.dart';
 import '../../../finance/presentation/widgets/audit_log_sheet.dart';
+import '../../../../core/widgets/save_feedback.dart';
 
 class ExpenseDetailDesktopPane extends StatefulWidget {
   final HouseExpense expense;
@@ -119,22 +119,15 @@ class _ExpenseDetailDesktopPaneState extends State<ExpenseDetailDesktopPane> {
 
     if (mounted) {
       widget.onClose();
-      await context.read<FinanceCubit>().deleteExpense(expense.id, scope: scope);
-      if (mounted) {
-        final state = context.read<FinanceCubit>().state;
-        if (state.status == FinanceStatus.failure && state.errorMessage != null) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              backgroundColor: AppColors.debtRed,
-              content: Text(state.errorMessage!),
-            ),
-          );
-        } else {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Despesa "${expense.title}" excluída.')),
-          );
-        }
-      }
+      final cubit = context.read<FinanceCubit>();
+      final messenger = ScaffoldMessenger.of(context);
+      final ok = await cubit.deleteExpense(expense.id, scope: scope);
+      showSaveFeedback(
+        messenger,
+        ok: ok,
+        success: 'Despesa "${expense.title}" excluída.',
+        failure: cubit.state.errorMessage,
+      );
     }
   }
 

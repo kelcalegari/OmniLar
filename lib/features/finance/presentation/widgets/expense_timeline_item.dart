@@ -14,11 +14,11 @@ import '../../domain/entities/house_member.dart';
 import '../../domain/entities/split_rule.dart';
 import '../../domain/services/expense_launch_defaults.dart';
 import '../cubit/finance_cubit.dart';
-import '../cubit/finance_state.dart';
 import '../pages/add_expense_page.dart';
 import '../../../../core/utils/clipboard_helper.dart';
 import 'audit_log_sheet.dart';
 import 'pay_pending_expense_sheet.dart';
+import '../../../../core/widgets/save_feedback.dart';
 
 class ExpenseTimelineItem extends StatelessWidget {
   final HouseExpense expense;
@@ -376,22 +376,15 @@ class ExpenseTimelineItem extends StatelessWidget {
       Navigator.pop(modalContext);
     }
     if (pageContext.mounted) {
-      await pageContext.read<FinanceCubit>().deleteExpense(expense.id, scope: scope);
-      if (pageContext.mounted) {
-        final state = pageContext.read<FinanceCubit>().state;
-        if (state.status == FinanceStatus.failure && state.errorMessage != null) {
-          ScaffoldMessenger.of(pageContext).showSnackBar(
-            SnackBar(
-              backgroundColor: AppColors.debtRed,
-              content: Text(state.errorMessage!),
-            ),
-          );
-        } else {
-          ScaffoldMessenger.of(pageContext).showSnackBar(
-            SnackBar(content: Text('Despesa "${expense.title}" excluída.')),
-          );
-        }
-      }
+      final cubit = pageContext.read<FinanceCubit>();
+      final messenger = ScaffoldMessenger.of(pageContext);
+      final ok = await cubit.deleteExpense(expense.id, scope: scope);
+      showSaveFeedback(
+        messenger,
+        ok: ok,
+        success: 'Despesa "${expense.title}" excluída.',
+        failure: cubit.state.errorMessage,
+      );
     }
   }
 
@@ -539,13 +532,20 @@ class ExpenseTimelineItem extends StatelessWidget {
                         style: OutlinedButton.styleFrom(
                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                         ),
-                        onPressed: () {
-                          context.read<FinanceCubit>().updateExpense(
-                            expense.copyWith(status: ExpenseStatus.pending),
-                          );
+                        onPressed: () async {
+                          final cubit = context.read<FinanceCubit>();
+                          final messenger = ScaffoldMessenger.of(context);
                           Navigator.pop(modalContext);
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(content: Text('Despesa "${expense.title}" revertida para pendente.')),
+                          // Pendente não tem data de pagamento: sem isso a despesa
+                          // continuaria contando no ciclo da baixa
+                          final ok = await cubit.updateExpense(
+                            expense.copyWith(status: ExpenseStatus.pending, clearPaidAt: true),
+                          );
+                          showSaveFeedback(
+                            messenger,
+                            ok: ok,
+                            success: 'Despesa "${expense.title}" revertida para pendente.',
+                            failure: cubit.state.errorMessage,
                           );
                         },
                       ),

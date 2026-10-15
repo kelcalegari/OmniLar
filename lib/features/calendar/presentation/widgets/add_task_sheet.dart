@@ -12,6 +12,7 @@ import '../../../finance/domain/repositories/finance_repository.dart';
 import '../../../finance/presentation/cubit/finance_cubit.dart';
 import '../../domain/entities/task_item.dart';
 import '../cubit/calendar_cubit.dart';
+import '../../../../core/widgets/save_feedback.dart';
 
 class AddTaskSheet extends StatefulWidget {
   final String activeMemberId;
@@ -188,7 +189,7 @@ class _AddTaskSheetState extends State<AddTaskSheet> {
     }
   }
 
-  void _submit() {
+  Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
 
     Money? cost;
@@ -202,7 +203,7 @@ class _AddTaskSheetState extends State<AddTaskSheet> {
     final edit = widget.taskToEdit;
     if (edit != null) {
       final description = _descriptionController.text.trim();
-      calendarCubit.updateTask(
+      final ok = await calendarCubit.updateTask(
         TaskItem(
           id: edit.id,
           title: _titleController.text.trim(),
@@ -219,12 +220,14 @@ class _AddTaskSheetState extends State<AddTaskSheet> {
           createdAt: edit.createdAt,
         ),
       );
-      Navigator.pop(context);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Tarefa "${_titleController.text.trim()}" atualizada!'),
-          backgroundColor: AppColors.primary,
-        ),
+      if (!mounted) return;
+      // Falhou: a tela fica aberta, com o que foi digitado
+      if (ok) Navigator.pop(context);
+      showSaveFeedback(
+        ScaffoldMessenger.of(context),
+        ok: ok,
+        success: 'Tarefa "${_titleController.text.trim()}" atualizada!',
+        failure: calendarCubit.state.errorMessage,
       );
       return;
     }
@@ -247,6 +250,7 @@ class _AddTaskSheetState extends State<AddTaskSheet> {
       repeatCount = 3; // Próximos 3 meses
     }
 
+    var allSaved = true;
     for (int i = 0; i < repeatCount; i++) {
       DateTime occurrenceDate;
       if (_recurrence == RecurrenceFrequency.monthly) {
@@ -271,21 +275,20 @@ class _AddTaskSheetState extends State<AddTaskSheet> {
         createdAt: now,
       );
 
-      calendarCubit.addTask(newTask);
+      allSaved = await calendarCubit.addTask(newTask) && allSaved;
     }
-
-    Navigator.pop(context);
+    if (!mounted) return;
 
     final title = _titleController.text.trim();
-    final message = _recurrence != RecurrenceFrequency.none
-        ? 'Tarefa "$title" criada com repetição (${_recurrence.shortLabel})!'
-        : 'Tarefa "$title" adicionada com sucesso!';
-
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(message),
-        backgroundColor: AppColors.primary,
-      ),
+    // Falhou: a tela fica aberta, com o que foi digitado
+    if (allSaved) Navigator.pop(context);
+    showSaveFeedback(
+      ScaffoldMessenger.of(context),
+      ok: allSaved,
+      success: _recurrence != RecurrenceFrequency.none
+          ? 'Tarefa "$title" criada com repetição (${_recurrence.shortLabel})!'
+          : 'Tarefa "$title" adicionada com sucesso!',
+      failure: calendarCubit.state.errorMessage,
     );
   }
 

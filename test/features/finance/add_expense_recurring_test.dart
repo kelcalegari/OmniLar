@@ -107,8 +107,14 @@ void main() {
       expect(added.isPending, isTrue);
       expect(added.amount.cents, equals(18550));
 
-      // Pode marcar como paga
-      await cubit.markExpenseAsPaid(added.id, actualAmount: const Money(19000));
+      // Pode marcar como paga, com o valor real da conta
+      final ok = await cubit.payPendingExpense(
+        added,
+        paidOn: DateTime.now(),
+        method: cubit.state.paymentMethods.where((pm) => !pm.isCreditCard).first,
+        amount: const Money(19000),
+      );
+      expect(ok, isTrue);
       final updated = cubit.state.expenses.firstWhere((e) => e.id == added.id);
       expect(updated.isPaid, isTrue);
       expect(updated.amount.cents, equals(19000));

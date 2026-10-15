@@ -11,6 +11,7 @@ import '../../../auth/domain/repositories/auth_repository.dart';
 import '../../domain/entities/savings_vault.dart';
 import '../cubit/finance_cubit.dart';
 import '../cubit/finance_state.dart';
+import '../../../../core/widgets/save_feedback.dart';
 
 class SavingsVaultsPage extends StatelessWidget {
   const SavingsVaultsPage({super.key});
@@ -119,7 +120,7 @@ class SavingsVaultsPage extends StatelessWidget {
                 child: const Text('Cancelar'),
               ),
               FilledButton(
-                onPressed: () {
+                onPressed: () async {
                   final name = nameController.text.trim();
                   if (name.isEmpty) return;
 
@@ -132,10 +133,14 @@ class SavingsVaultsPage extends StatelessWidget {
                     createdAt: DateTime.now(),
                   );
 
-                  cubit.createSavingsVault(newVault);
+                  final messenger = ScaffoldMessenger.of(context);
                   Navigator.pop(dialogCtx);
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text('Caixinha "$name" criada com sucesso! 🎯')),
+                  final ok = await cubit.createSavingsVault(newVault);
+                  showSaveFeedback(
+                    messenger,
+                    ok: ok,
+                    success: 'Caixinha "$name" criada com sucesso! 🎯',
+                    failure: cubit.state.errorMessage,
                   );
                 },
                 style: FilledButton.styleFrom(backgroundColor: AppColors.primary),
@@ -213,18 +218,22 @@ class SavingsVaultsPage extends StatelessWidget {
                 child: const Text('Cancelar'),
               ),
               FilledButton(
-                onPressed: () {
+                onPressed: () async {
                   if (depositCents <= 0) return;
 
-                  cubit.depositToVault(
+                  final messenger = ScaffoldMessenger.of(context);
+                  Navigator.pop(dialogCtx);
+                  final ok = await cubit.depositToVault(
                     vaultId: vault.id,
                     memberId: selectedMemberId,
                     amount: Money(depositCents),
                     description: descController.text.trim(),
                   );
-                  Navigator.pop(dialogCtx);
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text('Guardado ${Money(depositCents).format()} na caixinha! 🔒')),
+                  showSaveFeedback(
+                    messenger,
+                    ok: ok,
+                    success: 'Guardado ${Money(depositCents).format()} na caixinha! 🔒',
+                    failure: cubit.state.errorMessage,
                   );
                 },
                 style: FilledButton.styleFrom(backgroundColor: AppColors.primary),
@@ -394,7 +403,7 @@ class SavingsVaultsPage extends StatelessWidget {
                 child: const Text('Cancelar'),
               ),
               FilledButton(
-                onPressed: () {
+                onPressed: () async {
                   if (withdrawCents <= 0) return;
                   if (withdrawCents > vault.currentBalance.cents) {
                     ScaffoldMessenger.of(context).showSnackBar(
@@ -403,15 +412,19 @@ class SavingsVaultsPage extends StatelessWidget {
                     return;
                   }
 
-                  cubit.withdrawFromVault(
+                  final messenger = ScaffoldMessenger.of(context);
+                  Navigator.pop(dialogCtx);
+                  final ok = await cubit.withdrawFromVault(
                     vaultId: vault.id,
                     memberId: selectedMemberId,
                     amount: Money(withdrawCents),
                     description: descController.text.trim(),
                   );
-                  Navigator.pop(dialogCtx);
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text('Resgatado ${Money(withdrawCents).format()} com sucesso! 💸')),
+                  showSaveFeedback(
+                    messenger,
+                    ok: ok,
+                    success: 'Resgatado ${Money(withdrawCents).format()} com sucesso! 💸',
+                    failure: cubit.state.errorMessage,
                   );
                 },
                 style: FilledButton.styleFrom(backgroundColor: AppColors.accent),
