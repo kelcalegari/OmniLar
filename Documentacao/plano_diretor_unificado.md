@@ -19,9 +19,9 @@ pie title Status Global das Funcionalidades
 | **Mobile Core** (Despesas, Recorrentes, Tarefas, Compras, Agenda, OCR) | 100% Concluído ✅ | 100% Automatizado |
 | **Backend & Segurança** (Supabase RLS, Biometria RN07, Fila Offline AES) | 95% Concluído ✅ | 100% Automatizado |
 | **Web & Desktop Executivo** (Dual-Pane, Atalhos, Importação, Relatórios) | 50% Concluído 🔄 | Testes em expansão |
-| **Publicação & Lojas** (FCM Push, Keystore, Landing Page, Bundle iOS) | 20% Concluído ⏳ | Preparação final |
+| **Publicação & Lojas** (FCM Push, Keystore, Landing Page, Web instalável no iPhone) | 20% Concluído ⏳ | Preparação final |
 
-> **Confiabilidade da Base:** **194 testes automatizados passando (100% verde)**, `dart analyze` com zero warnings.
+> **Confiabilidade da Base:** **510 testes automatizados passando (100% verde)**, `flutter analyze` com zero erros e zero warnings (14/10/2026).
 
 ---
 
@@ -62,11 +62,11 @@ flowchart TD
     end
 
     subgraph BlocoB["Frente 2: Notificações & OCR de Nuvem"]
-        M1[FCM / APNs Notificações Push] --> M2[Extração Condomínio na Edge Function]
+        M1[Push FCM: Android, Web e iPhone PWA] --> M2[Extração Condomínio na Edge Function]
     end
 
     subgraph BlocoC["Frente 3: Preparação para Lojas & Produção"]
-        P1[Assinatura Android Keystore / AAB] --> P2[Bundle Identifier iOS Runner]
+        P1[Assinatura Android Keystore / AAB] --> P2[Web instalável no iPhone - PWA]
         P2 --> P3[Políticas de Privacidade & Domínio Oficial]
     end
 
@@ -100,8 +100,10 @@ flowchart TD
 
 ### 🔹 Frente 2: Comunicação Ativa & IA de Nuvem
 
-#### 1. Notificações Push (Mobile)
-- Configuração do **Firebase Cloud Messaging (FCM)** no Android e **APNs** no iOS.
+#### 1. Notificações Push (Android, Web e iPhone instalado)
+- **Firebase Cloud Messaging (FCM)** como canal único: Android nativo, navegador e iPhone com o site instalado na Tela de Início (PWA, iOS 16.4+).
+- **Sem APNs nativo:** o app não vai para a App Store, então o iPhone usa o Web Push pelo FCM. Detalhes e limitações na seção 9 da [arquitetura_tecnica.md](arquitetura_tecnica.md).
+- Entregas: tabela `device_tokens`, edge function `notify` (FCM HTTP v1), `web/firebase-messaging-sw.js`, `manifest.json` revisado, botão "Ativar notificações" e passo a passo de instalação no iPhone.
 - Disparo de alertas essenciais:
   - *"Fulano solicitou um empréstimo P2P de R$ X"*;
   - *"Nova tarefa atribuída a você: Comprar pó de café"*;
@@ -119,9 +121,10 @@ flowchart TD
 - Fixação do `applicationId: br.com.omnilar.app` e versionamento semântico no `build.gradle`.
 - Geração do pacote de produção `.aab` (Android App Bundle).
 
-#### 2. iOS (App Store)
-- Configuração final de Signing & Capabilities no Xcode.
-- Bundle Identifier `br.com.omnilar.app` e provisionamento.
+#### 2. iOS (site instalado, sem App Store)
+- O app **não será publicado na App Store**. No iPhone, o OmniLar é usado como site instalado na Tela de Início (PWA).
+- Preparar a versão web para instalação: `manifest.json` com nome, `id`, cores e ícones do OmniLar; meta tags e `apple-touch-icon` no `web/index.html`; hospedagem em HTTPS no domínio oficial.
+- Push no iPhone pelo FCM/Web Push (ver Frente 2).
 
 #### 3. Conformidade & Suporte
 - Publicação dos termos de uso e política de privacidade obrigatórios para as lojas.
@@ -134,5 +137,5 @@ flowchart TD
 |---|---|---|
 | **Sprint 1** | **Web Produtividade & Relatórios** | Drag & Drop OFX/CSV, Modo Grade, Exportação PDF/Excel |
 | **Sprint 2** | **Landing Page & Vitrine Web** | Página pública na rota `/`, botão Demo 1-clique |
-| **Sprint 3** | **Notificações Push & Edge IA** | Push notifications FCM/APNs, OCR de condomínio |
-| **Sprint 4** | **Engenharia de Release** | Assinatura de builds (`.aab`/`.ipa`), publicação nas lojas |
+| **Sprint 3** | **Notificações Push & Edge IA** | Push pelo FCM (Android, web e iPhone instalado), OCR de condomínio |
+| **Sprint 4** | **Engenharia de Release** | Assinatura do `.aab` e publicação na Google Play; versão web instalável (PWA) para iPhone |

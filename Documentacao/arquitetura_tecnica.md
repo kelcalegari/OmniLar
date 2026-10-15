@@ -11,7 +11,7 @@ flowchart LR
     SB --> PG[(Postgres + RLS)]
     SB --> EF[Edge Functions]
     EF --> IA[Servico de IA]
-    EF --> PUSH[Push FCM/APNs]
+    EF --> PUSH[Push FCM: Android, Web e iPhone PWA]
     PG -->|triggers e cron| EF
     PG --> RT[Realtime]
     RT --> APP
@@ -31,7 +31,7 @@ flowchart LR
 | Método | Uso |
 |---|---|
 | E-mail e senha | Padrão |
-| Login social (Google, Apple) | Facilita a entrada. Apple é obrigatória na App Store se houver login social |
+| Login social (Google; Apple opcional) | Facilita a entrada. Sem App Store, o login Apple deixa de ser obrigatório. No web ele exige conta de desenvolvedor Apple paga (Services ID), então fica fora por enquanto |
 | Magic link / OTP por e-mail | Recuperação e convites |
 | Biometria local | Camada extra de abertura do app e confirmação de ações de risco (não substitui o login) |
 
@@ -167,7 +167,7 @@ create policy "members insert" on house_expenses for insert
 | `import-parse` | Lê OFX/CSV/PDF e normaliza as linhas |
 | `import-classify` | Sugere categoria, dono e rateio |
 | `assistant` | Orquestra o assistente: contexto, ferramentas (tools) e Cartão de Confirmação |
-| `notify` | Envia push (FCM/APNs) conforme eventos e preferências |
+| `notify` | Grava em `notifications` e envia push pelo FCM (API HTTP v1) para Android, web e iPhone instalado, conforme eventos e preferências |
 | `scheduler` | Tarefas agendadas (lembretes, rotinas, ciclo virando, contas recorrentes) via `pg_cron` |
 | `delete-account` / `export-data` | LGPD |
 
@@ -195,11 +195,22 @@ create policy "members insert" on house_expenses for insert
 
 ## 9. Notificações
 
-- Push: FCM (Android) e APNs (iOS), com tokens em `device_tokens`.
+- **Sem App Store:** o app não é publicado na loja da Apple, então **não usamos APNs nativo**. No iPhone, o OmniLar roda como site instalado na Tela de Início (PWA), e o push chega pelo Web Push.
+- **Um só canal de envio: FCM.** O FCM entrega no Android nativo, no navegador (desktop e Android) e no iPhone com o site instalado (iOS 16.4+, que usa o Web Push padrão). Não precisa de conta de desenvolvedor Apple nem de certificado.
+- **Tokens** em `device_tokens` (`user_id`, `token`, `platform`: `android` / `web` / `ios_pwa`, `last_seen_at`). A função `notify` apaga o token quando o FCM responde que ele é inválido (por exemplo, quando o usuário remove o ícone da Tela de Início).
+- **Histórico primeiro:** toda notificação é gravada em `notifications` (lista do sino dentro do app, via Realtime) e depois enviada por push. Se o push se perder, o aviso continua no app.
 - Tipos: convite, RSVP, lembrete, aporte pendente, vencimento, cobrança, atraso, resumo semanal.
 - Preferências por tipo e horário silencioso.
-- **Deeplink** em toda notificação (GoRouter), por exemplo `app://p2p/loan/{id}`.
-- Lembretes disparados pelo `scheduler`, com idempotência por `(entidade, tipo, janela)`.
+- **Deeplink** em toda notificação como **rota web** do GoRouter, por exemplo `/p2p/loan/{id}`. A mesma rota serve para o app nativo e para o clique na notificação do navegador/PWA.
+- Lembretes disparados pelo `scheduler`, com idempotência por `(entidade, tipo, janela)`. Todo lembrete sai do servidor: o navegador não agenda nada sozinho.
+
+### 9.1. Web e iPhone (PWA)
+
+- **Requisitos:** site em HTTPS, `manifest.json` com `display: standalone`, nome e ícones do OmniLar, e o service worker `web/firebase-messaging-sw.js`.
+- **iPhone só recebe push com o site instalado** (Compartilhar → Adicionar à Tela de Início) e aberto pelo ícone. Numa aba comum do Safari, não funciona. O app detecta iPhone fora do modo instalado (`navigator.standalone == false`) e mostra um passo a passo para instalar.
+- **Permissão só após toque do usuário:** o pedido aparece num botão "Ativar notificações", nunca automático ao abrir. Se o usuário negar, ele só reativa nos Ajustes do iPhone. Testar num iPhone de verdade, porque o Flutter web trata os toques de um jeito próprio e é preciso confirmar que o Safari reconhece o toque como ação do usuário.
+- **Sem push silencioso:** todo push precisa mostrar uma notificação visível, senão o iOS pode cancelar a inscrição. Não há sincronização em segundo plano.
+- **Recursos disponíveis no iPhone:** tela bloqueada, Central de Notificações, modos de Foco e número no ícone (Badging API, `navigator.setAppBadge`). Botões de ação e imagem na notificação não aparecem.
 
 ## 10. Flutter: Arquitetura
 
@@ -258,7 +269,7 @@ presentation (Cubit/Widget) -> domain (entidades, use cases) <- data (Supabase, 
 | Biometria | `local_auth` |
 | Câmera e QR Code | `camera`, `mobile_scanner` |
 | Seleção e compressão de imagem | `image_picker`, `flutter_image_compress` |
-| Notificações | `firebase_messaging`, `flutter_local_notifications` |
+| Notificações | `firebase_messaging` (Android e web/PWA), `flutter_local_notifications` (só Android, para avisos com o app aberto) |
 | Internacionalização | `intl`, `flutter_localizations` (pt-BR primeiro) |
 | Gráficos | `fl_chart` |
 | Testes | `flutter_test`, `bloc_test`, `mocktail` |
@@ -322,7 +333,7 @@ presentation (Cubit/Widget) -> domain (entidades, use cases) <- data (Supabase, 
 - Repositório com *pipeline* (GitHub Actions): `flutter analyze`, `dart format --set-exit-if-changed`, testes, geração de código, build.
 - Migrações do Supabase validadas em banco temporário a cada PR.
 - Ambientes `dev`, `staging` e `prod`, com projetos Supabase separados e `--dart-define` para configuração.
-- Distribuição: Firebase App Distribution ou TestFlight para testadores.
+- Distribuição: Firebase App Distribution para testadores Android. No iPhone, os testadores usam a versão web instalada na Tela de Início (sem TestFlight, que exige conta Apple paga).
 - Versionamento semântico e *changelog*.
 
 ## 13. Segurança e Privacidade (LGPD)
@@ -364,7 +375,7 @@ presentation (Cubit/Widget) -> domain (entidades, use cases) <- data (Supabase, 
 - [ ] Projeto Flutter com estrutura feature-first, tema e DI
 - [ ] GoRouter com shell de 5 abas e guards
 - [ ] Tipo `Money` e utilitário de ciclo, com testes
-- [ ] Notificações (token, push de teste, deeplink)
+- [ ] Notificações (token, push de teste no Android e no iPhone instalado, deeplink)
 - [ ] CI com análise, testes e validação de migrações
 - [ ] Observabilidade básica (Crashlytics/Sentry)
 

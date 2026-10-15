@@ -253,6 +253,6 @@ assistant_conversations, assistant_messages, assistant_actions, assistant_prefer
 
 **Verificações pendentes do nome**
 - [ ] Domínio no Registro.br (`omnilar.com.br`)
-- [ ] Disponibilidade na Google Play e na App Store
+- [ ] Disponibilidade na Google Play (o app não será publicado na App Store; no iPhone ele roda como site instalado)
 - [ ] Busca de marca no INPI
 - [ ] Contas e usuários em redes sociais
