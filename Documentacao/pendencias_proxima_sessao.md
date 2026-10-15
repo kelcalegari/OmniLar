@@ -96,19 +96,58 @@ Resumo dos mecanismos que mudaram nesta sessão, para localizar as coisas.
 - **Ciclo reaberto:** trocar a divisão do excedente do balde no segundo fechamento redistribui o excedente inteiro; parcelas e acordos do primeiro fechamento não são desfeitos.
 - **Acordos de reposição criados antes da migration 0037** não têm caixinha de origem (não havia nenhum no banco).
 
-### Oferecido ao dono e ainda sem decisão
-Itens levantados na segunda sessão de 13/10; ele não pediu nenhum. Perguntar antes de fazer.
-- **Selo "Saudável"** do cartão do Fôlego continua aparecendo em ciclo passado e vazio.
-- **Cartão da despesa em tela estreita:** não estoura mais, mas fica apertado; a opção é passar o valor e o "Pagar" para uma segunda linha.
-- **Revisão do scanner:** título e categoria são editáveis; data e status não (sai sempre como pago, na data do documento). O pedido do dono foi "alterar cadastro", entendido como categoria.
-- **Excluir categoria com lançamentos:** hoje é recusado. A alternativa é arquivar (some das escolhas, continua nas despesas antigas).
-- **Planejamento de Aportes:** "variável" é toda categoria cujo nome contém mercado, feira, luz, energia, água ou gás. Conta recorrente de valor fixo já conta como fixa, mas uma despesa avulsa numa dessas categorias (ex.: condomínio em "Contas (Luz, Água, Internet)") ainda entra como variável.
-- **Tempo real** para aportes, empréstimos, agenda e caixinhas.
-- **Relatórios:** tem as próprias setas de ciclo, sem o atalho "voltar ao ciclo atual" nem o esmaecimento na troca.
-- **Troca de ciclo:** o resumo do ciclo ainda relê despesas e aportes por dentro; cortar isso é o próximo passo se a troca parecer lenta.
-- **Busca nos ajustes:** leva até o grupo, não até o item.
-- **Assistente:** "Assistente Ativo", "Alertas Proativos" e "Horário Silencioso" eram controles de enfeite e foram removidos; implementar de verdade é trabalho à parte.
-- **Lista de moradores desatualizada** depois que alguém entra na casa: corrigido nos Ajustes e, pelo tempo real, no estado financeiro; outras telas (formulário de despesa, agenda) não foram conferidas.
+### Decisões pendentes do dono, com opções e recomendação
+Levantadas em 14/10/2026. O dono pediu para registrar as opções com a recomendação e vai retomar numa próxima sessão: **antes de começar, pergunte se ele segue as recomendações (marcadas com ⭐) ou se escolhe outra letra**. Peça aprovação antes de cada migration, como sempre.
+
+1. **Selo "Saudável" em ciclo passado e vazio** (cartão do Fôlego)
+   - a) Esconder o selo fora do ciclo atual
+   - b) ⭐ Trocar por um selo de situação do ciclo ("Fechado" ou "Em aberto")
+   - c) Manter
+2. **Cartão da despesa em tela estreita** (não estoura, mas fica apertado)
+   - a) ⭐ Em tela estreita, valor e "Pagar" descem para uma segunda linha
+   - b) "Pagar" vira só um ícone
+   - c) Manter
+3. **Revisão do escâner** (título e categoria já são editáveis; documento sai sempre como pago, na data dele)
+   - a) ⭐ Editar a data e escolher "já paguei" ou "a pagar", como já existe para boleto
+   - b) Só a data
+   - c) Manter
+4. **Excluir categoria com lançamentos** (hoje é recusado)
+   - a) Arquivar: some das escolhas, continua nas despesas antigas
+   - b) ⭐ Excluir pedindo para qual categoria mover os lançamentos (sem estado novo)
+   - c) Manter a recusa
+5. **O que é "gasto variável" no Planejamento de Aportes** (hoje: categoria cujo nome contém mercado, feira, luz, energia, água ou gás; conta recorrente fixa já conta como fixa)
+   - a) ⭐ Interruptor "gasto variável" no cadastro da categoria (precisa de migration)
+   - b) Manter a adivinhação pelo nome
+6. **Tempo real em mais telas** (hoje: tarefas, compras, despesas e moradores)
+   - a) Aportes, empréstimos, caixinhas e agenda
+   - b) ⭐ Só aportes, empréstimos e caixinhas, que mexem no Fôlego e no fechamento (precisa de migration)
+   - c) Não ampliar
+7. **Relatórios** (setas de ciclo próprias)
+   - a) ⭐ Mesmo atalho "voltar ao ciclo atual" e esmaecimento na troca que a Casa tem
+   - b) Manter
+8. **Busca nos Ajustes** (leva até o grupo, não até o item)
+   - a) Abrir o grupo e destacar o item
+   - b) ⭐ Abrir direto a edição do item (categoria, forma de pagamento, conta fixa); para o resto, o grupo
+   - c) Manter
+9. **Interruptores do Assistente** ("Assistente Ativo", "Alertas Proativos", "Horário Silencioso"; eram de enfeite e foram removidos)
+   - a) Implementar agora
+   - b) ⭐ Deixar para quando existirem notificações, das quais eles dependem
+10. **Fila offline** (fora dela: pagar parcela, de propósito; marcar item como comprado; concluir tarefa; exclusões)
+    - a) ⭐ Incluir "marcar item como comprado" e "concluir tarefa", comuns no mercado sem sinal
+    - b) Manter
+11. **Série de eventos já criada** (não estende nem encurta)
+    - a) ⭐ Permitir mudar o "repetir até" ao editar "esta e as próximas"
+    - b) Manter (excluir e recriar)
+12. **Sem internet as listas não carregam**
+    - a) Guardar uma cópia local para abrir sem internet (trabalho grande)
+    - b) ⭐ Manter por enquanto
+13. **Ciclo reaberto** (trocar a divisão do excedente no segundo fechamento redistribui o excedente inteiro)
+    - a) ⭐ Manter (caso raro)
+    - b) Recalcular só a diferença no segundo fechamento
+
+Ordem sugerida, se ele seguir as recomendações: 1, 2, 7, 8, 3, 4, 11, 10, 5, 6 (os dois últimos com migration). Os itens 9, 12 e 13 ficam como estão.
+
+### Registros da importação e dos boletos
 - **Importação de fatura e extrato:** está em `main` (código em `lib/features/reconciliation/`). A confirmação e o desfazer usam as funções `confirm_import` e `undo_import` da migration 0052; as regras aprendidas ficam em `import_rules` (0053). PDF e foto são lidos pela função `import-read`, publicada no servidor (versão 1), que também sugere nome e categoria. Nada disso foi testado com conta real nem com arquivo de banco de verdade; a leitura por IA só foi conferida até a recusa de quem não está logado. O que falta está na seção "Situação atual" do `plano_importacao_conciliacao.md`. A seção 12 do plano guarda a discussão com o dono sobre a fatura na Casa: o agrupamento por fatura está feito; decidiu-se a alternativa C, "fatura como conta pendente" (seção 13), implementada com a migration 0054: compra no cartão nasce pendente, a fatura é paga com data e origem (titular ou Caixa) e o fechamento pergunta o que fazer com fatura em aberto, e a fatura pode ser paga inteira pelo titular ou pelo Caixa da Casa (migration 0055: em fatura importada paga pelo Caixa, o que não era da casa vira dívida com o Caixa; no modo demo, não).
 - **Boleto pelo escâner e pagamento de contas pendentes:** em main (`feat/boleto-pending-payment`). O leitor `boleto_code.dart` lê código de barras (44 dígitos, câmera), linha digitável de 47 e conta de consumo de 48, conferindo os dígitos verificadores (o cálculo só foi conferido contra um código real de conta de consumo). O boleto nasce como conta a pagar com vencimento (editável; obrigatório quando o código não traz) e com a linha digitável guardada para copiar depois (coluna `barcode`, migration 0056); pode nascer já pago, com data e meio. Conta já prevista (mesmo código, ou vencimento próximo com o mesmo valor ou conta variável/recorrente) é atualizada em vez de duplicada. O "Pagar" de qualquer conta pendente pede dia e meio de pagamento: meio da casa = casa; meio com responsável = ele, reembolsado; cartão = vira compra da fatura (`pending_payment.dart`). O fechamento lista as contas pendentes do ciclo com o meio da baixa ou "levar para o próximo ciclo" (padrão: o meio que a conta já tinha, senão o da casa).
 - **Código do boleto e meio da fatura:** em main. Apagar o campo do código ao editar remove o código. Conta pendente com código mostra "copiar" no card e no detalhe; o formulário de despesa tem o campo "Código do boleto", que confere o código, preenche o valor (se vazio) e o vencimento. A fatura do cartão (tela "Pagar fatura" e "Fatura já paga?" da importação) é paga escolhendo o meio: meio da casa = pago pelo Caixa; meio do titular = pago por ele, reembolsado. Meio de outro morador pagando a fatura de alguém não entra (`invoicePaymentOptions` em `pending_payment.dart`).
@@ -116,6 +155,8 @@ Itens levantados na segunda sessão de 13/10; ele não pediu nenhum. Perguntar a
 - **Acesso à importação:** card "Importar fatura ou extrato" na Casa, acima do fechamento; atalho dentro de cada fatura; menu de cada cartão ou conta nos Ajustes. Saiu do Smart FAB e do painel geral dos Ajustes.
 
 ### Pontas pequenas, nunca tratadas
+- **Troca de ciclo:** o resumo do ciclo ainda relê despesas e aportes por dentro; cortar isso é o próximo passo se a troca parecer lenta.
+- **Lista de moradores desatualizada** depois que alguém entra na casa: corrigido nos Ajustes e, pelo tempo real, no estado financeiro; outras telas (formulário de despesa, agenda) não foram conferidas.
 - **Conferência do banco contra as migrations:** gatilhos e funções foram conferidos e batem (só faltava um gatilho da 0017, criado na 0046), e todas as tabelas têm RLS ligado. Não foi conferido o conteúdo das regras de acesso nem os índices; como as migrations 0001 a 0021 foram aplicadas à mão, pode haver outra diferença.
 - **Telas novas sem teste automatizado:** diálogo de participantes de projeto, "repetir até" do evento, diálogo do dia de início do ciclo, histórico da caixinha e diálogo de fechar compra. A regra de cada uma tem teste; a tela não.
 
