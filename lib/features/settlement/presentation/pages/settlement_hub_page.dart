@@ -151,20 +151,6 @@ class _SettlementHubContent extends StatelessWidget {
         ),
         actions: [
           const PrivacyToggleButton(),
-          BlocBuilder<SettlementCubit, SettlementState>(
-            builder: (context, state) {
-              final summary = state.summary;
-              if (summary == null) return const SizedBox.shrink();
-              return IconButton(
-                icon: const Icon(Icons.calculate_outlined),
-                tooltip: 'Auditar memória de cálculo',
-                onPressed: () => SettlementAuditSheet.show(
-                  context: context,
-                  summary: summary,
-                ),
-              );
-            },
-          ),
           IconButton(
             icon: const Icon(Icons.help_outline_rounded),
             tooltip: 'Entenda como funciona a compensação',
@@ -247,12 +233,42 @@ class _SettlementHubContent extends StatelessWidget {
               const SizedBox(height: 16),
 
               // PASSO 2: Resumo de Empréstimos P2P
-              _buildStep2P2PSummary(context, summary),
+              _buildStep2P2PSummary(
+                context,
+                summary,
+                canOpenAudit: !isDesktop,
+              ),
               const SizedBox(height: 16),
 
               // PASSO 3: O Veredito - Super Pix
               _buildStep3SuperPix(context, summary, state),
               const SizedBox(height: 24),
+
+              // No desktop a auditoria já fica fixa ao lado; aqui abre no modal
+              if (!isDesktop) ...[
+                OutlinedButton.icon(
+                  onPressed: () => SettlementAuditSheet.show(
+                    context: context,
+                    summary: summary,
+                  ),
+                  icon: const Icon(Icons.calculate_outlined),
+                  label: const Text(
+                    'Auditar memória de cálculo',
+                    style: TextStyle(fontWeight: FontWeight.w600),
+                  ),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: AppColors.primary,
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    side: BorderSide(
+                      color: AppColors.primary.withValues(alpha: 0.5),
+                    ),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 12),
+              ],
 
               // Botão de Confirmação Atômica
               if (!isSettled && !canManageCycle)
@@ -1222,10 +1238,13 @@ class _SettlementHubContent extends StatelessWidget {
     );
   }
 
+  /// [canOpenAudit] é falso quando a auditoria já está na tela (desktop):
+  /// aí tocar no morador não abre o modal.
   Widget _buildStep2P2PSummary(
     BuildContext context,
-    SettlementSummary summary,
-  ) {
+    SettlementSummary summary, {
+    required bool canOpenAudit,
+  }) {
     return Card(
       elevation: 0,
       shape: RoundedRectangleBorder(
@@ -1238,47 +1257,27 @@ class _SettlementHubContent extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Row(
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.all(6),
-                      decoration: BoxDecoration(
-                        color: AppColors.primary.withValues(alpha: 0.1),
-                        shape: BoxShape.circle,
-                      ),
-                      child: const Text(
-                        '2',
-                        style: TextStyle(
-                          fontWeight: FontWeight.bold,
-                          color: AppColors.primary,
-                        ),
-                      ),
+                Container(
+                  padding: const EdgeInsets.all(6),
+                  decoration: BoxDecoration(
+                    color: AppColors.primary.withValues(alpha: 0.1),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Text(
+                    '2',
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      color: AppColors.primary,
                     ),
-                    const SizedBox(width: 8),
-                    const Text(
-                      'Compensação de Empréstimos P2P',
-                      style: TextStyle(
-                        fontWeight: FontWeight.bold,
-                        fontSize: 15,
-                      ),
-                    ),
-                  ],
+                  ),
                 ),
-                TextButton.icon(
-                  onPressed: () => SettlementAuditSheet.show(
-                    context: context,
-                    summary: summary,
-                  ),
-                  icon: const Icon(Icons.receipt_long_rounded, size: 14),
-                  label: const Text(
-                    'Auditar',
-                    style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
-                  ),
-                  style: TextButton.styleFrom(
-                    visualDensity: VisualDensity.compact,
-                    foregroundColor: AppColors.primary,
+                const SizedBox(width: 8),
+                const Text(
+                  'Compensação de Empréstimos P2P',
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 15,
                   ),
                 ),
               ],
@@ -1300,11 +1299,13 @@ class _SettlementHubContent extends StatelessWidget {
             const SizedBox(height: 10),
             ...summary.memberBalances.map((m) {
               return InkWell(
-                onTap: () => SettlementAuditSheet.show(
-                  context: context,
-                  summary: summary,
-                  initialMemberId: m.memberId,
-                ),
+                onTap: canOpenAudit
+                    ? () => SettlementAuditSheet.show(
+                        context: context,
+                        summary: summary,
+                        initialMemberId: m.memberId,
+                      )
+                    : null,
                 borderRadius: BorderRadius.circular(8),
                 child: Padding(
                   padding: const EdgeInsets.symmetric(
@@ -1323,12 +1324,14 @@ class _SettlementHubContent extends StatelessWidget {
                               fontWeight: FontWeight.w500,
                             ),
                           ),
-                          const SizedBox(width: 4),
-                          Icon(
-                            Icons.info_outline_rounded,
-                            size: 14,
-                            color: Colors.grey.shade400,
-                          ),
+                          if (canOpenAudit) ...[
+                            const SizedBox(width: 4),
+                            Icon(
+                              Icons.info_outline_rounded,
+                              size: 14,
+                              color: Colors.grey.shade400,
+                            ),
+                          ],
                         ],
                       ),
                       PrivacySensitiveText(
