@@ -195,6 +195,8 @@ create policy "members insert" on house_expenses for insert
 
 ## 9. Notificações
 
+O plano completo (o que já existe, a estrutura no banco, o catálogo de todas as notificações e as decisões pendentes) está em [plano_notificacoes.md](plano_notificacoes.md).
+
 - **Sem App Store:** o app não é publicado na loja da Apple, então **não usamos APNs nativo**. No iPhone, o OmniLar roda como site instalado na Tela de Início (PWA), e o push chega pelo Web Push.
 - **Um só canal de envio: FCM.** O FCM entrega no Android nativo, no navegador (desktop e Android) e no iPhone com o site instalado (iOS 16.4+, que usa o Web Push padrão). Não precisa de conta de desenvolvedor Apple nem de certificado.
 - **Tokens** em `device_tokens` (`user_id`, `token`, `platform`: `android` / `web` / `ios_pwa`, `last_seen_at`). A função `notify` apaga o token quando o FCM responde que ele é inválido (por exemplo, quando o usuário remove o ícone da Tela de Início).

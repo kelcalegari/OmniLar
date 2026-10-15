@@ -262,6 +262,7 @@ Uma linha por migration, para saber onde está cada regra.
 ## Documentos relacionados
 
 - `fechamento_no_banco.md`: o trabalho adiado de levar o cálculo do fechamento para o banco.
+- `plano_notificacoes.md`: plano das notificações (estrutura, catálogo e decisões pendentes). Fica para depois das pendências deste arquivo.
 - `plano_importacao_conciliacao.md`: plano da importação de fatura e conciliação, com o que já foi feito e o que falta.
 - `arquitetura_tecnica.md` e os `modulo_*.md`: especificação original de cada módulo. Podem divergir do que está implementado; em caso de dúvida, vale o código.
 - `plano_diretor_unificado.md` e `README_documento_mestre.md`: visão geral do produto.
