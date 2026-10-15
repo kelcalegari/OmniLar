@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:file_picker/file_picker.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
@@ -799,6 +800,18 @@ class _ReportsPageContent extends StatelessWidget {
     return Color(int.parse('FF$cleanHex', radix: 16));
   }
 
+  /// Aviso depois de salvar. No navegador o arquivo vai direto para os
+  /// downloads e o `saveFile` sempre devolve null, então null ali não quer
+  /// dizer que a pessoa cancelou.
+  String _savedMessage(
+    Uri? saved, {
+    required String web,
+    required String file,
+  }) {
+    if (kIsWeb) return '$web Veja a pasta de downloads do navegador.';
+    return saved == null ? 'Exportação cancelada.' : file;
+  }
+
   /// Salva a prestação de contas do ciclo em PDF, pelo mesmo caminho do CSV.
   Future<void> _exportReportPdf(
     BuildContext context,
@@ -837,9 +850,11 @@ class _ReportsPageContent extends StatelessWidget {
       messenger.showSnackBar(
         SnackBar(
           content: Text(
-            saved == null
-                ? 'Exportação cancelada.'
-                : 'Prestação de contas salva.',
+            _savedMessage(
+              saved,
+              web: 'Prestação de contas baixada.',
+              file: 'Prestação de contas salva.',
+            ),
           ),
         ),
       );
@@ -880,9 +895,12 @@ class _ReportsPageContent extends StatelessWidget {
       messenger.showSnackBar(
         SnackBar(
           content: Text(
-            saved == null
-                ? 'Exportação cancelada.'
-                : 'Relatório do ciclo salvo (${state.expenses.length} lançamentos).',
+            _savedMessage(
+              saved,
+              web: 'Planilha do ciclo baixada.',
+              file:
+                  'Planilha do ciclo salva (${state.expenses.length} lançamentos).',
+            ),
           ),
         ),
       );
