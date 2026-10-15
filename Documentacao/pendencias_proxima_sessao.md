@@ -8,28 +8,11 @@ Reescrito em 13/10/2026, no fim de uma sessão longa de correções, e atualizad
 - **Banco (Supabase `rygxmpwzofgieodvhpcy`, acessível pelo conector do Supabase):** migrations 0001 a 0058 aplicadas. No histórico de migrations do Supabase constam só as 0022 a 0027 e as 0030 a 0058; as 0001 a 0021, a 0028 e a 0029 foram aplicadas à mão pelo SQL Editor. A próxima migration é a 0059.
 - **Edge Functions:** `capture-read` versão 8 e `assistant` versão 5, ambas com `verify_jwt=true` e exigindo usuário logado que more na casa.
 - **Qualidade:** `flutter analyze` com 0 erros e 0 warnings, e 515 testes passando (14/10/2026). Os testes automatizados rodam só contra os datasources mock (modo demo); nenhum roda contra o Supabase.
-- **Dados no banco:** em 13/10/2026 o dono apagou todos os dados de teste (todas as tabelas de `public` e as contas de login) e recomeçou do zero; a estrutura, as funções e o histórico de migrations não mudaram. Logo depois foi criada de novo a casa "Nossa Casa", com as contas novas de kelvynn e Cristiano; o dono já lançou algumas despesas de teste nela (entre elas a recorrente "Internet", todo dia 25). Nunca houve um fechamento de ciclo confirmado com sessão real.
+- **Dados no banco:** em 13/10/2026 o dono apagou todos os dados de teste (todas as tabelas de `public` e as contas de login) e recomeçou do zero; a estrutura, as funções e o histórico de migrations não mudaram. Logo depois foi criada de novo a casa "Nossa Casa", com as contas novas de kelvynn e Cristiano; o dono já lançou algumas despesas de teste nela (entre elas a recorrente "Internet", todo dia 25). Em 14/10/2026 já havia 3 fechamentos de ciclo confirmados e 3 importações feitos pelo dono com sessão real.
 
 ## O ponto mais importante
 
-**Nada do que foi feito nesta sessão foi exercitado no app com sessão real.** Tudo passou por teste automatizado no modo demo e por testes de banco com rollback. O dono testa no app; quem continuar o trabalho deve tratar qualquer relato de erro dele como prioridade.
-
-O que testar primeiro, depois de reiniciar por completo as instâncias abertas do app:
-
-1. **Fechamento de ciclo de ponta a ponta**, com pagamento parcial e cobertura por caixinha. A função `confirm_cycle_settlement` foi recriada nas migrations 0037 e 0044 e só teve a sintaxe validada.
-2. **Lançar despesa, criar empréstimo e fechar compra do mercado.** Os três passaram a ser uma chamada só ao banco (migration 0042). Repetir o lançamento de despesa com um morador comum.
-3. **Criar evento na agenda**, com e sem repetição (migrations 0045 e 0048).
-4. **Reabrir a tela do ciclo fechado** e conferir saldos, transferências e memória de cálculo (migration 0035).
-5. **Despesa recorrente:** cadastrar e avançar para o ciclo seguinte (migrations 0036 e 0038).
-
-Da segunda sessão de 13/10, o que mais depende de teste do dono:
-
-1. **Copiar no navegador.** Não foi reproduzido: a hipótese é o site aberto por http fora de `localhost`, onde o navegador não deixa copiar. Entrou um plano B (`clipboard_helper.dart`) e a mensagem "copiado" só aparece se copiou. Falta o dono dizer se agora copia e por qual endereço abre o site.
-2. **Tempo real de despesas e moradores** (migration 0050): só se confirma com dois aparelhos logados.
-3. **Trocar o dono de uma categoria** (migration 0051): as despesas em aberto dela devem mudar de rateio; tirar o dono deve devolver ao percentual da casa.
-4. **Ajustes novos:** índice de grupos, página por grupo no celular e duas colunas no PC, com edição dentro da página.
-
-A lista completa de roteiros está em "Testes manuais pendentes", mais abaixo.
+**Os roteiros de teste manual foram executados pelo dono com sessão real até 14/10/2026.** O que muda depois disso continua sendo testado só no modo demo e em ensaio no banco com rollback; o dono testa no app, e qualquer relato de erro dele é prioridade. Os roteiros do que ainda não foi testado ficam em "Testes manuais pendentes", mais abaixo.
 
 ## Como trabalhar neste projeto
 
@@ -107,7 +90,7 @@ Resumo dos mecanismos que mudaram nesta sessão, para localizar as coisas.
 ### Limites conhecidos
 - **Sem rede as listas não carregam:** o app não guarda cópia local. A fila offline só ajuda quando a conexão cai no meio do uso.
 - **Fora da fila offline:** pagamento de parcela (de propósito), marcar item como comprado, concluir tarefa e exclusões.
-- **Importar fatura ou extrato:** página própria em `/casa/importar` (Smart FAB, Ajustes > Pagamentos e contas, e o menu de cada cartão ou conta). Escolhe-se a origem e o arquivo OFX/CSV; o app compara com o que já foi lançado, e cada linha nova da Casa vira uma despesa. A confirmação grava tudo de uma vez e entra no histórico da página, de onde pode ser desfeita; a revisão em si não é guardada e se perde ao sair da página. A fatura de exemplo aparece só no modo demo.
+- **Importar fatura ou extrato:** página própria em `/casa/importar` (cartão "Importar fatura ou extrato" na Casa, atalho em cada fatura e menu de cada cartão ou conta nos Ajustes; `/importar` redireciona para lá). Escolhe-se a origem e o arquivo OFX/CSV; o app compara com o que já foi lançado, e cada linha nova da Casa vira uma despesa. A confirmação grava tudo de uma vez e entra no histórico da página, de onde pode ser desfeita; a revisão em si não é guardada e se perde ao sair da página. A fatura de exemplo aparece só no modo demo.
 - **Série de eventos já criada** não pode ser estendida nem encurtada; só excluindo "esta e as próximas" e criando de novo.
 - **Fatura de cartão:** só funciona para cartão com fechamento e vencimento cadastrados; gravar `paid_at` direto na tabela de despesas continua possível para qualquer morador.
 - **Ciclo reaberto:** trocar a divisão do excedente do balde no segundo fechamento redistribui o excedente inteiro; parcelas e acordos do primeiro fechamento não são desfeitos.
@@ -138,67 +121,17 @@ Itens levantados na segunda sessão de 13/10; ele não pediu nenhum. Perguntar a
 
 ## Testes manuais pendentes
 
-Nenhum destes roteiros foi executado com usuário logado.
+Os roteiros anteriores foram executados pelo dono até 14/10/2026. Ficam aqui só os do que entrou depois.
 
-### Segunda sessão de 13/10
-- **Rateio com morador novo:** abrir Ajustes > Divisão das despesas logo depois de alguém entrar na casa; deve mostrar os dois moradores (antes quebrava com "Value 100 is not between 10 and 90").
-- **Copiar:** código de convite, chave Pix e cobrança do Super Pix, no navegador e no celular. Se não copiar, deve aparecer o aviso de falha, não "copiado".
-- **Fôlego do Caixa:** a faixa "Gasto diário seguro" só aparece no ciclo em andamento; fora dele aparece "Voltar ao ciclo atual".
-- **Troca de ciclo:** ao passar de um ciclo para outro os números esmaecem até o novo chegar; clicar várias vezes seguidas deve parar no último ciclo pedido.
-- **Recorrente em ciclo futuro:** com a "Internet" todo dia 25, o ciclo de 09/12 a 08/01 deve mostrar só a de 25/12, sem as de outubro e novembro.
-- **Planejamento de Aportes:** conta recorrente fixa entra em "fixas"; em aportes fixos, a cota do dono de uma categoria sobe no valor das despesas dela e bate com o fechamento.
-- **Scanner:** editar o título direto na revisão e trocar a categoria, por código de barras e por documento.
-- **Painel de detalhes da despesa e cartão em "Gastos do Ciclo":** nome longo de morador e coluna estreita não devem estourar.
-- **Categorias:** editar nome e dono; excluir uma sem lançamentos; tentar excluir uma com lançamentos (deve recusar dizendo quantos são); repetir como morador comum (deve recusar por permissão).
-- **Dono da categoria:** definir um dono e conferir que as despesas em aberto viram 100% dele; tirar o dono e conferir a volta ao percentual da casa; despesa com sub-itens em aportes fixos deve ser cobrada do dono no fechamento.
-- **Tempo real:** com dois aparelhos, lançar, pagar e excluir uma despesa em um e ver mudar no outro; entrar na casa com convite e aparecer na lista dos outros.
-- **Ajustes:** índice com quatro grupos e busca ("cartao" sem acento, nome de um cartão, algo inexistente); no PC, grupos à esquerda e conteúdo ao lado; salvar o modelo de rateio dentro da página; editar forma de pagamento e conta fixa na lista; "Gerar código de convite" só cria o código ao tocar; trocar o tema pelos três botões; abrir a importação de fatura pelo bloco "Importar Fatura e Extratos" e pelo menu de um cartão (já chega com o cartão escolhido).
-- **Visibilidade do evento:** a linha de ajuda abaixo de Casa / Restrito / Privado muda conforme a opção.
-
-### Fechamento do ciclo
-- Fechar um ciclo como dono, tentar fechar como membro comum, reabrir, lançar uma despesa esquecida e fechar de novo (o Super Pix deve mostrar só a diferença).
-- Fechar com conta pendente e com gasto acima do balde (aportes fixos).
-- Fechar com pagamento parcial ao Caixa nas quatro opções: financiar, manter como pendência, perdoar e cobrir com caixinha.
-- Reabrir a tela do ciclo fechado: saldos por morador, transferências com nomes (inclusive as do Caixa) e memória de cálculo.
-- Com o fechamento aberto no aparelho do admin, lançar uma despesa por outro aparelho e confirmar: deve pedir para revisar.
-- Com um ciclo fechado, tentar lançar despesa paga e aporte com data dentro dele (deve recusar) e uma conta pendente atrasada (deve aceitar).
-- Com o ciclo reaberto, tentar mudar o valor de uma despesa já acertada (deve recusar) e o título dela (deve aceitar).
-- Definir um dono para uma categoria, lançar uma despesa nela e conferir no fechamento que é cobrada só do dono, sem consumir o balde.
-- Morador sem aporte fixo definido: o fechamento deve mostrar o aviso com o nome dele.
-
-### Lançamentos e despesas
-- Lançar despesa pelo formulário, com sub-itens; editar o título de uma despesa antiga e conferir que o rateio não mudou.
-- Editar uma compra no cartão sem mexer na data: deve continuar na mesma fatura.
-- Lançar despesa pelo assistente e pelo scanner numa categoria com dono; fechar compra do mercado com cartão pessoal. Devem sair com categoria e gerar reembolso quando o cartão tem dono.
-- Fechar compra do mercado com um item pessoal de outro morador (deve nascer o empréstimo) e com item pessoal de quem pagou (não deve nascer).
-- Despesa recorrente: cadastrar, avançar um ciclo, excluir "só esta" e voltar (não deve reaparecer); mudar o dia de vencimento com "esta e as próximas" e avançar outro ciclo.
-- Registrar e desfazer o pagamento de uma fatura de cartão; tentar com o ciclo fechado.
-- Tirar uma despesa de um projeto pelo formulário.
-
-### Empréstimos e caixinhas
-- Criar empréstimo parcelado; como devedor, o botão de excluir não deve aparecer; como credor, só enquanto nada foi pago.
-- Pagar um acordo com o Lar pela aba Pessoal: deve perguntar a caixinha e o saldo dela deve subir.
-- Pagar um acordo de reposição de caixinha: deve voltar para a mesma caixinha, sem perguntar.
-- Caixinha: criar com saldo inicial (deve aparecer "Saldo inicial" no histórico), depositar, resgatar, tentar resgatar acima do saldo e abrir o histórico.
-
-### Ajustes
-- Modelos de Rateio: salvar "Por Categoria de Gasto" e reabrir; em aportes fixos, gravar R$ 0 para um morador; abrir a tela com um morador comum (deve mostrar o aviso e desabilitar o botão).
-- Dia de Início do Ciclo: escolher outro dia, conferir as datas que o diálogo mostra, salvar e navegar pelos próximos ciclos no painel financeiro. Voltar ao dia antigo antes de a troca valer cancela.
-- Recorrentes: a lista deve mostrar as séries ativas da casa, uma linha por série.
-
-### Agenda, tarefas, compras e projetos
-- Evento recorrente: criar com e sem "repetir até"; editar e excluir nos três escopos.
-- Tarefa: editar pelo menu "⋮"; o nome do responsável deve continuar aparecendo no cartão depois de alguns segundos na tela.
-- Item de compra: editar pelo lápis. Repetir a edição de tarefa e de item com um morador que não os criou.
-- Projeto: criar, lançar uma despesa, abrir "Participantes", incluir um convidado de fora e desmarcar um morador; o acerto deve mudar na hora.
-- Relatórios: os percentuais do gráfico por categoria devem somar 100%; exportar o CSV.
-- Relatórios, prévia do fechamento (branch `feat/relatorios-previa-ciclo`): abrir com cada morador; "Minha prévia" deve mostrar só o logado e "Todos", os dois. O saldo de cada um deve ser igual ao do Hub de Liquidação aberto sem mexer em nada. Lançar uma compra num cartão com dono e conferir que a fatura aparece como paga pelo dono; lançar uma conta pendente com uma forma de pagamento de um morador e conferir o mesmo. Navegar para um ciclo fechado ("Fechado em…") e para um futuro. Conferir na Home que o planejador mostra a mesma cota pendente do Hub quando há fatura em aberto. Calendário "Próximos pagamentos": com um empréstimo marcado para não entrar no fechamento, a parcela deve aparecer na data dela; com um que entra no fechamento, não deve aparecer (está dentro do Super Pix); "Copiar código" numa conta lida pelo scanner. "Próximos ciclos": abrir a seção; um empréstimo parcelado deve mostrar uma parcela em cada ciclo, com a numeração certa, e a data da última parcela em "Quitação dos empréstimos". Mais dados: com lançamentos no ciclo anterior, o gráfico por categoria deve mostrar ▲/▼ e o total anterior; "Quem paga as despesas" deve somar o total do ciclo; abrir "Evolução dos últimos ciclos" e conferir os totais com os ciclos navegados no painel. Exportar o CSV no navegador e no celular: o arquivo deve ser salvo e abrir no Excel ou no Google Sheets com acentos, com a prévia e os próximos pagamentos no fim. Exportar a prestação de contas em PDF e abrir. Saldo do Caixa: conferir o "hoje" com o dinheiro que está de fato na conta da casa e se o último saldo do ciclo bate com o fôlego da Home.
-
-### Outros
-- Fila offline com o aparelho realmente sem rede: editar tarefa, editar item e criar empréstimo.
-- Horários: evento com hora marcada e tarefa concluída batendo com o relógio.
-- Assistente e leitura de documento com usuário logado (nunca testados com sessão real). Pedir ao assistente para perdoar uma dívida: ele deve explicar onde fazer, sem propor ação.
-- "Testar chave" de IA no navegador.
+### Correção de inconsistências de 14/10 (commit `42f33fd`, migration 0058)
+- **Compra no cartão:** deve nascer pendente, dentro da fatura, por qualquer tela (formulário, escâner, assistente, compra do mercado, importação).
+- **Fatura e conta recorrente:** com uma conta recorrente no mesmo cartão e vencimento, pagar e desfazer o pagamento da fatura não devem mexer nela; o total em "Pagar fatura" não deve somá-la.
+- **Falha ao gravar:** com a internet desligada, lançar uma despesa, uma tarefa e um aporte: a tela fica aberta, mostra o erro e não diz "sucesso".
+- **"Reverter para pendente"** numa despesa paga: ela deve sair do ciclo da baixa.
+- **Evento:** editar e desmarcar um participante; ele deve sumir da lista.
+- **Despesa de projeto** numa categoria com dono: o acerto do projeto divide entre os participantes, sem cobrar tudo do dono. Mover uma despesa para dentro ou para fora de um projeto refaz o rateio.
+- **Casa sem forma de pagamento** (ou sem categoria): fechar compra, escâner e assistente avisam em vez de gravar sem ela.
+- **Busca nos Ajustes:** "importar" leva direto à página de importação.
 
 ## Migrations desta fase
 
