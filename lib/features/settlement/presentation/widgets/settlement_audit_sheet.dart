@@ -188,42 +188,48 @@ class _SettlementAuditSheetState extends State<SettlementAuditSheet> {
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Row(
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.all(8),
-                      decoration: BoxDecoration(
-                        color: AppColors.primary.withValues(alpha: 0.12),
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                      child: const Icon(
-                        Icons.calculate_outlined,
-                        color: AppColors.primary,
-                        size: 22,
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Text(
-                          'Auditoria do Cálculo',
-                          style: TextStyle(
-                            fontWeight: FontWeight.bold,
-                            fontSize: 18,
-                          ),
+                Expanded(
+                  child: Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: AppColors.primary.withValues(alpha: 0.12),
+                          borderRadius: BorderRadius.circular(10),
                         ),
-                        Text(
-                          widget.summary.cycle.formattedPeriod,
-                          style: TextStyle(
-                            color: Colors.grey.shade600,
-                            fontSize: 12,
-                            fontWeight: FontWeight.w500,
-                          ),
+                        child: const Icon(
+                          Icons.calculate_outlined,
+                          color: AppColors.primary,
+                          size: 22,
                         ),
-                      ],
-                    ),
-                  ],
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text(
+                              'Auditoria do Cálculo',
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                fontWeight: FontWeight.bold,
+                                fontSize: 18,
+                              ),
+                            ),
+                            Text(
+                              widget.summary.cycle.formattedPeriod,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                color: Colors.grey.shade600,
+                                fontSize: 12,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
                 if (!widget.isEmbedded)
                   IconButton(
@@ -366,13 +372,16 @@ class _SettlementAuditSheetState extends State<SettlementAuditSheet> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text(
-                'Saldo Líquido de ${audit.memberName}:',
-                style: const TextStyle(
-                  fontWeight: FontWeight.bold,
-                  fontSize: 14,
+              Expanded(
+                child: Text(
+                  'Saldo Líquido de ${audit.memberName}:',
+                  style: const TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 14,
+                  ),
                 ),
               ),
+              const SizedBox(width: 8),
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                 decoration: BoxDecoration(
@@ -466,15 +475,11 @@ class _SettlementAuditSheetState extends State<SettlementAuditSheet> {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 3),
       child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Row(
-            children: [
-              Icon(icon, size: 14, color: iconColor),
-              const SizedBox(width: 6),
-              Text(label, style: const TextStyle(fontSize: 12)),
-            ],
-          ),
+          Icon(icon, size: 14, color: iconColor),
+          const SizedBox(width: 6),
+          Expanded(child: Text(label, style: const TextStyle(fontSize: 12))),
+          const SizedBox(width: 8),
           PrivacySensitiveText(
             value,
             style: TextStyle(

@@ -233,11 +233,7 @@ class _SettlementHubContent extends StatelessWidget {
               const SizedBox(height: 16),
 
               // PASSO 2: Resumo de Empréstimos P2P
-              _buildStep2P2PSummary(
-                context,
-                summary,
-                canOpenAudit: !isDesktop,
-              ),
+              _buildStep2P2PSummary(context, summary),
               const SizedBox(height: 16),
 
               // PASSO 3: O Veredito - Super Pix
@@ -640,12 +636,15 @@ class _SettlementHubContent extends StatelessWidget {
                           color: AppColors.primary,
                         ),
                         const SizedBox(width: 6),
-                        Text(
-                          summary.cycle.monthName.toUpperCase(),
-                          style: const TextStyle(
-                            fontWeight: FontWeight.bold,
-                            fontSize: 15,
-                            letterSpacing: 0.5,
+                        Flexible(
+                          child: Text(
+                            summary.cycle.monthName.toUpperCase(),
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              fontWeight: FontWeight.bold,
+                              fontSize: 15,
+                              letterSpacing: 0.5,
+                            ),
                           ),
                         ),
                       ],
@@ -764,9 +763,11 @@ class _SettlementHubContent extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(width: 8),
-                const Text(
-                  'Resumo do Caixa da Casa',
-                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+                const Expanded(
+                  child: Text(
+                    'Resumo do Caixa da Casa',
+                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+                  ),
                 ),
               ],
             ),
@@ -812,9 +813,11 @@ class _SettlementHubContent extends StatelessWidget {
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                const Text(
-                  'Aportes Realizados:',
-                  style: TextStyle(color: Colors.grey),
+                const Expanded(
+                  child: Text(
+                    'Aportes Realizados:',
+                    style: TextStyle(color: Colors.grey),
+                  ),
                 ),
                 PrivacySensitiveText(
                   summary.totalContributions.formatted,
@@ -829,9 +832,11 @@ class _SettlementHubContent extends StatelessWidget {
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                const Text(
-                  'Despesas da Casa no Ciclo:',
-                  style: TextStyle(color: Colors.grey),
+                const Expanded(
+                  child: Text(
+                    'Despesas da Casa no Ciclo:',
+                    style: TextStyle(color: Colors.grey),
+                  ),
                 ),
                 PrivacySensitiveText(
                   summary.totalHouseExpenses.formatted,
@@ -844,8 +849,11 @@ class _SettlementHubContent extends StatelessWidget {
             ),
             if (summary.totalPersonalExpensesInBills.cents > 0) ...[
               const SizedBox(height: 4),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              Wrap(
+                alignment: WrapAlignment.spaceBetween,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                spacing: 8,
+                runSpacing: 4,
                 children: [
                   Text(
                     '↳ Compartilhado: ${summary.totalSharedHouseExpenses.formatted}',
@@ -877,13 +885,15 @@ class _SettlementHubContent extends StatelessWidget {
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Text(
-                  isSettled
-                      ? 'Saldo Final do Ciclo:'
-                      : (isSurplus
-                            ? 'Saldo Livre (Sobra no Fundo):'
-                            : 'Déficit do Caixa:'),
-                  style: const TextStyle(fontWeight: FontWeight.w600),
+                Expanded(
+                  child: Text(
+                    isSettled
+                        ? 'Saldo Final do Ciclo:'
+                        : (isSurplus
+                              ? 'Saldo Livre (Sobra no Fundo):'
+                              : 'Déficit do Caixa:'),
+                    style: const TextStyle(fontWeight: FontWeight.w600),
+                  ),
                 ),
                 PrivacySensitiveText(
                   isSettled
@@ -936,164 +946,168 @@ class _SettlementHubContent extends StatelessWidget {
               ),
             ] else if (isSurplus && surplusToDecide.cents > 0) ...[
               const SizedBox(height: 16),
-              Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: AppColors.primary.withValues(alpha: 0.05),
+              // Material (e não um Container colorido) para os RadioListTile
+              // pintarem o toque por cima do fundo.
+              Material(
+                color: AppColors.primary.withValues(alpha: 0.05),
+                shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(12),
-                  border: Border.all(
+                  side: BorderSide(
                     color: AppColors.primary.withValues(alpha: 0.2),
                   ),
                 ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        const Icon(
-                          Icons.savings_rounded,
-                          color: AppColors.primary,
-                          size: 18,
-                        ),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: Text(
-                            'O que fazer com a sobra de ${surplusToDecide.formatted}?',
-                            style: const TextStyle(
-                              fontWeight: FontWeight.bold,
-                              fontSize: 13,
-                              color: AppColors.primary,
+                child: Padding(
+                  padding: const EdgeInsets.all(12),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          const Icon(
+                            Icons.savings_rounded,
+                            color: AppColors.primary,
+                            size: 18,
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              'O que fazer com a sobra de ${surplusToDecide.formatted}?',
+                              style: const TextStyle(
+                                fontWeight: FontWeight.bold,
+                                fontSize: 13,
+                                color: AppColors.primary,
+                              ),
                             ),
                           ),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      RadioListTile<SurplusAction>(
+                        dense: true,
+                        contentPadding: EdgeInsets.zero,
+                        value: SurplusAction.toVault,
+                        groupValue: state.options.surplusAction,
+                        title: const Text(
+                          'Guardar em uma Caixinha (Recomendado)',
+                          style: TextStyle(
+                            fontWeight: FontWeight.w600,
+                            fontSize: 13,
+                          ),
+                        ),
+                        subtitle: const Text(
+                          'Destina a economia para metas ou reserva da casa',
+                          style: TextStyle(fontSize: 11),
+                        ),
+                        onChanged: (val) {
+                          if (val != null)
+                            context.read<SettlementCubit>().updateSurplusAction(
+                              val,
+                            );
+                        },
+                      ),
+                      if (state.options.surplusAction ==
+                          SurplusAction.toVault) ...[
+                        Padding(
+                          padding: const EdgeInsets.only(
+                            left: 32,
+                            right: 8,
+                            bottom: 8,
+                          ),
+                          child: state.vaults.isEmpty
+                              ? Container(
+                                  padding: const EdgeInsets.all(8),
+                                  decoration: BoxDecoration(
+                                    color: Colors.amber.withValues(alpha: 0.1),
+                                    borderRadius: BorderRadius.circular(8),
+                                  ),
+                                  child: const Text(
+                                    'Nenhuma caixinha criada ainda. Crie uma em Caixinhas para guardar a sobra.',
+                                    style: TextStyle(
+                                      fontSize: 11,
+                                      color: Colors.orange,
+                                    ),
+                                  ),
+                                )
+                              : DropdownButtonFormField<String>(
+                                  value:
+                                      state.options.targetVaultId ??
+                                      state.vaults.first.id,
+                                  decoration: const InputDecoration(
+                                    labelText: 'Caixinha de Destino',
+                                    contentPadding: EdgeInsets.symmetric(
+                                      horizontal: 12,
+                                      vertical: 8,
+                                    ),
+                                    border: OutlineInputBorder(),
+                                    isDense: true,
+                                  ),
+                                  items: state.vaults.map((vault) {
+                                    return DropdownMenuItem<String>(
+                                      value: vault.id,
+                                      child: Text(
+                                        '${vault.name} (${vault.currentBalance.formatted})',
+                                        style: const TextStyle(fontSize: 13),
+                                      ),
+                                    );
+                                  }).toList(),
+                                  onChanged: (vaultId) {
+                                    if (vaultId != null) {
+                                      context
+                                          .read<SettlementCubit>()
+                                          .updateTargetVaultId(vaultId);
+                                    }
+                                  },
+                                ),
                         ),
                       ],
-                    ),
-                    const SizedBox(height: 8),
-                    RadioListTile<SurplusAction>(
-                      dense: true,
-                      contentPadding: EdgeInsets.zero,
-                      value: SurplusAction.toVault,
-                      groupValue: state.options.surplusAction,
-                      title: const Text(
-                        'Guardar em uma Caixinha (Recomendado)',
-                        style: TextStyle(
-                          fontWeight: FontWeight.w600,
-                          fontSize: 13,
+                      RadioListTile<SurplusAction>(
+                        dense: true,
+                        contentPadding: EdgeInsets.zero,
+                        value: SurplusAction.rollover,
+                        groupValue: state.options.surplusAction,
+                        title: const Text(
+                          'Deixar no Caixa para o próximo mês',
+                          style: TextStyle(
+                            fontWeight: FontWeight.w600,
+                            fontSize: 13,
+                          ),
                         ),
-                      ),
-                      subtitle: const Text(
-                        'Destina a economia para metas ou reserva da casa',
-                        style: TextStyle(fontSize: 11),
-                      ),
-                      onChanged: (val) {
-                        if (val != null)
-                          context.read<SettlementCubit>().updateSurplusAction(
-                            val,
-                          );
-                      },
-                    ),
-                    if (state.options.surplusAction ==
-                        SurplusAction.toVault) ...[
-                      Padding(
-                        padding: const EdgeInsets.only(
-                          left: 32,
-                          right: 8,
-                          bottom: 8,
+                        subtitle: const Text(
+                          'Fica como folga: cobre gastos acima do balde no próximo ciclo',
+                          style: TextStyle(fontSize: 11),
                         ),
-                        child: state.vaults.isEmpty
-                            ? Container(
-                                padding: const EdgeInsets.all(8),
-                                decoration: BoxDecoration(
-                                  color: Colors.amber.withValues(alpha: 0.1),
-                                  borderRadius: BorderRadius.circular(8),
-                                ),
-                                child: const Text(
-                                  'Nenhuma caixinha criada ainda. Crie uma em Caixinhas para guardar a sobra.',
-                                  style: TextStyle(
-                                    fontSize: 11,
-                                    color: Colors.orange,
-                                  ),
-                                ),
-                              )
-                            : DropdownButtonFormField<String>(
-                                value:
-                                    state.options.targetVaultId ??
-                                    state.vaults.first.id,
-                                decoration: const InputDecoration(
-                                  labelText: 'Caixinha de Destino',
-                                  contentPadding: EdgeInsets.symmetric(
-                                    horizontal: 12,
-                                    vertical: 8,
-                                  ),
-                                  border: OutlineInputBorder(),
-                                  isDense: true,
-                                ),
-                                items: state.vaults.map((vault) {
-                                  return DropdownMenuItem<String>(
-                                    value: vault.id,
-                                    child: Text(
-                                      '${vault.name} (${vault.currentBalance.formatted})',
-                                      style: const TextStyle(fontSize: 13),
-                                    ),
-                                  );
-                                }).toList(),
-                                onChanged: (vaultId) {
-                                  if (vaultId != null) {
-                                    context
-                                        .read<SettlementCubit>()
-                                        .updateTargetVaultId(vaultId);
-                                  }
-                                },
-                              ),
+                        onChanged: (val) {
+                          if (val != null)
+                            context.read<SettlementCubit>().updateSurplusAction(
+                              val,
+                            );
+                        },
+                      ),
+                      RadioListTile<SurplusAction>(
+                        dense: true,
+                        contentPadding: EdgeInsets.zero,
+                        value: SurplusAction.refund,
+                        groupValue: state.options.surplusAction,
+                        title: const Text(
+                          'Devolver aos membros (Rateio)',
+                          style: TextStyle(
+                            fontWeight: FontWeight.w600,
+                            fontSize: 13,
+                          ),
+                        ),
+                        subtitle: const Text(
+                          'Abate do aporte de cada um, na proporção do aporte',
+                          style: TextStyle(fontSize: 11),
+                        ),
+                        onChanged: (val) {
+                          if (val != null)
+                            context.read<SettlementCubit>().updateSurplusAction(
+                              val,
+                            );
+                        },
                       ),
                     ],
-                    RadioListTile<SurplusAction>(
-                      dense: true,
-                      contentPadding: EdgeInsets.zero,
-                      value: SurplusAction.rollover,
-                      groupValue: state.options.surplusAction,
-                      title: const Text(
-                        'Deixar no Caixa para o próximo mês',
-                        style: TextStyle(
-                          fontWeight: FontWeight.w600,
-                          fontSize: 13,
-                        ),
-                      ),
-                      subtitle: const Text(
-                        'Fica como folga: cobre gastos acima do balde no próximo ciclo',
-                        style: TextStyle(fontSize: 11),
-                      ),
-                      onChanged: (val) {
-                        if (val != null)
-                          context.read<SettlementCubit>().updateSurplusAction(
-                            val,
-                          );
-                      },
-                    ),
-                    RadioListTile<SurplusAction>(
-                      dense: true,
-                      contentPadding: EdgeInsets.zero,
-                      value: SurplusAction.refund,
-                      groupValue: state.options.surplusAction,
-                      title: const Text(
-                        'Devolver aos membros (Rateio)',
-                        style: TextStyle(
-                          fontWeight: FontWeight.w600,
-                          fontSize: 13,
-                        ),
-                      ),
-                      subtitle: const Text(
-                        'Abate do aporte de cada um, na proporção do aporte',
-                        style: TextStyle(fontSize: 11),
-                      ),
-                      onChanged: (val) {
-                        if (val != null)
-                          context.read<SettlementCubit>().updateSurplusAction(
-                            val,
-                          );
-                      },
-                    ),
-                  ],
+                  ),
                 ),
               ),
             ],
@@ -1238,13 +1252,10 @@ class _SettlementHubContent extends StatelessWidget {
     );
   }
 
-  /// [canOpenAudit] é falso quando a auditoria já está na tela (desktop):
-  /// aí tocar no morador não abre o modal.
   Widget _buildStep2P2PSummary(
     BuildContext context,
-    SettlementSummary summary, {
-    required bool canOpenAudit,
-  }) {
+    SettlementSummary summary,
+  ) {
     return Card(
       elevation: 0,
       shape: RoundedRectangleBorder(
@@ -1273,11 +1284,13 @@ class _SettlementHubContent extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(width: 8),
-                const Text(
-                  'Compensação de Empréstimos P2P',
-                  style: TextStyle(
-                    fontWeight: FontWeight.bold,
-                    fontSize: 15,
+                const Expanded(
+                  child: Text(
+                    'Compensação de Empréstimos P2P',
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 15,
+                    ),
                   ),
                 ),
               ],
@@ -1286,9 +1299,11 @@ class _SettlementHubContent extends StatelessWidget {
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                const Text(
-                  'Parcelas Interpessoais do Mês:',
-                  style: TextStyle(color: Colors.grey),
+                const Expanded(
+                  child: Text(
+                    'Parcelas Interpessoais do Mês:',
+                    style: TextStyle(color: Colors.grey),
+                  ),
                 ),
                 PrivacySensitiveText(
                   summary.totalP2PCleared.formatted,
@@ -1298,43 +1313,26 @@ class _SettlementHubContent extends StatelessWidget {
             ),
             const SizedBox(height: 10),
             ...summary.memberBalances.map((m) {
-              return InkWell(
-                onTap: canOpenAudit
-                    ? () => SettlementAuditSheet.show(
-                        context: context,
-                        summary: summary,
-                        initialMemberId: m.memberId,
-                      )
-                    : null,
-                borderRadius: BorderRadius.circular(8),
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(
-                    vertical: 6,
-                    horizontal: 4,
-                  ),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Row(
-                        children: [
-                          Text(
-                            '${m.memberName}:',
-                            style: const TextStyle(
-                              fontSize: 13,
-                              fontWeight: FontWeight.w500,
-                            ),
-                          ),
-                          if (canOpenAudit) ...[
-                            const SizedBox(width: 4),
-                            Icon(
-                              Icons.info_outline_rounded,
-                              size: 14,
-                              color: Colors.grey.shade400,
-                            ),
-                          ],
-                        ],
+              return Padding(
+                padding: const EdgeInsets.symmetric(
+                  vertical: 6,
+                  horizontal: 4,
+                ),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        '${m.memberName}:',
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w500,
+                        ),
                       ),
-                      PrivacySensitiveText(
+                    ),
+                    const SizedBox(width: 8),
+                    Flexible(
+                      child: PrivacySensitiveText(
                         m.isCreditor
                             ? '+${m.netBalance.formatted} (a receber)'
                             : m.isDebtor
@@ -1350,8 +1348,8 @@ class _SettlementHubContent extends StatelessWidget {
                               : Colors.grey,
                         ),
                       ),
-                    ],
-                  ),
+                    ),
+                  ],
                 ),
               );
             }),
@@ -1389,34 +1387,31 @@ class _SettlementHubContent extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Row(
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.all(6),
-                      decoration: const BoxDecoration(
-                        color: AppColors.primary,
-                        shape: BoxShape.circle,
-                      ),
-                      child: const Text(
-                        '3',
-                        style: TextStyle(
-                          fontWeight: FontWeight.bold,
-                          color: Colors.white,
-                        ),
-                      ),
+                Container(
+                  padding: const EdgeInsets.all(6),
+                  decoration: const BoxDecoration(
+                    color: AppColors.primary,
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Text(
+                    '3',
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      color: Colors.white,
                     ),
-                    const SizedBox(width: 8),
-                    const Text(
-                      'O Veredito: O "Super Pix"',
-                      style: TextStyle(
-                        fontWeight: FontWeight.bold,
-                        fontSize: 16,
-                        color: AppColors.primary,
-                      ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                const Expanded(
+                  child: Text(
+                    'O Veredito: O "Super Pix"',
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 16,
+                      color: AppColors.primary,
                     ),
-                  ],
+                  ),
                 ),
                 TextButton.icon(
                   onPressed: () => _shareSettlementSummary(context, summary),
@@ -1589,47 +1584,52 @@ class _SettlementHubContent extends StatelessWidget {
                   ),
                 ],
               ),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.end,
-                children: [
-                  PrivacySensitiveText(
-                    isPartial
-                        ? resolution.amountPaid.formatted
-                        : transfer.amount.formatted,
-                    style: TextStyle(
-                      fontWeight: FontWeight.bold,
-                      fontSize: 18,
-                      color: isPartial ? AppColors.accent : AppColors.primary,
-                    ),
-                  ),
-                  if (isPartial)
-                    Text(
-                      'Total: ${transfer.amount.formatted}',
-                      style: const TextStyle(
-                        fontSize: 10,
-                        color: Colors.grey,
-                        decoration: TextDecoration.lineThrough,
+              const SizedBox(width: 8),
+              Flexible(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    PrivacySensitiveText(
+                      isPartial
+                          ? resolution.amountPaid.formatted
+                          : transfer.amount.formatted,
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 18,
+                        color: isPartial ? AppColors.accent : AppColors.primary,
                       ),
                     ),
-                ],
+                    if (isPartial)
+                      Text(
+                        'Total: ${transfer.amount.formatted}',
+                        style: const TextStyle(
+                          fontSize: 10,
+                          color: Colors.grey,
+                          decoration: TextDecoration.lineThrough,
+                        ),
+                      ),
+                  ],
+                ),
               ),
             ],
           ),
           const SizedBox(height: 10),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          // Wrap: no celular os botões descem para a linha de baixo
+          Wrap(
+            alignment: WrapAlignment.spaceBetween,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            spacing: 8,
+            runSpacing: 4,
             children: [
-              Expanded(
-                child: Text(
-                  '${transfer.fromMemberName} transfere para ${transfer.toMemberName}',
-                  style: const TextStyle(
-                    fontWeight: FontWeight.w600,
-                    fontSize: 13,
-                  ),
+              Text(
+                '${transfer.fromMemberName} transfere para ${transfer.toMemberName}',
+                style: const TextStyle(
+                  fontWeight: FontWeight.w600,
+                  fontSize: 13,
                 ),
               ),
-              Row(
-                mainAxisSize: MainAxisSize.min,
+              Wrap(
+                crossAxisAlignment: WrapCrossAlignment.center,
                 children: [
                   if (!isSettled) ...[
                     TextButton.icon(
