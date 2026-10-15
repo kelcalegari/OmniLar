@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:omni_lar/core/domain/value_objects/financial_cycle.dart';
 import 'package:omni_lar/core/errors/failures.dart';
 import 'package:omni_lar/features/finance/data/datasources/mock_finance_datasource.dart';
 import 'package:omni_lar/features/finance/domain/entities/category.dart';
@@ -51,6 +52,38 @@ void main() {
             contains('lançamento'),
           ),
         ),
+      );
+      expect((await ds.getCategories()).any((c) => c.id == 'cat_mercado'), isTrue);
+    });
+
+    test('Excluir movendo: os lançamentos vão para a outra categoria e ela sai', () async {
+      final ds = MockFinanceDataSource();
+      final now = DateTime.now();
+      final cycle = FinancialCycle(
+        start: DateTime(now.year - 5),
+        end: DateTime(now.year + 5),
+      );
+      final before = await ds.getExpensesForCycle(cycle);
+      final inMarket = before.where((e) => e.categoryId == 'cat_mercado').length;
+      expect(inMarket, greaterThan(0));
+      final target = (await ds.getCategories()).firstWhere((c) => c.id != 'cat_mercado');
+
+      await ds.deleteCategory('cat_mercado', moveToCategoryId: target.id);
+
+      final after = await ds.getExpensesForCycle(cycle);
+      expect(after.where((e) => e.categoryId == 'cat_mercado'), isEmpty);
+      expect(
+        after.where((e) => e.categoryId == target.id).length,
+        before.where((e) => e.categoryId == target.id).length + inMarket,
+      );
+      expect((await ds.getCategories()).any((c) => c.id == 'cat_mercado'), isFalse);
+    });
+
+    test('Excluir movendo para ela mesma é recusado', () async {
+      final ds = MockFinanceDataSource();
+      await expectLater(
+        ds.deleteCategory('cat_mercado', moveToCategoryId: 'cat_mercado'),
+        throwsA(isA<ServerFailure>()),
       );
       expect((await ds.getCategories()).any((c) => c.id == 'cat_mercado'), isTrue);
     });

@@ -475,9 +475,9 @@ class FinanceCubit extends Cubit<FinanceState> {
   }
 
   /// Devolve a mensagem de erro para a tela mostrar, ou null se excluiu.
-  Future<String?> deleteCategory(String categoryId) async {
+  Future<String?> deleteCategory(String categoryId, {String? moveToCategoryId}) async {
     try {
-      await _repository.deleteCategory(categoryId);
+      await _repository.deleteCategory(categoryId, moveToCategoryId: moveToCategoryId);
       await loadCycleData(cycle: state.currentCycle);
       return null;
     } catch (e) {

@@ -34,7 +34,11 @@ import '../../../../core/widgets/save_feedback.dart';
 class SmartScannerPage extends StatefulWidget {
   final void Function(CaptureProposal proposal)? onProposalReady;
 
-  const SmartScannerPage({super.key, this.onProposalReady});
+  /// Abre direto na revisão desta proposta (usado nos testes).
+  @visibleForTesting
+  final CaptureProposal? initialProposal;
+
+  const SmartScannerPage({super.key, this.onProposalReady, this.initialProposal});
 
   static Future<void> show(BuildContext context) {
     return showAdaptiveModal(
@@ -63,7 +67,11 @@ class _SmartScannerPageState extends State<SmartScannerPage> {
 
   // Boleto: vencimento, se já foi pago e a conta já prevista no app
   DateTime? _dueDate;
+  // Boleto nasce a pagar; nota e cupom, já pagos (os dois podem ser trocados)
   bool _alreadyPaid = false;
+
+  /// Nota e cupom: dia da compra (já paga) ou do vencimento (a pagar).
+  DateTime _documentDate = DateTime.now();
   DateTime _paidOn = DateTime.now();
   List<HouseExpense> _knownBills = const [];
   HouseExpense? _useKnownBill;
@@ -86,6 +94,7 @@ class _SmartScannerPageState extends State<SmartScannerPage> {
   @override
   void initState() {
     super.initState();
+    _currentProposal = widget.initialProposal;
     if (_isLiveCameraSupported) {
       _initCamera();
     }
@@ -929,14 +938,20 @@ class _SmartScannerPageState extends State<SmartScannerPage> {
       final financeCubit = context.read<FinanceCubit>();
       final state = financeCubit.state;
       final currentUserId = sl<AuthRepository>().currentUser?.id;
-      final selectedPm = state.paymentMethods
-          .where((p) => p.id == _selectedPaymentMethodId)
-          .firstOrNull ?? state.paymentMethods.firstOrNull;
+      final isPayable = !_alreadyPaid;
+      // A pagar: o meio é escolhido ao pagar; até lá, o da casa
+      final selectedPm = isPayable
+          ? (ExpenseLaunchDefaults.houseAccount(state.paymentMethods) ?? state.paymentMethods.firstOrNull)
+          : state.paymentMethods
+                  .where((p) => p.id == _selectedPaymentMethodId)
+                  .firstOrNull ??
+              state.paymentMethods.firstOrNull;
       // Meio de pagamento pessoal: quem pagou é o dono dele e a Casa reembolsa
-      final paidByMemberId = selectedPm?.ownerMemberId ??
+      final paidByMemberId = (isPayable ? null : selectedPm?.ownerMemberId) ??
           currentUserId ??
           (state.members.isNotEmpty ? state.members.first.id : 'member_carlos');
-      final paidOutOfPocket = selectedPm != null &&
+      final paidOutOfPocket = !isPayable &&
+          selectedPm != null &&
           selectedPm.ownerMemberId != null &&
           selectedPm.id != 'pm_caixa';
 
@@ -986,20 +1001,21 @@ class _SmartScannerPageState extends State<SmartScannerPage> {
       final scannedMethod =
           state.paymentMethods.where((p) => p.id == finalPaymentMethodId).firstOrNull;
       // No cartão, a compra entra na fatura (o vencimento é calculado ao gravar)
-      final waitsForInvoice = ExpenseLaunchDefaults.waitsForInvoice(scannedMethod);
+      final waitsForInvoice = !isPayable && ExpenseLaunchDefaults.waitsForInvoice(scannedMethod);
+      final documentDate = _documentDate;
 
       final expense = HouseExpense(
         id: expenseId,
         title: title,
         amount: proposal.totalAmount,
-        date: proposal.date,
-        dueDate: waitsForInvoice ? null : proposal.date,
+        date: documentDate,
+        dueDate: waitsForInvoice ? null : documentDate,
         categoryId: finalCategoryId,
         paidByMemberId: paidByMemberId,
         paymentMethodId: finalPaymentMethodId,
         splitRule: splitRule,
         paidOutOfPocket: waitsForInvoice ? false : paidOutOfPocket,
-        status: waitsForInvoice ? ExpenseStatus.pending : ExpenseStatus.paid,
+        status: waitsForInvoice || isPayable ? ExpenseStatus.pending : ExpenseStatus.paid,
         notes: proposal.merchantOrBeneficiary,
         items: expenseItems,
       );
@@ -1017,7 +1033,9 @@ class _SmartScannerPageState extends State<SmartScannerPage> {
           SnackBar(
             backgroundColor: AppColors.creditGreen,
             content: Text(
-              'Proposta "$title" confirmada! Despesa de ${proposal.houseAmount.format()} lançada. 📋✅',
+              isPayable
+                  ? 'Conta "$title" lançada a pagar, vence em ${DateFormat('dd/MM').format(documentDate)}.'
+                  : 'Proposta "$title" confirmada! Despesa de ${proposal.houseAmount.format()} lançada. 📋✅',
             ),
           ),
         );
@@ -1326,7 +1344,8 @@ class _SmartScannerPageState extends State<SmartScannerPage> {
       _titleController.text = proposal.title;
       _selectedCategoryId = null;
       _dueDate = isBoleto ? proposal.dueDate : null;
-      _alreadyPaid = false;
+      _alreadyPaid = !isBoleto;
+      _documentDate = proposal.date;
       _paidOn = DateTime.now();
       _knownBills = const [];
       _useKnownBill = null;
@@ -1555,7 +1574,7 @@ class _SmartScannerPageState extends State<SmartScannerPage> {
           ],
           const SizedBox(height: 16),
 
-          if (isBoleto) ..._boletoFields(theme, proposal),
+          if (isBoleto) ..._boletoFields(theme, proposal) else ..._documentFields(theme),
 
           // Categoria (conta já prevista mantém a dela; fatura não vira despesa)
           if (_useKnownBill == null && _useInvoice == null)
@@ -1586,8 +1605,8 @@ class _SmartScannerPageState extends State<SmartScannerPage> {
             },
           ),
 
-          // Forma de Pagamento (boleto a pagar: o meio é escolhido ao pagar)
-          if (!isBoleto || _alreadyPaid)
+          // Forma de Pagamento (conta a pagar: o meio é escolhido ao pagar)
+          if (_alreadyPaid)
           Builder(
             builder: (context) {
               final paymentMethods = context.watch<FinanceCubit>().state.paymentMethods;
@@ -1656,6 +1675,64 @@ class _SmartScannerPageState extends State<SmartScannerPage> {
         ],
       ),
     );
+  }
+
+  Future<void> _pickDocumentDate() async {
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: _documentDate,
+      firstDate: DateTime(_documentDate.year - 1),
+      lastDate: _alreadyPaid ? DateTime.now() : DateTime(_documentDate.year + 2, 12, 31),
+      helpText: _alreadyPaid ? 'Dia da compra' : 'Vencimento',
+    );
+    if (picked != null && mounted) {
+      setState(() => _documentDate = DateTime(picked.year, picked.month, picked.day, 12));
+    }
+  }
+
+  /// Nota e cupom: já pagos (na data da compra) ou a pagar (com vencimento).
+  List<Widget> _documentFields(ThemeData theme) {
+    final dayFormat = DateFormat('dd/MM/yyyy');
+    return [
+      SegmentedButton<bool>(
+        key: const Key('scan_paid_choice'),
+        segments: const [
+          ButtonSegment(value: true, label: Text('Já paguei'), icon: Icon(Icons.check_circle_outline, size: 16)),
+          ButtonSegment(value: false, label: Text('A pagar'), icon: Icon(Icons.schedule_rounded, size: 16)),
+        ],
+        selected: {_alreadyPaid},
+        onSelectionChanged: _isSubmitting
+            ? null
+            : (value) => setState(() {
+                  _alreadyPaid = value.first;
+                  // Já paga não pode ficar no futuro
+                  final now = DateTime.now();
+                  if (_alreadyPaid && _documentDate.isAfter(now)) {
+                    _documentDate = DateTime(now.year, now.month, now.day, 12);
+                  }
+                }),
+      ),
+      const SizedBox(height: 8),
+      OutlinedButton.icon(
+        key: const Key('scan_document_date'),
+        icon: Icon(_alreadyPaid ? Icons.event_available_rounded : Icons.event_rounded, size: 18),
+        label: Text(
+          _alreadyPaid
+              ? 'Compra em ${dayFormat.format(_documentDate)}'
+              : 'Vence em ${dayFormat.format(_documentDate)}',
+        ),
+        onPressed: _isSubmitting ? null : _pickDocumentDate,
+      ),
+      if (!_alreadyPaid)
+        Padding(
+          padding: const EdgeInsets.only(top: 4),
+          child: Text(
+            'Fica em "A Vencer" até ser paga. Ao pagar, você escolhe o meio de pagamento.',
+            style: theme.textTheme.bodySmall?.copyWith(fontSize: 12),
+          ),
+        ),
+      const SizedBox(height: 12),
+    ];
   }
 
   /// Código para copiar, vencimento, situação e conta já prevista.

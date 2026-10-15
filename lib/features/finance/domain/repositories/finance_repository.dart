@@ -41,7 +41,9 @@ abstract class FinanceRepository {
   Future<void> addCategory(ExpenseCategory category);
   Future<void> updateCategory(ExpenseCategory category);
   /// Recusa (com a mensagem pronta para a tela) a categoria que já tem lançamentos.
-  Future<void> deleteCategory(String categoryId);
+  /// Exclui a categoria. Com [moveToCategoryId], os lançamentos dela passam
+  /// antes para essa outra categoria; sem ela, categoria em uso é recusada.
+  Future<void> deleteCategory(String categoryId, {String? moveToCategoryId});
   Future<void> addPaymentMethod(PaymentMethod paymentMethod);
   Future<void> updatePaymentMethod(PaymentMethod paymentMethod);
   Future<void> deletePaymentMethod(String paymentMethodId);

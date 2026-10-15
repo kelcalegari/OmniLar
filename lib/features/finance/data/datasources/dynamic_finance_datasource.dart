@@ -89,8 +89,8 @@ class DynamicFinanceDataSource implements FinanceDataSource {
       _active.updateCategory(category);
 
   @override
-  Future<void> deleteCategory(String categoryId) =>
-      _active.deleteCategory(categoryId);
+  Future<void> deleteCategory(String categoryId, {String? moveToCategoryId}) =>
+      _active.deleteCategory(categoryId, moveToCategoryId: moveToCategoryId);
 
   @override
   Future<void> addPaymentMethod(PaymentMethod paymentMethod) =>

@@ -697,7 +697,22 @@ class MockFinanceDataSource implements FinanceDataSource {
   }
 
   @override
-  Future<void> deleteCategory(String categoryId) async {
+  Future<void> deleteCategory(String categoryId, {String? moveToCategoryId}) async {
+    if (moveToCategoryId != null) {
+      if (moveToCategoryId == categoryId || !_categories.any((c) => c.id == moveToCategoryId)) {
+        throw const ServerFailure('Escolha outra categoria para receber os lançamentos.');
+      }
+      // Os lançamentos passam para a outra categoria; o rateio de cada um não muda
+      for (var i = 0; i < _expenses.length; i++) {
+        final e = _expenses[i];
+        _expenses[i] = e.copyWith(
+          categoryId: e.categoryId == categoryId ? moveToCategoryId : null,
+          items: e.items
+              .map((it) => it.categoryId == categoryId ? it.copyWith(categoryId: moveToCategoryId) : it)
+              .toList(),
+        );
+      }
+    }
     final inUse = _expenses.where((e) =>
         e.categoryId == categoryId || e.items.any((i) => i.categoryId == categoryId)).length;
     if (inUse > 0) {

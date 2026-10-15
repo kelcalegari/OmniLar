@@ -794,8 +794,20 @@ class SupabaseFinanceDataSource implements FinanceDataSource {
   }
 
   @override
-  Future<void> deleteCategory(String categoryId) async {
+  Future<void> deleteCategory(String categoryId, {String? moveToCategoryId}) async {
     if (!_isUuid(categoryId)) return;
+    if (moveToCategoryId != null) {
+      // Move os lançamentos e exclui na mesma transação (migration 0059)
+      try {
+        await client.rpc('delete_category_moving_expenses', params: {
+          'p_category_id': categoryId,
+          'p_target_category_id': moveToCategoryId,
+        });
+      } on PostgrestException catch (e) {
+        throw ServerFailure(e.message);
+      }
+      return;
+    }
     final List<dynamic> rows;
     try {
       final expenses = await client

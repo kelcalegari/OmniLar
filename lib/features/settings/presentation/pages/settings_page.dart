@@ -401,36 +401,69 @@ class _SettingsPageState extends State<SettingsPage> {
       return;
     }
 
+    // Os lançamentos da categoria passam para outra, escolhida aqui
+    final others = financeCubit.state.categories.where((c) => c.id != category.id).toList();
+    if (others.isEmpty) return;
+    String targetId = others.first.id;
+
     showDialog(
       context: context,
-      builder: (dialogCtx) => AlertDialog(
-        title: const Text(
-          'Excluir Categoria',
-          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
-        ),
-        content: Text(
-          'Excluir a categoria "${category.name}"? Só é possível excluir categoria sem lançamentos.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dialogCtx),
-            child: const Text('Cancelar'),
+      builder: (dialogCtx) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: const Text(
+            'Excluir Categoria',
+            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
           ),
-          FilledButton(
-            style: FilledButton.styleFrom(backgroundColor: AppColors.debtRed),
-            onPressed: () async {
-              Navigator.pop(dialogCtx);
-              final error = await financeCubit.deleteCategory(category.id);
-              messenger.showSnackBar(
-                SnackBar(
-                  backgroundColor: error == null ? null : AppColors.debtRed,
-                  content: Text(error ?? 'Categoria "${category.name}" excluída.'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text('Excluir a categoria "${category.name}"? Os lançamentos dela, inclusive '
+                  'os de ciclos fechados, passam para a categoria escolhida abaixo; o rateio de cada um não muda.'),
+              const SizedBox(height: 16),
+              DropdownButtonFormField<String>(
+                key: const Key('delete_category_target'),
+                initialValue: targetId,
+                isExpanded: true,
+                decoration: const InputDecoration(
+                  labelText: 'Mover os lançamentos para',
+                  border: OutlineInputBorder(),
                 ),
-              );
-            },
-            child: const Text('Excluir'),
+                items: [
+                  for (final c in others) DropdownMenuItem(value: c.id, child: Text(c.name)),
+                ],
+                onChanged: (value) {
+                  if (value != null) setDialogState(() => targetId = value);
+                },
+              ),
+            ],
           ),
-        ],
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogCtx),
+              child: const Text('Cancelar'),
+            ),
+            FilledButton(
+              style: FilledButton.styleFrom(backgroundColor: AppColors.debtRed),
+              onPressed: () async {
+                Navigator.pop(dialogCtx);
+                final target = others.firstWhere((c) => c.id == targetId);
+                final error = await financeCubit.deleteCategory(
+                  category.id,
+                  moveToCategoryId: targetId,
+                );
+                messenger.showSnackBar(
+                  SnackBar(
+                    backgroundColor: error == null ? null : AppColors.debtRed,
+                    content: Text(error ??
+                        'Categoria "${category.name}" excluída; os lançamentos foram para "${target.name}".'),
+                  ),
+                );
+              },
+              child: const Text('Excluir e mover'),
+            ),
+          ],
+        ),
       ),
     );
   }
