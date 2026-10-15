@@ -15,6 +15,8 @@ import '../cubit/reports_cubit.dart';
 import '../widgets/cycle_preview_section.dart';
 import '../widgets/payment_calendar_section.dart';
 import '../widgets/upcoming_cycles_section.dart';
+import '../widgets/cycle_insights_section.dart';
+import '../../domain/entities/cycle_insights.dart';
 
 class ReportsPage extends StatefulWidget {
   const ReportsPage({super.key});
@@ -39,7 +41,11 @@ class _ReportsPageState extends State<ReportsPage> {
       create: (context) {
         final cubit = sl<ReportsCubit>();
         final finance = context.read<FinanceCubit>().state;
-        if (finance.status == FinanceStatus.success) cubit.loadPreview(finance);
+        if (finance.status == FinanceStatus.success)
+          cubit.loadPreview(
+            finance,
+            schedule: context.read<FinanceCubit>().cycleSchedule,
+          );
         return cubit;
       },
       // A prévia acompanha o ciclo que o painel carregou (troca de ciclo,
@@ -54,8 +60,17 @@ class _ReportsPageState extends State<ReportsPage> {
                 previous.members != current.members),
         listener: (context, state) {
           final reports = context.read<ReportsCubit>();
-          reports.loadPreview(state);
+          reports.loadPreview(
+            state,
+            schedule: context.read<FinanceCubit>().cycleSchedule,
+          );
           // Próximos ciclos já abertos: um lançamento novo pode mudar eles
+          if (reports.evolutionRequested) {
+            reports.loadEvolution(
+              state,
+              context.read<FinanceCubit>().cycleSchedule,
+            );
+          }
           if (reports.upcomingRequested) {
             reports.loadUpcoming(
               state,
@@ -139,7 +154,12 @@ class _ReportsPageContent extends StatelessWidget {
                             membersWithoutFixedContribution:
                                 _membersWithoutFixedContribution(state),
                             onRetry: () =>
-                                context.read<ReportsCubit>().loadPreview(state),
+                                context.read<ReportsCubit>().loadPreview(
+                                  state,
+                                  schedule: context
+                                      .read<FinanceCubit>()
+                                      .cycleSchedule,
+                                ),
                           ),
                           PaymentCalendarSection(
                             currentMemberId: _currentMemberId(context),
@@ -164,12 +184,30 @@ class _ReportsPageContent extends StatelessWidget {
                     _buildExecutiveCards(context, state, summary),
                     const SizedBox(height: 20),
 
-                    // Seção: Gastos por Categoria
-                    _buildCategoriesSection(context, state),
+                    // Seção: Gastos por Categoria (com o ciclo anterior)
+                    BlocBuilder<ReportsCubit, ReportsState>(
+                      buildWhen: (a, b) => a.insights != b.insights,
+                      builder: (context, reports) => _buildCategoriesSection(
+                        context,
+                        state,
+                        reports.insights,
+                      ),
+                    ),
                     const SizedBox(height: 20),
 
                     // Seção: Aportes por Membro
                     _buildMembersSection(context, state),
+                    const SizedBox(height: 20),
+
+                    // Quem paga, empréstimos e evolução dos ciclos
+                    CycleInsightsSection(
+                      categories: state.categories,
+                      onEvolutionRequested: () =>
+                          context.read<ReportsCubit>().loadEvolution(
+                            context.read<FinanceCubit>().state,
+                            context.read<FinanceCubit>().cycleSchedule,
+                          ),
+                    ),
                     const SizedBox(height: 20),
 
                     // Card de Acesso ao Hub de Fechamento
@@ -374,7 +412,33 @@ class _ReportsPageContent extends StatelessWidget {
     );
   }
 
-  Widget _buildCategoriesSection(BuildContext context, FinanceState state) {
+  /// Variação de uma categoria sobre o ciclo anterior: gastar mais é vermelho.
+  Widget _changeLabel(double? change) {
+    if (change == null) return const SizedBox.shrink();
+    final up = change > 0;
+    final text = change.abs() < 0.5
+        ? '='
+        : '${up ? '▲' : '▼'} ${change.abs().toStringAsFixed(0)}%';
+    return Padding(
+      padding: const EdgeInsets.only(right: 8),
+      child: Text(
+        text,
+        style: TextStyle(
+          fontSize: 11,
+          fontWeight: FontWeight.w600,
+          color: change.abs() < 0.5
+              ? Colors.grey
+              : (up ? AppColors.debtRed : AppColors.creditGreen),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCategoriesSection(
+    BuildContext context,
+    FinanceState state,
+    CycleInsights? insights,
+  ) {
     final expenses = state.expenses;
     final categories = state.categories;
 
@@ -417,6 +481,16 @@ class _ReportsPageContent extends StatelessWidget {
                 ),
               ],
             ),
+            // Sem lançamento no ciclo anterior não há com o que comparar
+            if (insights != null && insights.previousTotal.isPositive) ...[
+              const SizedBox(height: 4),
+              PrivacySensitiveText(
+                'Ciclo anterior: ${insights.previousTotal.formatted} · este ciclo '
+                '${totalSpentCents >= insights.previousTotal.cents ? '+' : '−'}'
+                '${Money((totalSpentCents - insights.previousTotal.cents).abs()).formatted}',
+                style: const TextStyle(fontSize: 12, color: Colors.grey),
+              ),
+            ],
             const SizedBox(height: 16),
 
             // Barra visual de progresso proporcional
@@ -509,6 +583,7 @@ class _ReportsPageContent extends StatelessWidget {
                           ),
                         ),
                       ),
+                      _changeLabel(insights?.changeOf(catId, cents)),
                       Text(
                         '${percentage.toStringAsFixed(1)}%',
                         style: const TextStyle(

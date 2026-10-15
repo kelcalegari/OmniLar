@@ -9,9 +9,11 @@ import '../../../p2p/domain/entities/p2p_loan.dart';
 import '../../../p2p/domain/repositories/p2p_repository.dart';
 import '../../../settlement/domain/entities/settlement_summary.dart';
 import '../../../settlement/domain/repositories/settlement_repository.dart';
+import '../../domain/entities/cycle_insights.dart';
 import '../../domain/entities/cycle_preview.dart';
 import '../../domain/entities/payment_due_entry.dart';
 import '../../domain/entities/upcoming_forecast.dart';
+import '../../domain/services/cycle_insights_builder.dart';
 import '../../domain/services/cycle_preview_builder.dart';
 import '../../domain/services/payment_calendar_builder.dart';
 import '../../domain/services/upcoming_cycles_builder.dart';
@@ -34,6 +36,14 @@ class ReportsState extends Equatable {
   final bool upcomingLoading;
   final String? upcomingError;
 
+  /// Comparação com o ciclo anterior, quem paga o quê e empréstimos.
+  final CycleInsights? insights;
+
+  /// Evolução dos últimos ciclos: carregada só quando a seção é aberta.
+  final List<CycleTotal>? evolution;
+  final bool evolutionLoading;
+  final String? evolutionError;
+
   const ReportsState({
     this.status = ReportsStatus.initial,
     this.preview,
@@ -43,6 +53,10 @@ class ReportsState extends Equatable {
     this.upcoming,
     this.upcomingLoading = false,
     this.upcomingError,
+    this.insights,
+    this.evolution,
+    this.evolutionLoading = false,
+    this.evolutionError,
   });
 
   ReportsState copyWith({
@@ -54,6 +68,10 @@ class ReportsState extends Equatable {
     UpcomingForecast? upcoming,
     bool? upcomingLoading,
     String? upcomingError,
+    CycleInsights? insights,
+    List<CycleTotal>? evolution,
+    bool? evolutionLoading,
+    String? evolutionError,
     bool clearCycleData = false,
     bool clearErrors = false,
   }) {
@@ -66,6 +84,11 @@ class ReportsState extends Equatable {
       upcoming: upcoming ?? this.upcoming,
       upcomingLoading: upcomingLoading ?? this.upcomingLoading,
       upcomingError: upcomingError ?? (clearErrors ? null : this.upcomingError),
+      insights: insights ?? (clearCycleData ? null : this.insights),
+      evolution: evolution ?? (clearCycleData ? null : this.evolution),
+      evolutionLoading: evolutionLoading ?? this.evolutionLoading,
+      evolutionError:
+          evolutionError ?? (clearErrors ? null : this.evolutionError),
     );
   }
 
@@ -79,6 +102,10 @@ class ReportsState extends Equatable {
     upcoming,
     upcomingLoading,
     upcomingError,
+    insights,
+    evolution,
+    evolutionLoading,
+    evolutionError,
   ];
 }
 
@@ -92,6 +119,7 @@ class ReportsCubit extends Cubit<ReportsState> {
   final PaymentCalendarBuilder _calendarBuilder =
       const PaymentCalendarBuilder();
   final UpcomingCyclesBuilder _upcomingBuilder = const UpcomingCyclesBuilder();
+  final CycleInsightsBuilder _insightsBuilder = const CycleInsightsBuilder();
   final DateTime Function() _now;
 
   ReportsCubit(
@@ -107,6 +135,11 @@ class ReportsCubit extends Cubit<ReportsState> {
   /// Número da carga mais recente: resposta de uma carga antiga é descartada.
   int _sequence = 0;
   int _upcomingSequence = 0;
+  int _evolutionSequence = 0;
+
+  /// A evolução dos últimos ciclos foi aberta: recarrega junto com o resto.
+  bool get evolutionRequested => _evolutionRequested;
+  bool _evolutionRequested = false;
 
   /// A seção dos próximos ciclos foi aberta: recarrega junto com o resto.
   bool get upcomingRequested => _upcomingRequested;
@@ -116,8 +149,12 @@ class ReportsCubit extends Cubit<ReportsState> {
     () => _p2pRepository?.getLoans() ?? Future.value(const <P2PLoan>[]),
   ).catchError((_) => const <P2PLoan>[]);
 
-  /// Monta a prévia do ciclo que o painel financeiro carregou.
-  Future<void> loadPreview(FinanceState finance) async {
+  /// Monta a prévia do ciclo que o painel financeiro carregou. Com
+  /// [schedule], lê também o ciclo anterior para a comparação.
+  Future<void> loadPreview(
+    FinanceState finance, {
+    CycleSchedule? schedule,
+  }) async {
     final sequence = ++_sequence;
     // Troca de ciclo: a prévia anterior não vale para o novo
     final sameCycle = state.preview?.cycle == finance.currentCycle;
@@ -134,8 +171,18 @@ class ReportsCubit extends Cubit<ReportsState> {
       );
       // Sem os empréstimos o calendário sai só com faturas, contas e fechamento
       final loansFuture = _loans();
+      // Sem o ciclo anterior a leitura sai sem comparação
+      final finances = _financeRepository;
+      final previousFuture = finances == null || schedule == null
+          ? Future<List<HouseExpense>?>.value(null)
+          : Future<List<HouseExpense>?>.sync(
+              () => finances.getExpensesForCycle(
+                schedule.previous(finance.currentCycle),
+              ),
+            ).catchError((_) => null);
       final summary = await summaryFuture;
       final loans = await loansFuture;
+      final previousExpenses = await previousFuture;
       if (sequence != _sequence || isClosed) return;
 
       final today = _now();
@@ -156,12 +203,21 @@ class ReportsCubit extends Cubit<ReportsState> {
         members: finance.members,
         today: today,
       );
+      final insights = _insightsBuilder.build(
+        expenses: finance.expenses,
+        previousExpenses: previousExpenses,
+        members: finance.members,
+        paymentMethods: finance.paymentMethods,
+        loans: loans,
+        today: today,
+      );
       emit(
         state.copyWith(
           status: ReportsStatus.loaded,
           preview: preview,
           calendar: calendar,
           summary: summary,
+          insights: insights,
         ),
       );
     } catch (e) {
@@ -214,6 +270,46 @@ class ReportsCubit extends Cubit<ReportsState> {
         state.copyWith(
           upcomingLoading: false,
           upcomingError: 'Não foi possível carregar os próximos ciclos: $e',
+        ),
+      );
+    }
+  }
+
+  /// Total dos últimos [count] ciclos até o que o painel mostra (uma leitura
+  /// de despesas por ciclo; o ciclo mostrado reaproveita o que já foi lido).
+  Future<void> loadEvolution(
+    FinanceState finance,
+    CycleSchedule schedule, {
+    int count = 6,
+  }) async {
+    _evolutionRequested = true;
+    final finances = _financeRepository;
+    if (finances == null) return;
+    final sequence = ++_evolutionSequence;
+    emit(state.copyWith(evolutionLoading: true, clearErrors: true));
+    try {
+      final cycles = <FinancialCycle>[finance.currentCycle];
+      while (cycles.length < count) {
+        cycles.insert(0, schedule.previous(cycles.first));
+      }
+      final reads = [
+        for (final c in cycles)
+          c == finance.currentCycle
+              ? Future.value(finance.expenses)
+              : finances.getExpensesForCycle(c),
+      ];
+      final totals = <CycleTotal>[
+        for (var i = 0; i < cycles.length; i++)
+          CycleInsightsBuilder.totalOf(cycles[i], await reads[i]),
+      ];
+      if (sequence != _evolutionSequence || isClosed) return;
+      emit(state.copyWith(evolution: totals, evolutionLoading: false));
+    } catch (e) {
+      if (sequence != _evolutionSequence || isClosed) return;
+      emit(
+        state.copyWith(
+          evolutionLoading: false,
+          evolutionError: 'Não foi possível carregar a evolução dos ciclos: $e',
         ),
       );
     }

@@ -15,34 +15,48 @@ void main() {
   final today = DateTime(2026, 10, 20); // ciclo atual: 10/10 a 09/11
 
   const members = [
-    HouseMember(id: 'm_ana', name: 'Ana', role: 'owner', defaultSplitPercent: 50),
-    HouseMember(id: 'm_bia', name: 'Bia', role: 'member', defaultSplitPercent: 50),
+    HouseMember(
+      id: 'm_ana',
+      name: 'Ana',
+      role: 'owner',
+      defaultSplitPercent: 50,
+    ),
+    HouseMember(
+      id: 'm_bia',
+      name: 'Bia',
+      role: 'member',
+      defaultSplitPercent: 50,
+    ),
   ];
-  const account = PaymentMethod(id: 'pm_conta', name: 'Conta', type: PaymentMethodType.account);
+  const account = PaymentMethod(
+    id: 'pm_conta',
+    name: 'Conta',
+    type: PaymentMethodType.account,
+  );
 
   /// Quatro parcelas de R$ 50, uma por mês, do dia 15/10 ao dia 15/01.
   P2PLoan loan(String id, {bool settleInCycle = true}) => P2PLoan(
-        id: id,
-        title: id,
-        totalAmount: const Money(20000),
-        lenderMemberId: 'm_ana',
-        borrowerMemberId: 'm_bia',
-        installmentsCount: 4,
-        createdAt: DateTime(2026, 10, 1),
-        firstDueDate: DateTime(2026, 10, 15),
-        settleInCycle: settleInCycle,
-        installments: [
-          for (var n = 1; n <= 4; n++)
-            P2PInstallment(
-              id: '$id-$n',
-              loanId: id,
-              number: n,
-              totalCount: 4,
-              amount: const Money(5000),
-              dueDate: DateTime(2026, 9 + n, 15),
-            ),
-        ],
-      );
+    id: id,
+    title: id,
+    totalAmount: const Money(20000),
+    lenderMemberId: 'm_ana',
+    borrowerMemberId: 'm_bia',
+    installmentsCount: 4,
+    createdAt: DateTime(2026, 10, 1),
+    firstDueDate: DateTime(2026, 10, 15),
+    settleInCycle: settleInCycle,
+    installments: [
+      for (var n = 1; n <= 4; n++)
+        P2PInstallment(
+          id: '$id-$n',
+          loanId: id,
+          number: n,
+          totalCount: 4,
+          amount: const Money(5000),
+          dueDate: DateTime(2026, 9 + n, 15),
+        ),
+    ],
+  );
 
   test('os três ciclos seguintes ao de hoje', () {
     final cycles = UpcomingCyclesBuilder.upcomingCycles(schedule, today);
@@ -66,31 +80,41 @@ void main() {
     expect(forecast.cycles, hasLength(3));
     for (final (index, cycle) in forecast.cycles.indexed) {
       final bia = cycle.preview.memberById('m_bia')!;
-      expect(bia.p2pToPay.cents, 5000, reason: cycle.preview.cycle.formattedPeriod);
+      expect(
+        bia.p2pToPay.cents,
+        5000,
+        reason: cycle.preview.cycle.formattedPeriod,
+      );
       expect(bia.installmentsToPay.single.installmentNumber, index + 2);
       expect(bia.installmentsToPay.single.totalInstallments, 4);
       expect(cycle.preview.memberById('m_ana')!.p2pToReceive.cents, 5000);
     }
   });
 
-  test('parcela fora do fechamento fica numa lista própria e fora do saldo', () {
-    final forecast = const UpcomingCyclesBuilder().build(
-      schedule: schedule,
-      expensesByCycle: const {},
-      loans: [loan('lembrete', settleInCycle: false)],
-      members: members,
-      paymentMethods: const [account],
-      today: today,
-    );
+  test(
+    'parcela fora do fechamento fica numa lista própria e fora do saldo',
+    () {
+      final forecast = const UpcomingCyclesBuilder().build(
+        schedule: schedule,
+        expensesByCycle: const {},
+        loans: [loan('lembrete', settleInCycle: false)],
+        members: members,
+        paymentMethods: const [account],
+        today: today,
+      );
 
-    final first = forecast.cycles.first;
-    expect(first.preview.memberById('m_bia')!.p2pToPay, const Money.zero());
-    expect(first.outsideClosing.single.title, 'lembrete 2/4');
-    expect(first.outsideClosing.single.payerId, 'm_bia');
-  });
+      final first = forecast.cycles.first;
+      expect(first.preview.memberById('m_bia')!.p2pToPay, const Money.zero());
+      expect(first.outsideClosing.single.title, 'lembrete 2/4');
+      expect(first.outsideClosing.single.payerId, 'm_bia');
+    },
+  );
 
   test('aporte fixo e contas já lançadas entram em cada ciclo', () {
-    final next = FinancialCycle(start: DateTime(2026, 11, 10), end: DateTime(2026, 12, 9));
+    final next = FinancialCycle(
+      start: DateTime(2026, 11, 10),
+      end: DateTime(2026, 12, 9),
+    );
     final fixedMembers = [
       members[0].copyWith(defaultFixedAmountCents: 100000),
       members[1].copyWith(defaultFixedAmountCents: 80000),
