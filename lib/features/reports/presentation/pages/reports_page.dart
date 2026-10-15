@@ -21,6 +21,8 @@ import '../widgets/payment_calendar_section.dart';
 import '../widgets/upcoming_cycles_section.dart';
 import '../widgets/cycle_insights_section.dart';
 import '../../domain/services/cycle_report_csv.dart';
+import '../../domain/services/cycle_report_pdf.dart';
+import '../../../auth/domain/repositories/auth_repository.dart';
 import '../../domain/entities/cycle_insights.dart';
 
 class ReportsPage extends StatefulWidget {
@@ -103,13 +105,35 @@ class _ReportsPageContent extends StatelessWidget {
           style: TextStyle(fontWeight: FontWeight.bold),
         ),
         actions: [
-          IconButton(
+          PopupMenuButton<String>(
             icon: const Icon(Icons.file_download_outlined),
-            tooltip: 'Exportar relatório do ciclo (CSV para planilha)',
-            onPressed: () {
+            tooltip: 'Exportar relatório do ciclo',
+            onSelected: (format) {
               final state = context.read<FinanceCubit>().state;
-              _exportReportCsv(context, state);
+              if (format == 'pdf') {
+                _exportReportPdf(context, state);
+              } else {
+                _exportReportCsv(context, state);
+              }
             },
+            itemBuilder: (_) => const [
+              PopupMenuItem(
+                value: 'pdf',
+                child: ListTile(
+                  leading: Icon(Icons.picture_as_pdf_outlined),
+                  title: Text('Prestação de contas (PDF)'),
+                  contentPadding: EdgeInsets.zero,
+                ),
+              ),
+              PopupMenuItem(
+                value: 'csv',
+                child: ListTile(
+                  leading: Icon(Icons.table_chart_outlined),
+                  title: Text('Planilha (CSV)'),
+                  contentPadding: EdgeInsets.zero,
+                ),
+              ),
+            ],
           ),
           const PrivacyToggleButton(),
           IconButton(
@@ -773,6 +797,57 @@ class _ReportsPageContent extends StatelessWidget {
     if (hex == null || !hex.startsWith('#')) return AppColors.primary;
     final cleanHex = hex.replaceFirst('#', '');
     return Color(int.parse('FF$cleanHex', radix: 16));
+  }
+
+  /// Salva a prestação de contas do ciclo em PDF, pelo mesmo caminho do CSV.
+  Future<void> _exportReportPdf(
+    BuildContext context,
+    FinanceState state,
+  ) async {
+    final messenger = ScaffoldMessenger.of(context);
+    final reports = context.read<ReportsCubit>().state;
+    final sameCycle = reports.preview?.cycle == state.currentCycle;
+    String houseName;
+    try {
+      houseName = sl<AuthRepository>().currentHouse?.name ?? 'Nossa casa';
+    } catch (_) {
+      houseName = 'Nossa casa';
+    }
+    try {
+      final bytes = await const CycleReportPdf().build(
+        houseName: houseName,
+        cycle: state.currentCycle,
+        expenses: state.expenses,
+        categories: state.categories,
+        members: state.members,
+        contributions: state.contributions,
+        summary: state.summary,
+        preview: sameCycle ? reports.preview : null,
+        insights: sameCycle ? reports.insights : null,
+        generatedAt: DateTime.now(),
+      );
+      final saved = await FilePicker.saveFile(
+        fileName: CycleReportPdf.fileNameFor(state.currentCycle),
+        bytes: bytes,
+        mimeType: 'application/pdf',
+        dialogTitle: 'Salvar prestação de contas',
+        allowedExtensions: const ['pdf'],
+        type: FileType.custom,
+      );
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text(
+            saved == null
+                ? 'Exportação cancelada.'
+                : 'Prestação de contas salva.',
+          ),
+        ),
+      );
+    } catch (e) {
+      messenger.showSnackBar(
+        SnackBar(content: Text('Não foi possível gerar o PDF: $e')),
+      );
+    }
   }
 
   /// Salva o relatório do ciclo em CSV: download no navegador, escolha do
