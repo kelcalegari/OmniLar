@@ -5,6 +5,7 @@ import '../../../../core/theme/app_colors.dart';
 import '../../../../core/utils/clipboard_helper.dart';
 import '../../../../core/widgets/privacy_toggle.dart';
 import '../../domain/entities/payment_due_entry.dart';
+import '../../domain/services/house_cashflow_builder.dart';
 import '../cubit/reports_cubit.dart';
 
 String _day(DateTime d) =>
@@ -140,6 +141,8 @@ class PaymentCalendarSection extends StatelessWidget {
                         style: TextStyle(fontSize: 11, color: Colors.grey),
                       ),
                     ),
+                  if (state.cashflow != null)
+                    _HouseCashflowBlock(state.cashflow!),
                 ],
               ),
             ),
@@ -298,6 +301,132 @@ class _PaymentDueRow extends StatelessWidget {
               color: amountColor,
             ),
           ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Saldo do Caixa da Casa dia a dia até o fechamento, com o aviso do dia em
+/// que ele fica negativo.
+class _HouseCashflowBlock extends StatelessWidget {
+  final HouseCashflow cashflow;
+
+  const _HouseCashflowBlock(this.cashflow);
+
+  @override
+  Widget build(BuildContext context) {
+    final negative = cashflow.firstNegativeDay;
+    final lowest = cashflow.lowestBalance;
+
+    return Padding(
+      padding: const EdgeInsets.only(top: 16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          const Divider(height: 1),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              const Icon(
+                Icons.savings_outlined,
+                size: 18,
+                color: AppColors.primary,
+              ),
+              const SizedBox(width: 6),
+              const Expanded(
+                child: Text(
+                  'Saldo do Caixa da Casa',
+                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                ),
+              ),
+              PrivacySensitiveText(
+                'hoje ${cashflow.startingBalance.formatted}',
+                style: TextStyle(
+                  fontWeight: FontWeight.bold,
+                  fontSize: 13,
+                  color: cashflow.startingBalance.isNegative
+                      ? AppColors.debtRed
+                      : AppColors.creditGreen,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          const Text(
+            'Sobra do ciclo anterior mais os aportes, menos o que o Caixa já pagou. '
+            'No fechamento, conta que cada morador paga o Super Pix.',
+            style: TextStyle(fontSize: 11, color: Colors.grey),
+          ),
+          if (negative != null)
+            Container(
+              margin: const EdgeInsets.only(top: 8),
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: AppColors.debtRed.withValues(alpha: 0.06),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(
+                  color: AppColors.debtRed.withValues(alpha: 0.25),
+                ),
+              ),
+              child: PrivacySensitiveText(
+                'O Caixa fica negativo em ${_day(negative.date)}: faltam '
+                '${Money(-negative.balance.cents).formatted}. Antecipe um aporte '
+                'ou pague a conta do bolso (volta no fechamento).',
+                style: const TextStyle(fontSize: 12),
+              ),
+            )
+          else if (cashflow.days.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.only(top: 6),
+              child: PrivacySensitiveText(
+                'Menor saldo até o fechamento: ${lowest.formatted}',
+                style: const TextStyle(fontSize: 12, color: Colors.grey),
+              ),
+            ),
+          const SizedBox(height: 4),
+          if (cashflow.days.isEmpty)
+            const Padding(
+              padding: EdgeInsets.only(top: 6),
+              child: Text(
+                'Nada entra nem sai do Caixa até o fechamento.',
+                style: TextStyle(fontSize: 12, color: Colors.grey),
+              ),
+            ),
+          for (final d in cashflow.days)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 4),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  SizedBox(
+                    width: 46,
+                    child: Text(
+                      _day(d.date),
+                      style: const TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                  Expanded(
+                    child: Text(
+                      d.items.join('\n'),
+                      style: const TextStyle(fontSize: 11, color: Colors.grey),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  PrivacySensitiveText(
+                    d.balance.formatted,
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.bold,
+                      color: d.balance.isNegative ? AppColors.debtRed : null,
+                    ),
+                  ),
+                ],
+              ),
+            ),
         ],
       ),
     );

@@ -15,6 +15,7 @@ import '../../domain/entities/payment_due_entry.dart';
 import '../../domain/entities/upcoming_forecast.dart';
 import '../../domain/services/cycle_insights_builder.dart';
 import '../../domain/services/cycle_preview_builder.dart';
+import '../../domain/services/house_cashflow_builder.dart';
 import '../../domain/services/payment_calendar_builder.dart';
 import '../../domain/services/upcoming_cycles_builder.dart';
 
@@ -39,6 +40,9 @@ class ReportsState extends Equatable {
   /// Comparação com o ciclo anterior, quem paga o quê e empréstimos.
   final CycleInsights? insights;
 
+  /// Saldo do Caixa dia a dia até o fechamento (só no ciclo em andamento).
+  final HouseCashflow? cashflow;
+
   /// Evolução dos últimos ciclos: carregada só quando a seção é aberta.
   final List<CycleTotal>? evolution;
   final bool evolutionLoading;
@@ -54,6 +58,7 @@ class ReportsState extends Equatable {
     this.upcomingLoading = false,
     this.upcomingError,
     this.insights,
+    this.cashflow,
     this.evolution,
     this.evolutionLoading = false,
     this.evolutionError,
@@ -69,6 +74,8 @@ class ReportsState extends Equatable {
     bool? upcomingLoading,
     String? upcomingError,
     CycleInsights? insights,
+    HouseCashflow? cashflow,
+    bool clearCashflow = false,
     List<CycleTotal>? evolution,
     bool? evolutionLoading,
     String? evolutionError,
@@ -85,6 +92,8 @@ class ReportsState extends Equatable {
       upcomingLoading: upcomingLoading ?? this.upcomingLoading,
       upcomingError: upcomingError ?? (clearErrors ? null : this.upcomingError),
       insights: insights ?? (clearCycleData ? null : this.insights),
+      cashflow:
+          cashflow ?? (clearCycleData || clearCashflow ? null : this.cashflow),
       evolution: evolution ?? (clearCycleData ? null : this.evolution),
       evolutionLoading: evolutionLoading ?? this.evolutionLoading,
       evolutionError:
@@ -103,6 +112,7 @@ class ReportsState extends Equatable {
     upcomingLoading,
     upcomingError,
     insights,
+    cashflow,
     evolution,
     evolutionLoading,
     evolutionError,
@@ -203,6 +213,22 @@ class ReportsCubit extends Cubit<ReportsState> {
         members: finance.members,
         today: today,
       );
+      // Saldo do Caixa: só no ciclo em andamento, que ainda não foi fechado
+      final day = DateTime(today.year, today.month, today.day);
+      final cycleSummary = finance.summary;
+      final cashflow =
+          !preview.isSettled &&
+              cycleSummary != null &&
+              finance.currentCycle.contains(day)
+          ? const HouseCashflowBuilder().build(
+              calendar: calendar,
+              startingBalance: HouseCashflowBuilder.startingBalance(
+                openingBalance: cycleSummary.openingBalance,
+                contributions: cycleSummary.totalContributions,
+                expenses: finance.expenses,
+              ),
+            )
+          : null;
       final insights = _insightsBuilder.build(
         expenses: finance.expenses,
         previousExpenses: previousExpenses,
@@ -218,6 +244,8 @@ class ReportsCubit extends Cubit<ReportsState> {
           calendar: calendar,
           summary: summary,
           insights: insights,
+          cashflow: cashflow,
+          clearCashflow: cashflow == null,
         ),
       );
     } catch (e) {

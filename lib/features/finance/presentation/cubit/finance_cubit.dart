@@ -257,14 +257,8 @@ class FinanceCubit extends Cubit<FinanceState> {
 
   /// Sobra que o ciclo anterior deixou no Caixa. O fôlego já desconta as
   /// contas e soma os aportes do ciclo, então não serve de saldo inicial.
-  Money _openingBalanceOf(FinancialCycleSummary? summary) {
-    if (summary == null) return const Money.zero();
-    final cents = summary.folego.cents +
-        summary.totalExpensesPaid.cents +
-        summary.committedFutureExpenses.cents -
-        summary.totalContributions.cents;
-    return Money(cents > 0 ? cents : 0);
-  }
+  Money _openingBalanceOf(FinancialCycleSummary? summary) =>
+      summary?.openingBalance ?? const Money.zero();
 
   void updateFundingEstimateMode(FundingEstimateMode mode) {
     final updated = _estimate(

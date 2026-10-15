@@ -33,6 +33,16 @@ class FinancialCycleSummary extends Equatable {
   /// Alias para aportes realizados no ciclo
   Money get totalContributed => totalContributions;
 
+  /// Sobra que o ciclo anterior deixou no Caixa (nunca negativa). O fôlego já
+  /// desconta as contas e soma os aportes do ciclo, então não serve sozinho.
+  Money get openingBalance {
+    final cents = folego.cents +
+        totalExpensesPaid.cents +
+        committedFutureExpenses.cents -
+        totalContributions.cents;
+    return Money(cents > 0 ? cents : 0);
+  }
+
   /// Status de saúde do fôlego
   FolegoStatus get status {
     if (folego.isNegative) return FolegoStatus.danger;
