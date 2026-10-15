@@ -4,7 +4,7 @@ Reescrito em 13/10/2026, no fim de uma sessão longa de correções, e atualizad
 
 ## Estado atual
 
-- **Código:** as decisões de 15/10/2026 estão na branch `feat/decisoes-recomendadas`, ainda sem merge na `main` nem push (confira com `git log --oneline -8` e `git status`).
+- **Código:** `main` local e `origin/main` sincronizadas, com as decisões de 15/10/2026 (merge da branch `feat/decisoes-recomendadas`). Confira com `git log --oneline -5` e `git status`.
 - **Banco (Supabase `rygxmpwzofgieodvhpcy`, acessível pelo conector do Supabase):** migrations 0001 a 0061 aplicadas (as 0059, 0060 e 0061 em 15/10/2026, antes do merge do código: são compatíveis com o app antigo). No histórico de migrations do Supabase constam só as 0022 a 0027 e as 0030 a 0061; as 0001 a 0021, a 0028 e a 0029 foram aplicadas à mão pelo SQL Editor. A próxima migration é a 0062.
 - **Edge Functions:** `capture-read` versão 8 e `assistant` versão 5, ambas com `verify_jwt=true` e exigindo usuário logado que more na casa.
 - **Qualidade:** `flutter analyze` com 0 erros e 0 warnings, e 531 testes passando (15/10/2026). Os testes automatizados rodam só contra os datasources mock (modo demo); nenhum roda contra o Supabase.
@@ -135,7 +135,7 @@ Resumo dos mecanismos que mudaram nesta sessão, para localizar as coisas.
 
 Os roteiros anteriores foram executados pelo dono até 14/10/2026. Ficam aqui só os do que entrou depois.
 
-### Decisões implementadas em 15/10 (branch `feat/decisoes-recomendadas`, migrations 0059 a 0061)
+### Decisões implementadas em 15/10 (migrations 0059 a 0061)
 - **Selo do Fôlego:** num ciclo passado já fechado aparece "Fechado"; num não fechado (ou futuro), "Em aberto"; no ciclo atual, a saúde do caixa.
 - **Cartão da despesa no celular:** numa conta a pagar, valor e "Pagar" ficam numa segunda linha, sem apertar o título.
 - **Escâner (nota ou cupom):** trocar a data; escolher "A pagar" e conferir que a despesa nasce pendente, com o vencimento escolhido.
