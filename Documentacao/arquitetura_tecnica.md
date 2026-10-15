@@ -195,24 +195,7 @@ create policy "members insert" on house_expenses for insert
 
 ## 9. Notificações
 
-O plano completo (o que já existe, a estrutura no banco, o catálogo de todas as notificações e as decisões pendentes) está em [plano_notificacoes.md](plano_notificacoes.md).
-
-- **Sem App Store:** o app não é publicado na loja da Apple, então **não usamos APNs nativo**. No iPhone, o OmniLar roda como site instalado na Tela de Início (PWA), e o push chega pelo Web Push.
-- **Um só canal de envio: FCM.** O FCM entrega no Android nativo, no navegador (desktop e Android) e no iPhone com o site instalado (iOS 16.4+, que usa o Web Push padrão). Não precisa de conta de desenvolvedor Apple nem de certificado.
-- **Tokens** em `device_tokens` (`user_id`, `token`, `platform`: `android` / `web` / `ios_pwa`, `last_seen_at`). A função `notify` apaga o token quando o FCM responde que ele é inválido (por exemplo, quando o usuário remove o ícone da Tela de Início).
-- **Histórico primeiro:** toda notificação é gravada em `notifications` (lista do sino dentro do app, via Realtime) e depois enviada por push. Se o push se perder, o aviso continua no app.
-- Tipos: convite, RSVP, lembrete, aporte pendente, vencimento, cobrança, atraso, resumo semanal.
-- Preferências por tipo e horário silencioso.
-- **Deeplink** em toda notificação como **rota web** do GoRouter, por exemplo `/p2p/loan/{id}`. A mesma rota serve para o app nativo e para o clique na notificação do navegador/PWA.
-- Lembretes disparados pelo `scheduler`, com idempotência por `(entidade, tipo, janela)`. Todo lembrete sai do servidor: o navegador não agenda nada sozinho.
-
-### 9.1. Web e iPhone (PWA)
-
-- **Requisitos:** site em HTTPS, `manifest.json` com `display: standalone`, nome e ícones do OmniLar, e o service worker `web/firebase-messaging-sw.js`.
-- **iPhone só recebe push com o site instalado** (Compartilhar → Adicionar à Tela de Início) e aberto pelo ícone. Numa aba comum do Safari, não funciona. O app detecta iPhone fora do modo instalado (`navigator.standalone == false`) e mostra um passo a passo para instalar.
-- **Permissão só após toque do usuário:** o pedido aparece num botão "Ativar notificações", nunca automático ao abrir. Se o usuário negar, ele só reativa nos Ajustes do iPhone. Testar num iPhone de verdade, porque o Flutter web trata os toques de um jeito próprio e é preciso confirmar que o Safari reconhece o toque como ação do usuário.
-- **Sem push silencioso:** todo push precisa mostrar uma notificação visível, senão o iOS pode cancelar a inscrição. Não há sincronização em segundo plano.
-- **Recursos disponíveis no iPhone:** tela bloqueada, Central de Notificações, modos de Foco e número no ícone (Badging API, `navigator.setAppBadge`). Botões de ação e imagem na notificação não aparecem.
+Tudo sobre notificações está em [plano_notificacoes.md](plano_notificacoes.md): princípios, estrutura no banco e no app, envio pelo FCM, **iPhone e Apple (seção 3.4: site instalado, sem APNs nem App Store)**, catálogo de todas as notificações e decisões pendentes.
 
 ## 10. Flutter: Arquitetura
 

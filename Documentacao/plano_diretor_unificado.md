@@ -102,7 +102,7 @@ flowchart TD
 
 #### 1. Notificações Push (Android, Web e iPhone instalado)
 - **Firebase Cloud Messaging (FCM)** como canal único: Android nativo, navegador e iPhone com o site instalado na Tela de Início (PWA, iOS 16.4+).
-- **Sem APNs nativo:** o app não vai para a App Store, então o iPhone usa o Web Push pelo FCM. Detalhes e limitações na seção 9 da [arquitetura_tecnica.md](arquitetura_tecnica.md); catálogo e plano em [plano_notificacoes.md](plano_notificacoes.md).
+- **Sem APNs nativo:** o app não vai para a App Store, então o iPhone usa o Web Push pelo FCM. Detalhes, limitações do iPhone e catálogo em [plano_notificacoes.md](plano_notificacoes.md).
 - Entregas: tabela `device_tokens`, edge function `notify` (FCM HTTP v1), `web/firebase-messaging-sw.js`, `manifest.json` revisado, botão "Ativar notificações" e passo a passo de instalação no iPhone.
 - Disparo de alertas essenciais:
   - *"Fulano solicitou um empréstimo P2P de R$ X"*;

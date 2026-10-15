@@ -1,6 +1,6 @@
 # Omni Lar — plano das notificações
 
-Escrito em 15/10/2026. Junta o que estava espalhado (seção 9 da [arquitetura_tecnica.md](arquitetura_tecnica.md), a Frente 2 do [plano_diretor_unificado.md](plano_diretor_unificado.md) e os avisos citados em cada `modulo_*.md`) e confere com o que existe hoje no banco e no código. **Fica para depois das pendências de [pendencias_proxima_sessao.md](pendencias_proxima_sessao.md)**: quando o dono pedir para começar, este é o ponto de partida. Peça aprovação antes de cada migration, como sempre.
+Escrito em 15/10/2026. Junta o que estava espalhado (a antiga seção 9 da [arquitetura_tecnica.md](arquitetura_tecnica.md), que passou inteira para cá, a Frente 2 do [plano_diretor_unificado.md](plano_diretor_unificado.md) e os avisos citados em cada `modulo_*.md`) e confere com o que existe hoje no banco e no código. **Fica para depois das pendências de [pendencias_proxima_sessao.md](pendencias_proxima_sessao.md)**: quando o dono pedir para começar, este é o ponto de partida. Peça aprovação antes de cada migration, como sempre.
 
 ## 1. O que existe hoje (conferido em 15/10/2026)
 
@@ -15,7 +15,7 @@ Escrito em 15/10/2026. Junta o que estava espalhado (seção 9 da [arquitetura_t
 
 ## 2. Princípios
 
-Valem para toda notificação; os da seção 9 da arquitetura continuam valendo.
+Valem para toda notificação.
 
 1. **Histórico primeiro.** Toda notificação é gravada em `notifications` e aparece no sino; o push é um envio a mais. Se o push se perder, o aviso continua no app.
 2. **Quem gera é o banco, não o app.** Notificação de um acontecimento sai de um gatilho no banco (ou do agendador), nunca do aparelho de quem fez a ação: assim ela sai mesmo se o app fechar no meio, vale para a fila offline e não depende da versão do app.
@@ -23,11 +23,12 @@ Valem para toda notificação; os da seção 9 da arquitetura continuam valendo.
 4. **Uma vez só.** Cada notificação tem uma chave de repetição (`dedupe_key`, por exemplo `loan_installment_due:{parcela}:{dia}`); gravar de novo a mesma chave não cria outra. Os lembretes agendados usam a janela no lugar do dia.
 5. **Respeita a visibilidade.** Evento restrito só avisa quem participa; item pessoal da compra não vira aviso para os outros; valores seguem o modo privacidade da tela só dentro do app (o texto do push é decidido na seção 7).
 6. **Deeplink em toda notificação**, como rota do GoRouter que abre o item (seção 5). A mesma rota serve no Android, no navegador e no iPhone instalado.
-7. **Um canal de envio: FCM** (Android, navegador e iPhone com o site instalado, iOS 16.4+). Sem APNs nativo, porque o app não vai para a App Store.
-8. **Permissão só depois de um toque** num botão "Ativar notificações", nunca ao abrir o app. No iPhone fora do modo instalado, o app mostra o passo a passo para instalar.
-9. **Sem push silencioso.** Todo push mostra algo visível; não há sincronização em segundo plano.
+7. **Um canal de envio: FCM** (Android, navegador e iPhone com o site instalado, iOS 16.4+). Sem APNs nativo, porque o app não vai para a App Store (seção 3.4).
+8. **Permissão só depois de um toque** num botão "Ativar notificações", nunca ao abrir o app (seção 3.4).
+9. **Sem push silencioso.** Todo push mostra algo visível; não há sincronização em segundo plano (seção 3.4).
 10. **O morador decide.** Preferência por grupo (seção 4) e horário silencioso. O que é essencial (seção 6) pode ter o push desligado, mas continua no sino.
 11. **Agrupar o que vem em rajada.** Vários lançamentos seguidos da mesma pessoa (uma importação, uma compra fechada) viram um aviso só ("Ana lançou 12 despesas").
+12. **Todo lembrete sai do servidor.** O navegador e o aparelho não agendam nada sozinhos.
 
 ## 3. Arquitetura proposta
 
@@ -39,7 +40,7 @@ Valem para toda notificação; os da seção 9 da arquitetura continuam valendo.
 - **Gatilhos** nas tabelas dos acontecimentos (seção 6). Os lembretes saem de um job do `pg_cron` que chama `run_scheduled_notifications()` de hora em hora (vencimentos, ciclo fechando, resumo).
 
 ### 3.2. Envio
-- Cada linha nova com `push_status = 'pending'` chama a Edge Function **`notify`** (pelo `pg_net` ou por um Database Webhook). Ela confere preferência e horário silencioso, envia pelo FCM (API HTTP v1) para os tokens do usuário, apaga o token que o FCM disser que é inválido e grava o resultado.
+- Cada linha nova com `push_status = 'pending'` chama a Edge Function **`notify`** (pelo `pg_net` ou por um Database Webhook). Ela confere preferência e horário silencioso, envia pelo FCM (API HTTP v1) para os tokens do usuário, apaga o token que o FCM disser que é inválido (por exemplo, quando o usuário remove o ícone do site da Tela de Início do iPhone) e grava o resultado.
 - Fora do horário silencioso, o que caiu nele é enviado no fim do horário, num aviso só.
 - Segredos do FCM nos *secrets* do Supabase.
 
@@ -49,6 +50,26 @@ Valem para toda notificação; os da seção 9 da arquitetura continuam valendo.
 - **Pacotes:** `firebase_core`, `firebase_messaging` (Android e web) e `flutter_local_notifications` (só Android, para avisar com o app aberto). Na web, `web/firebase-messaging-sw.js` e o `manifest.json` com nome, ícones e cores do Omni Lar.
 - **Número no ícone** (Badging API) com as não lidas, onde houver suporte.
 - No modo demo, notificações de exemplo só no sino, sem push.
+
+### 3.4. iPhone e Apple (site instalado)
+
+O app não é publicado na App Store: no iPhone, o Omni Lar é usado como site instalado na Tela de Início (PWA). Isso define como o push chega e o que ele consegue mostrar.
+
+**Como o push chega**
+- **Sem APNs nativo.** Não há conta de desenvolvedor Apple nem certificado. O iPhone recebe pelo Web Push padrão (iOS 16.4 ou mais novo), e o envio sai pelo mesmo FCM do Android e do navegador. O token do iPhone é gravado com `platform = 'ios_pwa'`.
+- **Só com o site instalado** (Compartilhar → Adicionar à Tela de Início) e aberto pelo ícone. Numa aba comum do Safari, não funciona.
+- **Requisitos do site:** HTTPS; `manifest.json` com `display: standalone`, nome, `id`, cores e ícones do Omni Lar (hoje ainda estão os padrões do Flutter); e o service worker `web/firebase-messaging-sw.js`.
+
+**Permissão**
+- O app detecta o iPhone fora do modo instalado (`navigator.standalone == false`) e mostra o passo a passo para instalar, em vez do botão de ativar.
+- Instalado, o pedido de permissão só aparece depois de um toque no botão "Ativar notificações", nunca automático ao abrir. Se o usuário negar, ele só reativa nos Ajustes do iPhone; o app mostra esse caminho.
+- **Testar num iPhone de verdade:** o Flutter web trata os toques de um jeito próprio, e é preciso confirmar que o Safari reconhece o toque como ação do usuário (senão o pedido de permissão é bloqueado).
+
+**Limites**
+- **Sem push silencioso:** todo push precisa mostrar uma notificação visível, senão o iOS pode cancelar a inscrição. Não há sincronização em segundo plano: os dados atualizam ao abrir o app.
+- **O que aparece:** tela bloqueada, Central de Notificações, modos de Foco e o número no ícone (Badging API, `navigator.setAppBadge`).
+- **O que não aparece:** botões de ação e imagem na notificação. Por isso, no iPhone, aviso com ação (aceitar empréstimo, responder convite) abre o item pelo deeplink, e a ação é feita na tela.
+- Remover o ícone da Tela de Início invalida o token; a função `notify` apaga o token quando o FCM avisa.
 
 ## 4. Grupos (para as preferências)
 
@@ -209,7 +230,7 @@ Coluna **Quando**: *na hora* (gatilho no banco) ou *agendada* (`pg_cron`). Colun
    - a) ⭐ Mostrar valores, com um interruptor "Esconder valores nas notificações"
    - b) Nunca mostrar valores no push (só no sino)
 5. **Aceite de empréstimo pelo devedor** (`loan_created`): o status `pendingAcceptance` existe, mas o app não tem a tela de aceite
-   - a) ⭐ Fazer o aceite junto com as notificações (o aviso tem os botões Aceitar e Recusar no Android; no iPhone, abre o empréstimo)
+   - a) ⭐ Fazer o aceite junto com as notificações (o aviso tem os botões Aceitar e Recusar no Android; no iPhone, que não mostra botões, abre o empréstimo)
    - b) Só avisar, sem aceite
 6. **Troca de tarefa** (`task_swap_requested`): o app ainda não tem o pedido de troca
    - a) Fazer o pedido de troca junto com as notificações
@@ -237,4 +258,4 @@ Coluna **Quando**: *na hora* (gatilho no banco) ou *agendada* (`pg_cron`). Colun
 - Cada gatilho: um ensaio com rollback no banco, simulando o usuário, conferindo destinatários, que o autor fica de fora, a visibilidade e a `dedupe_key`.
 - Agendados: chamar `run_scheduled_notifications()` com uma data simulada e conferir que rodar duas vezes não repete.
 - App: testes do sino, do deeplink e das preferências no modo demo.
-- Push: o dono testa no Android, no navegador e no iPhone com o site instalado (aberto pelo ícone), com sessão real.
+- Push: o dono testa no Android, no navegador e no iPhone com o site instalado (aberto pelo ícone), com sessão real. No iPhone, conferir também o pedido de permissão pelo toque, o passo a passo fora do modo instalado e o número no ícone (seção 3.4).
