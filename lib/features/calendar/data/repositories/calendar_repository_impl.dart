@@ -92,6 +92,37 @@ class CalendarRepositoryImpl implements CalendarRepository {
       );
 
   @override
+  Future<bool> setTaskCompleted({
+    required String taskId,
+    required bool completed,
+    required String completedByMemberId,
+  }) async {
+    final sync = _offlineSync;
+    final at = DateTime.now();
+    Future<void> write() => _dataSource.setTaskCompleted(
+          taskId: taskId,
+          completed: completed,
+          completedByMemberId: completedByMemberId,
+          at: at,
+        );
+    // Só o que já tem id real pode ser reenviado depois
+    if (sync == null || !sync.isActive || !isUuid(taskId)) {
+      await write();
+      return true;
+    }
+    return sync.runOrQueue(
+      OfflineActionType.setTaskCompleted,
+      () => {
+        'id': taskId,
+        'completed': completed,
+        'completedBy': completedByMemberId,
+        'at': at.toIso8601String(),
+      },
+      write,
+    );
+  }
+
+  @override
   Future<void> deleteTask(String taskId) => _dataSource.deleteTask(taskId);
 
   @override

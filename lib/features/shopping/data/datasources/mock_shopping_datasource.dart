@@ -137,6 +137,15 @@ class MockShoppingDataSource implements ShoppingDataSource {
   }
 
   @override
+  Future<void> setItemBought(String itemId, {required bool bought, DateTime? at}) async {
+    final index = _items.indexWhere((i) => i.id == itemId);
+    if (index == -1) return;
+    final item = _items[index];
+    _items[index] = item.copyWith(isBought: bought, boughtAt: bought ? (at ?? DateTime.now()) : null);
+    _notifyItems(item.listId);
+  }
+
+  @override
   Future<void> updateItem(ShoppingItem item) async {
     final index = _items.indexWhere((i) => i.id == item.id);
     if (index == -1) return;

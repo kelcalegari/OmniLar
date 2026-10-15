@@ -33,6 +33,10 @@ class DynamicShoppingDataSource implements ShoppingDataSource {
   Future<void> toggleItemBought(String itemId) => _active.toggleItemBought(itemId);
 
   @override
+  Future<void> setItemBought(String itemId, {required bool bought, DateTime? at}) =>
+      _active.setItemBought(itemId, bought: bought, at: at);
+
+  @override
   Future<void> deleteItem(String itemId) => _active.deleteItem(itemId);
 
   @override

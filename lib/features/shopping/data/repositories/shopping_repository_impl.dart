@@ -41,6 +41,22 @@ class ShoppingRepositoryImpl implements ShoppingRepository {
   Future<void> toggleItemBought(String itemId) => _dataSource.toggleItemBought(itemId);
 
   @override
+  Future<bool> setItemBought(String itemId, {required bool bought}) async {
+    final sync = _offlineSync;
+    final at = DateTime.now();
+    // Só o que já tem id real pode ser reenviado depois
+    if (sync == null || !sync.isActive || !isUuid(itemId)) {
+      await _dataSource.setItemBought(itemId, bought: bought, at: at);
+      return true;
+    }
+    return sync.runOrQueue(
+      OfflineActionType.setShoppingItemBought,
+      () => {'id': itemId, 'bought': bought, 'at': at.toIso8601String()},
+      () => _dataSource.setItemBought(itemId, bought: bought, at: at),
+    );
+  }
+
+  @override
   Future<void> deleteItem(String itemId) => _dataSource.deleteItem(itemId);
 
   @override

@@ -367,6 +367,9 @@ class _AddEventSheetState extends State<AddEventSheet> {
           visibility: _visibility,
           participants: participants,
           recurrenceFrequency: _recurrenceFrequency,
+          // Vale ao editar "esta e as próximas" (ou todas): a série encurta ou cresce
+          recurrenceEndDate: _recurrenceEndDate,
+          clearRecurrenceEndDate: _recurrenceEndDate == null,
         );
 
         RecurrenceScope scope = RecurrenceScope.thisInstanceOnly;
@@ -624,8 +627,10 @@ class _AddEventSheetState extends State<AddEventSheet> {
                   ],
                 ),
               ),
-              // Data final da repetição: só ao criar a série
-              if (_recurrenceFrequency != RecurrenceFrequency.none && widget.initialEvent == null) ...[
+              // Data final da repetição: ao criar a série ou ao editar uma já criada
+              // (a troca vale para "esta e as próximas" e para "todas")
+              if (_recurrenceFrequency != RecurrenceFrequency.none &&
+                  (widget.initialEvent == null || widget.initialEvent!.isRecurring)) ...[
                 const SizedBox(height: 8),
                 Row(
                   children: [

@@ -12,6 +12,10 @@ abstract class ShoppingDataSource {
   /// Altera nome, quantidade e se o item é pessoal.
   Future<void> updateItem(ShoppingItem item);
   Future<void> toggleItemBought(String itemId);
+
+  /// Marca ou desmarca o item como comprado (pode ser repetido sem inverter de
+  /// novo, por isso entra na fila offline). [at] é quando foi marcado.
+  Future<void> setItemBought(String itemId, {required bool bought, DateTime? at});
   Future<void> deleteItem(String itemId);
   Future<ShoppingTrip> completeTrip({
     required String listId,

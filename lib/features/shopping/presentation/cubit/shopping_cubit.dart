@@ -111,7 +111,21 @@ class ShoppingCubit extends BlocBase<ShoppingState> {
   Future<void> toggleItemBought(String itemId) async {
     if (state.selectedList == null) return;
     try {
-      await _repository.toggleItemBought(itemId);
+      final item = state.items.where((i) => i.id == itemId).firstOrNull;
+      if (item == null) {
+        await _repository.toggleItemBought(itemId);
+      } else {
+        // Grava o estado desejado: sem sinal no mercado, entra na fila offline
+        final bought = !item.isBought;
+        final sent = await _repository.setItemBought(itemId, bought: bought);
+        if (!sent) {
+          emit(state.copyWith(items: [
+            for (final i in state.items)
+              i.id == itemId ? i.copyWith(isBought: bought, boughtAt: bought ? DateTime.now() : null) : i,
+          ]));
+          return;
+        }
+      }
       final updatedItems = await _repository.getItems(state.selectedList!.id);
       emit(state.copyWith(items: updatedItems));
     } catch (e) {

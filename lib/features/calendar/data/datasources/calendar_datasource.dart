@@ -30,5 +30,14 @@ abstract class CalendarDataSource {
     required String taskId,
     required String completedByMemberId,
   });
+
+  /// Conclui ou reabre a tarefa (pode ser repetido sem inverter de novo, por
+  /// isso entra na fila offline). [at] é quando foi concluída.
+  Future<void> setTaskCompleted({
+    required String taskId,
+    required bool completed,
+    required String completedByMemberId,
+    DateTime? at,
+  });
   Future<void> deleteTask(String taskId);
 }

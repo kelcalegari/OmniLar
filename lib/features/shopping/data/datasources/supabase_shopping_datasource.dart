@@ -217,6 +217,19 @@ class SupabaseShoppingDataSource implements ShoppingDataSource {
   }
 
   @override
+  Future<void> setItemBought(String itemId, {required bool bought, DateTime? at}) async {
+    try {
+      await client.from('shopping_items').update({
+        'is_bought': bought,
+        'bought_by': bought ? client.auth.currentUser?.id : null,
+        'bought_at': bought ? (at ?? DateTime.now()).toUtc().toIso8601String() : null,
+      }).eq('id', itemId);
+    } catch (e) {
+      throw ServerFailure('Erro ao marcar item de compras: $e');
+    }
+  }
+
+  @override
   Future<void> updateItem(ShoppingItem item) async {
     try {
       await client.from('shopping_items').update({

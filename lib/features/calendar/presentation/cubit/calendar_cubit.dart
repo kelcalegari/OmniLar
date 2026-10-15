@@ -192,10 +192,34 @@ class CalendarCubit extends Cubit<CalendarState> {
 
   Future<void> toggleTask(String taskId) async {
     try {
-      await _repository.toggleTaskComplete(
-        taskId: taskId,
-        completedByMemberId: state.activeMemberId,
-      );
+      final task = state.tasks.where((t) => t.id == taskId).firstOrNull;
+      if (task == null) {
+        await _repository.toggleTaskComplete(
+          taskId: taskId,
+          completedByMemberId: state.activeMemberId,
+        );
+      } else {
+        // Grava o estado desejado: sem conexão, entra na fila offline
+        final completed = !task.isCompleted;
+        final sent = await _repository.setTaskCompleted(
+          taskId: taskId,
+          completed: completed,
+          completedByMemberId: state.activeMemberId,
+        );
+        if (!sent) {
+          emit(state.copyWith(tasks: [
+            for (final t in state.tasks)
+              t.id == taskId
+                  ? t.copyWith(
+                      isCompleted: completed,
+                      completedAt: completed ? DateTime.now() : null,
+                      completedByMemberId: completed ? state.activeMemberId : null,
+                    )
+                  : t,
+          ]));
+          return;
+        }
+      }
       final tasks = await _repository.getTasks(includeArchived: state.isShowingHistory);
       emit(state.copyWith(tasks: tasks));
     } catch (e) {

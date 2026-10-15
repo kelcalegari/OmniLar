@@ -77,5 +77,19 @@ class DynamicCalendarDataSource implements CalendarDataSource {
       );
 
   @override
+  Future<void> setTaskCompleted({
+    required String taskId,
+    required bool completed,
+    required String completedByMemberId,
+    DateTime? at,
+  }) =>
+      _active.setTaskCompleted(
+        taskId: taskId,
+        completed: completed,
+        completedByMemberId: completedByMemberId,
+        at: at,
+      );
+
+  @override
   Future<void> deleteTask(String taskId) => _active.deleteTask(taskId);
 }

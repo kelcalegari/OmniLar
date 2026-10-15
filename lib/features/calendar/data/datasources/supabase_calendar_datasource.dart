@@ -259,7 +259,7 @@ class SupabaseCalendarDataSource implements CalendarDataSource {
     try {
       final current = await client
           .from('events')
-          .select('recurring_series_id, start_time')
+          .select('recurring_series_id, start_time, recurrence_end_date')
           .eq('id', event.id)
           .maybeSingle();
       final seriesId = current?['recurring_series_id'] as String?;
@@ -314,10 +314,87 @@ class SupabaseCalendarDataSource implements CalendarDataSource {
         }).eq('id', row['id'] as String);
         await _upsertParticipants(row['id'] as String, event.participants);
       }
+
+      await _applySeriesEnd(
+        seriesId: seriesId,
+        currentStart: DateTime.parse(current!['start_time'] as String).toLocal(),
+        currentEnd: current['recurrence_end_date'] != null
+            ? DateTime.tryParse(current['recurrence_end_date'] as String)
+            : null,
+        edited: event,
+        fromStart: scope == RecurrenceScope.thisAndFuture,
+        sharedFields: sharedFields,
+      );
     } catch (e) {
       if (e is Failure) rethrow;
       throw ServerFailure('Erro ao atualizar evento da agenda: $e');
     }
+  }
+
+  /// "Repetir até" trocado na edição da série: tira o que passou da nova data,
+  /// cria o que falta até ela (com os mesmos participantes) e grava a data.
+  Future<void> _applySeriesEnd({
+    required String seriesId,
+    required DateTime currentStart,
+    required DateTime? currentEnd,
+    required CalendarEvent edited,
+    required bool fromStart,
+    required Map<String, dynamic> sharedFields,
+  }) async {
+    String? day(DateTime? d) => d?.toIso8601String().split('T')[0];
+    if (day(edited.recurrenceEndDate) == day(currentEnd)) return;
+
+    final rows = await client
+        .from('events')
+        .select('id, start_time, recurrence_frequency')
+        .eq('recurring_series_id', seriesId);
+    final frequency = rows.isEmpty
+        ? edited.recurrenceFrequency.name
+        : rows.first['recurrence_frequency'] as String;
+    final change = seriesEndChange(
+      occurrences: [
+        for (final r in rows)
+          (id: r['id'] as String, start: DateTime.parse(r['start_time'] as String).toLocal()),
+      ],
+      from: currentStart,
+      edited: edited.copyWith(
+        recurrenceFrequency: RecurrenceFrequency.values.firstWhere(
+          (f) => f.name == frequency,
+          orElse: () => edited.recurrenceFrequency,
+        ),
+      ),
+    );
+
+    if (change.removeIds.isNotEmpty) {
+      await client.from('events').delete().inFilter('id', change.removeIds);
+    }
+    final duration = edited.endTime.difference(edited.startTime);
+    if (change.addStarts.isNotEmpty) {
+      final inserted = await client.from('events').insert([
+        for (final start in change.addStarts)
+          {
+            ...sharedFields,
+            'house_id': _houseId,
+            'start_time': start.toUtc().toIso8601String(),
+            'end_time': start.add(duration).toUtc().toIso8601String(),
+            'recurrence_frequency': frequency,
+            'recurring_series_id': seriesId,
+            'recurrence_end_date': day(edited.recurrenceEndDate),
+          },
+      ]).select('id');
+      for (final r in inserted) {
+        await _upsertParticipants(r['id'] as String, edited.participants);
+      }
+    }
+
+    var endUpdate = client
+        .from('events')
+        .update({'recurrence_end_date': day(edited.recurrenceEndDate)})
+        .eq('recurring_series_id', seriesId);
+    if (fromStart) {
+      endUpdate = endUpdate.gte('start_time', currentStart.toUtc().toIso8601String());
+    }
+    await endUpdate;
   }
 
   @override
@@ -573,6 +650,24 @@ class SupabaseCalendarDataSource implements CalendarDataSource {
       }).eq('id', taskId);
     } catch (e) {
       throw ServerFailure('Erro ao alternar status da tarefa: $e');
+    }
+  }
+
+  @override
+  Future<void> setTaskCompleted({
+    required String taskId,
+    required bool completed,
+    required String completedByMemberId,
+    DateTime? at,
+  }) async {
+    try {
+      await client.from('tasks').update({
+        'is_completed': completed,
+        'completed_at': completed ? (at ?? DateTime.now()).toUtc().toIso8601String() : null,
+        'completed_by': completed ? completedByMemberId : null,
+      }).eq('id', taskId);
+    } catch (e) {
+      throw ServerFailure('Erro ao concluir tarefa: $e');
     }
   }
 

@@ -222,6 +222,7 @@ class MockCalendarDataSource implements CalendarDataSource {
               );
             }
           }
+          _applySeriesEnd(current, event, fromStart: scope == RecurrenceScope.thisAndFuture);
         } else {
           _events[index] = event;
         }
@@ -253,10 +254,45 @@ class MockCalendarDataSource implements CalendarDataSource {
               );
             }
           }
+          _applySeriesEnd(current, event, fromStart: scope == RecurrenceScope.thisAndFuture);
         } else {
           _events[index] = event;
         }
         break;
+    }
+  }
+
+  /// "Repetir até" trocado na edição da série: tira o que passou da nova data,
+  /// cria o que falta até ela e grava a data nas ocorrências.
+  void _applySeriesEnd(CalendarEvent current, CalendarEvent edited, {required bool fromStart}) {
+    if (edited.recurrenceEndDate == current.recurrenceEndDate) return;
+    final seriesId = current.seriesId!;
+    final change = seriesEndChange(
+      occurrences: [
+        for (final e in _events)
+          if (e.seriesId == seriesId) (id: e.id, start: e.startTime),
+      ],
+      from: current.startTime,
+      edited: edited,
+    );
+    _events.removeWhere((e) => change.removeIds.contains(e.id));
+    final duration = edited.endTime.difference(edited.startTime);
+    for (var i = 0; i < change.addStarts.length; i++) {
+      final start = change.addStarts[i];
+      _events.add(edited.copyWith(
+        id: '${seriesId}_ext_${start.millisecondsSinceEpoch}_$i',
+        seriesId: seriesId,
+        startTime: start,
+        endTime: start.add(duration),
+      ));
+    }
+    for (var i = 0; i < _events.length; i++) {
+      final e = _events[i];
+      if (e.seriesId == seriesId && (!fromStart || !e.startTime.isBefore(current.startTime))) {
+        _events[i] = edited.recurrenceEndDate == null
+            ? e.copyWith(clearRecurrenceEndDate: true)
+            : e.copyWith(recurrenceEndDate: edited.recurrenceEndDate);
+      }
     }
   }
 
@@ -384,6 +420,23 @@ class MockCalendarDataSource implements CalendarDataSource {
       isCompleted: isDone,
       completedAt: isDone ? DateTime.now() : null,
       completedByMemberId: isDone ? completedByMemberId : null,
+    );
+    _notifyTasks();
+  }
+
+  @override
+  Future<void> setTaskCompleted({
+    required String taskId,
+    required bool completed,
+    required String completedByMemberId,
+    DateTime? at,
+  }) async {
+    final taskIndex = _tasks.indexWhere((t) => t.id == taskId);
+    if (taskIndex == -1) return;
+    _tasks[taskIndex] = _tasks[taskIndex].copyWith(
+      isCompleted: completed,
+      completedAt: completed ? (at ?? DateTime.now()) : null,
+      completedByMemberId: completed ? completedByMemberId : null,
     );
     _notifyTasks();
   }

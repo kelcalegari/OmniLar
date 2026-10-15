@@ -31,5 +31,13 @@ abstract class CalendarRepository {
     required String taskId,
     required String completedByMemberId,
   });
+
+  /// Conclui ou reabre a tarefa. Sem conexão entra na fila offline e devolve
+  /// false (a tela atualiza a tarefa por conta própria).
+  Future<bool> setTaskCompleted({
+    required String taskId,
+    required bool completed,
+    required String completedByMemberId,
+  });
   Future<void> deleteTask(String taskId);
 }

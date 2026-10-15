@@ -12,6 +12,10 @@ abstract class ShoppingRepository {
   /// Altera nome, quantidade e se o item é pessoal.
   Future<void> updateItem(ShoppingItem item);
   Future<void> toggleItemBought(String itemId);
+
+  /// Marca ou desmarca o item como comprado. Sem conexão a marcação entra na
+  /// fila offline e devolve false (a tela atualiza o item por conta própria).
+  Future<bool> setItemBought(String itemId, {required bool bought});
   Future<void> deleteItem(String itemId);
   Future<ShoppingTrip> completeTrip({
     required String listId,

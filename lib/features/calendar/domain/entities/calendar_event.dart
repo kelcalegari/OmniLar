@@ -95,6 +95,7 @@ class CalendarEvent extends Equatable {
     String? seriesId,
     bool clearSeriesId = false,
     DateTime? recurrenceEndDate,
+    bool clearRecurrenceEndDate = false,
     bool? isRecurringException,
   }) {
     return CalendarEvent(
@@ -111,7 +112,8 @@ class CalendarEvent extends Equatable {
       participants: participants ?? this.participants,
       recurrenceFrequency: recurrenceFrequency ?? this.recurrenceFrequency,
       seriesId: clearSeriesId ? null : (seriesId ?? this.seriesId),
-      recurrenceEndDate: recurrenceEndDate ?? this.recurrenceEndDate,
+      recurrenceEndDate:
+          clearRecurrenceEndDate ? null : (recurrenceEndDate ?? this.recurrenceEndDate),
       isRecurringException: isRecurringException ?? this.isRecurringException,
     );
   }

@@ -81,3 +81,58 @@ List<DateTime> futureOccurrenceStarts(CalendarEvent event) {
 
   return starts;
 }
+
+/// Uma ocorrência já gravada de uma série.
+typedef SeriesOccurrence = ({String id, DateTime start});
+
+/// O que muda numa série ao trocar o "repetir até" editando "esta e as
+/// próximas": as ocorrências que passam da nova data saem, e as que faltam até
+/// ela entram (sem mexer nas anteriores a [from]).
+class SeriesEndChange {
+  final List<String> removeIds;
+  final List<DateTime> addStarts;
+
+  const SeriesEndChange({this.removeIds = const [], this.addStarts = const []});
+
+  bool get isEmpty => removeIds.isEmpty && addStarts.isEmpty;
+}
+
+/// [occurrences] é a série inteira; [from], o início da ocorrência editada; e
+/// [edited], o evento com o novo horário, a frequência e a nova data final.
+/// Com data final, as novas ocorrências seguem o dia da primeira da série; sem
+/// ela, o horizonte padrão a partir da ocorrência editada.
+SeriesEndChange seriesEndChange({
+  required List<SeriesOccurrence> occurrences,
+  required DateTime from,
+  required CalendarEvent edited,
+}) {
+  if (occurrences.isEmpty || edited.recurrenceFrequency == RecurrenceFrequency.none) {
+    return const SeriesEndChange();
+  }
+  final sorted = [...occurrences]..sort((a, b) => a.start.compareTo(b.start));
+  final end = edited.recurrenceEndDate;
+  final lastMoment = end == null ? null : DateTime(end.year, end.month, end.day, 23, 59, 59);
+
+  final removeIds = [
+    if (lastMoment != null)
+      for (final o in sorted)
+        if (!o.start.isBefore(from) && o.start.isAfter(lastMoment)) o.id,
+  ];
+  final kept = sorted.where((o) => !removeIds.contains(o.id)).toList();
+  final lastKept = kept.isEmpty ? from : kept.last.start;
+
+  final first = sorted.first.start;
+  final base = end != null
+      ? DateTime(first.year, first.month, first.day, edited.startTime.hour, edited.startTime.minute)
+      : edited.startTime;
+  final keptDays = {for (final o in kept) DateTime(o.start.year, o.start.month, o.start.day)};
+  final room = maxOccurrencesWithEndDate - kept.length;
+  final addStarts = <DateTime>[
+    for (final s in futureOccurrenceStarts(edited.copyWith(startTime: base)))
+      if (s.isAfter(lastKept) && !keptDays.contains(DateTime(s.year, s.month, s.day))) s,
+  ];
+  return SeriesEndChange(
+    removeIds: removeIds,
+    addStarts: addStarts.length > room ? addStarts.sublist(0, room < 0 ? 0 : room) : addStarts,
+  );
+}

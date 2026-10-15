@@ -328,6 +328,23 @@ Future<void> initServiceLocator() async {
       (payload) => sl<ShoppingDataSource>().updateItem(shoppingItemFromJson(payload)),
     )
     ..registerHandler(
+      OfflineActionType.setShoppingItemBought,
+      (payload) => sl<ShoppingDataSource>().setItemBought(
+        payload['id'] as String,
+        bought: payload['bought'] as bool,
+        at: DateTime.parse(payload['at'] as String),
+      ),
+    )
+    ..registerHandler(
+      OfflineActionType.setTaskCompleted,
+      (payload) => sl<CalendarDataSource>().setTaskCompleted(
+        taskId: payload['id'] as String,
+        completed: payload['completed'] as bool,
+        completedByMemberId: payload['completedBy'] as String,
+        at: DateTime.parse(payload['at'] as String),
+      ),
+    )
+    ..registerHandler(
       OfflineActionType.createLoan,
       (payload) => sl<P2PDataSource>().createLoan(p2pLoanFromJson(payload)),
     );
