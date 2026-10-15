@@ -32,7 +32,7 @@ A tela antiga "Rachar a Fatura" (`split_invoice_modal.dart`) foi substituída pe
 - **Conta pendente** que casa com uma linha só é vinculada: a baixa continua sendo feita na Casa.
 - **Movimentos do extrato são gravados depois da importação, um a um**: se um falhar (ciclo fechado, por exemplo), a importação continua gravada e a tela avisa qual não entrou. Desfazer a importação não reverte pagamento de fatura, aporte nem abatimento.
 - **Estorno** (feito): a linha de estorno pode abater de uma compra desta fatura (que é lançada só com o que sobrou, ou não é lançada se o estorno cobriu tudo) ou de uma despesa já lançada no mesmo cartão ou conta, até 120 dias antes (o valor dela diminui; se o estorno cobre o valor inteiro, ela é excluída depois de gravar a importação). Sem escolha, nada é registrado. Despesa já acertada em fechamento, com sub-itens ou com rateio em valores fixos não recebe estorno. A exclusão por estorno não é desfeita junto com a importação.
-- **A leitura por IA não foi testada com arquivo real**: a função está publicada e recusa quem não está logado, mas nenhuma fatura de verdade passou por ela ainda. PDF com senha não é lido.
+- **Leitura por IA**: testada pelo dono com sessão real e arquivo de verdade em 15/10/2026. PDF com senha não é lido.
 - **O PDF vai inteiro para o provedor de IA**: não dá para mascarar CPF e número de cartão dentro de um arquivo binário. O mascaramento vale para o texto que volta e para as descrições enviadas na sugestão de categoria.
 - **Sem cache da leitura por IA**: ler o mesmo PDF de novo gasta outra chamada.
 - **Mapeamento de colunas guardado só no aparelho**: em outro celular ou computador, o primeiro CSV do mesmo banco pede as colunas de novo.
@@ -41,7 +41,7 @@ A tela antiga "Rachar a Fatura" (`split_invoice_modal.dart`) foi substituída pe
 
 **A verificar**
 - Se a trava de ciclo fechado se aplica a empréstimo entre moradores (a importação cria o empréstimo normalmente).
-- O fluxo com conta real e um arquivo de banco de verdade: os testes usam arquivos fictícios e a casa demo.
+- O fluxo com conta real e um arquivo de banco de verdade: testado pelo dono em 15/10/2026 (os testes automatizados continuam usando arquivos fictícios e a casa demo).
 
 ## 2. Fluxo proposto
 
