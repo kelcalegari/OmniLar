@@ -17,6 +17,10 @@ class FolegoGaugeCard extends StatelessWidget {
   /// Os números ainda são do ciclo anterior: o do [cycle] está carregando.
   final bool isLoading;
 
+  /// Fora do ciclo em andamento o selo mostra a situação do ciclo ("Fechado"
+  /// ou "Em aberto") em vez da saúde do caixa; null = ainda não se sabe.
+  final bool? isCycleSettled;
+
   const FolegoGaugeCard({
     super.key,
     required this.summary,
@@ -25,6 +29,7 @@ class FolegoGaugeCard extends StatelessWidget {
     required this.onNextCycle,
     this.onCurrentCycle,
     this.isLoading = false,
+    this.isCycleSettled,
   });
 
   @override
@@ -35,6 +40,8 @@ class FolegoGaugeCard extends StatelessWidget {
     Color statusColor;
     String statusText;
     IconData statusIcon;
+
+    final isCurrentCycle = cycle.contains(DateTime.now());
 
     switch (status) {
       case FolegoStatus.positive:
@@ -53,6 +60,14 @@ class FolegoGaugeCard extends StatelessWidget {
         statusIcon = Icons.error_outline_rounded;
         break;
     }
+    if (!isCurrentCycle) {
+      // Em ciclo passado ou futuro a saúde do caixa não diz nada
+      final settled = isCycleSettled == true;
+      statusColor = settled ? AppColors.primary : Colors.grey;
+      statusText = settled ? 'Fechado' : 'Em aberto';
+      statusIcon = settled ? Icons.lock_outline_rounded : Icons.lock_open_rounded;
+    }
+    final showBadge = isCurrentCycle || isCycleSettled != null;
 
     return Card(
       child: Padding(
@@ -87,7 +102,7 @@ class FolegoGaugeCard extends StatelessWidget {
                 ),
               ],
             ),
-            if (onCurrentCycle != null && !cycle.contains(DateTime.now()))
+            if (onCurrentCycle != null && !isCurrentCycle)
               Center(
                 child: TextButton.icon(
                   style: TextButton.styleFrom(
@@ -126,7 +141,9 @@ class FolegoGaugeCard extends StatelessWidget {
                         'Fôlego do Caixa',
                         style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
                       ),
+                      if (showBadge)
                       Container(
+                        key: const Key('folego_status_badge'),
                         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                         decoration: BoxDecoration(
                           color: statusColor.withValues(alpha: 0.15),
@@ -221,7 +238,7 @@ class FolegoGaugeCard extends StatelessWidget {
                   ),
                   // Indicador de Gasto Diário Seguro (Burn Rate - Fase 2.1)
                   // Só no ciclo em andamento: em ciclo passado ou futuro não há "dias restantes"
-                  if (cycle.contains(DateTime.now())) ...[
+                  if (isCurrentCycle) ...[
                   const SizedBox(height: 14),
                   Builder(
                     builder: (context) {

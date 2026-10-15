@@ -33,6 +33,9 @@ class ExpenseTimelineItem extends StatelessWidget {
   /// o vencimento é o mesmo para todas as compras).
   final bool showPurchaseDate;
 
+  /// Largura do cartão abaixo da qual o valor e o "Pagar" vão para baixo.
+  static const double narrowWidth = 340;
+
   const ExpenseTimelineItem({
     super.key,
     required this.expense,
@@ -598,6 +601,57 @@ class ExpenseTimelineItem extends StatelessWidget {
     final dateFormatted = DateFormat('dd/MM')
         .format(showPurchaseDate ? expense.date : (expense.dueDate ?? expense.date));
 
+    final amountText = Text(
+      key: Key('expense_amount_${expense.id}'),
+      expense.amount.format(),
+      style: TextStyle(
+        fontSize: 15,
+        fontWeight: FontWeight.bold,
+        color: isOverdue
+            ? AppColors.debtRed
+            : (isPending ? AppColors.folegoWarning : null),
+      ),
+    );
+    final payBadge = Container(
+      key: Key('expense_pay_${expense.id}'),
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+      decoration: BoxDecoration(
+        color: AppColors.creditGreen.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(6),
+        border: Border.all(color: AppColors.creditGreen.withValues(alpha: 0.3)),
+      ),
+      child: const Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(Icons.check_rounded, size: 11, color: AppColors.creditGreen),
+          SizedBox(width: 2),
+          Text(
+            'Pagar',
+            style: TextStyle(
+              fontSize: 10,
+              fontWeight: FontWeight.bold,
+              color: AppColors.creditGreen,
+            ),
+          ),
+        ],
+      ),
+    );
+    // Valor e ação de pagamento: ao lado do título ou, compacto, numa linha só embaixo
+    Widget amountAndPay({required bool compact}) => compact
+        ? Row(
+            children: [
+              Expanded(child: amountText),
+              if (isPending) payBadge,
+            ],
+          )
+        : Column(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              amountText,
+              if (isPending) ...[const SizedBox(height: 4), payBadge],
+            ],
+          );
+
     return InkWell(
       borderRadius: BorderRadius.circular(16),
       onTap: () {
@@ -630,7 +684,10 @@ class ExpenseTimelineItem extends StatelessWidget {
             width: isSelected ? 2 : ((isOverdue || isPending) ? 1.5 : 1),
           ),
         ),
-        child: Column(
+        child: LayoutBuilder(builder: (context, constraints) {
+          // Em tela estreita o valor e o "Pagar" descem para uma segunda linha
+          final narrow = constraints.maxWidth < narrowWidth;
+          return Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -779,48 +836,10 @@ class ExpenseTimelineItem extends StatelessWidget {
                 ),
                 const SizedBox(width: 8),
 
-                // Valor e Badge de Rateio / Ação de pagamento
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.end,
-                  children: [
-                    Text(
-                      expense.amount.format(),
-                      style: TextStyle(
-                        fontSize: 15,
-                        fontWeight: FontWeight.bold,
-                        color: isOverdue
-                            ? AppColors.debtRed
-                            : (isPending ? AppColors.folegoWarning : null),
-                      ),
-                    ),
-                    if (isPending) ...[
-                      const SizedBox(height: 4),
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                        decoration: BoxDecoration(
-                          color: AppColors.creditGreen.withValues(alpha: 0.12),
-                          borderRadius: BorderRadius.circular(6),
-                          border: Border.all(color: AppColors.creditGreen.withValues(alpha: 0.3)),
-                        ),
-                        child: const Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(Icons.check_rounded, size: 11, color: AppColors.creditGreen),
-                            SizedBox(width: 2),
-                            Text(
-                              'Pagar',
-                              style: TextStyle(
-                                fontSize: 10,
-                                fontWeight: FontWeight.bold,
-                                color: AppColors.creditGreen,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ],
-                ),
+                if (!narrow) ...[
+                  const SizedBox(width: 8),
+                  amountAndPay(compact: false),
+                ],
                 // Boleto a pagar: o código fica à mão para colar no app do banco
                 if (expense.isPending && expense.barcode != null)
                   IconButton(
@@ -891,9 +910,15 @@ class ExpenseTimelineItem extends StatelessWidget {
                 ),
               ],
             ),
+            if (narrow)
+              Padding(
+                padding: const EdgeInsets.only(left: 56, top: 8),
+                child: amountAndPay(compact: true),
+              ),
             if (expense.isItemized) _buildItemizedBreakdown(theme),
           ],
-        ),
+        );
+        }),
       ),
     );
   }

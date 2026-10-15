@@ -169,8 +169,40 @@ class _ReportsPageContent extends StatelessWidget {
                   children: [
                     // Seletor de Ciclo
                     _buildCycleSelector(context, state, cubit),
-                    const SizedBox(height: 16),
+                    if (!state.currentCycle.contains(DateTime.now()))
+                      Center(
+                        child: TextButton.icon(
+                          key: const Key('reports_back_to_current_cycle'),
+                          style: TextButton.styleFrom(
+                            visualDensity: VisualDensity.compact,
+                            foregroundColor: AppColors.primary,
+                          ),
+                          icon: const Icon(Icons.today_rounded, size: 16),
+                          label: const Text(
+                            'Voltar ao ciclo atual',
+                            style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+                          ),
+                          onPressed: cubit.goToCurrentCycle,
+                        ),
+                      ),
+                    // A linha vira barra de progresso enquanto o ciclo escolhido carrega
+                    SizedBox(
+                      height: 16,
+                      child: Center(
+                        child: _isSwitchingCycle(state)
+                            ? const LinearProgressIndicator(minHeight: 2)
+                            : null,
+                      ),
+                    ),
 
+                    // Esmaece o que ainda é do ciclo anterior até o novo chegar
+                    AnimatedOpacity(
+                      key: const Key('reports_cycle_content'),
+                      opacity: _isSwitchingCycle(state) ? 0.4 : 1,
+                      duration: const Duration(milliseconds: 150),
+                      child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
                     // Prévia do fechamento e calendário de pagamentos, por morador
                     ValueListenableBuilder<bool>(
                       valueListenable: showAll,
@@ -244,6 +276,9 @@ class _ReportsPageContent extends StatelessWidget {
                     _buildSettlementCard(context),
                     const SizedBox(height: 32),
                   ],
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ),
@@ -273,6 +308,12 @@ class _ReportsPageContent extends StatelessWidget {
         .map((m) => m.name.split(' ').first)
         .toList();
   }
+
+  /// O ciclo mostrado no topo já mudou, mas os números ainda são do anterior.
+  bool _isSwitchingCycle(FinanceState state) =>
+      state.status == FinanceStatus.loading &&
+      state.summary != null &&
+      state.summary!.cycle != state.currentCycle;
 
   /// Rótulo do ciclo mostrado: o de hoje, um que já terminou ou um futuro.
   String _cycleLabel(FinanceState state) {

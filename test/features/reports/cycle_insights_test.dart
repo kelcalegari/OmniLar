@@ -85,6 +85,9 @@ class _FakeSettlementRepository implements SettlementRepository {
 
   @override
   Future<void> reopenSettlement(FinancialCycle cycle) async {}
+
+  @override
+  Future<bool> isCycleSettled(FinancialCycle cycle) async => false;
 }
 
 /// Só a leitura de despesas por ciclo: R$ 10 vezes o mês do início do ciclo.

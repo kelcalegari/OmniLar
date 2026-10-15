@@ -175,6 +175,42 @@ class _HomePageContentState extends State<_HomePageContent> {
     );
   }
 
+  /// Consulta da situação (fechado ou em aberto) do ciclo mostrado, refeita a
+  /// cada carga do ciclo para refletir um fechamento ou uma reabertura.
+  Future<bool?>? _cycleSettledFuture;
+  Object? _cycleSettledKey;
+
+  Future<bool?> _cycleSettledFor(FinanceState state) {
+    final key = (state.currentCycle, state.summary);
+    if (_cycleSettledFuture == null || _cycleSettledKey != key) {
+      _cycleSettledKey = key;
+      final cycle = state.currentCycle;
+      _cycleSettledFuture = cycle.contains(DateTime.now()) ||
+              !sl.isRegistered<SettlementRepository>()
+          ? Future.value(null)
+          : sl<SettlementRepository>()
+              .isCycleSettled(cycle)
+              .then<bool?>((settled) => settled)
+              .catchError((_) => null);
+    }
+    return _cycleSettledFuture!;
+  }
+
+  Widget _buildFolegoCard(FinanceState state, dynamic summary, FinanceCubit cubit) {
+    return FutureBuilder<bool?>(
+      future: _cycleSettledFor(state),
+      builder: (context, snapshot) => FolegoGaugeCard(
+        summary: summary,
+        cycle: state.currentCycle,
+        onPreviousCycle: cubit.previousCycle,
+        onNextCycle: cubit.nextCycle,
+        onCurrentCycle: cubit.goToCurrentCycle,
+        isLoading: _isSwitchingCycle(state),
+        isCycleSettled: snapshot.data,
+      ),
+    );
+  }
+
   /// O ciclo mostrado no topo já mudou, mas os números ainda são do anterior.
   bool _isSwitchingCycle(FinanceState state) =>
       state.status == FinanceStatus.loading &&
@@ -201,14 +237,7 @@ class _HomePageContentState extends State<_HomePageContent> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        FolegoGaugeCard(
-          summary: summary,
-          cycle: state.currentCycle,
-          onPreviousCycle: cubit.previousCycle,
-          onNextCycle: cubit.nextCycle,
-          onCurrentCycle: cubit.goToCurrentCycle,
-          isLoading: _isSwitchingCycle(state),
-        ),
+        _buildFolegoCard(state, summary, cubit),
         if (state.fundingEstimate != null) ...[
           const SizedBox(height: 16),
           _dimWhileSwitching(state, CycleFundingPlannerCard(estimate: state.fundingEstimate!)),
@@ -249,14 +278,7 @@ class _HomePageContentState extends State<_HomePageContent> {
                 flex: 4,
                 child: Column(
                   children: [
-                    FolegoGaugeCard(
-                      summary: summary,
-                      cycle: state.currentCycle,
-                      onPreviousCycle: cubit.previousCycle,
-                      onNextCycle: cubit.nextCycle,
-                      onCurrentCycle: cubit.goToCurrentCycle,
-                      isLoading: _isSwitchingCycle(state),
-                    ),
+                    _buildFolegoCard(state, summary, cubit),
                     if (state.fundingEstimate != null) ...[
                       const SizedBox(height: 16),
                       _dimWhileSwitching(state, CycleFundingPlannerCard(estimate: state.fundingEstimate!)),
@@ -358,14 +380,7 @@ class _HomePageContentState extends State<_HomePageContent> {
               flex: 5,
               child: Column(
                 children: [
-                  FolegoGaugeCard(
-                    summary: summary,
-                    cycle: state.currentCycle,
-                    onPreviousCycle: cubit.previousCycle,
-                    onNextCycle: cubit.nextCycle,
-                    onCurrentCycle: cubit.goToCurrentCycle,
-                    isLoading: _isSwitchingCycle(state),
-                  ),
+                  _buildFolegoCard(state, summary, cubit),
                   if (state.fundingEstimate != null) ...[
                     const SizedBox(height: 16),
                     _dimWhileSwitching(state, CycleFundingPlannerCard(estimate: state.fundingEstimate!)),

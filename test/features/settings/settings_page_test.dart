@@ -372,6 +372,25 @@ void main() {
       expect(find.textContaining('Forma de pagamento'), findsWidgets);
     });
 
+    testWidgets('Categoria e forma de pagamento encontradas abrem direto a edição', (tester) async {
+      final cubit = sl<FinanceCubit>();
+      await cubit.loadCycleData();
+      await tester.pumpWidget(buildTestableWidget());
+      await tester.pumpAndSettle();
+
+      final category = cubit.state.categories.first;
+      await search(tester, category.name);
+      await tester.tap(find.textContaining('Categoria •').first);
+      await tester.pumpAndSettle();
+      expect(find.text('Editar Categoria'), findsOneWidget);
+      expect(find.widgetWithText(TextField, category.name), findsOneWidget);
+      await tester.tap(find.text('Cancelar'));
+      await tester.pumpAndSettle();
+
+      // Fechando a edição, fica-se no grupo do item
+      expect(find.text('Categorias de Gastos'), findsWidgets);
+    });
+
     testWidgets('Sem resultado avisa, e limpar a busca devolve os grupos', (tester) async {
       await sl<FinanceCubit>().loadCycleData();
       await tester.pumpWidget(buildTestableWidget());

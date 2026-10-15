@@ -590,4 +590,16 @@ class SupabaseSettlementDataSource implements SettlementDataSource {
       throw ServerFailure(e.message);
     }
   }
+
+  @override
+  Future<bool> isCycleSettled(FinancialCycle cycle) async {
+    final row = await client
+        .from('settlements')
+        .select('status')
+        .eq('house_id', _houseId)
+        .eq('cycle_start_date', cycle.startDate.toIso8601String().split('T')[0])
+        .maybeSingle();
+    final status = row?['status'];
+    return status == 'confirmed' || status == 'completed';
+  }
 }

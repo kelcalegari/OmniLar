@@ -944,7 +944,8 @@ class _HouseMembersBlockState extends State<_HouseMembersBlock> {
 }
 
 
-/// Um resultado da busca dos Ajustes: leva a um grupo ou abre algo direto.
+/// Um resultado da busca dos Ajustes: leva a um grupo, abre algo direto ou
+/// as duas coisas (o grupo e, por cima, a edição do item).
 class _SearchEntry {
   final String title;
   final String where;
@@ -996,6 +997,7 @@ extension _SettingsSearch on _SettingsPageState {
       group: group,
     );
 
+    final financeCubit = context.read<FinanceCubit>();
     return [
       _SearchEntry(
         title: 'Meu perfil',
@@ -1056,12 +1058,19 @@ extension _SettingsSearch on _SettingsPageState {
           icon: Icons.person_outline_rounded,
           group: _SettingsGroup.house,
         ),
+      // Categoria, forma de pagamento e conta fixa abrem direto a edição
       for (final c in financeState.categories)
         _SearchEntry(
           title: c.name,
           where: 'Categoria • ${_SettingsGroup.split.title}',
           icon: Icons.label_outline_rounded,
           group: _SettingsGroup.split,
+          action: () => _showCategoryFormDialog(
+            context,
+            financeCubit,
+            financeState.members,
+            existing: c,
+          ),
         ),
       for (final pm in financeState.paymentMethods)
         _SearchEntry(
@@ -1069,6 +1078,12 @@ extension _SettingsSearch on _SettingsPageState {
           where: 'Forma de pagamento • ${_SettingsGroup.payments.title}',
           icon: Icons.credit_card_rounded,
           group: _SettingsGroup.payments,
+          action: () => _showPaymentMethodFormDialog(
+            context: context,
+            financeCubit: financeCubit,
+            members: financeState.members,
+            existingPm: pm,
+          ),
         ),
       for (final e in financeState.recurringSeries)
         _SearchEntry(
@@ -1076,6 +1091,14 @@ extension _SettingsSearch on _SettingsPageState {
           where: 'Conta fixa • ${_SettingsGroup.payments.title}',
           icon: Icons.repeat_rounded,
           group: _SettingsGroup.payments,
+          action: () => showAdaptiveModal(
+            context: context,
+            maxWidth: 540,
+            child: BlocProvider<FinanceCubit>.value(
+              value: financeCubit,
+              child: AddExpensePage(expenseToEdit: e),
+            ),
+          ),
         ),
     ];
   }

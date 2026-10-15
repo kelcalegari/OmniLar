@@ -32,4 +32,7 @@ class DynamicSettlementDataSource implements SettlementDataSource {
   @override
   Future<void> reopenSettlement(FinancialCycle cycle) =>
       _active.reopenSettlement(cycle);
+
+  @override
+  Future<bool> isCycleSettled(FinancialCycle cycle) => _active.isCycleSettled(cycle);
 }

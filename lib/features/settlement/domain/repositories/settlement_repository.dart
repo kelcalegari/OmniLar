@@ -12,4 +12,7 @@ abstract class SettlementRepository {
     SettlementOptions? options,
   });
   Future<void> reopenSettlement(FinancialCycle cycle);
+
+  /// Se o ciclo já tem fechamento confirmado, sem montar o resumo inteiro.
+  Future<bool> isCycleSettled(FinancialCycle cycle);
 }

@@ -141,6 +141,9 @@ class _FakeSettlementRepository implements SettlementRepository {
 
   @override
   Future<void> reopenSettlement(FinancialCycle cycle) async {}
+
+  @override
+  Future<bool> isCycleSettled(FinancialCycle cycle) async => false;
 }
 
 void main() {

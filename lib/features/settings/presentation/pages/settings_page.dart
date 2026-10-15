@@ -104,16 +104,14 @@ class _SettingsPageState extends State<SettingsPage> {
     );
   }
 
-  /// Resultado escolhido: abre o que ele indica e limpa a busca.
+  /// Resultado escolhido: abre o grupo dele e, quando há, a edição do item
+  /// por cima (fechando a edição, fica-se no grupo). Limpa a busca.
   void _pickSearchEntry(_SearchEntry entry, ValueChanged<_SettingsGroup> openGroup) {
     _clearSearch();
     FocusManager.instance.primaryFocus?.unfocus();
     final group = entry.group;
-    if (group != null) {
-      openGroup(group);
-    } else {
-      entry.action?.call();
-    }
+    if (group != null) openGroup(group);
+    entry.action?.call();
   }
 
   void _showEditProfileModal(BuildContext context, UserProfile? user) {

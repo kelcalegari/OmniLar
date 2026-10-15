@@ -428,4 +428,9 @@ class MockSettlementDataSource implements SettlementDataSource {
       _cachedSettlement = null;
     }
   }
+
+  @override
+  Future<bool> isCycleSettled(FinancialCycle cycle) async =>
+      _cachedSettlement?.cycle == cycle &&
+      _cachedSettlement!.status == SettlementStatus.settled;
 }

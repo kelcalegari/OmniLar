@@ -24,4 +24,7 @@ class SettlementRepositoryImpl implements SettlementRepository {
   @override
   Future<void> reopenSettlement(FinancialCycle cycle) =>
       _dataSource.reopenSettlement(cycle);
+
+  @override
+  Future<bool> isCycleSettled(FinancialCycle cycle) => _dataSource.isCycleSettled(cycle);
 }
