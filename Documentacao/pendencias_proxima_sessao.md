@@ -106,7 +106,7 @@ Resumo dos mecanismos que mudaram nesta sessão, para localizar as coisas.
 ### Limites conhecidos
 - **Sem rede as listas não carregam:** o app não guarda cópia local. A fila offline só ajuda quando a conexão cai no meio do uso.
 - **Fora da fila offline:** pagamento de parcela (de propósito) e exclusões.
-- **Importar fatura ou extrato:** página própria em `/casa/importar` (cartão "Importar fatura ou extrato" na Casa, atalho em cada fatura e menu de cada cartão ou conta nos Ajustes; `/importar` redireciona para lá). Escolhe-se a origem e o arquivo OFX/CSV; o app compara com o que já foi lançado, e cada linha nova da Casa vira uma despesa. A confirmação grava tudo de uma vez e entra no histórico da página, de onde pode ser desfeita; a revisão em si não é guardada e se perde ao sair da página. A fatura de exemplo aparece só no modo demo.
+- **Importar fatura ou extrato:** página própria em `/casa/importar` (cartão "Importar fatura ou extrato" na Casa, atalho em cada fatura e menu de cada cartão ou conta nos Ajustes; `/importar` redireciona para lá). Escolhe-se a origem e o arquivo OFX/CSV; o app compara com o que já foi lançado, e cada linha nova da Casa vira uma despesa. A confirmação grava tudo de uma vez e entra no histórico da página, de onde pode ser desfeita; a revisão em andamento fica guardada neste aparelho (ao voltar, "Revisão em andamento" oferece Retomar ou Descartar), mas não aparece em outro aparelho. A fatura de exemplo aparece só no modo demo.
 - **Fatura de cartão:** só funciona para cartão com fechamento e vencimento cadastrados; gravar `paid_at` direto na tabela de despesas continua possível para qualquer morador.
 - **Ciclo reaberto:** trocar a divisão do excedente do balde no segundo fechamento redistribui o excedente inteiro; parcelas e acordos do primeiro fechamento não são desfeitos.
 - **Acordos de reposição criados antes da migration 0037** não têm caixinha de origem (não havia nenhum no banco).
@@ -117,6 +117,61 @@ Resumo dos mecanismos que mudaram nesta sessão, para localizar as coisas.
 - **Código do boleto e meio da fatura:** em main. Apagar o campo do código ao editar remove o código. Conta pendente com código mostra "copiar" no card e no detalhe; o formulário de despesa tem o campo "Código do boleto", que confere o código, preenche o valor (se vazio) e o vencimento. A fatura do cartão (tela "Pagar fatura" e "Fatura já paga?" da importação) é paga escolhendo o meio: meio da casa = pago pelo Caixa; meio do titular = pago por ele, reembolsado. Meio de outro morador pagando a fatura de alguém não entra (`invoicePaymentOptions` em `pending_payment.dart`).
 - **Código do boleto da fatura:** em main, migration 0057 (tabela `card_invoice_codes`: cartão + vencimento + linha digitável). A tela "Pagar fatura" informa, troca, apaga e copia o código; o card da fatura copia. O escâner reconhece o boleto da fatura em aberto (vencimento a até 5 dias, total até 30% diferente) e guarda o código nela, sem lançar despesa (`knownInvoicesFor`). A tela de pagar conta pendente também informa ou troca o código (`BillCodeField`). O formulário esconde o campo de código em compra no cartão. As faturas em aberto e os códigos não têm limite de data (só "Pagamentos registrados" mostra 62 dias).
 - **Acesso à importação:** card "Importar fatura ou extrato" na Casa, acima do fechamento; atalho dentro de cada fatura; menu de cada cartão ou conta nos Ajustes. Saiu do Smart FAB e do painel geral dos Ajustes.
+
+### Decisões pendentes do dono, com opções e recomendação (15/10/2026)
+Levantadas em 15/10/2026, depois do merge das decisões anteriores. A numeração é a da lista apresentada ao dono naquele dia: os itens 6 (merge e push, feito), 7 (testes manuais, ver "Testes manuais pendentes"), 14 e 15 (importação e leitor de boleto, testados pelo dono) não pedem decisão. **Antes de começar, pergunte se ele segue as recomendações (marcadas com ⭐) ou se escolhe outra letra**, e peça aprovação antes de cada migration.
+
+1. **Despesas excluídas ficam sem categoria ao excluir a categoria** (detalhe em "Pontas deixadas pelas decisões de 15/10/2026")
+   - a) ⭐ Migration 0062: a função também move as despesas excluídas, com a mesma checagem de dono ou administrador
+   - b) Manter (despesa excluída não aparece em lugar nenhum)
+2. **"Repetir até" mudado com "só esta" não faz nada**
+   - a) ⭐ Ao escolher "só esta" com a data final mudada, avisar que ela só vale para "esta e as próximas" ou "todas" e deixar trocar a escolha
+   - b) Esconder o campo na edição "só esta" (difícil: o alcance só é escolhido ao salvar)
+   - c) Manter
+3. **Ocorrências criadas ao estender uma série ficam no nome de quem editou.** Efeito prático: o banco só deixa editar um evento a quem o criou ou a um administrador, e recusa sem avisar; quem criou a série deixa de conseguir editar essas ocorrências, sem erro na tela
+   - a) ⭐ Migration com uma função do banco que estende ou encurta a série, criando as ocorrências no nome de quem criou a série (resolve o item 4 junto)
+   - b) Manter
+4. **Estender ou encurtar uma série não é tudo-ou-nada**
+   - a) ⭐ Junto com o item 3, na mesma função do banco
+   - b) Manter
+5. **Agenda e histórico da caixinha sem tempo real**
+   - a) Ligar nos dois
+   - b) ⭐ Só na agenda, que é compartilhada pela casa (precisa de migration); o histórico da caixinha já é relido ao abrir
+   - c) Manter
+8. **Sem internet as listas não carregam**
+   - a) Guardar uma cópia local (trabalho grande)
+   - b) ⭐ Manter por enquanto (como decidido em 14/10)
+9. **Pagar parcela e exclusões fora da fila offline**
+   - a) ⭐ Pôr na fila só a exclusão de item de compra e de tarefa (excluir de novo não causa problema; comum no mercado sem sinal). Pagar parcela continua fora
+   - b) Pôr na fila todas as exclusões (risco: a exclusão de uma despesa ser recusada no reenvio por estar num ciclo fechado)
+   - c) Manter
+10. **Fatura depende do fechamento e do vencimento cadastrados; qualquer morador grava `paid_at` direto**
+    - a) ⭐ O cadastro de cartão passa a exigir os dois dias, e uma migration faz o banco só aceitar mudança de pagamento numa compra no cartão vinda da tela de pagar a fatura
+    - b) Só exigir os dias no cadastro
+    - c) Manter
+11. **Ciclo reaberto redistribui o excedente inteiro no segundo fechamento**
+    - a) ⭐ Manter (caso raro, como decidido em 14/10)
+    - b) Recalcular só a diferença
+12. **Acordos de reposição de antes da 0037 sem caixinha de origem**
+    - a) ⭐ Tirar da lista: não existia nenhum no banco
+    - b) Migration para preencher
+13. **"A revisão da importação se perde ao sair da página"** — o texto estava desatualizado: a revisão já fica guardada no aparelho (Retomar ou Descartar); só não passa para outro aparelho. O texto em "Limites conhecidos" foi corrigido em 15/10
+    - a) ⭐ Manter como está (só no aparelho)
+    - b) Guardar a revisão no servidor, para aparecer em qualquer aparelho (precisa de migration)
+16. **A troca de ciclo relê despesas e aportes duas vezes**
+    - a) Cortar a leitura repetida agora
+    - b) ⭐ Só se a troca parecer lenta para o dono
+17. **Lista de moradores desatualizada no formulário de despesa e na agenda**
+    - a) ⭐ Conferir as duas telas e fazê-las usar a lista que já atualiza em tempo real
+    - b) Manter
+18. **Conferência do banco contra as migrations (regras de acesso e índices)**
+    - a) ⭐ Comparar regras de acesso e índices com as migrations e rodar o relatório de alertas do Supabase (só leitura); se houver diferença, trazer a correção para aprovação
+    - b) Manter
+19. **Telas sem teste automatizado** (participantes de projeto, "repetir até", dia de início do ciclo, histórico da caixinha, fechar compra)
+    - a) ⭐ Escrever testes de tela para as cinco
+    - b) Manter
+
+Ordem sugerida, se ele seguir as recomendações: 12, 1, 2, 17, 9, 19, 3 e 4 juntos, 5, 10 e 18. Precisam de migration o 1, o 3 com o 4, o 5 e o 10 (e o 18, só se houver diferença). Os itens 8, 11, 13 e 16 ficam como estão.
 
 ### Pontas deixadas pelas decisões de 15/10/2026
 - **Excluir categoria deixa sem categoria as despesas já excluídas:** a função `delete_category_moving_expenses` (0059) roda com as permissões de quem chama, e o RLS esconde despesas com `deleted_at`; ao excluir a categoria, a chave estrangeira põe `category_id` nulo nelas. Não aparece no app (despesa excluída nunca é restaurada). Correção proposta: migration 0062 com a função em `security definer`, mantendo a checagem `is_house_admin`.
