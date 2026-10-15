@@ -479,6 +479,8 @@ class _SettingsPageState extends State<SettingsPage> {
     String? selectedOwnerId = members.any((m) => m.id == existing?.ownerMemberId)
         ? existing?.ownerMemberId
         : null;
+    // Sem escolha anterior, o interruptor abre no que o nome sugere
+    bool? variableSpend = existing?.isVariableSpend;
     final messenger = ScaffoldMessenger.of(context);
 
     showDialog(
@@ -544,6 +546,20 @@ class _SettingsPageState extends State<SettingsPage> {
                     });
                   },
                 ),
+                const SizedBox(height: 8),
+                SwitchListTile(
+                  key: const Key('category_variable_spend'),
+                  contentPadding: EdgeInsets.zero,
+                  title: const Text('Gasto variável', style: TextStyle(fontSize: 14)),
+                  subtitle: const Text(
+                    'Muda de um ciclo para o outro (mercado, luz, água). O Planejamento de Aportes estima pela média.',
+                    style: TextStyle(fontSize: 12),
+                  ),
+                  value: variableSpend ??
+                      ExpenseCategory(id: existing?.id ?? '', name: nameController.text, icon: '', colorHex: '')
+                          .looksLikeVariableSpend,
+                  onChanged: (value) => setDialogState(() => variableSpend = value),
+                ),
               ],
             ),
             actions: [
@@ -565,6 +581,7 @@ class _SettingsPageState extends State<SettingsPage> {
                         icon: existing.icon,
                         colorHex: existing.colorHex,
                         ownerMemberId: selectedOwnerId,
+                        isVariableSpend: variableSpend ?? existing.isVariableSpend,
                       ),
                     );
                     messenger.showSnackBar(
@@ -582,6 +599,7 @@ class _SettingsPageState extends State<SettingsPage> {
                     icon: 'category',
                     colorHex: '#0F766E',
                     ownerMemberId: selectedOwnerId,
+                    isVariableSpend: variableSpend,
                   );
 
                   Navigator.pop(dialogCtx);

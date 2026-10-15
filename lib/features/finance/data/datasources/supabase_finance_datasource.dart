@@ -51,8 +51,16 @@ class SupabaseFinanceDataSource implements FinanceDataSource {
     late final StreamController<void> controller;
     controller = StreamController<void>.broadcast(
       onListen: () {
-        var pending = client.channel('house-finance-$houseId');
-        for (final table in const ['house_expenses', 'house_members']) {
+        // Um canal por assinatura: o fechamento de um não derruba o do outro
+        var pending = client.channel('house-finance-$houseId-${identityHashCode(controller)}');
+        // Despesas e moradores (0050); aportes, empréstimos e caixinhas (0061)
+        for (final table in const [
+          'house_expenses',
+          'house_members',
+          'contributions',
+          'p2p_loans',
+          'savings_vaults',
+        ]) {
           pending = pending.onPostgresChanges(
             event: PostgresChangeEvent.all,
             schema: 'public',
@@ -67,6 +75,15 @@ class SupabaseFinanceDataSource implements FinanceDataSource {
             },
           );
         }
+        // Parcelas não têm house_id: sem filtro, o RLS entrega só as da casa
+        pending = pending.onPostgresChanges(
+          event: PostgresChangeEvent.all,
+          schema: 'public',
+          table: 'p2p_installments',
+          callback: (_) {
+            if (!controller.isClosed) controller.add(null);
+          },
+        );
         channel = pending.subscribe();
       },
       onCancel: () {
@@ -186,6 +203,7 @@ class SupabaseFinanceDataSource implements FinanceDataSource {
             icon: r['icon'] as String? ?? 'category_outlined',
             colorHex: r['color_hex'] as String? ?? '0xFF2196F3',
             ownerMemberId: r['owner_member_id'] as String?,
+            isVariableSpend: r['is_variable_spend'] as bool?,
           );
         }).toList();
       }
@@ -762,6 +780,7 @@ class SupabaseFinanceDataSource implements FinanceDataSource {
         'icon': category.icon,
         'color_hex': category.colorHex,
         'owner_member_id': category.ownerMemberId,
+        if (category.isVariableSpend != null) 'is_variable_spend': category.isVariableSpend,
       });
     } catch (e) {
       throw ServerFailure('Erro ao criar categoria: $e');
@@ -778,6 +797,7 @@ class SupabaseFinanceDataSource implements FinanceDataSource {
           .update({
             'name': category.name,
             'owner_member_id': _isUuid(category.ownerMemberId) ? category.ownerMemberId : null,
+            if (category.isVariableSpend != null) 'is_variable_spend': category.isVariableSpend,
           })
           .eq('id', category.id)
           .eq('house_id', _houseId)

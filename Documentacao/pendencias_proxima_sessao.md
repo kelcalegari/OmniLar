@@ -1,13 +1,13 @@
 # Omni Lar — ponto de partida para a próxima sessão
 
-Reescrito em 13/10/2026, no fim de uma sessão longa de correções, e atualizado no mesmo dia ao fim de uma segunda sessão (banco zerado, correções relatadas pelo dono no app, tempo real, categoria com dono e Ajustes refeitos). Substitui a versão anterior deste arquivo e o antigo `o_que_falta_fazer.md`, que foi apagado. Leia este arquivo inteiro antes de propor trabalho.
+Reescrito em 13/10/2026, no fim de uma sessão longa de correções, e atualizado no mesmo dia ao fim de uma segunda sessão (banco zerado, correções relatadas pelo dono no app, tempo real, categoria com dono e Ajustes refeitos). Atualizado em 15/10/2026 depois de implementadas as decisões pendentes do dono (as recomendações com ⭐). Substitui a versão anterior deste arquivo e o antigo `o_que_falta_fazer.md`, que foi apagado. Leia este arquivo inteiro antes de propor trabalho.
 
 ## Estado atual
 
-- **Código:** `main` local e `origin/main` sincronizadas, diretório de trabalho limpo. Confira com `git log --oneline -5` e `git status`.
-- **Banco (Supabase `rygxmpwzofgieodvhpcy`, acessível pelo conector do Supabase):** migrations 0001 a 0058 aplicadas. No histórico de migrations do Supabase constam só as 0022 a 0027 e as 0030 a 0058; as 0001 a 0021, a 0028 e a 0029 foram aplicadas à mão pelo SQL Editor. A próxima migration é a 0059.
+- **Código:** as decisões de 15/10/2026 estão na branch `feat/decisoes-recomendadas`, ainda sem merge na `main` nem push (confira com `git log --oneline -8` e `git status`).
+- **Banco (Supabase `rygxmpwzofgieodvhpcy`, acessível pelo conector do Supabase):** migrations 0001 a 0061 aplicadas (as 0059, 0060 e 0061 em 15/10/2026, antes do merge do código: são compatíveis com o app antigo). No histórico de migrations do Supabase constam só as 0022 a 0027 e as 0030 a 0061; as 0001 a 0021, a 0028 e a 0029 foram aplicadas à mão pelo SQL Editor. A próxima migration é a 0062.
 - **Edge Functions:** `capture-read` versão 8 e `assistant` versão 5, ambas com `verify_jwt=true` e exigindo usuário logado que more na casa.
-- **Qualidade:** `flutter analyze` com 0 erros e 0 warnings, e 515 testes passando (14/10/2026). Os testes automatizados rodam só contra os datasources mock (modo demo); nenhum roda contra o Supabase.
+- **Qualidade:** `flutter analyze` com 0 erros e 0 warnings, e 531 testes passando (15/10/2026). Os testes automatizados rodam só contra os datasources mock (modo demo); nenhum roda contra o Supabase.
 - **Dados no banco:** em 13/10/2026 o dono apagou todos os dados de teste (todas as tabelas de `public` e as contas de login) e recomeçou do zero; a estrutura, as funções e o histórico de migrations não mudaram. Logo depois foi criada de novo a casa "Nossa Casa", com as contas novas de kelvynn e Cristiano; o dono já lançou algumas despesas de teste nela (entre elas a recorrente "Internet", todo dia 25). Em 14/10/2026 já havia 3 fechamentos de ciclo confirmados e 3 importações feitos pelo dono com sessão real.
 
 ## O ponto mais importante
@@ -52,6 +52,18 @@ Para não perguntar de novo:
 - **Excluir empréstimo:** só quem emprestou ou um administrador (no acordo com o Caixa, só o administrador), e só enquanto nada foi pago.
 - **Despesa de projeto:** dividida entre os participantes do projeto, pelo percentual de cada um; não segue o rateio da casa.
 - **Fila offline:** pagamento de parcela fica fora, de propósito; em edição simultânea vale a última que chegar.
+- **Decisões de 14/10/2026, implementadas em 15/10/2026 (recomendações ⭐):**
+  - Selo do Fôlego fora do ciclo atual mostra a situação do ciclo ("Fechado" ou "Em aberto"); no ciclo atual continua a saúde do caixa.
+  - Cartão da despesa em tela estreita: valor e "Pagar" descem para uma segunda linha.
+  - Revisão do escâner: nota e cupom escolhem "Já paguei" (data da compra editável) ou "A pagar" (com vencimento; o meio é escolhido ao pagar).
+  - Excluir categoria com lançamentos: pede para qual categoria mover os lançamentos (sem estado de arquivada).
+  - "Gasto variável": interruptor no cadastro da categoria; sem escolha, vale a adivinhação pelo nome.
+  - Tempo real também para aportes, empréstimos (e parcelas) e caixinhas.
+  - Relatórios com o atalho "Voltar ao ciclo atual" e o esmaecimento na troca de ciclo.
+  - Busca nos Ajustes abre direto a edição de categoria, forma de pagamento e conta fixa; o resto abre o grupo.
+  - Série de eventos: o "repetir até" pode ser mudado ao editar "esta e as próximas" (ou todas).
+  - Fila offline inclui "marcar item como comprado" e "concluir tarefa".
+  - Ficam como estão: interruptores do Assistente (dependem de notificações), cópia local para abrir sem internet e o segundo fechamento de ciclo reaberto.
 
 ## Como o sistema está montado hoje
 
@@ -78,74 +90,26 @@ Resumo dos mecanismos que mudaram nesta sessão, para localizar as coisas.
 - **Item de compra** não tem categoria: a compra fechada vira uma despesa na categoria de mercado da casa.
 - **Participantes de evento:** editar um evento grava a lista inteira; quem foi desmarcado sai de `event_participants`.
 - **Ajustes:** quatro grupos (Casa, Divisão das despesas, Pagamentos e contas, Aplicativo). No celular e no tablet o índice abre uma página por grupo; a partir de 1024 px os grupos ficam à esquerda e o conteúdo ao lado. Moradores e convites, categorias, modelo de rateio, formas de pagamento e contas fixas ficam dentro da página, assim como a chave de IA, o tema e a auditoria (a chave de IA e a auditoria usam o parâmetro `embedded`). A importação de fatura tem página própria (`/importar`): nos Ajustes ela aparece no menu de cada cartão ou conta, e o resultado da busca leva direto a ela. Só ciclo, chave Pix e perfil abrem janela (formulários curtos). Os interruptores "Assistente Ativo", "Alertas Proativos" e "Horário Silencioso" foram removidos: não gravavam nada. O código de convite só é criado quando o dono ou um administrador toca em "Gerar código de convite". O editor do rateio guarda a edição em variáveis do método que o cria, por isso é mantido pelo `_KeptEditor` e só é recriado quando moradores, categorias ou o modelo mudam. A busca do índice ignora acentos e acha as opções (por título ou sinônimo) e o que a casa cadastrou: moradores, categorias, formas de pagamento e contas fixas. O índice e o esqueleto ficam em `settings_page.dart`; o conteúdo dos grupos, em `settings_groups.dart`.
-- **Tempo real:** tarefas, itens de compra, despesas e moradores avisam os outros aparelhos (migrations 0015 e 0050). Despesas e moradores recarregam o ciclo pelo `FinanceCubit` (`watchHouseChanges`); aportes, empréstimos, agenda e caixinhas só atualizam ao recarregar.
+- **Tempo real:** tarefas, itens de compra, despesas, moradores, aportes, empréstimos (e parcelas) e caixinhas avisam os outros aparelhos (migrations 0015, 0050 e 0061). O `FinanceCubit` recarrega o ciclo e o `P2PCubit` relê os empréstimos pelo mesmo `watchHouseChanges` (cada assinatura abre o próprio canal); as parcelas não têm `house_id` e são assinadas sem filtro (o RLS entrega só as da casa). A agenda só atualiza ao recarregar.
+- **Situação do ciclo no Fôlego:** `SettlementRepository.isCycleSettled` lê só o `status` em `settlements`; a Home consulta a cada carga do ciclo fora do ciclo atual.
+- **Categoria:** `categories.is_variable_spend` (0060, nulo = adivinha pelo nome, `ExpenseCategory.countsAsVariableSpend`). Excluir categoria passa pela RPC `delete_category_moving_expenses` (0059), que move despesas, sub-itens, itens de compra, linhas e regras da importação e exclui na mesma transação; o rateio das despesas movidas não muda.
+- **Escâner:** nota e cupom têm "Já paguei" / "A pagar" e data editável; `SmartScannerPage.initialProposal` existe só para os testes.
+- **Série de eventos:** `seriesEndChange` (`event_recurrence.dart`) diz o que sai e o que entra ao trocar o "repetir até"; no Supabase as ocorrências novas são inseridas direto em `events` por quem edita (fica sendo o criador delas).
 - **Caixinhas:** nascem zeradas (o saldo inicial vira depósito), toda casa nova recebe a "Reserva da Casa", e cada caixinha tem o histórico de entradas e saídas.
 - **Projetos compartilhados:** usam a casa e o usuário da sessão; o acerto divide entre os participantes (`project_settlement_service.dart`); há um diálogo para editar participantes e percentuais.
 - **Agenda:** evento recorrente aceita "repetir até" (máximo de 200 ocorrências); tarefas e itens de compra podem ser editados.
-- **Fila offline:** `lib/core/network/`. Entram na fila: lançar despesa, adicionar item de compra, criar evento, criar tarefa, editar tarefa, editar item de compra e criar empréstimo.
+- **Fila offline:** `lib/core/network/`. Entram na fila: lançar despesa, adicionar item de compra, criar evento, criar tarefa, editar tarefa, editar item de compra, criar empréstimo, marcar item como comprado e concluir tarefa. As duas últimas gravam o estado desejado (`setItemBought`, `setTaskCompleted`), para o reenvio não inverter de novo; sem conexão a tela atualiza o item ou a tarefa sozinha.
 - **Formas de pagamento:** `payment_methods` tem duas colunas de dono (`owner_id` e `owner_member_id`), mantidas iguais por gatilho desde a migration 0046.
 
 ## Em aberto
 
 ### Limites conhecidos
 - **Sem rede as listas não carregam:** o app não guarda cópia local. A fila offline só ajuda quando a conexão cai no meio do uso.
-- **Fora da fila offline:** pagamento de parcela (de propósito), marcar item como comprado, concluir tarefa e exclusões.
+- **Fora da fila offline:** pagamento de parcela (de propósito) e exclusões.
 - **Importar fatura ou extrato:** página própria em `/casa/importar` (cartão "Importar fatura ou extrato" na Casa, atalho em cada fatura e menu de cada cartão ou conta nos Ajustes; `/importar` redireciona para lá). Escolhe-se a origem e o arquivo OFX/CSV; o app compara com o que já foi lançado, e cada linha nova da Casa vira uma despesa. A confirmação grava tudo de uma vez e entra no histórico da página, de onde pode ser desfeita; a revisão em si não é guardada e se perde ao sair da página. A fatura de exemplo aparece só no modo demo.
-- **Série de eventos já criada** não pode ser estendida nem encurtada; só excluindo "esta e as próximas" e criando de novo.
 - **Fatura de cartão:** só funciona para cartão com fechamento e vencimento cadastrados; gravar `paid_at` direto na tabela de despesas continua possível para qualquer morador.
 - **Ciclo reaberto:** trocar a divisão do excedente do balde no segundo fechamento redistribui o excedente inteiro; parcelas e acordos do primeiro fechamento não são desfeitos.
 - **Acordos de reposição criados antes da migration 0037** não têm caixinha de origem (não havia nenhum no banco).
-
-### Decisões pendentes do dono, com opções e recomendação
-Levantadas em 14/10/2026. O dono pediu para registrar as opções com a recomendação e vai retomar numa próxima sessão: **antes de começar, pergunte se ele segue as recomendações (marcadas com ⭐) ou se escolhe outra letra**. Peça aprovação antes de cada migration, como sempre.
-
-1. **Selo "Saudável" em ciclo passado e vazio** (cartão do Fôlego)
-   - a) Esconder o selo fora do ciclo atual
-   - b) ⭐ Trocar por um selo de situação do ciclo ("Fechado" ou "Em aberto")
-   - c) Manter
-2. **Cartão da despesa em tela estreita** (não estoura, mas fica apertado)
-   - a) ⭐ Em tela estreita, valor e "Pagar" descem para uma segunda linha
-   - b) "Pagar" vira só um ícone
-   - c) Manter
-3. **Revisão do escâner** (título e categoria já são editáveis; documento sai sempre como pago, na data dele)
-   - a) ⭐ Editar a data e escolher "já paguei" ou "a pagar", como já existe para boleto
-   - b) Só a data
-   - c) Manter
-4. **Excluir categoria com lançamentos** (hoje é recusado)
-   - a) Arquivar: some das escolhas, continua nas despesas antigas
-   - b) ⭐ Excluir pedindo para qual categoria mover os lançamentos (sem estado novo)
-   - c) Manter a recusa
-5. **O que é "gasto variável" no Planejamento de Aportes** (hoje: categoria cujo nome contém mercado, feira, luz, energia, água ou gás; conta recorrente fixa já conta como fixa)
-   - a) ⭐ Interruptor "gasto variável" no cadastro da categoria (precisa de migration)
-   - b) Manter a adivinhação pelo nome
-6. **Tempo real em mais telas** (hoje: tarefas, compras, despesas e moradores)
-   - a) Aportes, empréstimos, caixinhas e agenda
-   - b) ⭐ Só aportes, empréstimos e caixinhas, que mexem no Fôlego e no fechamento (precisa de migration)
-   - c) Não ampliar
-7. **Relatórios** (setas de ciclo próprias)
-   - a) ⭐ Mesmo atalho "voltar ao ciclo atual" e esmaecimento na troca que a Casa tem
-   - b) Manter
-8. **Busca nos Ajustes** (leva até o grupo, não até o item)
-   - a) Abrir o grupo e destacar o item
-   - b) ⭐ Abrir direto a edição do item (categoria, forma de pagamento, conta fixa); para o resto, o grupo
-   - c) Manter
-9. **Interruptores do Assistente** ("Assistente Ativo", "Alertas Proativos", "Horário Silencioso"; eram de enfeite e foram removidos)
-   - a) Implementar agora
-   - b) ⭐ Deixar para quando existirem notificações, das quais eles dependem
-10. **Fila offline** (fora dela: pagar parcela, de propósito; marcar item como comprado; concluir tarefa; exclusões)
-    - a) ⭐ Incluir "marcar item como comprado" e "concluir tarefa", comuns no mercado sem sinal
-    - b) Manter
-11. **Série de eventos já criada** (não estende nem encurta)
-    - a) ⭐ Permitir mudar o "repetir até" ao editar "esta e as próximas"
-    - b) Manter (excluir e recriar)
-12. **Sem internet as listas não carregam**
-    - a) Guardar uma cópia local para abrir sem internet (trabalho grande)
-    - b) ⭐ Manter por enquanto
-13. **Ciclo reaberto** (trocar a divisão do excedente no segundo fechamento redistribui o excedente inteiro)
-    - a) ⭐ Manter (caso raro)
-    - b) Recalcular só a diferença no segundo fechamento
-
-Ordem sugerida, se ele seguir as recomendações: 1, 2, 7, 8, 3, 4, 11, 10, 5, 6 (os dois últimos com migration). Os itens 9, 12 e 13 ficam como estão.
 
 ### Registros da importação e dos boletos
 - **Importação de fatura e extrato:** está em `main` (código em `lib/features/reconciliation/`). A confirmação e o desfazer usam as funções `confirm_import` e `undo_import` da migration 0052; as regras aprendidas ficam em `import_rules` (0053). PDF e foto são lidos pela função `import-read`, publicada no servidor (versão 1), que também sugere nome e categoria. Nada disso foi testado com conta real nem com arquivo de banco de verdade; a leitura por IA só foi conferida até a recusa de quem não está logado. O que falta está na seção "Situação atual" do `plano_importacao_conciliacao.md`. A seção 12 do plano guarda a discussão com o dono sobre a fatura na Casa: o agrupamento por fatura está feito; decidiu-se a alternativa C, "fatura como conta pendente" (seção 13), implementada com a migration 0054: compra no cartão nasce pendente, a fatura é paga com data e origem (titular ou Caixa) e o fechamento pergunta o que fazer com fatura em aberto, e a fatura pode ser paga inteira pelo titular ou pelo Caixa da Casa (migration 0055: em fatura importada paga pelo Caixa, o que não era da casa vira dívida com o Caixa; no modo demo, não).
@@ -163,6 +127,18 @@ Ordem sugerida, se ele seguir as recomendações: 1, 2, 7, 8, 3, 4, 11, 10, 5, 6
 ## Testes manuais pendentes
 
 Os roteiros anteriores foram executados pelo dono até 14/10/2026. Ficam aqui só os do que entrou depois.
+
+### Decisões implementadas em 15/10 (branch `feat/decisoes-recomendadas`, migrations 0059 a 0061)
+- **Selo do Fôlego:** num ciclo passado já fechado aparece "Fechado"; num não fechado (ou futuro), "Em aberto"; no ciclo atual, a saúde do caixa.
+- **Cartão da despesa no celular:** numa conta a pagar, valor e "Pagar" ficam numa segunda linha, sem apertar o título.
+- **Escâner (nota ou cupom):** trocar a data; escolher "A pagar" e conferir que a despesa nasce pendente, com o vencimento escolhido.
+- **Excluir categoria com lançamentos** (como dono ou administrador): escolher a categoria de destino; as despesas, inclusive de ciclo fechado, aparecem nela. Como morador comum, a exclusão é recusada e nada muda.
+- **Gasto variável:** desligar em "Supermercado" e ligar noutra categoria; o Planejamento de Aportes passa a estimar só a ligada.
+- **Tempo real:** com dois aparelhos abertos, registrar um aporte, pagar uma parcela e depositar numa caixinha; o outro aparelho atualiza sozinho (Home e Empréstimos).
+- **Relatórios:** ir a outro ciclo, aparece "Voltar ao ciclo atual"; o conteúdo esmaece enquanto carrega.
+- **Busca nos Ajustes:** buscar uma categoria, uma forma de pagamento e uma conta fixa; cada uma abre direto a edição.
+- **Série de eventos:** editar "esta e as próximas" encurtando o "repetir até" (as ocorrências depois somem) e estendendo (as que faltam aparecem, com os mesmos participantes).
+- **Fila offline:** sem internet, marcar um item como comprado e concluir uma tarefa; ao voltar a conexão, conferir no outro aparelho.
 
 ### Correção de inconsistências de 14/10 (commit `42f33fd`, migration 0058)
 - **Compra no cartão:** deve nascer pendente, dentro da fatura, por qualquer tela (formulário, escâner, assistente, compra do mercado, importação).
@@ -217,6 +193,9 @@ Uma linha por migration, para saber onde está cada regra.
 | 0056 | Código de barras do boleto na despesa |
 | 0057 | Código do boleto da fatura do cartão (`card_invoice_codes`) |
 | 0058 | Compra no cartão nasce pendente também no banco; pagar e desfazer a fatura só mexem nas compras dela (sem projeto e sem recorrente) |
+| 0059 | Excluir categoria movendo os lançamentos para outra (`delete_category_moving_expenses`) |
+| 0060 | Interruptor "gasto variável" na categoria (`categories.is_variable_spend`) |
+| 0061 | Tempo real para aportes, empréstimos, parcelas e caixinhas |
 
 ## Documentos relacionados
 

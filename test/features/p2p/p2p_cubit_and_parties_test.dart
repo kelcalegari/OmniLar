@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:omni_lar/core/domain/value_objects/money.dart';
 import 'package:omni_lar/features/auth/domain/entities/user_profile.dart';
@@ -160,6 +162,30 @@ void main() {
       await cubit.deleteLoan('loan_to_delete');
       expect(cubit.state.allLoans.isEmpty, isTrue);
       expect(cubit.state.loansTheyOweMe.isEmpty, isTrue);
+    });
+
+    test('aviso de mudança vindo de outro aparelho relê os empréstimos', () async {
+      final changes = StreamController<void>.broadcast();
+      addTearDown(changes.close);
+      final cubit = P2PCubit(repo, auth, () => changes.stream);
+      await cubit.loadLoans();
+      expect(cubit.state.allLoans, isEmpty);
+
+      repo.loans.add(P2PLoan(
+        id: 'loan_outro_aparelho',
+        title: 'Lançado no outro celular',
+        totalAmount: const Money(1000),
+        lenderMemberId: otherUserUuid,
+        borrowerMemberId: realUserUuid,
+        installmentsCount: 1,
+        createdAt: DateTime.now(),
+        firstDueDate: DateTime.now(),
+      ));
+      changes.add(null);
+      await Future<void>.delayed(const Duration(milliseconds: 700));
+
+      expect(cubit.state.allLoans.single.id, 'loan_outro_aparelho');
+      await cubit.close();
     });
   });
 }

@@ -123,27 +123,13 @@ class CycleFundingEstimator {
   }) {
     final List<CategoryFundingEstimate> estimates = [];
 
-    // Prioriza categorias de consumo variável mais comuns no orçamento familiar
-    final isVariableCategory = (ExpenseCategory cat) {
-      final n = cat.name.toLowerCase();
-      final id = cat.id.toLowerCase();
-      return n.contains('mercado') ||
-          n.contains('alimenta') ||
-          n.contains('feira') ||
-          n.contains('supermercado') ||
-          n.contains('luz') ||
-          n.contains('energia') ||
-          n.contains('água') ||
-          n.contains('agua') ||
-          n.contains('gás') ||
-          n.contains('gas') ||
-          id.contains('mercado');
-    };
+    // Gasto variável: o interruptor do cadastro da categoria ou, sem ele, o nome
+    final variableCategories = categories.where((c) => c.countsAsVariableSpend).toList();
 
-    final variableCategories = categories.where(isVariableCategory).toList();
-
-    // Se nenhuma categoria tiver nome padrão de mercado, analisa as categorias que tiveram histórico
-    final targetCategories = variableCategories.isNotEmpty
+    // Ninguém escolheu e nenhum nome parece variável: analisa as primeiras categorias.
+    // Se a casa já marcou as suas, vale a escolha, mesmo que seja nenhuma.
+    final anyChosen = categories.any((c) => c.isVariableSpend != null);
+    final targetCategories = variableCategories.isNotEmpty || anyChosen
         ? variableCategories
         : categories.take(3).toList();
 

@@ -11,7 +11,12 @@ class P2PCubit extends Cubit<P2PState> {
   final AuthRepository? _authRepository;
   StreamSubscription? _authSubscription;
 
-  P2PCubit(this._repository, [this._authRepository])
+  /// Avisos de mudança na casa feitos em outro aparelho (empréstimos e parcelas).
+  final Stream<void> Function()? _houseChanges;
+  StreamSubscription<void>? _houseChangesSubscription;
+  Timer? _houseChangesDebounce;
+
+  P2PCubit(this._repository, [this._authRepository, this._houseChanges])
       : super(P2PState(
           currentUserId: _resolveInitialUserId(_authRepository),
         )) {
@@ -25,7 +30,43 @@ class P2PCubit extends Cubit<P2PState> {
   }
 
   void resetState() {
+    // Troca de conta ou de casa: o aviso volta a ser ligado para a casa nova
+    _stopWatchingHouseChanges();
     emit(P2PState(currentUserId: _resolveInitialUserId(_authRepository)));
+  }
+
+  /// Liga o aviso de mudanças da casa, se ainda não estiver ligado. Enquanto a
+  /// casa não carregou a fonte recusa; a próxima carga tenta de novo.
+  void _watchHouseChanges() {
+    final changes = _houseChanges;
+    if (changes == null || _houseChangesSubscription != null || isClosed) return;
+    try {
+      _houseChangesSubscription = changes().listen(
+        (_) {
+          // Um pagamento gera vários avisos seguidos: recarrega uma vez só
+          _houseChangesDebounce?.cancel();
+          _houseChangesDebounce = Timer(const Duration(milliseconds: 600), () {
+            if (!isClosed) _reloadQuietly();
+          });
+        },
+        onError: (_) {},
+      );
+    } catch (_) {}
+  }
+
+  void _stopWatchingHouseChanges() {
+    _houseChangesDebounce?.cancel();
+    _houseChangesDebounce = null;
+    _houseChangesSubscription?.cancel();
+    _houseChangesSubscription = null;
+  }
+
+  /// Relê os empréstimos sem passar pelo estado de carregando.
+  Future<void> _reloadQuietly() async {
+    try {
+      final loans = await _repository.getLoans();
+      if (!isClosed) emit(state.copyWith(status: P2PStatus.success, allLoans: loans));
+    } catch (_) {}
   }
 
   static String _resolveInitialUserId(AuthRepository? auth) {
@@ -59,6 +100,7 @@ class P2PCubit extends Cubit<P2PState> {
         allLoans: loans,
         currentUserId: activeUserId,
       ));
+      _watchHouseChanges();
     } catch (e) {
       emit(state.copyWith(
         status: P2PStatus.failure,
@@ -172,6 +214,7 @@ class P2PCubit extends Cubit<P2PState> {
   @override
   Future<void> close() {
     _authSubscription?.cancel();
+    _stopWatchingHouseChanges();
     return super.close();
   }
 }

@@ -186,7 +186,12 @@ Future<void> initServiceLocator() async {
     return mock;
   });
   sl.registerLazySingleton<P2PRepository>(() => P2PRepositoryImpl(sl(), sl<OfflineSyncService>()));
-  sl.registerLazySingleton<P2PCubit>(() => P2PCubit(sl(), sl<AuthRepository>()));
+  sl.registerLazySingleton<P2PCubit>(() => P2PCubit(
+        sl(),
+        sl<AuthRepository>(),
+        // Empréstimos e parcelas pagos em outro aparelho (migration 0061)
+        () => sl<FinanceRepository>().watchHouseChanges(),
+      ));
 
   // Settlement Feature (Motor de Compensação / Super Pix)
   sl.registerLazySingleton<SettlementDataSource>(() {
