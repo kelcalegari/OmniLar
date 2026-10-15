@@ -698,108 +698,113 @@ class _TasksAndShoppingPageState extends State<TasksAndShoppingPage> with Single
               : Colors.grey.withValues(alpha: 0.15),
         ),
       ),
-      child: ListTile(
-        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-        leading: Checkbox(
-          value: task.isCompleted,
-          activeColor: AppColors.primary,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
-          onChanged: (_) => cubit.toggleTask(task.id),
-        ),
-        title: Row(
-          children: [
-            Expanded(
-              child: Text(
-                task.title,
-                style: TextStyle(
-                  fontWeight: FontWeight.bold,
-                  fontSize: 15,
-                  decoration: task.isCompleted ? TextDecoration.lineThrough : null,
-                  color: task.isCompleted ? Colors.grey : null,
+      child: Material(
+        // O ListTile pinta o ripple no Material mais próximo; sem este,
+        // o fundo do Container esconde o efeito de toque
+        type: MaterialType.transparency,
+        child: ListTile(
+          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+          leading: Checkbox(
+            value: task.isCompleted,
+            activeColor: AppColors.primary,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+            onChanged: (_) => cubit.toggleTask(task.id),
+          ),
+          title: Row(
+            children: [
+              Expanded(
+                child: Text(
+                  task.title,
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 15,
+                    decoration: task.isCompleted ? TextDecoration.lineThrough : null,
+                    color: task.isCompleted ? Colors.grey : null,
+                  ),
                 ),
               ),
-            ),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-              decoration: BoxDecoration(
-                color: priorityColor.withValues(alpha: 0.12),
-                borderRadius: BorderRadius.circular(8),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                decoration: BoxDecoration(
+                  color: priorityColor.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Text(
+                  priorityLabel,
+                  style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: priorityColor),
+                ),
               ),
-              child: Text(
-                priorityLabel,
-                style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: priorityColor),
-              ),
-            ),
-          ],
-        ),
-        subtitle: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            if (task.description != null && task.description!.isNotEmpty) ...[
-              const SizedBox(height: 4),
-              Text(task.description!, style: const TextStyle(fontSize: 12, color: Colors.grey)),
             ],
-            const SizedBox(height: 6),
-            Row(
-              children: [
-                if (task.assignedToMemberName != null) ...[
-                  const Icon(Icons.person_outline, size: 14, color: Colors.grey),
-                  const SizedBox(width: 4),
-                  Text(
-                    task.assignedToMemberName!,
-                    style: const TextStyle(fontSize: 12, color: Colors.grey, fontWeight: FontWeight.w500),
-                  ),
-                  const SizedBox(width: 12),
-                ],
-                if (task.dueDate != null) ...[
-                  Icon(
-                    Icons.calendar_today_outlined,
-                    size: 14,
-                    color: task.isOverdue ? AppColors.debtRed : Colors.grey,
-                  ),
-                  const SizedBox(width: 4),
-                  Text(
-                    DateFormat('dd/MM').format(task.dueDate!),
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: task.isOverdue ? AppColors.debtRed : Colors.grey,
-                      fontWeight: task.isOverdue ? FontWeight.bold : FontWeight.normal,
-                    ),
-                  ),
-                  if (task.isOverdue) ...[
+          ),
+          subtitle: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              if (task.description != null && task.description!.isNotEmpty) ...[
+                const SizedBox(height: 4),
+                Text(task.description!, style: const TextStyle(fontSize: 12, color: Colors.grey)),
+              ],
+              const SizedBox(height: 6),
+              Row(
+                children: [
+                  if (task.assignedToMemberName != null) ...[
+                    const Icon(Icons.person_outline, size: 14, color: Colors.grey),
                     const SizedBox(width: 4),
-                    const Text(
-                      '(Atrasada)',
-                      style: TextStyle(fontSize: 11, color: AppColors.debtRed, fontWeight: FontWeight.bold),
+                    Text(
+                      task.assignedToMemberName!,
+                      style: const TextStyle(fontSize: 12, color: Colors.grey, fontWeight: FontWeight.w500),
+                    ),
+                    const SizedBox(width: 12),
+                  ],
+                  if (task.dueDate != null) ...[
+                    Icon(
+                      Icons.calendar_today_outlined,
+                      size: 14,
+                      color: task.isOverdue ? AppColors.debtRed : Colors.grey,
+                    ),
+                    const SizedBox(width: 4),
+                    Text(
+                      DateFormat('dd/MM').format(task.dueDate!),
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: task.isOverdue ? AppColors.debtRed : Colors.grey,
+                        fontWeight: task.isOverdue ? FontWeight.bold : FontWeight.normal,
+                      ),
+                    ),
+                    if (task.isOverdue) ...[
+                      const SizedBox(width: 4),
+                      const Text(
+                        '(Atrasada)',
+                        style: TextStyle(fontSize: 11, color: AppColors.debtRed, fontWeight: FontWeight.bold),
+                      ),
+                    ],
+                  ],
+                  if (task.cost != null) ...[
+                    const Spacer(),
+                    Text(
+                      task.cost!.formatted,
+                      style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: AppColors.primary),
                     ),
                   ],
                 ],
-                if (task.cost != null) ...[
-                  const Spacer(),
-                  Text(
-                    task.cost!.formatted,
-                    style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: AppColors.primary),
-                  ),
-                ],
-              ],
-            ),
-          ],
-        ),
-        // Um botão só, para não tirar largura do conteúdo da tarefa
-        trailing: PopupMenuButton<String>(
-          icon: const Icon(Icons.more_vert_rounded, size: 20, color: Colors.grey),
-          tooltip: 'Editar ou excluir tarefa',
-          onSelected: (action) {
-            if (action == 'edit') {
-              AddTaskSheet.show(context, task.createdByMemberId, taskToEdit: task);
-            } else {
-              cubit.deleteTask(task.id);
-            }
-          },
-          itemBuilder: (_) => const [
-            PopupMenuItem(value: 'edit', child: Text('Editar')),
-            PopupMenuItem(value: 'delete', child: Text('Excluir')),
-          ],
+              ),
+            ],
+          ),
+          // Um botão só, para não tirar largura do conteúdo da tarefa
+          trailing: PopupMenuButton<String>(
+            icon: const Icon(Icons.more_vert_rounded, size: 20, color: Colors.grey),
+            tooltip: 'Editar ou excluir tarefa',
+            onSelected: (action) {
+              if (action == 'edit') {
+                AddTaskSheet.show(context, task.createdByMemberId, taskToEdit: task);
+              } else {
+                cubit.deleteTask(task.id);
+              }
+            },
+            itemBuilder: (_) => const [
+              PopupMenuItem(value: 'edit', child: Text('Editar')),
+              PopupMenuItem(value: 'delete', child: Text('Excluir')),
+            ],
+          ),
         ),
       ),
     );
@@ -1094,49 +1099,54 @@ class _TasksAndShoppingPageState extends State<TasksAndShoppingPage> with Single
         borderRadius: BorderRadius.circular(14),
         border: Border.all(color: Colors.grey.withValues(alpha: 0.15)),
       ),
-      child: ListTile(
-        contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 2),
-        leading: Checkbox(
-          value: item.isBought,
-          activeColor: AppColors.creditGreen,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
-          onChanged: (_) => cubit.toggleItemBought(item.id),
-        ),
-        title: Text(
-          item.name,
-          style: TextStyle(
-            fontWeight: FontWeight.w600,
-            fontSize: 14,
-            decoration: item.isBought ? TextDecoration.lineThrough : null,
-            color: item.isBought ? Colors.grey : null,
+      child: Material(
+        // O ListTile pinta o ripple no Material mais próximo; sem este,
+        // o fundo do Container esconde o efeito de toque
+        type: MaterialType.transparency,
+        child: ListTile(
+          contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 2),
+          leading: Checkbox(
+            value: item.isBought,
+            activeColor: AppColors.creditGreen,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+            onChanged: (_) => cubit.toggleItemBought(item.id),
           ),
-        ),
-        trailing: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            if (item.isPersonal)
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                decoration: BoxDecoration(
-                  color: AppColors.accent.withValues(alpha: 0.15),
-                  borderRadius: BorderRadius.circular(8),
+          title: Text(
+            item.name,
+            style: TextStyle(
+              fontWeight: FontWeight.w600,
+              fontSize: 14,
+              decoration: item.isBought ? TextDecoration.lineThrough : null,
+              color: item.isBought ? Colors.grey : null,
+            ),
+          ),
+          trailing: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (item.isPersonal)
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: AppColors.accent.withValues(alpha: 0.15),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: const Text(
+                    'Pessoal',
+                    style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: AppColors.accent),
+                  ),
                 ),
-                child: const Text(
-                  'Pessoal',
-                  style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: AppColors.accent),
-                ),
+              IconButton(
+                icon: const Icon(Icons.edit_outlined, size: 18, color: Colors.grey),
+                tooltip: 'Editar item',
+                onPressed: () => _showEditItemDialog(context, item, cubit),
               ),
-            IconButton(
-              icon: const Icon(Icons.edit_outlined, size: 18, color: Colors.grey),
-              tooltip: 'Editar item',
-              onPressed: () => _showEditItemDialog(context, item, cubit),
-            ),
-            IconButton(
-              icon: const Icon(Icons.close_rounded, size: 18, color: Colors.grey),
-              tooltip: 'Remover da lista',
-              onPressed: () => cubit.deleteItem(item.id),
-            ),
-          ],
+              IconButton(
+                icon: const Icon(Icons.close_rounded, size: 18, color: Colors.grey),
+                tooltip: 'Remover da lista',
+                onPressed: () => cubit.deleteItem(item.id),
+              ),
+            ],
+          ),
         ),
       ),
     );
