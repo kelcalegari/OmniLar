@@ -1,3 +1,7 @@
+import 'dart:convert';
+import 'dart:typed_data';
+
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
@@ -16,6 +20,7 @@ import '../widgets/cycle_preview_section.dart';
 import '../widgets/payment_calendar_section.dart';
 import '../widgets/upcoming_cycles_section.dart';
 import '../widgets/cycle_insights_section.dart';
+import '../../domain/services/cycle_report_csv.dart';
 import '../../domain/entities/cycle_insights.dart';
 
 class ReportsPage extends StatefulWidget {
@@ -100,7 +105,7 @@ class _ReportsPageContent extends StatelessWidget {
         actions: [
           IconButton(
             icon: const Icon(Icons.file_download_outlined),
-            tooltip: 'Exportar Relatório do Ciclo (CSV / Planilha)',
+            tooltip: 'Exportar relatório do ciclo (CSV para planilha)',
             onPressed: () {
               final state = context.read<FinanceCubit>().state;
               _exportReportCsv(context, state);
@@ -770,128 +775,46 @@ class _ReportsPageContent extends StatelessWidget {
     return Color(int.parse('FF$cleanHex', radix: 16));
   }
 
-  void _exportReportCsv(BuildContext context, FinanceState state) {
-    final buffer = StringBuffer();
-    // BOM UTF-8 para o Excel reconhecer acentuação e caracteres brasileiros
-    buffer.write('\uFEFF');
-
-    buffer.writeln('RELATÓRIO DE DESPESAS DO CICLO — OMNI LAR');
-    final cycle = state.currentCycle;
-    if (cycle != null) {
-      buffer.writeln(
-        'Período;${cycle.startDate.day}/${cycle.startDate.month}/${cycle.startDate.year} até ${cycle.endDate.day}/${cycle.endDate.month}/${cycle.endDate.year}',
+  /// Salva o relatório do ciclo em CSV: download no navegador, escolha do
+  /// local no celular e no computador.
+  Future<void> _exportReportCsv(
+    BuildContext context,
+    FinanceState state,
+  ) async {
+    final messenger = ScaffoldMessenger.of(context);
+    final reports = context.read<ReportsCubit>().state;
+    // A prévia só vale se for do ciclo que está na tela
+    final sameCycle = reports.preview?.cycle == state.currentCycle;
+    final csv = const CycleReportCsv().build(
+      cycle: state.currentCycle,
+      expenses: state.expenses,
+      categories: state.categories,
+      members: state.members,
+      preview: sameCycle ? reports.preview : null,
+      calendar: sameCycle ? reports.calendar : null,
+    );
+    try {
+      final saved = await FilePicker.saveFile(
+        fileName: CycleReportCsv.fileNameFor(state.currentCycle),
+        bytes: Uint8List.fromList(utf8.encode(csv)),
+        mimeType: 'text/csv',
+        dialogTitle: 'Salvar relatório do ciclo',
+        allowedExtensions: const ['csv'],
+        type: FileType.custom,
+      );
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text(
+            saved == null
+                ? 'Exportação cancelada.'
+                : 'Relatório do ciclo salvo (${state.expenses.length} lançamentos).',
+          ),
+        ),
+      );
+    } catch (e) {
+      messenger.showSnackBar(
+        SnackBar(content: Text('Não foi possível salvar o relatório: $e')),
       );
     }
-    buffer.writeln('');
-    buffer.writeln(
-      'Data;Descrição;Categoria;Valor (R\$);Quem Pagou;Status;Recorrente',
-    );
-
-    for (final exp in state.expenses) {
-      final cat =
-          state.categories
-              .where((c) => c.id == exp.categoryId)
-              .firstOrNull
-              ?.name ??
-          'Geral';
-      final payer =
-          state.members
-              .where((m) => m.id == exp.paidByMemberId)
-              .firstOrNull
-              ?.name ??
-          'Membro';
-      final dt =
-          '${exp.date.day.toString().padLeft(2, '0')}/${exp.date.month.toString().padLeft(2, '0')}/${exp.date.year}';
-      final valStr = (exp.amount.cents / 100.0)
-          .toStringAsFixed(2)
-          .replaceAll('.', ',');
-      final statusStr = exp.isPending ? 'Pendente' : 'Paga';
-      final recStr = exp.isRecurring
-          ? (exp.isVariable ? 'Recorrente Variável' : 'Recorrente Fixa')
-          : 'Avulsa';
-
-      buffer.writeln(
-        '$dt;"${exp.title}";"$cat";$valStr;"$payer";$statusStr;$recStr',
-      );
-    }
-
-    buffer.writeln('');
-    buffer.writeln('RESUMO GERAL');
-    // Totais das próprias linhas listadas acima, para o arquivo fechar com ele mesmo
-    String asCsvMoney(int cents) =>
-        (cents / 100.0).toStringAsFixed(2).replaceAll('.', ',');
-    final paidCents = state.expenses
-        .where((e) => !e.isPending)
-        .fold<int>(0, (acc, e) => acc + e.amount.cents);
-    final pendingCents = state.expenses
-        .where((e) => e.isPending)
-        .fold<int>(0, (acc, e) => acc + e.amount.cents);
-    buffer.writeln('Total Pago (R\$);${asCsvMoney(paidCents)}');
-    buffer.writeln('Total Pendente (R\$);${asCsvMoney(pendingCents)}');
-    buffer.writeln(
-      'Total Lançado (R\$);${asCsvMoney(paidCents + pendingCents)}',
-    );
-
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Row(
-          children: [
-            Icon(
-              Icons.file_download_done_rounded,
-              color: AppColors.creditGreen,
-            ),
-            SizedBox(width: 8),
-            Text('Relatório Gerado'),
-          ],
-        ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text(
-              'O relatório consolidado do ciclo foi estruturado no padrão universal CSV (UTF-8 com delimitador ponto e vírgula para Excel e Google Sheets).',
-              style: TextStyle(fontSize: 13),
-            ),
-            const SizedBox(height: 12),
-            Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: Theme.of(ctx).cardColor,
-                borderRadius: BorderRadius.circular(10),
-                border: Border.all(color: Colors.grey.withValues(alpha: 0.2)),
-              ),
-              child: Text(
-                'Total de lançamentos: ${state.expenses.length}\nTotal lançado (pagas e pendentes): ${Money(state.expenses.fold<int>(0, (acc, e) => acc + e.amount.cents)).format()}',
-                style: const TextStyle(
-                  fontWeight: FontWeight.bold,
-                  fontSize: 13,
-                ),
-              ),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('Fechar'),
-          ),
-          FilledButton.icon(
-            icon: const Icon(Icons.check_rounded),
-            label: const Text('Concluído'),
-            onPressed: () {
-              Navigator.pop(ctx);
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text(
-                    'Relatório pronto para download e compartilhamento! 📊',
-                  ),
-                ),
-              );
-            },
-          ),
-        ],
-      ),
-    );
   }
 }
