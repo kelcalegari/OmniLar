@@ -264,6 +264,7 @@ Uma linha por migration, para saber onde está cada regra.
 | 0065 | Gatilhos das notificações na hora: empréstimos, fechamento, tarefa atribuída e agenda (branch `feat/notificacoes`) |
 | 0066 | Envio do push: `pg_net`, `claim_pending_notifications` e chamada da função `notify` (branch `feat/notificacoes`) |
 | 0067 | Caixinhas: prazo da meta, exclusão segura, transferência, motivo no depósito e avisos |
+| 0068 | Painel administrativo, fase A: administradores, status da conta, aprovação e funções do painel (branch `feat/painel-admin-fase-a`, ainda não aplicada) |
 
 ## Documentos relacionados
 

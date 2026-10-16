@@ -28,6 +28,12 @@ import '../../features/finance/data/repositories/finance_repository_impl.dart';
 import '../../features/finance/domain/repositories/finance_repository.dart';
 import '../../features/finance/domain/services/cycle_funding_estimator.dart';
 import '../../features/finance/presentation/cubit/finance_cubit.dart';
+import '../../features/admin/data/datasources/admin_datasource.dart';
+import '../../features/admin/data/datasources/dynamic_admin_datasource.dart';
+import '../../features/admin/data/datasources/mock_admin_datasource.dart';
+import '../../features/admin/data/datasources/supabase_admin_datasource.dart';
+import '../../features/admin/presentation/cubit/account_access_cubit.dart';
+import '../../features/admin/presentation/cubit/admin_cubit.dart';
 import '../../features/notifications/data/datasources/dynamic_notifications_datasource.dart';
 import '../../features/notifications/data/datasources/mock_notifications_datasource.dart';
 import '../../features/notifications/data/datasources/notifications_datasource.dart';
@@ -289,6 +295,24 @@ Future<void> initServiceLocator() async {
     return mock;
   });
   sl.registerLazySingleton<NotificationsCubit>(() => NotificationsCubit(sl(), sl<AuthRepository>()));
+
+  // Status da conta e painel administrativo (migration 0068)
+  sl.registerLazySingleton<AdminDataSource>(() {
+    final client = SupabaseConfig.client;
+    final mock = MockAdminDataSource(
+      currentUserId: () => sl<AuthRepository>().currentUser?.id ?? 'member_carlos',
+    );
+    if (client != null) {
+      return DynamicAdminDataSource(
+        remote: SupabaseAdminDataSource(client: client),
+        mock: mock,
+        isDemoMode: isDemoModeActive,
+      );
+    }
+    return mock;
+  });
+  sl.registerLazySingleton<AccountAccessCubit>(() => AccountAccessCubit(sl(), sl<AuthRepository>()));
+  sl.registerFactory<AdminCubit>(() => AdminCubit(sl()));
   sl.registerLazySingleton<PushService>(() => PushService(
         client: SupabaseConfig.client,
         isDemoMode: isDemoModeActive,

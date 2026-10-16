@@ -12,6 +12,9 @@ import '../../features/auth/presentation/cubit/auth_cubit.dart';
 import '../../features/auth/presentation/cubit/auth_state.dart';
 import '../../features/auth/presentation/pages/login_page.dart';
 import '../../features/auth/presentation/pages/house_onboarding_page.dart';
+import '../../features/admin/presentation/cubit/account_access_cubit.dart';
+import '../../features/admin/presentation/pages/account_pending_page.dart';
+import '../../features/admin/presentation/pages/admin_page.dart';
 import '../../features/splash/presentation/pages/splash_page.dart';
 import '../../features/home/presentation/pages/home_page.dart';
 import '../../features/home/presentation/pages/web_landing_page.dart';
@@ -48,7 +51,11 @@ class AppRouter {
   static final GoRouter router = GoRouter(
     navigatorKey: _rootNavigatorKey,
     initialLocation: kIsWeb ? '/landing' : '/splash',
-    refreshListenable: GoRouterRefreshStream(sl<AuthCubit>().stream),
+    refreshListenable: Listenable.merge([
+      GoRouterRefreshStream(sl<AuthCubit>().stream),
+      // Conta aprovada, recusada ou suspensa muda a rota na hora
+      GoRouterRefreshStream(sl<AccountAccessCubit>().stream),
+    ]),
     redirect: (context, state) {
       final authState = sl<AuthCubit>().state;
       final location = state.uri.path;
@@ -56,6 +63,8 @@ class AppRouter {
       final isLanding = location == '/landing' || location == '/';
       final isLoggingIn = location == '/login';
       final isOnboarding = location == '/onboarding/house';
+      final isAccountPending = location == '/conta/em-analise';
+      final isAdmin = location == '/admin';
 
       // 0. Enquanto estiver na rota de Splash, deixa a SplashPage coordenar o warm-up suave
       if (isSplash) {
@@ -84,6 +93,20 @@ class AppRouter {
         }
         if (isLanding) return '/landing';
         return isLoggingIn ? null : '/login';
+      }
+
+      // 2.1. Conta em análise, recusada ou suspensa -> tela de espera (migration 0068)
+      final access = sl<AccountAccessCubit>().state;
+      if (access.isBlocked) {
+        return isAccountPending ? null : '/conta/em-analise';
+      }
+      if (isAccountPending) {
+        return authState.hasHouse ? '/casa' : '/onboarding/house';
+      }
+
+      // 2.2. Painel administrativo só para quem administra o app
+      if (isAdmin) {
+        return access.isAdmin ? null : '/casa';
       }
 
       // 3. Autenticado mas sem casa -> vai para /onboarding/house
@@ -122,6 +145,18 @@ class AppRouter {
         name: 'login',
         parentNavigatorKey: _rootNavigatorKey,
         builder: (context, state) => const LoginPage(),
+      ),
+      GoRoute(
+        path: '/conta/em-analise',
+        name: 'account_pending',
+        parentNavigatorKey: _rootNavigatorKey,
+        builder: (context, state) => const AccountPendingPage(),
+      ),
+      GoRoute(
+        path: '/admin',
+        name: 'admin',
+        parentNavigatorKey: _rootNavigatorKey,
+        builder: (context, state) => AdminPage(initialTab: state.uri.queryParameters['aba']),
       ),
       GoRoute(
         path: '/onboarding/house',

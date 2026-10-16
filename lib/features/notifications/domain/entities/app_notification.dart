@@ -12,7 +12,8 @@ enum NotificationCategory {
   tarefas,
   agenda,
   projetos,
-  assistente;
+  assistente,
+  conta;
 
   static NotificationCategory fromName(String? name) =>
       values.firstWhere((c) => c.name == name, orElse: () => NotificationCategory.casa);

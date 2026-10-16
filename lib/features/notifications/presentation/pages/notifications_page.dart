@@ -160,6 +160,7 @@ IconData notificationIcon(NotificationCategory category) => switch (category) {
       NotificationCategory.agenda => Icons.calendar_month_rounded,
       NotificationCategory.projetos => Icons.folder_shared_rounded,
       NotificationCategory.assistente => Icons.auto_awesome_rounded,
+      NotificationCategory.conta => Icons.manage_accounts_rounded,
     };
 
 class _NotificationTile extends StatelessWidget {

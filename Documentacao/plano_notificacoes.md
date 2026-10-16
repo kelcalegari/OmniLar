@@ -20,6 +20,8 @@ Fase 4 (push), mesma branch:
 
 Hospedagem (16/10/2026, branch `feat/hosting`): o site vai para o Firebase Hosting gratuito (plano Spark) em **https://omnilar.web.app**, site `omnilar` do projeto `omnilar-ef002`. `firebase.json` (todas as rotas abrem o app, service worker sem cache) e `.firebaserc` na raiz; `scripts/publicar_web.sh` roda análise e testes, faz o build web e publica. Passos do dono, uma vez: `firebase login` com a conta dona do projeto e `firebase hosting:sites:create omnilar --project omnilar-ef002`. Trocar o endereço depois obriga a reinstalar o ícone no iPhone e reativar as notificações (permissão e token são do endereço).
 
+Categoria `conta` (migration 0068, painel administrativo): conta aprovada, reativada, recusada ou suspensa, e conta nova esperando aprovação para os administradores. É sempre essencial e não tem casa (`house_id` vazio); grava por `notify_account`, fora do `enqueue_notification` (que só entrega a moradores de uma casa).
+
 Fica para as próximas rodadas: aceite de empréstimo (decisão 5a: o banco não aceita o status `pendingAcceptance` hoje e o fechamento teria de ignorar empréstimo não aceito), os gatilhos informativos restantes (despesas, caixinhas, compras, projetos, importação, casa), push (fase 4, depende do projeto Firebase), agendados (fase 5), preferências nos Ajustes (fase 6) e Assistente (fase 7). As transferências do Super Pix já nascem confirmadas no fechamento, então `transfer_pending` e `transfer_confirmed` precisam ser repensados antes.
 
 ## 1. O que existe hoje (conferido em 15/10/2026)

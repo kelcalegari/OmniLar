@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 import '../../../../core/di/service_locator.dart';
+import '../../../admin/presentation/cubit/account_access_cubit.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/utils/clipboard_helper.dart';
 import '../../../../core/utils/responsive.dart';
@@ -2715,6 +2716,30 @@ class _SettingsPageState extends State<SettingsPage> {
   }
 
   Widget _signOutButton(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        // Administração do app: só para quem administra o Omni Lar (migration 0068)
+        BlocBuilder<AccountAccessCubit, AccountAccessState>(
+          bloc: sl<AccountAccessCubit>(),
+          builder: (context, access) => !access.isAdmin
+              ? const SizedBox.shrink()
+              : Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+                  child: FilledButton.tonalIcon(
+                    onPressed: () => context.push('/admin'),
+                    icon: const Icon(Icons.admin_panel_settings_rounded),
+                    label: const Text('Administração do Omni Lar'),
+                    style: FilledButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 14)),
+                  ),
+                ),
+        ),
+        _signOutOnlyButton(context),
+      ],
+    );
+  }
+
+  Widget _signOutOnlyButton(BuildContext context) {
     return Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 16),
                     child: OutlinedButton.icon(

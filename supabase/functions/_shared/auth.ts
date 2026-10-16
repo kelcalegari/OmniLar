@@ -47,6 +47,12 @@ export async function requireHouseMember(
     throw new HttpError(401, 'Sessão inválida ou expirada. Faça login novamente.');
   }
 
+  // Conta esperando aprovação, recusada ou suspensa não usa a IA (migration 0068)
+  const { data: accountActive, error: accountError } = await supabaseClient.rpc('is_account_active');
+  if (accountError || accountActive !== true) {
+    throw new HttpError(403, 'Sua conta não está liberada para usar a IA.');
+  }
+
   let query = supabaseClient
     .from('house_members')
     .select('house_id')
