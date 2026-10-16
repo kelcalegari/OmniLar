@@ -772,7 +772,7 @@ class _SettlementHubContent extends StatelessWidget {
               ],
             ),
             const SizedBox(height: 14),
-            if (summary.openingBalance.cents > 0) ...[
+            if (summary.openingBalance.cents > summary.vaultReturns.cents) ...[
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
@@ -781,7 +781,26 @@ class _SettlementHubContent extends StatelessWidget {
                     style: TextStyle(color: Colors.grey),
                   ),
                   PrivacySensitiveText(
-                    summary.openingBalance.formatted,
+                    (summary.openingBalance - summary.vaultReturns).formatted,
+                    style: const TextStyle(
+                      fontWeight: FontWeight.bold,
+                      color: AppColors.creditGreen,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 6),
+            ],
+            if (summary.vaultReturns.cents > 0) ...[
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Text(
+                    'Devolvido das caixinhas:',
+                    style: TextStyle(color: Colors.grey),
+                  ),
+                  PrivacySensitiveText(
+                    summary.vaultReturns.formatted,
                     style: const TextStyle(
                       fontWeight: FontWeight.bold,
                       color: AppColors.creditGreen,

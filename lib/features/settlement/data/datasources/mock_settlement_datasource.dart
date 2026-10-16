@@ -114,13 +114,16 @@ class MockSettlementDataSource implements SettlementDataSource {
       deficitVaultBalance: deficitVaultBalance,
       surplusAlreadyVaulted: Money(_surplusVaulted[cycle] ?? 0),
       deficitAlreadyCovered: Money(_deficitCovered[cycle] ?? 0),
-      openingBalance: _openingBalance(cycle),
+      openingBalance: _openingBalance(cycle) + await financeDataSource.getOpeningBalance(cycle),
       surplusAlreadyRolled: Money(_surplusRolled[cycle] ?? 0),
       surplusAlreadyRefunded: Money(_surplusRefunded[cycle] ?? 0),
       refundSurplus: options?.surplusAction == SurplusAction.refund,
       houseShortfallAlreadySettled: Money(_houseShortfallSettled[cycle] ?? 0),
       houseLoansAlreadyReceived: Money(_houseLoansReceived[cycle] ?? 0),
-    ).copyWith(isReopened: _reopenedTransfers.containsKey(cycle));
+    ).copyWith(
+      isReopened: _reopenedTransfers.containsKey(cycle),
+      vaultReturns: await financeDataSource.getVaultReturnsForCycle(cycle),
+    );
 
     // Consultar outro ciclo não pode apagar um fechamento já arquivado
     if (_cachedSettlement?.status != SettlementStatus.settled) {

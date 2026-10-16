@@ -60,6 +60,9 @@ class SavingsTransaction extends Equatable {
   final String description;
   final DateTime date;
 
+  /// Ciclo cujo Caixa recebeu o resgate (nulo: o valor só saiu da caixinha).
+  final DateTime? cycleStartDate;
+
   const SavingsTransaction({
     required this.id,
     required this.vaultId,
@@ -68,11 +71,13 @@ class SavingsTransaction extends Equatable {
     required this.type,
     required this.description,
     required this.date,
+    this.cycleStartDate,
   });
 
   bool get isDeposit => type == 'deposit';
   bool get isWithdraw => type == 'withdraw';
+  bool get returnedToCycle => isWithdraw && cycleStartDate != null;
 
   @override
-  List<Object?> get props => [id, vaultId, memberId, amount, type, description, date];
+  List<Object?> get props => [id, vaultId, memberId, amount, type, description, date, cycleStartDate];
 }

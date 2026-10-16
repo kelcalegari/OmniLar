@@ -354,7 +354,7 @@ class _HouseCashflowBlock extends StatelessWidget {
           ),
           const SizedBox(height: 4),
           const Text(
-            'Sobra do ciclo anterior mais os aportes, menos o que o Caixa já pagou. '
+            'Sobra do ciclo anterior e o que voltou das caixinhas, mais os aportes, menos o que o Caixa já pagou. '
             'No fechamento, conta que cada morador paga o Super Pix.',
             style: TextStyle(fontSize: 11, color: Colors.grey),
           ),

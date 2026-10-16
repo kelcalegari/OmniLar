@@ -2,7 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:omni_lar/core/di/service_locator.dart';
+import 'package:omni_lar/core/domain/value_objects/financial_cycle.dart';
 import 'package:omni_lar/core/domain/value_objects/money.dart';
+import 'package:omni_lar/core/errors/failures.dart';
+import 'package:omni_lar/features/finance/data/datasources/mock_finance_datasource.dart';
 import 'package:omni_lar/features/auth/presentation/cubit/auth_cubit.dart';
 import 'package:omni_lar/features/finance/domain/entities/savings_vault.dart';
 import 'package:omni_lar/features/finance/presentation/cubit/finance_cubit.dart';
@@ -71,6 +74,73 @@ void main() {
     });
   });
 
+  group('Resgate devolvido ao ciclo', () {
+    final cycle = FinancialCycle.fromDate(date: DateTime.now(), cycleStartDay: 1);
+
+    test('Só sacar não mexe no Caixa do ciclo', () async {
+      final ds = MockFinanceDataSource();
+      final before = await ds.getCycleSummary(cycle);
+
+      await ds.withdrawFromVault(
+        vaultId: 'vault_reserva',
+        memberId: 'member_carlos',
+        amount: const Money(10000),
+        description: 'Conserto',
+      );
+
+      expect(await ds.getVaultReturnsForCycle(cycle), const Money.zero());
+      expect((await ds.getCycleSummary(cycle)).folego, before.folego);
+      final history = await ds.getVaultTransactions('vault_reserva');
+      expect(history.first.returnedToCycle, isFalse);
+    });
+
+    test('Devolver ao ciclo soma o valor ao dinheiro da casa no Caixa', () async {
+      final ds = MockFinanceDataSource();
+      final before = await ds.getCycleSummary(cycle);
+
+      await ds.withdrawFromVault(
+        vaultId: 'vault_reserva',
+        memberId: 'member_carlos',
+        amount: const Money(15000),
+        description: 'Reforçar o Caixa do ciclo',
+        returnToCycleStart: cycle.startDate,
+      );
+
+      expect(await ds.getVaultReturnsForCycle(cycle), const Money(15000));
+      expect(await ds.getOpeningBalance(cycle), const Money(15000));
+      final after = await ds.getCycleSummary(cycle);
+      expect(after.folego, before.folego + const Money(15000));
+      // Não vira aporte de ninguém
+      expect(after.totalContributions, before.totalContributions);
+
+      final history = await ds.getVaultTransactions('vault_reserva');
+      expect(history.first.returnedToCycle, isTrue);
+      expect(history.first.description, 'Reforçar o Caixa do ciclo');
+
+      // Outro ciclo não recebe o valor
+      expect(await ds.getVaultReturnsForCycle(cycle.next(1)), const Money.zero());
+    });
+
+    test('Resgate sem motivo é recusado e não mexe no saldo', () async {
+      final ds = MockFinanceDataSource();
+      final balance = (await ds.getSavingsVaults()).firstWhere((v) => v.id == 'vault_reserva').currentBalance;
+
+      await expectLater(
+        ds.withdrawFromVault(
+          vaultId: 'vault_reserva',
+          memberId: 'member_carlos',
+          amount: const Money(10000),
+          description: '   ',
+        ),
+        throwsA(isA<ServerFailure>()),
+      );
+      expect(
+        (await ds.getSavingsVaults()).firstWhere((v) => v.id == 'vault_reserva').currentBalance,
+        balance,
+      );
+    });
+  });
+
   group('SavingsVaultsPage - Widget Test', () {
     Widget buildTestWidget() {
       return MultiBlocProvider(
@@ -113,6 +183,37 @@ void main() {
       expect(find.text('Quem está guardando?'), findsOneWidget);
       expect(find.text('Valor a Guardar:'), findsOneWidget);
       expect(find.text('Confirmar e Guardar'), findsOneWidget);
+
+      await tester.tap(find.text('Cancelar'));
+      await tester.pumpAndSettle();
+    });
+
+    testWidgets('Resgate pede o motivo e oferece devolver ao ciclo', (tester) async {
+      await sl<FinanceCubit>().loadCycleData();
+
+      await tester.pumpWidget(buildTestWidget());
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('Resgatar').first);
+      await tester.pumpAndSettle();
+
+      expect(find.text('Só sacar'), findsOneWidget);
+      expect(find.text('Devolver ao ciclo'), findsOneWidget);
+
+      // Sem motivo o resgate não sai
+      await tester.tap(find.text('Confirmar Resgate'));
+      await tester.pumpAndSettle();
+      expect(find.text('Informe o motivo do resgate'), findsOneWidget);
+
+      await tester.tap(find.text('Devolver ao ciclo'));
+      await tester.pumpAndSettle();
+      expect(find.textContaining('entra no Caixa do ciclo'), findsOneWidget);
+
+      await tester.ensureVisible(find.text('Conserto'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Conserto'));
+      await tester.pumpAndSettle();
+      expect(find.text('Informe o motivo do resgate'), findsNothing);
 
       await tester.tap(find.text('Cancelar'));
       await tester.pumpAndSettle();

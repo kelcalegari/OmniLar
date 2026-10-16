@@ -408,7 +408,15 @@ class MockFinanceDataSource implements FinanceDataSource {
   }
 
   @override
-  Future<Money> getOpeningBalance(FinancialCycle cycle) async => const Money.zero();
+  Future<Money> getOpeningBalance(FinancialCycle cycle) => getVaultReturnsForCycle(cycle);
+
+  @override
+  Future<Money> getVaultReturnsForCycle(FinancialCycle cycle) async {
+    final cents = _savingsTransactions
+        .where((t) => t.returnedToCycle && cycle.contains(t.cycleStartDate!))
+        .fold<int>(0, (acc, t) => acc + t.amount.cents);
+    return Money(cents);
+  }
 
   @override
   Future<List<Contribution>> getContributionsForCycle(FinancialCycle cycle) async {
@@ -441,8 +449,8 @@ class MockFinanceDataSource implements FinanceDataSource {
       }
     }
 
-    // Fôlego = Total de Aportes - (Despesas Pagas + Contas a vencer do ciclo)
-    final folego = totalContrib - (totalPaid + committedFuture);
+    // Fôlego = Dinheiro da casa no início + Aportes - (Despesas Pagas + Contas a vencer do ciclo)
+    final folego = await getOpeningBalance(cycle) + totalContrib - (totalPaid + committedFuture);
 
     return FinancialCycleSummary(
       cycle: cycle,
@@ -842,10 +850,14 @@ class MockFinanceDataSource implements FinanceDataSource {
     required String memberId,
     required Money amount,
     required String description,
+    DateTime? returnToCycleStart,
   }) async {
     final index = _savingsVaults.indexWhere((v) => v.id == vaultId);
     if (index != -1) {
       final current = _savingsVaults[index];
+      if (description.trim().isEmpty) {
+        throw const ServerFailure('Informe o motivo do resgate.');
+      }
       // Como no banco: resgate acima do saldo é recusado, não zera a caixinha
       if (amount.cents > current.currentBalance.cents) {
         throw const ServerFailure('Saldo insuficiente na caixinha.');
@@ -861,6 +873,7 @@ class MockFinanceDataSource implements FinanceDataSource {
         type: 'withdraw',
         description: description,
         date: DateTime.now(),
+        cycleStartDate: returnToCycleStart,
       ));
     }
   }

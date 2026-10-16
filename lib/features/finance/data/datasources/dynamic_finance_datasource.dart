@@ -53,6 +53,10 @@ class DynamicFinanceDataSource implements FinanceDataSource {
   Future<Money> getOpeningBalance(FinancialCycle cycle) => _active.getOpeningBalance(cycle);
 
   @override
+  Future<Money> getVaultReturnsForCycle(FinancialCycle cycle) =>
+      _active.getVaultReturnsForCycle(cycle);
+
+  @override
   Future<FinancialCycleSummary> getCycleSummary(FinancialCycle cycle) =>
       _active.getCycleSummary(cycle);
 
@@ -150,12 +154,14 @@ class DynamicFinanceDataSource implements FinanceDataSource {
     required String memberId,
     required Money amount,
     required String description,
+    DateTime? returnToCycleStart,
   }) =>
       _active.withdrawFromVault(
         vaultId: vaultId,
         memberId: memberId,
         amount: amount,
         description: description,
+        returnToCycleStart: returnToCycleStart,
       );
 
   @override

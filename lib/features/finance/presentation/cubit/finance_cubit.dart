@@ -679,6 +679,7 @@ class FinanceCubit extends Cubit<FinanceState> {
     required String memberId,
     required Money amount,
     required String description,
+    DateTime? returnToCycleStart,
   }) async {
     try {
       await _repository.withdrawFromVault(
@@ -686,6 +687,7 @@ class FinanceCubit extends Cubit<FinanceState> {
         memberId: memberId,
         amount: amount,
         description: description,
+        returnToCycleStart: returnToCycleStart,
       );
       await loadCycleData(cycle: state.currentCycle);
       return true;

@@ -25,6 +25,7 @@ Map<String, dynamic> settlementSummaryToJson(SettlementSummary s) => {
       'bucket_deficit_cents': s.bucketDeficit.cents,
       'deficit_covered_by_vault_cents': s.deficitCoveredByVault.cents,
       'opening_balance_cents': s.openingBalance.cents,
+      'vault_returns_cents': s.vaultReturns.cents,
       'surplus_refunded_cents': s.surplusRefunded.cents,
       'house_loan_receipts_cents': s.houseLoanReceipts.cents,
       'member_balances': [
@@ -222,6 +223,7 @@ SettlementSummary? settlementSummaryFromJson(
       bucketDeficit: _money(j['bucket_deficit_cents']),
       deficitCoveredByVault: _money(j['deficit_covered_by_vault_cents']),
       openingBalance: _money(j['opening_balance_cents']),
+      vaultReturns: _money(j['vault_returns_cents']),
       surplusRefunded: _money(j['surplus_refunded_cents']),
       houseLoanReceipts: _money(j['house_loan_receipts_cents']),
     );

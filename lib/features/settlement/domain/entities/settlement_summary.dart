@@ -24,8 +24,12 @@ class SettlementSummary {
   /// Parte do excedente coberta pela Caixinha escolhida no fechamento.
   final Money deficitCoveredByVault;
 
-  /// Sobra que o fechamento do ciclo anterior deixou no Caixa como folga.
+  /// Dinheiro da casa no Caixa no início do ciclo: a sobra do fechamento
+  /// anterior mais os resgates de caixinha devolvidos ao ciclo.
   final Money openingBalance;
+
+  /// Parte de [openingBalance] que voltou das caixinhas neste ciclo.
+  final Money vaultReturns;
 
   /// Sobra deste fechamento devolvida aos moradores (já abatida dos aportes devidos).
   final Money surplusRefunded;
@@ -55,6 +59,7 @@ class SettlementSummary {
     this.bucketDeficit = const Money.zero(),
     this.deficitCoveredByVault = const Money.zero(),
     this.openingBalance = const Money.zero(),
+    this.vaultReturns = const Money.zero(),
     this.surplusRefunded = const Money.zero(),
     this.houseLoanReceipts = const Money.zero(),
     this.isReopened = false,
@@ -99,6 +104,7 @@ class SettlementSummary {
     Money? bucketDeficit,
     Money? deficitCoveredByVault,
     Money? openingBalance,
+    Money? vaultReturns,
     Money? surplusRefunded,
     Money? houseLoanReceipts,
     bool? isReopened,
@@ -118,6 +124,7 @@ class SettlementSummary {
       bucketDeficit: bucketDeficit ?? this.bucketDeficit,
       deficitCoveredByVault: deficitCoveredByVault ?? this.deficitCoveredByVault,
       openingBalance: openingBalance ?? this.openingBalance,
+      vaultReturns: vaultReturns ?? this.vaultReturns,
       surplusRefunded: surplusRefunded ?? this.surplusRefunded,
       houseLoanReceipts: houseLoanReceipts ?? this.houseLoanReceipts,
       isReopened: isReopened ?? this.isReopened,

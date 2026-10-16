@@ -26,8 +26,12 @@ abstract class FinanceDataSource {
   Future<List<HouseExpense>> getExpensesForProject(String projectId);
   Future<List<Contribution>> getContributionsForCycle(FinancialCycle cycle);
 
-  /// Sobra que o fechamento do ciclo anterior deixou no Caixa para este ciclo.
+  /// Dinheiro da casa no Caixa no início do ciclo: a sobra que o fechamento
+  /// anterior deixou mais os resgates de caixinha devolvidos ao ciclo.
   Future<Money> getOpeningBalance(FinancialCycle cycle);
+
+  /// Resgates de caixinha devolvidos ao Caixa deste ciclo.
+  Future<Money> getVaultReturnsForCycle(FinancialCycle cycle);
   Future<FinancialCycleSummary> getCycleSummary(FinancialCycle cycle);
 
   Future<void> addExpense(HouseExpense expense);
@@ -77,6 +81,7 @@ abstract class FinanceDataSource {
     required String memberId,
     required Money amount,
     required String description,
+    DateTime? returnToCycleStart,
   });
 
   // Auditoria da Casa

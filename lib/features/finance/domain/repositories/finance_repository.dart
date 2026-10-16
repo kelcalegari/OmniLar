@@ -62,7 +62,8 @@ abstract class FinanceRepository {
   Future<List<SavingsTransaction>> getVaultTransactions(String vaultId);
   Future<void> createSavingsVault(SavingsVault vault);
   Future<void> depositToVault({required String vaultId, required String memberId, required Money amount, required String description});
-  Future<void> withdrawFromVault({required String vaultId, required String memberId, required Money amount, required String description});
+  /// Com [returnToCycleStart], o valor resgatado volta para o Caixa daquele ciclo.
+  Future<void> withdrawFromVault({required String vaultId, required String memberId, required Money amount, required String description, DateTime? returnToCycleStart});
 
   // Auditoria da Casa
   Future<List<AuditEntry>> getAuditLog({String? entityId, int limit = 50});

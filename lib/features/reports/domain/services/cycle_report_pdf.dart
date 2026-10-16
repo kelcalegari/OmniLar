@@ -220,7 +220,7 @@ class CycleReportPdf {
             ),
           ),
           tile(
-            'Sobra do ciclo anterior',
+            'Sobra anterior e caixinhas',
             _money(summary?.openingBalance ?? const Money.zero()),
           ),
           tile('Fôlego', _money(summary?.folego ?? const Money.zero())),

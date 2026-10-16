@@ -227,7 +227,11 @@ class SupabaseSettlementDataSource implements SettlementDataSource {
       houseShortfallAlreadySettled: houseShortfallAlreadySettled,
       houseLoansAlreadyReceived: houseLoansAlreadyReceived,
     );
-    return summary.copyWith(isReopened: isReopened, dataVersion: dataVersion);
+    return summary.copyWith(
+      isReopened: isReopened,
+      dataVersion: dataVersion,
+      vaultReturns: await financeDataSource.getVaultReturnsForCycle(cycle),
+    );
   }
 
   @override

@@ -302,7 +302,7 @@ class SavingsVaultsPage extends StatelessWidget {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              '${t.isDeposit ? 'Entrada' : 'Saída'} • ${memberName(t.memberId)}',
+                              '${t.isDeposit ? 'Entrada' : t.returnedToCycle ? 'Devolvido ao ciclo' : 'Saída'} • ${memberName(t.memberId)}',
                               style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
                             ),
                             if (t.description.isNotEmpty)
@@ -343,7 +343,12 @@ class SavingsVaultsPage extends StatelessWidget {
     String selectedMemberId = authRepo.isDemoMode
         ? (members.isNotEmpty ? members.first.id as String : 'member_carlos')
         : (authRepo.currentUser?.id ?? '');
-    final descController = TextEditingController(text: 'Uso de ${vault.name} para despesa');
+    final descController = TextEditingController();
+    // Ciclo em andamento: só ele pode receber o valor de volta no Caixa
+    final currentCycle = cubit.cycleSchedule.cycleFor(DateTime.now());
+    var returnToCycle = false;
+    String? reasonError;
+    const quickReasons = ['Emergência', 'Conserto', 'Despesa da casa', 'Reforçar o Caixa do ciclo'];
 
     showDialog(
       context: context,
@@ -387,12 +392,51 @@ class SavingsVaultsPage extends StatelessWidget {
                     },
                   ),
                   const SizedBox(height: 16),
+                  const Text('Para onde vai o dinheiro?', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.grey)),
+                  const SizedBox(height: 6),
+                  SegmentedButton<bool>(
+                    segments: const [
+                      ButtonSegment(value: false, label: Text('Só sacar'), icon: Icon(Icons.north_east_rounded)),
+                      ButtonSegment(value: true, label: Text('Devolver ao ciclo'), icon: Icon(Icons.account_balance_wallet_outlined)),
+                    ],
+                    selected: {returnToCycle},
+                    onSelectionChanged: (s) => setDialogState(() => returnToCycle = s.first),
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    returnToCycle
+                        ? 'O valor entra no Caixa do ciclo ${currentCycle.label} como dinheiro da casa: '
+                            'ajuda a pagar as contas e, no fechamento, conta como a sobra do ciclo anterior.'
+                        : 'O valor sai da caixinha e não entra no Caixa do ciclo.',
+                    style: const TextStyle(fontSize: 11, color: Colors.grey),
+                  ),
+                  const SizedBox(height: 16),
                   TextField(
                     controller: descController,
+                    onChanged: (_) {
+                      if (reasonError != null) setDialogState(() => reasonError = null);
+                    },
                     decoration: InputDecoration(
-                      labelText: 'Para qual despesa ou uso?',
+                      labelText: 'Motivo do resgate',
+                      hintText: 'Ex.: conserto da geladeira',
+                      errorText: reasonError,
                       border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
                     ),
+                  ),
+                  const SizedBox(height: 8),
+                  Wrap(
+                    spacing: 6,
+                    runSpacing: 6,
+                    children: [
+                      for (final reason in quickReasons)
+                        ActionChip(
+                          label: Text(reason, style: const TextStyle(fontSize: 12)),
+                          onPressed: () => setDialogState(() {
+                            descController.text = reason;
+                            reasonError = null;
+                          }),
+                        ),
+                    ],
                   ),
                 ],
               ),
@@ -411,6 +455,11 @@ class SavingsVaultsPage extends StatelessWidget {
                     );
                     return;
                   }
+                  final reason = descController.text.trim();
+                  if (reason.isEmpty) {
+                    setDialogState(() => reasonError = 'Informe o motivo do resgate');
+                    return;
+                  }
 
                   final messenger = ScaffoldMessenger.of(context);
                   Navigator.pop(dialogCtx);
@@ -418,12 +467,15 @@ class SavingsVaultsPage extends StatelessWidget {
                     vaultId: vault.id,
                     memberId: selectedMemberId,
                     amount: Money(withdrawCents),
-                    description: descController.text.trim(),
+                    description: reason,
+                    returnToCycleStart: returnToCycle ? currentCycle.startDate : null,
                   );
                   showSaveFeedback(
                     messenger,
                     ok: ok,
-                    success: 'Resgatado ${Money(withdrawCents).format()} com sucesso! 💸',
+                    success: returnToCycle
+                        ? '${Money(withdrawCents).format()} devolvido ao Caixa do ciclo! 💸'
+                        : 'Resgatado ${Money(withdrawCents).format()} com sucesso! 💸',
                     failure: cubit.state.errorMessage,
                   );
                 },

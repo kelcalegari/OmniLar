@@ -90,7 +90,7 @@ class _FakeFinanceRepository implements FinanceRepository {
   @override
   Future<void> depositToVault({required String vaultId, required String memberId, required Money amount, required String description}) async {}
   @override
-  Future<void> withdrawFromVault({required String vaultId, required String memberId, required Money amount, required String description}) async {}
+  Future<void> withdrawFromVault({required String vaultId, required String memberId, required Money amount, required String description, DateTime? returnToCycleStart}) async {}
   @override
   Future<List<AuditEntry>> getAuditLog({String? entityId, int limit = 50}) async => [];
   @override

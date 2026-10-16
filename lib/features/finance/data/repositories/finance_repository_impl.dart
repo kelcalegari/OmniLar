@@ -155,12 +155,14 @@ class FinanceRepositoryImpl implements FinanceRepository {
     required String memberId,
     required Money amount,
     required String description,
+    DateTime? returnToCycleStart,
   }) =>
       _dataSource.withdrawFromVault(
         vaultId: vaultId,
         memberId: memberId,
         amount: amount,
         description: description,
+        returnToCycleStart: returnToCycleStart,
       );
 
   @override

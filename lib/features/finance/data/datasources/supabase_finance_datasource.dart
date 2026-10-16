@@ -356,6 +356,7 @@ class SupabaseFinanceDataSource implements FinanceDataSource {
 
   @override
   Future<Money> getOpeningBalance(FinancialCycle cycle) async {
+    var rolledCents = 0;
     try {
       String dateOnly(DateTime d) => d.toIso8601String().split('T')[0];
       // Só o ciclo imediatamente anterior conta: os ciclos são mensais
@@ -369,7 +370,25 @@ class SupabaseFinanceDataSource implements FinanceDataSource {
           .order('cycle_start_date', ascending: false)
           .limit(1)
           .maybeSingle();
-      return Money((row?['surplus_rolled_cents'] as num?)?.toInt() ?? 0);
+      rolledCents = (row?['surplus_rolled_cents'] as num?)?.toInt() ?? 0;
+    } catch (_) {}
+    // O resgate de caixinha devolvido ao ciclo também é dinheiro da casa no Caixa
+    final returned = await getVaultReturnsForCycle(cycle);
+    return Money(rolledCents + returned.cents);
+  }
+
+  @override
+  Future<Money> getVaultReturnsForCycle(FinancialCycle cycle) async {
+    try {
+      String dateOnly(DateTime d) => d.toIso8601String().split('T')[0];
+      final rows = await client
+          .from('savings_transactions')
+          .select('amount_cents')
+          .eq('house_id', _houseId)
+          .eq('type', 'withdraw')
+          .gte('cycle_start_date', dateOnly(cycle.startDate))
+          .lte('cycle_start_date', dateOnly(cycle.endDate));
+      return Money(rows.fold<int>(0, (acc, r) => acc + (r['amount_cents'] as num).toInt()));
     } catch (_) {
       return const Money.zero();
     }
@@ -991,7 +1010,7 @@ class SupabaseFinanceDataSource implements FinanceDataSource {
     try {
       final rows = await client
           .from('savings_transactions')
-          .select('id, vault_id, member_id, amount_cents, type, description, created_at')
+          .select('id, vault_id, member_id, amount_cents, type, description, created_at, cycle_start_date')
           .eq('vault_id', vaultId)
           .order('created_at', ascending: false)
           .limit(200);
@@ -1005,6 +1024,9 @@ class SupabaseFinanceDataSource implements FinanceDataSource {
           type: r['type'] as String,
           description: r['description'] as String? ?? '',
           date: DateTime.parse(r['created_at'] as String).toLocal(),
+          cycleStartDate: r['cycle_start_date'] == null
+              ? null
+              : DateTime.parse(r['cycle_start_date'] as String),
         );
       }).toList();
     } catch (e) {
@@ -1038,6 +1060,7 @@ class SupabaseFinanceDataSource implements FinanceDataSource {
     required String memberId,
     required Money amount,
     required String description,
+    DateTime? returnToCycleStart,
   }) async {
     try {
       await client.rpc('move_vault_balance', params: {
@@ -1045,6 +1068,8 @@ class SupabaseFinanceDataSource implements FinanceDataSource {
         'p_type': 'withdraw',
         'p_amount_cents': amount.cents,
         'p_description': description,
+        if (returnToCycleStart != null)
+          'p_cycle_start_date': returnToCycleStart.toIso8601String().split('T')[0],
       });
     } catch (e) {
       throw ServerFailure('Erro ao resgatar da caixinha: $e');
