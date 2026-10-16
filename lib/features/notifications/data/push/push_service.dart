@@ -82,10 +82,37 @@ class PushService {
   /// Pede a permissão e registra o aparelho. Chamar só a partir de um toque do
   /// usuário: sem o toque, o Safari do iPhone bloqueia o pedido.
   Future<PushStatus> enable() async {
+    // No navegador o pedido sai antes de qualquer espera: depois de um await o
+    // Safari (e o iPhone com o site instalado) já não conta como toque e
+    // ignora o pedido sem mostrar nada.
+    Future<String>? browserRequest;
+    if (kIsWeb) {
+      final env = environment;
+      if (env.hasNotificationApi && !(env.isIos && !env.isStandalone)) {
+        browserRequest = PushEnvironment.requestBrowserPermission()
+            .catchError((Object e) => 'error: $e');
+      }
+    }
+
     final current = await status();
     if (current == PushStatus.unsupported || current == PushStatus.needsInstall) return current;
-    final settings = await FirebaseMessaging.instance.requestPermission();
-    final result = _fromAuthorization(settings.authorizationStatus);
+
+    final PushStatus result;
+    if (browserRequest != null) {
+      final permission = await browserRequest;
+      if (permission.startsWith('error')) {
+        lastError = 'Navegador: $permission';
+        return PushStatus.failed;
+      }
+      result = switch (permission) {
+        'granted' => PushStatus.enabled,
+        'denied' => PushStatus.denied,
+        _ => PushStatus.notDetermined,
+      };
+    } else {
+      final settings = await FirebaseMessaging.instance.requestPermission();
+      result = _fromAuthorization(settings.authorizationStatus);
+    }
     if (result != PushStatus.enabled) return result;
     return await _registerToken() ? PushStatus.enabled : PushStatus.failed;
   }

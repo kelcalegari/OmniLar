@@ -18,4 +18,9 @@ class PushEnvironment {
   });
 
   static PushEnvironment read() => impl.readPushEnvironment();
+
+  /// Pede a permissão de notificação ao navegador: 'granted', 'denied' ou
+  /// 'default'. A chamada sai na hora (antes de qualquer espera), porque o
+  /// Safari só mostra o pedido dentro do toque do usuário.
+  static Future<String> requestBrowserPermission() => impl.requestBrowserPermission();
 }

@@ -5,6 +5,11 @@ import 'package:web/web.dart' as web;
 
 import 'push_environment.dart';
 
+Future<String> requestBrowserPermission() async {
+  final result = await web.Notification.requestPermission().toDart;
+  return result.toDart;
+}
+
 PushEnvironment readPushEnvironment() {
   final navigator = web.window.navigator;
   final userAgent = navigator.userAgent;
