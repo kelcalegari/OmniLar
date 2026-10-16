@@ -170,8 +170,8 @@ Coluna **Quando**: *na hora* (gatilho no banco) ou *agendada* (`pg_cron`). Colun
 | `contribution_added` | Aporte registrado por outro em seu nome ou no Caixa | O morador do aporte | "Aporte de R$ 1.500,00 registrado em seu nome" | na hora | informativa |
 | `contribution_pending` | No modelo de aportes fixos, morador sem aporte 5 dias depois do início do ciclo | O morador | "Seu aporte de R$ 1.500,00 de novembro ainda não entrou" | agendada | essencial |
 | `funding_short` | O Fôlego ficou negativo | Dono e administradores | "O Caixa ficou R$ 200,00 no vermelho neste ciclo" | na hora (uma vez por ciclo) | essencial |
-| `vault_movement` | Depósito ou resgate feito por outro | Moradores | "Ana resgatou R$ 300,00 da Reserva da Casa" | na hora | informativa |
-| `vault_goal_reached` | Caixinha atingiu a meta | Moradores | "Viagem atingiu a meta de R$ 5.000,00" | na hora | informativa |
+| `vault_movement` | Depósito, resgate ou transferência feito por outro (só pelo app; fechamento e acordos têm aviso próprio) — **feito na 0067**, com o motivo | Moradores | "Ana resgatou R$ 300,00 de Reserva da Casa: conserto" | na hora | informativa |
+| `vault_goal_reached` | Caixinha atingiu a meta, venha de onde vier o dinheiro — **feito na 0067** | Moradores (menos quem fez o depósito) | "Viagem atingiu a meta de R$ 5.000,00" | na hora | informativa |
 
 ### 6.5. Empréstimos
 | Tipo | Gatilho | Quem recebe | Exemplo | Quando | Peso |

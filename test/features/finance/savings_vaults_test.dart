@@ -74,6 +74,153 @@ void main() {
     });
   });
 
+  group('Prazo da meta', () {
+    final created = DateTime(2026, 1, 1);
+    SavingsVault vault({int balance = 0, DateTime? deadline}) => SavingsVault(
+          id: 'v',
+          name: 'Viagem',
+          targetAmount: const Money(120000),
+          currentBalance: Money(balance),
+          createdAt: created,
+          targetDate: deadline,
+        );
+
+    test('Sem prazo não calcula ritmo', () {
+      final v = vault();
+      expect(v.monthlyNeeded(DateTime(2026, 3, 1)), isNull);
+      expect(v.isBehindPace(DateTime(2026, 3, 1)), isFalse);
+    });
+
+    test('Divide o que falta pelos meses até o prazo, contando o mês atual', () {
+      final v = vault(balance: 20000, deadline: DateTime(2026, 12, 31));
+      // Faltam R$ 1.000,00 em 10 meses (março a dezembro)
+      expect(v.monthlyNeeded(DateTime(2026, 3, 10)), const Money(10000));
+    });
+
+    test('Ritmo abaixo quando o saldo está atrás da linha reta até o prazo', () {
+      final deadline = DateTime(2026, 12, 31);
+      final today = DateTime(2026, 7, 1); // metade do caminho
+      expect(vault(balance: 30000, deadline: deadline).isBehindPace(today), isTrue);
+      expect(vault(balance: 70000, deadline: deadline).isBehindPace(today), isFalse);
+    });
+
+    test('Prazo vencido sem a meta conta como atrasado; meta atingida não', () {
+      final deadline = DateTime(2026, 6, 30);
+      final after = DateTime(2026, 7, 2);
+      expect(vault(balance: 50000, deadline: deadline).isOverdue(after), isTrue);
+      expect(vault(balance: 50000, deadline: deadline).isBehindPace(after), isTrue);
+      expect(vault(balance: 120000, deadline: deadline).isOverdue(after), isFalse);
+    });
+  });
+
+  group('Editar, excluir e transferir', () {
+    test('Editar muda nome, meta e prazo, mas não o saldo', () async {
+      final ds = MockFinanceDataSource();
+      final v = (await ds.getSavingsVaults()).firstWhere((v) => v.id == 'vault_viagem');
+
+      await ds.updateSavingsVault(v.copyWith(
+        name: 'Viagem de Natal',
+        targetAmount: const Money(900000),
+        targetDate: DateTime(2026, 12, 20),
+        currentBalance: const Money(1),
+      ));
+
+      final after = (await ds.getSavingsVaults()).firstWhere((x) => x.id == 'vault_viagem');
+      expect(after.name, 'Viagem de Natal');
+      expect(after.targetAmount, const Money(900000));
+      expect(after.targetDate, DateTime(2026, 12, 20));
+      expect(after.currentBalance, v.currentBalance);
+
+      await expectLater(ds.updateSavingsVault(after.copyWith(name: '  ')), throwsA(isA<ServerFailure>()));
+    });
+
+    test('Excluir exige a caixinha zerada', () async {
+      final ds = MockFinanceDataSource();
+      final v = (await ds.getSavingsVaults()).firstWhere((v) => v.currentBalance.isPositive);
+
+      await expectLater(ds.deleteSavingsVault(v.id), throwsA(isA<ServerFailure>()));
+
+      await ds.withdrawFromVault(
+        vaultId: v.id,
+        memberId: 'member_carlos',
+        amount: v.currentBalance,
+        description: 'Esvaziar',
+      );
+      await ds.deleteSavingsVault(v.id);
+      expect((await ds.getSavingsVaults()).any((x) => x.id == v.id), isFalse);
+    });
+
+    test('Transferir move o saldo e deixa os dois lados no histórico', () async {
+      final ds = MockFinanceDataSource();
+      final vaults = await ds.getSavingsVaults();
+      final from = vaults.firstWhere((v) => v.id == 'vault_reserva');
+      final to = vaults.firstWhere((v) => v.id == 'vault_viagem');
+
+      await ds.transferBetweenVaults(
+        fromVaultId: from.id,
+        toVaultId: to.id,
+        amount: const Money(10000),
+        description: 'Mudança de prioridade',
+      );
+
+      final after = await ds.getSavingsVaults();
+      expect(after.firstWhere((v) => v.id == from.id).currentBalance, from.currentBalance - const Money(10000));
+      expect(after.firstWhere((v) => v.id == to.id).currentBalance, to.currentBalance + const Money(10000));
+
+      final out = (await ds.getVaultTransactions(from.id)).first;
+      final into = (await ds.getVaultTransactions(to.id)).first;
+      expect(out.isTransfer && out.isWithdraw && out.counterpartVaultId == to.id, isTrue);
+      expect(into.isTransfer && into.isDeposit && into.counterpartVaultId == from.id, isTrue);
+      expect(VaultHistoryFilter.transfers.matches(out), isTrue);
+      expect(VaultHistoryFilter.deposits.matches(out), isFalse);
+
+      // Sem motivo, acima do saldo ou para a mesma caixinha: recusado
+      await expectLater(
+        ds.transferBetweenVaults(fromVaultId: from.id, toVaultId: to.id, amount: const Money(1), description: ''),
+        throwsA(isA<ServerFailure>()),
+      );
+      await expectLater(
+        ds.transferBetweenVaults(
+          fromVaultId: from.id,
+          toVaultId: to.id,
+          amount: Money(from.currentBalance.cents * 10),
+          description: 'x',
+        ),
+        throwsA(isA<ServerFailure>()),
+      );
+      await expectLater(
+        ds.transferBetweenVaults(fromVaultId: from.id, toVaultId: from.id, amount: const Money(1), description: 'x'),
+        throwsA(isA<ServerFailure>()),
+      );
+    });
+
+    test('Histórico pagina do mais recente para o mais antigo', () async {
+      final ds = MockFinanceDataSource();
+      for (var i = 0; i < 5; i++) {
+        await ds.depositToVault(
+          vaultId: 'vault_reforma',
+          memberId: 'member_carlos',
+          amount: Money(100 + i),
+          description: 'Depósito $i',
+        );
+        await Future<void>.delayed(const Duration(milliseconds: 2));
+      }
+      final first = await ds.getVaultTransactions('vault_reforma', limit: 3);
+      expect(first.length, 3);
+      final next = await ds.getVaultTransactions('vault_reforma', limit: 3, before: first.last.date);
+      expect(next.every((t) => t.date.isBefore(first.last.date)), isTrue);
+      expect({...first.map((t) => t.id)}.intersection({...next.map((t) => t.id)}), isEmpty);
+    });
+
+    test('Depósito sem motivo é recusado', () async {
+      final ds = MockFinanceDataSource();
+      await expectLater(
+        ds.depositToVault(vaultId: 'vault_reserva', memberId: 'member_carlos', amount: const Money(100), description: ' '),
+        throwsA(isA<ServerFailure>()),
+      );
+    });
+  });
+
   group('Resgate devolvido ao ciclo', () {
     final cycle = FinancialCycle.fromDate(date: DateTime.now(), cycleStartDay: 1);
 
@@ -236,6 +383,85 @@ void main() {
       expect(find.text('Confirmar e Guardar'), findsOneWidget);
 
       await tester.tap(find.text('Cancelar'));
+      await tester.pumpAndSettle();
+    });
+
+    testWidgets('Guardar exige o motivo do depósito', (tester) async {
+      await sl<FinanceCubit>().loadCycleData();
+      await tester.pumpWidget(buildTestWidget());
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('Guardar').first);
+      await tester.pumpAndSettle();
+      await tester.ensureVisible(find.text('Confirmar e Guardar'));
+      await tester.tap(find.text('Confirmar e Guardar'));
+      await tester.pumpAndSettle();
+      expect(find.text('Informe o motivo do depósito'), findsOneWidget);
+
+      await tester.tap(find.text('Cancelar'));
+      await tester.pumpAndSettle();
+    });
+
+    testWidgets('Menu da caixinha abre editar e transferir', (tester) async {
+      await sl<FinanceCubit>().loadCycleData();
+      await tester.pumpWidget(buildTestWidget());
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byTooltip('Mais ações').first);
+      await tester.pumpAndSettle();
+      expect(find.text('Editar'), findsOneWidget);
+      expect(find.text('Transferir'), findsOneWidget);
+      expect(find.text('Excluir'), findsOneWidget);
+
+      await tester.tap(find.text('Editar'));
+      await tester.pumpAndSettle();
+      expect(find.text('Editar Caixinha'), findsOneWidget);
+      expect(find.text('Prazo da meta (opcional)'), findsOneWidget);
+      await tester.tap(find.text('Cancelar'));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byTooltip('Mais ações').first);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Transferir'));
+      await tester.pumpAndSettle();
+      expect(find.textContaining('Transferir de:'), findsOneWidget);
+      expect(find.text('Para a caixinha'), findsOneWidget);
+      await tester.tap(find.text('Cancelar'));
+      await tester.pumpAndSettle();
+    });
+
+    testWidgets('Histórico mostra filtros e a transferência', (tester) async {
+      final cubit = sl<FinanceCubit>();
+      await cubit.loadCycleData();
+      final vaults = cubit.state.savingsVaults.where((v) => v.currentBalance.cents >= 100).toList();
+      final from = vaults.first;
+      final to = cubit.state.savingsVaults.firstWhere((v) => v.id != from.id);
+      await tester.runAsync(() => cubit.transferBetweenVaults(
+            fromVaultId: from.id,
+            toVaultId: to.id,
+            amount: const Money(100),
+            description: 'Organizar as caixinhas',
+          ));
+
+      await tester.pumpWidget(buildTestWidget());
+      await tester.pumpAndSettle();
+
+      final index = cubit.state.savingsVaults.indexWhere((v) => v.id == from.id);
+      final historyButton = find.text('Histórico de entradas e saídas').at(index);
+      await tester.ensureVisible(historyButton);
+      await tester.pumpAndSettle();
+      await tester.tap(historyButton);
+      await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 50)));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Transferências'), findsOneWidget);
+      expect(find.textContaining('Transferido para ${to.name}'), findsOneWidget);
+
+      await tester.tap(find.text('Entradas'));
+      await tester.pumpAndSettle();
+      expect(find.textContaining('Transferido para ${to.name}'), findsNothing);
+
+      await tester.tap(find.text('Fechar'));
       await tester.pumpAndSettle();
     });
 

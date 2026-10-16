@@ -168,7 +168,9 @@ class AppRouter {
                   GoRoute(
                     path: 'caixinhas',
                     name: 'savings_vaults',
-                    builder: (context, state) => const SavingsVaultsPage(),
+                    builder: (context, state) => SavingsVaultsPage(
+                      openVaultId: state.uri.queryParameters['caixinha'],
+                    ),
                   ),
                   GoRoute(
                     path: 'importar',
@@ -195,6 +197,12 @@ class AppRouter {
               GoRoute(
                 path: '/caixinhas',
                 redirect: (context, state) => '/casa/caixinhas',
+              ),
+              // Deeplink das notificações: abre o histórico da caixinha
+              GoRoute(
+                path: '/caixinhas/:id',
+                redirect: (context, state) =>
+                    Uri(path: '/casa/caixinhas', queryParameters: {'caixinha': state.pathParameters['id']}).toString(),
               ),
               GoRoute(
                 path: '/importar',

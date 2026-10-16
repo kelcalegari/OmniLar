@@ -12,9 +12,23 @@ import '../../domain/entities/savings_vault.dart';
 import '../cubit/finance_cubit.dart';
 import '../cubit/finance_state.dart';
 import '../../../../core/widgets/save_feedback.dart';
+import '../widgets/vault_history_dialog.dart';
 
-class SavingsVaultsPage extends StatelessWidget {
-  const SavingsVaultsPage({super.key});
+class SavingsVaultsPage extends StatefulWidget {
+  /// Caixinha cujo histórico abre ao chegar por uma notificação.
+  final String? openVaultId;
+
+  const SavingsVaultsPage({super.key, this.openVaultId});
+
+  @override
+  State<SavingsVaultsPage> createState() => _SavingsVaultsPageState();
+}
+
+class _SavingsVaultsPageState extends State<SavingsVaultsPage> {
+  bool _linkHandled = false;
+
+  static String _formatDay(DateTime d) =>
+      '${d.day.toString().padLeft(2, '0')}/${d.month.toString().padLeft(2, '0')}/${d.year}';
 
   IconData _getIconData(String iconName) {
     switch (iconName) {
@@ -40,18 +54,21 @@ class SavingsVaultsPage extends StatelessWidget {
     }
   }
 
-  void _showNewVaultDialog(BuildContext context, FinanceCubit cubit) {
-    final nameController = TextEditingController();
-    int targetCents = 300000; // R$ 3.000,00 padrão
-    String selectedIcon = 'savings';
-    String selectedColor = '#10B981';
+  void _showVaultFormDialog(BuildContext context, FinanceCubit cubit, {SavingsVault? existing}) {
+    final isEdit = existing != null;
+    final nameController = TextEditingController(text: existing?.name ?? '');
+    int targetCents = existing?.targetAmount.cents ?? 300000; // R$ 3.000,00 padrão
+    String selectedIcon = existing?.icon ?? 'savings';
+    String selectedColor = existing?.colorHex ?? '#10B981';
+    DateTime? targetDate = existing?.targetDate;
+    String? nameError;
 
     showDialog(
       context: context,
       builder: (dialogCtx) => StatefulBuilder(
         builder: (context, setDialogState) {
           return AlertDialog(
-            title: const Text('Nova Caixinha da Casa', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+            title: Text(isEdit ? 'Editar Caixinha' : 'Nova Caixinha da Casa', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
             content: SingleChildScrollView(
               child: Column(
                 mainAxisSize: MainAxisSize.min,
@@ -59,10 +76,14 @@ class SavingsVaultsPage extends StatelessWidget {
                 children: [
                   TextField(
                     controller: nameController,
-                    autofocus: true,
+                    autofocus: !isEdit,
+                    onChanged: (_) {
+                      if (nameError != null) setDialogState(() => nameError = null);
+                    },
                     decoration: InputDecoration(
                       labelText: 'Nome da Meta ou Caixinha',
                       hintText: 'Ex: Férias de Fim de Ano, Geladeira Nova',
+                      errorText: nameError,
                       border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
                     ),
                   ),
@@ -75,6 +96,42 @@ class SavingsVaultsPage extends StatelessWidget {
                     onChanged: (val) {
                       setDialogState(() => targetCents = val.cents);
                     },
+                  ),
+                  const SizedBox(height: 12),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: OutlinedButton.icon(
+                          onPressed: targetCents <= 0
+                              ? null
+                              : () async {
+                                  final now = DateTime.now();
+                                  final picked = await showDatePicker(
+                                    context: context,
+                                    initialDate: targetDate ?? DateTime(now.year, now.month + 6, now.day),
+                                    firstDate: DateTime(now.year, now.month, now.day),
+                                    lastDate: DateTime(now.year + 30),
+                                    helpText: 'Prazo da meta',
+                                  );
+                                  if (picked != null) setDialogState(() => targetDate = picked);
+                                },
+                          icon: const Icon(Icons.event_rounded, size: 16),
+                          label: Text(
+                            targetCents <= 0
+                                ? 'Prazo: defina uma meta antes'
+                                : targetDate == null
+                                    ? 'Prazo da meta (opcional)'
+                                    : 'Prazo: ${_formatDay(targetDate!)}',
+                          ),
+                        ),
+                      ),
+                      if (targetDate != null)
+                        IconButton(
+                          tooltip: 'Tirar o prazo',
+                          onPressed: () => setDialogState(() => targetDate = null),
+                          icon: const Icon(Icons.close_rounded, size: 18),
+                        ),
+                    ],
                   ),
                   const SizedBox(height: 16),
                   const Text('Ícone da Caixinha:', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.grey)),
@@ -122,29 +179,45 @@ class SavingsVaultsPage extends StatelessWidget {
               FilledButton(
                 onPressed: () async {
                   final name = nameController.text.trim();
-                  if (name.isEmpty) return;
-
-                  final newVault = SavingsVault(
-                    id: 'vault_${DateTime.now().millisecondsSinceEpoch}',
-                    name: name,
-                    targetAmount: Money(targetCents),
-                    icon: selectedIcon,
-                    colorHex: selectedColor,
-                    createdAt: DateTime.now(),
-                  );
+                  if (name.isEmpty) {
+                    setDialogState(() => nameError = 'Dê um nome à caixinha');
+                    return;
+                  }
+                  // Sem meta não há prazo
+                  final deadline = targetCents > 0 ? targetDate : null;
 
                   final messenger = ScaffoldMessenger.of(context);
                   Navigator.pop(dialogCtx);
-                  final ok = await cubit.createSavingsVault(newVault);
+                  final bool ok;
+                  if (isEdit) {
+                    ok = await cubit.updateSavingsVault(existing.copyWith(
+                      name: name,
+                      targetAmount: Money(targetCents < 0 ? 0 : targetCents),
+                      icon: selectedIcon,
+                      colorHex: selectedColor,
+                      targetDate: deadline,
+                      clearTargetDate: deadline == null,
+                    ));
+                  } else {
+                    ok = await cubit.createSavingsVault(SavingsVault(
+                      id: 'vault_${DateTime.now().millisecondsSinceEpoch}',
+                      name: name,
+                      targetAmount: Money(targetCents),
+                      icon: selectedIcon,
+                      colorHex: selectedColor,
+                      createdAt: DateTime.now(),
+                      targetDate: deadline,
+                    ));
+                  }
                   showSaveFeedback(
                     messenger,
                     ok: ok,
-                    success: 'Caixinha "$name" criada com sucesso! 🎯',
+                    success: isEdit ? 'Caixinha "$name" atualizada!' : 'Caixinha "$name" criada com sucesso! 🎯',
                     failure: cubit.state.errorMessage,
                   );
                 },
                 style: FilledButton.styleFrom(backgroundColor: AppColors.primary),
-                child: const Text('Criar Caixinha'),
+                child: Text(isEdit ? 'Salvar' : 'Criar Caixinha'),
               ),
             ],
           );
@@ -160,7 +233,9 @@ class SavingsVaultsPage extends StatelessWidget {
     // Com sessão real o banco registra quem está logado: não há o que escolher
     String selectedMemberId =
         authRepo.isDemoMode && members.isNotEmpty ? members.first.id as String : defaultId;
-    final descController = TextEditingController(text: 'Aporte para ${vault.name}');
+    final descController = TextEditingController();
+    String? reasonError;
+    const quickReasons = ['Aporte mensal', 'Sobra do mês', 'Reforço da meta', 'Presente'];
 
     // Do Caixa do ciclo em andamento só volta o que as caixinhas devolveram a ele
     final currentCycle = cubit.cycleSchedule.cycleFor(DateTime.now());
@@ -234,10 +309,30 @@ class SavingsVaultsPage extends StatelessWidget {
                   const SizedBox(height: 16),
                   TextField(
                     controller: descController,
+                    onChanged: (_) {
+                      if (reasonError != null) setDialogState(() => reasonError = null);
+                    },
                     decoration: InputDecoration(
-                      labelText: 'Descrição ou Motivo',
+                      labelText: 'Motivo do depósito',
+                      hintText: 'Ex.: sobra do mês',
+                      errorText: reasonError,
                       border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
                     ),
+                  ),
+                  const SizedBox(height: 8),
+                  Wrap(
+                    spacing: 6,
+                    runSpacing: 6,
+                    children: [
+                      for (final reason in quickReasons)
+                        ActionChip(
+                          label: Text(reason, style: const TextStyle(fontSize: 12)),
+                          onPressed: () => setDialogState(() {
+                            descController.text = reason;
+                            reasonError = null;
+                          }),
+                        ),
+                    ],
                   ),
                 ],
               ),
@@ -260,6 +355,11 @@ class SavingsVaultsPage extends StatelessWidget {
                     );
                     return;
                   }
+                  final reason = descController.text.trim();
+                  if (reason.isEmpty) {
+                    setDialogState(() => reasonError = 'Informe o motivo do depósito');
+                    return;
+                  }
 
                   final messenger = ScaffoldMessenger.of(context);
                   Navigator.pop(dialogCtx);
@@ -267,7 +367,7 @@ class SavingsVaultsPage extends StatelessWidget {
                     vaultId: vault.id,
                     memberId: selectedMemberId,
                     amount: Money(depositCents),
-                    description: descController.text.trim(),
+                    description: reason,
                     fromCycleStart: fromCycle ? currentCycle.startDate : null,
                   );
                   showSaveFeedback(
@@ -289,94 +389,203 @@ class SavingsVaultsPage extends StatelessWidget {
     );
   }
 
-  /// Extrato da caixinha: quem guardou ou resgatou, quanto e quando.
-  void _showHistoryDialog(BuildContext context, SavingsVault vault, List<dynamic> members) {
-    String memberName(String id) {
-      for (final m in members) {
-        if (m.id == id) return (m.name as String).split(' ').first;
-      }
-      return 'Morador';
+  /// Extrato da caixinha: quem guardou, resgatou ou transferiu, quanto, quando e por quê.
+  void _showHistoryDialog(BuildContext context, SavingsVault vault, FinanceState state) {
+    VaultHistoryDialog.show(context, vault: vault, members: state.members, vaults: state.savingsVaults);
+  }
+
+  void _showTransferDialog(BuildContext context, FinanceCubit cubit, SavingsVault from, List<SavingsVault> vaults) {
+    final others = vaults.where((v) => v.id != from.id).toList();
+    if (others.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Crie outra caixinha para transferir o saldo.')),
+      );
+      return;
     }
+    if (!from.currentBalance.isPositive) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Esta caixinha está vazia.')),
+      );
+      return;
+    }
+    var toId = others.first.id;
+    int amountCents = from.currentBalance.cents;
+    final descController = TextEditingController();
+    String? reasonError;
+    const quickReasons = ['Mudança de prioridade', 'Meta atingida', 'Organizar as caixinhas'];
 
-    String two(int n) => n.toString().padLeft(2, '0');
-    String formatDate(DateTime d) =>
-        '${two(d.day)}/${two(d.month)}/${d.year} ${two(d.hour)}:${two(d.minute)}';
-
-    showDialog<void>(
+    showDialog(
       context: context,
-      builder: (dialogCtx) => AlertDialog(
-        title: Text('Histórico: ${vault.name}'),
-        content: SizedBox(
-          width: 420,
-          child: FutureBuilder<List<SavingsTransaction>>(
-            future: sl<FinanceRepository>().getVaultTransactions(vault.id),
-            builder: (context, snapshot) {
-              if (snapshot.connectionState != ConnectionState.done) {
-                return const SizedBox(
-                  height: 80,
-                  child: Center(child: CircularProgressIndicator()),
-                );
-              }
-              if (snapshot.hasError) {
-                return const Text('Não foi possível carregar o histórico desta caixinha.');
-              }
-              final transactions = snapshot.data ?? const [];
-              if (transactions.isEmpty) {
-                return const Text('Nenhuma entrada ou saída registrada nesta caixinha.');
-              }
-              return ListView.separated(
-                shrinkWrap: true,
-                itemCount: transactions.length,
-                separatorBuilder: (_, _) => const Divider(height: 12),
-                itemBuilder: (context, index) {
-                  final t = transactions[index];
-                  final color = t.isDeposit ? AppColors.creditGreen : AppColors.debtRed;
-                  return Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Icon(
-                        t.isDeposit ? Icons.south_west_rounded : Icons.north_east_rounded,
-                        size: 18,
-                        color: color,
-                      ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              '${t.takenFromCycle ? 'Veio do Caixa do ciclo' : t.isDeposit ? 'Entrada' : t.returnedToCycle ? 'Devolvido ao ciclo' : 'Saída'} • ${memberName(t.memberId)}',
-                              style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
-                            ),
-                            if (t.description.isNotEmpty)
-                              Text(t.description, style: const TextStyle(fontSize: 12)),
-                            Text(
-                              formatDate(t.date),
-                              style: const TextStyle(fontSize: 11, color: Colors.grey),
-                            ),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      PrivacySensitiveText(
-                        '${t.isDeposit ? '+' : '-'}${t.amount.format()}',
-                        style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: color),
-                      ),
+      builder: (dialogCtx) => StatefulBuilder(
+        builder: (context, setDialogState) {
+          return AlertDialog(
+            title: Text('Transferir de: ${from.name}', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+            content: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Text('Saldo disponível: ${from.currentBalance.format()}',
+                      style: const TextStyle(fontSize: 13, color: Colors.grey, fontWeight: FontWeight.bold)),
+                  const SizedBox(height: 14),
+                  DropdownButtonFormField<String>(
+                    initialValue: toId,
+                    decoration: InputDecoration(
+                      labelText: 'Para a caixinha',
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                    ),
+                    items: [
+                      for (final v in others) DropdownMenuItem(value: v.id, child: Text(v.name)),
                     ],
+                    onChanged: (v) {
+                      if (v != null) setDialogState(() => toId = v);
+                    },
+                  ),
+                  const SizedBox(height: 16),
+                  const Text('Valor a Transferir:', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.grey)),
+                  const SizedBox(height: 6),
+                  MoneyInputField(
+                    initialValue: Money(amountCents),
+                    showKeypad: false,
+                    onChanged: (val) => setDialogState(() => amountCents = val.cents),
+                  ),
+                  const SizedBox(height: 16),
+                  TextField(
+                    controller: descController,
+                    onChanged: (_) {
+                      if (reasonError != null) setDialogState(() => reasonError = null);
+                    },
+                    decoration: InputDecoration(
+                      labelText: 'Motivo da transferência',
+                      errorText: reasonError,
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Wrap(
+                    spacing: 6,
+                    runSpacing: 6,
+                    children: [
+                      for (final reason in quickReasons)
+                        ActionChip(
+                          label: Text(reason, style: const TextStyle(fontSize: 12)),
+                          onPressed: () => setDialogState(() {
+                            descController.text = reason;
+                            reasonError = null;
+                          }),
+                        ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(dialogCtx),
+                child: const Text('Cancelar'),
+              ),
+              FilledButton(
+                onPressed: () async {
+                  if (amountCents <= 0) return;
+                  if (amountCents > from.currentBalance.cents) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('O valor não pode ser maior que o saldo da caixinha!')),
+                    );
+                    return;
+                  }
+                  final reason = descController.text.trim();
+                  if (reason.isEmpty) {
+                    setDialogState(() => reasonError = 'Informe o motivo da transferência');
+                    return;
+                  }
+                  final toName = others.firstWhere((v) => v.id == toId).name;
+
+                  final messenger = ScaffoldMessenger.of(context);
+                  Navigator.pop(dialogCtx);
+                  final ok = await cubit.transferBetweenVaults(
+                    fromVaultId: from.id,
+                    toVaultId: toId,
+                    amount: Money(amountCents),
+                    description: reason,
+                  );
+                  showSaveFeedback(
+                    messenger,
+                    ok: ok,
+                    success: '${Money(amountCents).format()} transferido para $toName!',
+                    failure: cubit.state.errorMessage,
                   );
                 },
-              );
-            },
+                style: FilledButton.styleFrom(backgroundColor: AppColors.primary),
+                child: const Text('Transferir'),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  Future<void> _confirmDelete(BuildContext context, FinanceCubit cubit, SavingsVault vault) async {
+    if (vault.currentBalance.cents != 0) {
+      await showDialog<void>(
+        context: context,
+        builder: (dialogCtx) => AlertDialog(
+          title: const Text('Caixinha com saldo'),
+          content: Text(
+            '${vault.name} ainda tem ${vault.currentBalance.format()}. '
+            'Resgate ou transfira o saldo para outra caixinha antes de excluir.',
           ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(dialogCtx), child: const Text('Entendi')),
+          ],
         ),
+      );
+      return;
+    }
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogCtx) => AlertDialog(
+        title: const Text('Excluir caixinha?'),
+        content: Text('${vault.name} sai da lista. Esta ação não pode ser desfeita.'),
         actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dialogCtx),
-            child: const Text('Fechar'),
+          TextButton(onPressed: () => Navigator.pop(dialogCtx, false), child: const Text('Cancelar')),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogCtx, true),
+            style: FilledButton.styleFrom(backgroundColor: AppColors.debtRed),
+            child: const Text('Excluir'),
           ),
         ],
       ),
     );
+    if (confirmed != true || !context.mounted) return;
+    final messenger = ScaffoldMessenger.of(context);
+    final ok = await cubit.deleteSavingsVault(vault.id);
+    showSaveFeedback(
+      messenger,
+      ok: ok,
+      success: 'Caixinha "${vault.name}" excluída.',
+      failure: cubit.state.errorMessage,
+    );
+  }
+
+  /// Abre o histórico da caixinha do link uma vez, quando as caixinhas chegam.
+  void _handleLink(BuildContext context, FinanceState state) {
+    final id = widget.openVaultId;
+    if (_linkHandled || id == null) return;
+    if (state.status == FinanceStatus.initial || state.status == FinanceStatus.loading) return;
+    _linkHandled = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final vault = state.savingsVaults.where((v) => v.id == id).firstOrNull;
+      if (vault == null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Esta caixinha não existe mais.')),
+        );
+        return;
+      }
+      _showHistoryDialog(context, vault, state);
+    });
   }
 
   void _showWithdrawDialog(BuildContext context, FinanceCubit cubit, SavingsVault vault, List<dynamic> members) {
@@ -547,6 +756,8 @@ class SavingsVaultsPage extends StatelessWidget {
           final vaults = state.savingsVaults;
           final totalSavings = state.totalSavings;
           final members = state.members;
+          final today = DateTime.now();
+          _handleLink(context, state);
 
           return ResponsiveContainer(
             child: ListView(
@@ -612,7 +823,7 @@ class SavingsVaultsPage extends StatelessWidget {
                       style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                     ),
                     FilledButton.icon(
-                      onPressed: () => _showNewVaultDialog(context, cubit),
+                      onPressed: () => _showVaultFormDialog(context, cubit),
                       icon: const Icon(Icons.add_rounded, size: 18),
                       label: const Text('Nova Caixinha'),
                       style: FilledButton.styleFrom(
@@ -679,19 +890,27 @@ class SavingsVaultsPage extends StatelessWidget {
                                         style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
                                       ),
                                       const SizedBox(height: 2),
-                                      Row(
-                                        children: [
-                                          const Text('Meta: ', style: TextStyle(fontSize: 12, color: Colors.grey)),
-                                          PrivacySensitiveText(
-                                            vault.targetAmount.format(),
-                                            style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Colors.grey),
-                                          ),
-                                        ],
-                                      ),
+                                      if (vault.hasGoal)
+                                        Row(
+                                          children: [
+                                            const Text('Meta: ', style: TextStyle(fontSize: 12, color: Colors.grey)),
+                                            PrivacySensitiveText(
+                                              vault.targetAmount.format(),
+                                              style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Colors.grey),
+                                            ),
+                                            if (vault.targetDate != null)
+                                              Text(
+                                                ' até ${_formatDay(vault.targetDate!)}',
+                                                style: const TextStyle(fontSize: 12, color: Colors.grey),
+                                              ),
+                                          ],
+                                        )
+                                      else
+                                        const Text('Sem meta', style: TextStyle(fontSize: 12, color: Colors.grey)),
                                     ],
                                   ),
                                 ),
-                                if (vault.isGoalReached) ...[
+                                if (vault.hasGoal && vault.isGoalReached) ...[
                                   Container(
                                     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                                     decoration: BoxDecoration(
@@ -707,6 +926,33 @@ class SavingsVaultsPage extends StatelessWidget {
                                     ),
                                   ),
                                 ],
+                                PopupMenuButton<String>(
+                                  tooltip: 'Mais ações',
+                                  onSelected: (action) {
+                                    switch (action) {
+                                      case 'edit':
+                                        _showVaultFormDialog(context, cubit, existing: vault);
+                                      case 'transfer':
+                                        _showTransferDialog(context, cubit, vault, vaults);
+                                      case 'delete':
+                                        _confirmDelete(context, cubit, vault);
+                                    }
+                                  },
+                                  itemBuilder: (_) => const [
+                                    PopupMenuItem(
+                                      value: 'edit',
+                                      child: ListTile(leading: Icon(Icons.edit_rounded), title: Text('Editar'), dense: true),
+                                    ),
+                                    PopupMenuItem(
+                                      value: 'transfer',
+                                      child: ListTile(leading: Icon(Icons.swap_horiz_rounded), title: Text('Transferir'), dense: true),
+                                    ),
+                                    PopupMenuItem(
+                                      value: 'delete',
+                                      child: ListTile(leading: Icon(Icons.delete_outline_rounded), title: Text('Excluir'), dense: true),
+                                    ),
+                                  ],
+                                ),
                               ],
                             ),
                             const SizedBox(height: 16),
@@ -735,9 +981,35 @@ class SavingsVaultsPage extends StatelessWidget {
                                     ),
                                   ],
                                 ),
-                                Text('$percent% concluído', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Colors.grey)),
+                                if (vault.hasGoal)
+                                  Text('$percent% concluído', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Colors.grey)),
                               ],
                             ),
+                            if (vault.monthlyNeeded(today) case final monthly? when !vault.isGoalReached) ...[
+                              const SizedBox(height: 6),
+                              Row(
+                                children: [
+                                  Icon(
+                                    vault.isBehindPace(today) ? Icons.warning_amber_rounded : Icons.event_rounded,
+                                    size: 14,
+                                    color: vault.isBehindPace(today) ? AppColors.debtRed : Colors.grey,
+                                  ),
+                                  const SizedBox(width: 4),
+                                  Expanded(
+                                    child: PrivacySensitiveText(
+                                      vault.isOverdue(today)
+                                          ? 'Prazo vencido: faltam ${vault.remainingToGoal.format()}'
+                                          : 'Guardar ${monthly.format()}/mês até ${_formatDay(vault.targetDate!)}'
+                                              '${vault.isBehindPace(today) ? ' · ritmo abaixo do necessário' : ''}',
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        color: vault.isBehindPace(today) ? AppColors.debtRed : Colors.grey,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ],
                             const Divider(height: 24),
 
                             // Ações Guardar e Resgatar
@@ -772,7 +1044,7 @@ class SavingsVaultsPage extends StatelessWidget {
                             Align(
                               alignment: Alignment.centerLeft,
                               child: TextButton.icon(
-                                onPressed: () => _showHistoryDialog(context, vault, members),
+                                onPressed: () => _showHistoryDialog(context, vault, state),
                                 icon: const Icon(Icons.history_rounded, size: 16),
                                 label: const Text('Histórico de entradas e saídas'),
                               ),

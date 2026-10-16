@@ -650,6 +650,42 @@ class FinanceCubit extends Cubit<FinanceState> {
     }
   }
 
+  Future<bool> updateSavingsVault(SavingsVault vault) =>
+      _runVaultAction(() => _repository.updateSavingsVault(vault), 'Erro ao salvar a caixinha');
+
+  Future<bool> deleteSavingsVault(String vaultId) =>
+      _runVaultAction(() => _repository.deleteSavingsVault(vaultId), 'Erro ao excluir a caixinha');
+
+  Future<bool> transferBetweenVaults({
+    required String fromVaultId,
+    required String toVaultId,
+    required Money amount,
+    required String description,
+  }) =>
+      _runVaultAction(
+        () => _repository.transferBetweenVaults(
+          fromVaultId: fromVaultId,
+          toVaultId: toVaultId,
+          amount: amount,
+          description: description,
+        ),
+        'Erro ao transferir entre caixinhas',
+      );
+
+  Future<bool> _runVaultAction(Future<void> Function() action, String failure) async {
+    try {
+      await action();
+      await loadCycleData(cycle: state.currentCycle);
+      return true;
+    } catch (e) {
+      emit(state.copyWith(
+        status: FinanceStatus.failure,
+        errorMessage: '$failure: $e',
+      ));
+      return false;
+    }
+  }
+
   Future<bool> depositToVault({
     required String vaultId,
     required String memberId,

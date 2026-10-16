@@ -59,8 +59,11 @@ abstract class FinanceRepository {
   Future<List<SavingsVault>> getSavingsVaults();
 
   /// Entradas e saídas da caixinha, da mais recente para a mais antiga.
-  Future<List<SavingsTransaction>> getVaultTransactions(String vaultId);
+  Future<List<SavingsTransaction>> getVaultTransactions(String vaultId, {int limit = 50, DateTime? before});
   Future<void> createSavingsVault(SavingsVault vault);
+  Future<void> updateSavingsVault(SavingsVault vault);
+  Future<void> deleteSavingsVault(String vaultId);
+  Future<void> transferBetweenVaults({required String fromVaultId, required String toVaultId, required Money amount, required String description});
   /// Com [fromCycleStart], o valor sai do Caixa daquele ciclo (até o que as caixinhas devolveram a ele).
   Future<void> depositToVault({required String vaultId, required String memberId, required Money amount, required String description, DateTime? fromCycleStart});
 

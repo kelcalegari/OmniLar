@@ -69,8 +69,23 @@ abstract class FinanceDataSource {
   Future<List<SavingsVault>> getSavingsVaults();
 
   /// Entradas e saídas da caixinha, da mais recente para a mais antiga.
-  Future<List<SavingsTransaction>> getVaultTransactions(String vaultId);
+  /// [before] pagina: traz só os lançamentos anteriores a essa data.
+  Future<List<SavingsTransaction>> getVaultTransactions(String vaultId, {int limit = 50, DateTime? before});
   Future<void> createSavingsVault(SavingsVault vault);
+
+  /// Muda nome, meta, prazo, ícone e cor (o saldo só muda por movimentação).
+  Future<void> updateSavingsVault(SavingsVault vault);
+
+  /// Exclui a caixinha: só com saldo zerado.
+  Future<void> deleteSavingsVault(String vaultId);
+
+  /// Tira de uma caixinha e põe na outra, com o mesmo motivo nos dois lados.
+  Future<void> transferBetweenVaults({
+    required String fromVaultId,
+    required String toVaultId,
+    required Money amount,
+    required String description,
+  });
   Future<void> depositToVault({
     required String vaultId,
     required String memberId,

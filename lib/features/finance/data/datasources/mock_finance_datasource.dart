@@ -809,9 +809,72 @@ class MockFinanceDataSource implements FinanceDataSource {
   }
 
   @override
-  Future<List<SavingsTransaction>> getVaultTransactions(String vaultId) async {
-    return _savingsTransactions.where((t) => t.vaultId == vaultId).toList()
+  Future<List<SavingsTransaction>> getVaultTransactions(String vaultId, {int limit = 50, DateTime? before}) async {
+    final list = _savingsTransactions
+        .where((t) => t.vaultId == vaultId && (before == null || t.date.isBefore(before)))
+        .toList()
       ..sort((a, b) => b.date.compareTo(a.date));
+    return list.take(limit).toList();
+  }
+
+  @override
+  Future<void> updateSavingsVault(SavingsVault vault) async {
+    if (vault.name.trim().isEmpty) throw const ServerFailure('Dê um nome à caixinha.');
+    final index = _savingsVaults.indexWhere((v) => v.id == vault.id);
+    if (index == -1) throw const ServerFailure('Caixinha não encontrada nesta casa.');
+    // O saldo só muda por movimentação
+    _savingsVaults[index] = vault.copyWith(currentBalance: _savingsVaults[index].currentBalance);
+  }
+
+  @override
+  Future<void> deleteSavingsVault(String vaultId) async {
+    final index = _savingsVaults.indexWhere((v) => v.id == vaultId);
+    if (index == -1) throw const ServerFailure('Caixinha não encontrada nesta casa.');
+    if (_savingsVaults[index].currentBalance.cents != 0) {
+      throw const ServerFailure('Esvazie a caixinha antes de excluir: resgate ou transfira o saldo.');
+    }
+    _savingsVaults.removeAt(index);
+  }
+
+  @override
+  Future<void> transferBetweenVaults({
+    required String fromVaultId,
+    required String toVaultId,
+    required Money amount,
+    required String description,
+  }) async {
+    if (description.trim().isEmpty) throw const ServerFailure('Informe o motivo da transferência.');
+    if (amount.cents <= 0) throw const ServerFailure('O valor deve ser maior que zero.');
+    if (fromVaultId == toVaultId) throw const ServerFailure('Escolha outra caixinha para receber o valor.');
+    final from = _savingsVaults.indexWhere((v) => v.id == fromVaultId);
+    final to = _savingsVaults.indexWhere((v) => v.id == toVaultId);
+    if (from == -1 || to == -1) throw const ServerFailure('Caixinha não encontrada nesta casa.');
+    if (_savingsVaults[from].currentBalance.cents < amount.cents) {
+      throw const ServerFailure('Saldo insuficiente na caixinha.');
+    }
+    _savingsVaults[from] = _savingsVaults[from].copyWith(currentBalance: _savingsVaults[from].currentBalance - amount);
+    _savingsVaults[to] = _savingsVaults[to].copyWith(currentBalance: _savingsVaults[to].currentBalance + amount);
+    final now = DateTime.now();
+    _savingsTransactions.add(SavingsTransaction(
+      id: 'tx_${now.microsecondsSinceEpoch}_out',
+      vaultId: fromVaultId,
+      memberId: 'member_carlos',
+      amount: amount,
+      type: 'withdraw',
+      description: description.trim(),
+      date: now,
+      counterpartVaultId: toVaultId,
+    ));
+    _savingsTransactions.add(SavingsTransaction(
+      id: 'tx_${now.microsecondsSinceEpoch}_in',
+      vaultId: toVaultId,
+      memberId: 'member_carlos',
+      amount: amount,
+      type: 'deposit',
+      description: description.trim(),
+      date: now,
+      counterpartVaultId: fromVaultId,
+    ));
   }
 
   @override
@@ -827,6 +890,9 @@ class MockFinanceDataSource implements FinanceDataSource {
     required String description,
     DateTime? fromCycleStart,
   }) async {
+    if (description.trim().isEmpty) {
+      throw const ServerFailure('Informe o motivo do depósito.');
+    }
     final index = _savingsVaults.indexWhere((v) => v.id == vaultId);
     if (index != -1) {
       // Como no banco: do Caixa do ciclo só sai o que as caixinhas devolveram a ele

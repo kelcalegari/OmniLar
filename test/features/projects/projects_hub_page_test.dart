@@ -84,7 +84,13 @@ class _FakeFinanceRepository implements FinanceRepository {
   @override
   Future<List<SavingsVault>> getSavingsVaults() async => [];
   @override
-  Future<List<SavingsTransaction>> getVaultTransactions(String vaultId) async => [];
+  Future<List<SavingsTransaction>> getVaultTransactions(String vaultId, {int limit = 50, DateTime? before}) async => [];
+  @override
+  Future<void> updateSavingsVault(SavingsVault vault) async {}
+  @override
+  Future<void> deleteSavingsVault(String vaultId) async {}
+  @override
+  Future<void> transferBetweenVaults({required String fromVaultId, required String toVaultId, required Money amount, required String description}) async {}
   @override
   Future<void> createSavingsVault(SavingsVault vault) async {}
   @override

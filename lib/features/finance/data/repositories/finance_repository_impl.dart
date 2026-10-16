@@ -129,8 +129,28 @@ class FinanceRepositoryImpl implements FinanceRepository {
   Future<List<SavingsVault>> getSavingsVaults() => _dataSource.getSavingsVaults();
 
   @override
-  Future<List<SavingsTransaction>> getVaultTransactions(String vaultId) =>
-      _dataSource.getVaultTransactions(vaultId);
+  Future<List<SavingsTransaction>> getVaultTransactions(String vaultId, {int limit = 50, DateTime? before}) =>
+      _dataSource.getVaultTransactions(vaultId, limit: limit, before: before);
+
+  @override
+  Future<void> updateSavingsVault(SavingsVault vault) => _dataSource.updateSavingsVault(vault);
+
+  @override
+  Future<void> deleteSavingsVault(String vaultId) => _dataSource.deleteSavingsVault(vaultId);
+
+  @override
+  Future<void> transferBetweenVaults({
+    required String fromVaultId,
+    required String toVaultId,
+    required Money amount,
+    required String description,
+  }) =>
+      _dataSource.transferBetweenVaults(
+        fromVaultId: fromVaultId,
+        toVaultId: toVaultId,
+        amount: amount,
+        description: description,
+      );
 
   @override
   Future<Money> getVaultReturnsForCycle(FinancialCycle cycle) =>

@@ -958,6 +958,7 @@ class SupabaseFinanceDataSource implements FinanceDataSource {
           .from('savings_vaults')
           .select()
           .eq('house_id', _houseId)
+          .isFilter('deleted_at', null)
           .order('created_at', ascending: false);
 
       return rows.map((r) {
@@ -969,6 +970,7 @@ class SupabaseFinanceDataSource implements FinanceDataSource {
           icon: r['icon'] as String? ?? 'savings',
           colorHex: r['color_hex'] as String? ?? '#10B981',
           createdAt: DateTime.parse(r['created_at'] as String).toLocal(),
+          targetDate: r['target_date'] == null ? null : DateTime.parse(r['target_date'] as String),
         );
       }).toList();
     } catch (e) {
@@ -991,6 +993,7 @@ class SupabaseFinanceDataSource implements FinanceDataSource {
             'target_amount_cents': vault.targetAmount.cents > 0 ? vault.targetAmount.cents : null,
             'icon': vault.icon,
             'color_hex': vault.colorHex,
+            if (vault.targetDate != null) 'target_date': _dateOnly(vault.targetDate!),
           })
           .select('id')
           .single();
@@ -1009,14 +1012,14 @@ class SupabaseFinanceDataSource implements FinanceDataSource {
   }
 
   @override
-  Future<List<SavingsTransaction>> getVaultTransactions(String vaultId) async {
+  Future<List<SavingsTransaction>> getVaultTransactions(String vaultId, {int limit = 50, DateTime? before}) async {
     try {
-      final rows = await client
+      var query = client
           .from('savings_transactions')
-          .select('id, vault_id, member_id, amount_cents, type, description, created_at, cycle_start_date')
-          .eq('vault_id', vaultId)
-          .order('created_at', ascending: false)
-          .limit(200);
+          .select('id, vault_id, member_id, amount_cents, type, description, created_at, cycle_start_date, counterpart_vault_id')
+          .eq('vault_id', vaultId);
+      if (before != null) query = query.lt('created_at', before.toUtc().toIso8601String());
+      final rows = await query.order('created_at', ascending: false).limit(limit);
 
       return rows.map((r) {
         return SavingsTransaction(
@@ -1030,10 +1033,58 @@ class SupabaseFinanceDataSource implements FinanceDataSource {
           cycleStartDate: r['cycle_start_date'] == null
               ? null
               : DateTime.parse(r['cycle_start_date'] as String),
+          counterpartVaultId: r['counterpart_vault_id'] as String?,
         );
       }).toList();
     } catch (e) {
       throw ServerFailure('Erro ao buscar o histórico da caixinha: $e');
+    }
+  }
+
+  String _dateOnly(DateTime d) => d.toIso8601String().split('T')[0];
+
+  @override
+  Future<void> updateSavingsVault(SavingsVault vault) async {
+    try {
+      await client.from('savings_vaults').update({
+        'name': vault.name.trim(),
+        // Caixinha sem meta: a coluna só aceita nulo ou valor positivo
+        'target_amount_cents': vault.targetAmount.cents > 0 ? vault.targetAmount.cents : null,
+        'target_date': vault.targetDate == null ? null : _dateOnly(vault.targetDate!),
+        'icon': vault.icon,
+        'color_hex': vault.colorHex,
+      }).eq('id', vault.id);
+    } catch (e) {
+      throw ServerFailure('Erro ao salvar a caixinha: $e');
+    }
+  }
+
+  @override
+  Future<void> deleteSavingsVault(String vaultId) async {
+    try {
+      // O banco recusa caixinha com saldo ou que recebe parcelas de acordo em aberto
+      await client.rpc('delete_savings_vault', params: {'p_vault_id': vaultId});
+    } catch (e) {
+      throw ServerFailure('Erro ao excluir a caixinha: $e');
+    }
+  }
+
+  @override
+  Future<void> transferBetweenVaults({
+    required String fromVaultId,
+    required String toVaultId,
+    required Money amount,
+    required String description,
+  }) async {
+    try {
+      await client.rpc('transfer_between_vaults', params: {
+        'p_from_vault_id': fromVaultId,
+        'p_to_vault_id': toVaultId,
+        'p_amount_cents': amount.cents,
+        'p_description': description,
+      });
+    } catch (e) {
+      throw ServerFailure('Erro ao transferir entre caixinhas: $e');
     }
   }
 

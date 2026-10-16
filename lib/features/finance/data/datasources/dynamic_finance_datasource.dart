@@ -127,12 +127,32 @@ class DynamicFinanceDataSource implements FinanceDataSource {
   Future<List<SavingsVault>> getSavingsVaults() => _active.getSavingsVaults();
 
   @override
-  Future<List<SavingsTransaction>> getVaultTransactions(String vaultId) =>
-      _active.getVaultTransactions(vaultId);
+  Future<List<SavingsTransaction>> getVaultTransactions(String vaultId, {int limit = 50, DateTime? before}) =>
+      _active.getVaultTransactions(vaultId, limit: limit, before: before);
 
   @override
   Future<void> createSavingsVault(SavingsVault vault) =>
       _active.createSavingsVault(vault);
+
+  @override
+  Future<void> updateSavingsVault(SavingsVault vault) => _active.updateSavingsVault(vault);
+
+  @override
+  Future<void> deleteSavingsVault(String vaultId) => _active.deleteSavingsVault(vaultId);
+
+  @override
+  Future<void> transferBetweenVaults({
+    required String fromVaultId,
+    required String toVaultId,
+    required Money amount,
+    required String description,
+  }) =>
+      _active.transferBetweenVaults(
+        fromVaultId: fromVaultId,
+        toVaultId: toVaultId,
+        amount: amount,
+        description: description,
+      );
 
   @override
   Future<void> depositToVault({
