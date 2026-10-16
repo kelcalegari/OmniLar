@@ -18,6 +18,8 @@ Fase 4 (push), mesma branch:
 - **Função `notify`** (`verify_jwt=false`, não recebe dados de quem chama): busca as pendentes, respeita o push desligado por grupo, o horário silencioso (o aviso espera o fim dele; sai na próxima chamada, e o agendador da fase 5 garante uma por hora) e "esconder valores"; 3 ou mais avisos de uma vez viram "Você tem N avisos novos"; apaga token que o FCM diz não valer mais.
 - Ensaio com rollback de 0064, 0065 e 0066 juntas: aviso sem aparelho fica só no sino, com aparelho chama a função, grupo volta a pendente, só a função reserva.
 
+Hospedagem (16/10/2026, branch `feat/hosting`): o site vai para o Firebase Hosting gratuito (plano Spark) em **https://omnilar.web.app**, site `omnilar` do projeto `omnilar-ef002`. `firebase.json` (todas as rotas abrem o app, service worker sem cache) e `.firebaserc` na raiz; `scripts/publicar_web.sh` roda análise e testes, faz o build web e publica. Passos do dono, uma vez: `firebase login` com a conta dona do projeto e `firebase hosting:sites:create omnilar --project omnilar-ef002`. Trocar o endereço depois obriga a reinstalar o ícone no iPhone e reativar as notificações (permissão e token são do endereço).
+
 Fica para as próximas rodadas: aceite de empréstimo (decisão 5a: o banco não aceita o status `pendingAcceptance` hoje e o fechamento teria de ignorar empréstimo não aceito), os gatilhos informativos restantes (despesas, caixinhas, compras, projetos, importação, casa), push (fase 4, depende do projeto Firebase), agendados (fase 5), preferências nos Ajustes (fase 6) e Assistente (fase 7). As transferências do Super Pix já nascem confirmadas no fechamento, então `transfer_pending` e `transfer_confirmed` precisam ser repensados antes.
 
 ## 1. O que existe hoje (conferido em 15/10/2026)

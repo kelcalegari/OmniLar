@@ -1,0 +1,12 @@
+{
+  "projects": {
+    "default": "omnilar-ef002"
+  },
+  "targets": {
+    "omnilar-ef002": {
+      "hosting": {
+        "omnilar": ["omnilar"]
+      }
+    }
+  }
+}

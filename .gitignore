@@ -46,3 +46,6 @@ app.*.map.json
 
 # Configuração local do Claude (servidor de pré-visualização)
 .claude/
+
+# Cache do Firebase CLI
+.firebase/
