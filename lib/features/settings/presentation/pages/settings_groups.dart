@@ -488,6 +488,11 @@ extension _SettingsGroupViews on _SettingsPageState {
     return [
       _panel(
         context,
+        title: 'Notificações',
+        children: const [PushSettingsBlock()],
+      ),
+      _panel(
+        context,
         title: 'Assistente IA',
         children: [
           const AiKeyConfigSheet(embedded: true),
@@ -1042,6 +1047,9 @@ extension _SettingsSearch on _SettingsPageState {
         keywords: const ['importar', 'extrato', 'conciliacao', 'dividir fatura', 'ofx', 'csv'],
         action: () => context.push('/importar'),
       ),
+      option(_SettingsGroup.app, 'Notificações', Icons.notifications_rounded, const [
+        'push', 'avisos', 'alertas', 'iphone', 'tela de inicio',
+      ]),
       option(_SettingsGroup.app, 'Assistente IA', Icons.auto_awesome_rounded, const [
         'inteligencia artificial', 'chave', 'gemini', 'privacidade',
       ]),

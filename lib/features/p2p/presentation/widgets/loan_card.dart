@@ -11,6 +11,21 @@ import '../cubit/p2p_cubit.dart';
 import '../cubit/p2p_state.dart';
 import 'loan_details_sheet.dart';
 
+/// Abre o painel do empréstimo. Lê o empréstimo do estado da página para o
+/// painel refletir pagamentos e ajustes sem precisar ser reaberto.
+Future<void> showLoanDetails(BuildContext context, P2PLoan loan, {required bool isDebtor}) {
+  return showAdaptiveModal(
+    context: context,
+    maxWidth: 580,
+    child: BlocBuilder<P2PCubit, P2PState>(
+      builder: (_, state) {
+        final current = state.allLoans.where((l) => l.id == loan.id).firstOrNull ?? loan;
+        return LoanDetailsSheet(loan: current, isDebtor: isDebtor);
+      },
+    ),
+  );
+}
+
 class LoanCard extends StatelessWidget {
   final P2PLoan loan;
   final bool isDebtor; // true se eu devo, false se me devem
@@ -23,20 +38,7 @@ class LoanCard extends StatelessWidget {
     this.showBothParties = false,
   });
 
-  void _showDetails(BuildContext context) {
-    showAdaptiveModal(
-      context: context,
-      maxWidth: 580,
-      // Lê o empréstimo do estado da página para o painel refletir pagamentos e
-      // ajustes sem precisar ser reaberto.
-      child: BlocBuilder<P2PCubit, P2PState>(
-        builder: (_, state) {
-          final current = state.allLoans.where((l) => l.id == loan.id).firstOrNull ?? loan;
-          return LoanDetailsSheet(loan: current, isDebtor: isDebtor);
-        },
-      ),
-    );
-  }
+  void _showDetails(BuildContext context) => showLoanDetails(context, loan, isDebtor: isDebtor);
 
   @override
   Widget build(BuildContext context) {

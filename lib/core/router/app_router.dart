@@ -25,6 +25,7 @@ import '../../features/projects/presentation/cubit/projects_cubit.dart';
 import '../../features/projects/presentation/pages/projects_hub_page.dart';
 import '../../features/routine/presentation/pages/tasks_and_shopping_page.dart';
 import '../../features/reconciliation/presentation/pages/import_page.dart';
+import '../../features/notifications/presentation/pages/notifications_page.dart';
 
 class GoRouterRefreshStream extends ChangeNotifier {
   late final StreamSubscription<dynamic> _subscription;
@@ -128,6 +129,12 @@ class AppRouter {
         parentNavigatorKey: _rootNavigatorKey,
         builder: (context, state) => const HouseOnboardingPage(),
       ),
+      GoRoute(
+        path: '/notificacoes',
+        name: 'notifications',
+        parentNavigatorKey: _rootNavigatorKey,
+        builder: (context, state) => const NotificationsPage(),
+      ),
       // Shell com as 6 Abas Principais
       StatefulShellRoute.indexedStack(
         builder: (context, state, navigationShell) {
@@ -149,7 +156,10 @@ class AppRouter {
                   GoRoute(
                     path: 'fechamento',
                     name: 'settlement',
-                    builder: (context, state) => const SettlementHubPage(),
+                    // ?ciclo=AAAA-MM-DD abre o fechamento daquele ciclo (notificações)
+                    builder: (context, state) => SettlementHubPage(
+                      initialCycleDate: DateTime.tryParse(state.uri.queryParameters['ciclo'] ?? ''),
+                    ),
                   ),
                   GoRoute(
                     path: 'compras',
@@ -180,7 +190,7 @@ class AppRouter {
               // Aliases para compatibilidade retroativa
               GoRoute(
                 path: '/fechamento',
-                redirect: (context, state) => '/casa/fechamento',
+                redirect: (context, state) => state.uri.replace(path: '/casa/fechamento').toString(),
               ),
               GoRoute(
                 path: '/caixinhas',
@@ -214,6 +224,11 @@ class AppRouter {
                 path: '/tarefas',
                 redirect: (context, state) => '/tarefas-compras?tab=tarefas',
               ),
+              // Deeplink das notificações: abre a aba de tarefas
+              GoRoute(
+                path: '/tarefas/:id',
+                redirect: (context, state) => '/tarefas-compras?tab=tarefas',
+              ),
               GoRoute(
                 path: '/compras',
                 redirect: (context, state) => '/tarefas-compras?tab=compras',
@@ -226,9 +241,15 @@ class AppRouter {
               GoRoute(
                 path: '/agenda',
                 name: 'calendar',
-                pageBuilder: (context, state) => const NoTransitionPage(
-                  child: CalendarPage(),
+                pageBuilder: (context, state) => NoTransitionPage(
+                  child: CalendarPage(openEventId: state.uri.queryParameters['evento']),
                 ),
+              ),
+              // Deeplink das notificações: abre o evento
+              GoRoute(
+                path: '/agenda/evento/:id',
+                redirect: (context, state) =>
+                    Uri(path: '/agenda', queryParameters: {'evento': state.pathParameters['id']}).toString(),
               ),
             ],
           ),
@@ -238,9 +259,15 @@ class AppRouter {
               GoRoute(
                 path: '/pessoal',
                 name: 'p2p',
-                pageBuilder: (context, state) => const NoTransitionPage(
-                  child: P2PPage(),
+                pageBuilder: (context, state) => NoTransitionPage(
+                  child: P2PPage(openLoanId: state.uri.queryParameters['emprestimo']),
                 ),
+              ),
+              // Deeplink das notificações: abre o empréstimo
+              GoRoute(
+                path: '/pessoal/emprestimo/:id',
+                redirect: (context, state) =>
+                    Uri(path: '/pessoal', queryParameters: {'emprestimo': state.pathParameters['id']}).toString(),
               ),
             ],
           ),

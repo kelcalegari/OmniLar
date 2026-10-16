@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:go_router/go_router.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/utils/responsive.dart';
 import '../../../../core/widgets/privacy_toggle.dart';
@@ -11,16 +12,21 @@ import '../widgets/loan_card.dart';
 import 'create_loan_page.dart';
 
 class P2PPage extends StatelessWidget {
-  const P2PPage({super.key});
+  /// Empréstimo a abrir ao entrar (deeplink `/pessoal/emprestimo/{id}`).
+  final String? openLoanId;
+
+  const P2PPage({super.key, this.openLoanId});
 
   @override
   Widget build(BuildContext context) {
-    return const _P2PPageContent();
+    return _P2PPageContent(openLoanId: openLoanId);
   }
 }
 
 class _P2PPageContent extends StatefulWidget {
-  const _P2PPageContent();
+  final String? openLoanId;
+
+  const _P2PPageContent({this.openLoanId});
 
   @override
   State<_P2PPageContent> createState() => _P2PPageContentState();
@@ -32,9 +38,44 @@ class _P2PPageContentState extends State<_P2PPageContent> {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
-        context.read<P2PCubit>().loadLoans();
+        final requested = widget.openLoanId;
+        if (requested != null) {
+          _openRequestedLoan(requested);
+        } else {
+          context.read<P2PCubit>().loadLoans();
+        }
       }
     });
+  }
+
+  @override
+  void didUpdateWidget(covariant _P2PPageContent oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    final requested = widget.openLoanId;
+    if (requested != null && requested != oldWidget.openLoanId) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _openRequestedLoan(requested);
+      });
+    }
+  }
+
+  /// Abre o empréstimo pedido pelo deeplink. Ao fechar, limpa o pedido do
+  /// endereço (trocar o endereço com o painel aberto o fecharia), para a mesma
+  /// notificação poder abrir de novo.
+  Future<void> _openRequestedLoan(String loanId) async {
+    final cubit = context.read<P2PCubit>();
+    await cubit.loadLoans();
+    if (!mounted) return;
+    final state = cubit.state;
+    final loan = state.allLoans.where((l) => l.id == loanId).firstOrNull;
+    if (loan == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Este item não existe mais.')),
+      );
+    } else {
+      await showLoanDetails(context, loan, isDebtor: loan.borrowerMemberId == state.currentUserId);
+    }
+    if (mounted && widget.openLoanId == loanId) context.go('/pessoal');
   }
 
   @override

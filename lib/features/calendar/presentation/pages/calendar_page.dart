@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import '../../../../core/domain/enums/recurrence.dart';
 import '../../../../core/theme/app_colors.dart';
@@ -29,7 +30,10 @@ enum CalendarViewMode {
 }
 
 class CalendarPage extends StatefulWidget {
-  const CalendarPage({super.key});
+  /// Evento a abrir ao entrar (deeplink `/agenda/evento/{id}`).
+  final String? openEventId;
+
+  const CalendarPage({super.key, this.openEventId});
 
   @override
   State<CalendarPage> createState() => _CalendarPageState();
@@ -38,6 +42,47 @@ class CalendarPage extends StatefulWidget {
 class _CalendarPageState extends State<CalendarPage> {
   DateTime _selectedDate = DateTime.now();
   CalendarViewMode _viewMode = CalendarViewMode.month;
+
+  @override
+  void initState() {
+    super.initState();
+    final requested = widget.openEventId;
+    if (requested != null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _openRequestedEvent(requested);
+      });
+    }
+  }
+
+  @override
+  void didUpdateWidget(covariant CalendarPage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    final requested = widget.openEventId;
+    if (requested != null && requested != oldWidget.openEventId) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _openRequestedEvent(requested);
+      });
+    }
+  }
+
+  /// Abre o evento pedido pelo deeplink no dia dele. Ao fechar, limpa o pedido
+  /// do endereço (trocar o endereço com o painel aberto o fecharia), para a
+  /// mesma notificação poder abrir de novo.
+  Future<void> _openRequestedEvent(String eventId) async {
+    final cubit = context.read<CalendarCubit>();
+    await cubit.loadCalendarData();
+    if (!mounted) return;
+    final event = cubit.state.events.where((e) => e.id == eventId).firstOrNull;
+    if (event == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Este item não existe mais.')),
+      );
+    } else {
+      setState(() => _selectedDate = event.startTime);
+      await _showEventDetailsModal(context, event, cubit.state, cubit);
+    }
+    if (mounted && widget.openEventId == eventId) context.go('/agenda');
+  }
 
   bool _isSameDay(DateTime a, DateTime b) {
     return a.year == b.year && a.month == b.month && a.day == b.day;
@@ -140,13 +185,13 @@ class _CalendarPageState extends State<CalendarPage> {
     }
   }
 
-  void _showEventDetailsModal(
+  Future<void> _showEventDetailsModal(
     BuildContext context,
     CalendarEvent event,
     CalendarState state,
     CalendarCubit cubit,
   ) {
-    showAdaptiveModal(
+    return showAdaptiveModal(
       context: context,
       maxWidth: 540,
       child: BlocProvider.value(

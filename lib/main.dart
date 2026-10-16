@@ -3,6 +3,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'package:flutter_web_plugins/url_strategy.dart';
+import 'core/config/firebase_config.dart';
 import 'core/di/service_locator.dart';
 import 'core/router/app_router.dart';
 import 'core/theme/app_theme.dart';
@@ -12,6 +13,9 @@ import 'features/finance/presentation/cubit/finance_cubit.dart';
 import 'features/p2p/presentation/cubit/p2p_cubit.dart';
 import 'features/shopping/presentation/cubit/shopping_cubit.dart';
 import 'features/calendar/presentation/cubit/calendar_cubit.dart';
+import 'features/auth/domain/repositories/auth_repository.dart';
+import 'features/notifications/data/push/push_service.dart';
+import 'features/notifications/presentation/cubit/notifications_cubit.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -22,8 +26,16 @@ void main() async {
   // Inicializa formatação de datas em Português (Brasil)
   await initializeDateFormatting('pt_BR', null);
 
+  // Firebase, só para o push das notificações
+  await FirebaseConfig.initialize();
+
   // Inicializa Injeção de Dependências
   await initServiceLocator();
+
+  // Push: registra o aparelho de quem já permitiu; toque no aviso abre o item
+  final push = sl<PushService>();
+  push.onOpenDeeplink = AppRouter.router.go;
+  push.start(sl<AuthRepository>().authStateChanges);
 
   runApp(const OmniLarApp());
 }
@@ -52,6 +64,9 @@ class OmniLarApp extends StatelessWidget {
         ),
         BlocProvider<CalendarCubit>(
           create: (_) => sl<CalendarCubit>()..loadCalendarData(),
+        ),
+        BlocProvider<NotificationsCubit>(
+          create: (_) => sl<NotificationsCubit>()..load(),
         ),
       ],
       child: BlocBuilder<ThemeCubit, ThemeMode>(

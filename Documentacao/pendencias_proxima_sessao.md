@@ -5,9 +5,9 @@ Reescrito em 13/10/2026, no fim de uma sessão longa de correções, e atualizad
 ## Estado atual
 
 - **Código:** `main` local e `origin/main` sincronizadas, com as decisões de 15/10/2026 (merge da branch `feat/decisoes-recomendadas`). Confira com `git log --oneline -5` e `git status`.
-- **Banco (Supabase `rygxmpwzofgieodvhpcy`, acessível pelo conector do Supabase):** migrations 0001 a 0063 aplicadas (as 0059, 0060 e 0061 em 15/10/2026 e as 0062 e 0063 em 16/10/2026, antes do merge do código: são compatíveis com o app antigo). No histórico de migrations do Supabase constam só as 0022 a 0027 e as 0030 a 0063; as 0001 a 0021, a 0028 e a 0029 foram aplicadas à mão pelo SQL Editor. A próxima migration é a 0064.
-- **Edge Functions:** `capture-read` versão 8 e `assistant` versão 5, ambas com `verify_jwt=true` e exigindo usuário logado que more na casa.
-- **Qualidade:** `flutter analyze` com 0 erros e 0 warnings, e 531 testes passando (15/10/2026). Os testes automatizados rodam só contra os datasources mock (modo demo); nenhum roda contra o Supabase.
+- **Banco (Supabase `rygxmpwzofgieodvhpcy`, acessível pelo conector do Supabase):** migrations 0001 a 0066 aplicadas (as 0059, 0060 e 0061 em 15/10/2026; as 0062 e 0063 em 16/10/2026, antes do merge do código; as 0064 a 0066, das notificações, em 16/10/2026 a partir da branch `feat/notificacoes`, ainda sem merge: o app antigo continua funcionando, só não tem o sino). No histórico de migrations do Supabase constam só as 0022 a 0027 e as 0030 a 0066; as 0001 a 0021, a 0028 e a 0029 foram aplicadas à mão pelo SQL Editor. A próxima migration é a 0067.
+- **Edge Functions:** `capture-read` versão 8 e `assistant` versão 5, ambas com `verify_jwt=true` e exigindo usuário logado que more na casa. `notify` versão 1 (16/10/2026), com `verify_jwt=false`: chamada pelo banco, não recebe dados e envia os push pendentes pelo FCM; precisa dos secrets `FCM_SERVICE_ACCOUNT` e `FCM_PROJECT_ID` (o dono configura; sem eles responde "FCM_SERVICE_ACCOUNT não configurado" e os avisos ficam só no sino).
+- **Qualidade:** `flutter analyze` com 0 erros e 0 warnings, e 544 testes passando (16/10/2026). Os testes automatizados rodam só contra os datasources mock (modo demo); nenhum roda contra o Supabase.
 - **Dados no banco:** em 13/10/2026 o dono apagou todos os dados de teste (todas as tabelas de `public` e as contas de login) e recomeçou do zero; a estrutura, as funções e o histórico de migrations não mudaram. Logo depois foi criada de novo a casa "Nossa Casa", com as contas novas de kelvynn e Cristiano; o dono já lançou algumas despesas de teste nela (entre elas a recorrente "Internet", todo dia 25). Em 14/10/2026 já havia 3 fechamentos de ciclo confirmados e 3 importações feitos pelo dono com sessão real.
 
 ## O ponto mais importante
@@ -260,6 +260,9 @@ Uma linha por migration, para saber onde está cada regra.
 | 0061 | Tempo real para aportes, empréstimos, parcelas e caixinhas |
 | 0062 | Resgate de caixinha devolvido ao ciclo e motivo obrigatório |
 | 0063 | Depósito em caixinha tirando do Caixa do ciclo |
+| 0064 | Base das notificações: colunas novas, tokens, preferências, `enqueue_notification`, tempo real (branch `feat/notificacoes`) |
+| 0065 | Gatilhos das notificações na hora: empréstimos, fechamento, tarefa atribuída e agenda (branch `feat/notificacoes`) |
+| 0066 | Envio do push: `pg_net`, `claim_pending_notifications` e chamada da função `notify` (branch `feat/notificacoes`) |
 
 ## Documentos relacionados
 

@@ -28,6 +28,12 @@ import '../../features/finance/data/repositories/finance_repository_impl.dart';
 import '../../features/finance/domain/repositories/finance_repository.dart';
 import '../../features/finance/domain/services/cycle_funding_estimator.dart';
 import '../../features/finance/presentation/cubit/finance_cubit.dart';
+import '../../features/notifications/data/datasources/dynamic_notifications_datasource.dart';
+import '../../features/notifications/data/datasources/mock_notifications_datasource.dart';
+import '../../features/notifications/data/datasources/notifications_datasource.dart';
+import '../../features/notifications/data/datasources/supabase_notifications_datasource.dart';
+import '../../features/notifications/data/push/push_service.dart';
+import '../../features/notifications/presentation/cubit/notifications_cubit.dart';
 
 import '../../features/p2p/data/datasources/p2p_datasource.dart';
 import '../../features/p2p/data/datasources/mock_p2p_datasource.dart';
@@ -111,6 +117,7 @@ Future<void> initServiceLocator() async {
             if (sl.isRegistered<ShoppingCubit>()) sl<ShoppingCubit>().resetState();
             if (sl.isRegistered<CalendarCubit>()) sl<CalendarCubit>().resetState();
             if (sl.isRegistered<P2PCubit>()) sl<P2PCubit>().resetState();
+            if (sl.isRegistered<NotificationsCubit>()) sl<NotificationsCubit>().resetState();
           } catch (_) {}
         },
       ));
@@ -267,6 +274,25 @@ Future<void> initServiceLocator() async {
   });
   sl.registerLazySingleton<CalendarRepository>(() => CalendarRepositoryImpl(sl(), sl<OfflineSyncService>()));
   sl.registerLazySingleton<CalendarCubit>(() => CalendarCubit(sl(), sl<AuthRepository>()));
+
+  // Notificações (sino): quem grava é o banco; o app lê e marca como lida
+  sl.registerLazySingleton<NotificationsDataSource>(() {
+    final client = SupabaseConfig.client;
+    final mock = MockNotificationsDataSource();
+    if (client != null) {
+      return DynamicNotificationsDataSource(
+        remote: SupabaseNotificationsDataSource(client: client),
+        mock: mock,
+        isDemoMode: isDemoModeActive,
+      );
+    }
+    return mock;
+  });
+  sl.registerLazySingleton<NotificationsCubit>(() => NotificationsCubit(sl(), sl<AuthRepository>()));
+  sl.registerLazySingleton<PushService>(() => PushService(
+        client: SupabaseConfig.client,
+        isDemoMode: isDemoModeActive,
+      ));
 
   // Assistant Feature (Fase 7: Assistente de IA Determinístico)
   sl.registerLazySingleton<AssistantInterpreterService>(() => AssistantInterpreterService(

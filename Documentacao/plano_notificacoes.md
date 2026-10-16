@@ -2,6 +2,24 @@
 
 Escrito em 15/10/2026. Junta o que estava espalhado (a antiga seção 9 da [arquitetura_tecnica.md](arquitetura_tecnica.md), que passou inteira para cá, a Frente 2 do [plano_diretor_unificado.md](plano_diretor_unificado.md) e os avisos citados em cada `modulo_*.md`) e confere com o que existe hoje no banco e no código. **Fica para depois das pendências de [pendencias_proxima_sessao.md](pendencias_proxima_sessao.md)**: quando o dono pedir para começar, este é o ponto de partida. Peça aprovação antes de cada migration, como sempre.
 
+## 0. Andamento (16/10/2026, branch `feat/notificacoes`)
+
+Fases 1 a 3 da seção 8, primeira rodada:
+- **Migration 0064 (base):** colunas novas em `notifications` (`category`, `dedupe_key`, `group_key`, `entity_type`, `entity_id`, `actor_id`, `is_essential`, `push_status`, `pushed_at`), único por (`user_id`, `dedupe_key`), morador só altera `read_at`; tabelas `device_tokens`, `notification_preferences` e `notification_settings` (horário silencioso único, esconder valores, resumo semanal); `enqueue_notification` (tira o autor, quem não mora na casa e quem desligou o grupo, salvo essencial; agrupa rajadas de 10 minutos com `{n}` e `{total}`); `notifications` no tempo real. `push_status` nasce `skipped` sem token de aparelho e `pending` com token.
+- **Migration 0065 (gatilhos na hora):** empréstimos (`loan_created` com agrupamento, `loan_payment`, `loan_paid_off`, `loan_forgiven`, `loan_renegotiated`, `loan_deleted`), fechamento (`settlement_confirmed` com o resumo de cada morador, `settlement_reopened`), `task_assigned` (agrupado) e agenda (`event_invite`, `event_rsvp`, `event_at_risk`, `event_changed`, `event_cancelled`). Os que precisam ver o resto da transação (renegociação, pagamento, fechamento) são gatilhos adiados.
+- **Ensaio com rollback** das duas migrations com os dois moradores reais: destinatários, autor fora, agrupamento, chave de repetição e permissões conferidos. **Ainda não aplicadas no banco.**
+- **App:** sino na Home com a contagem, página `/notificacoes` agrupada por dia, marcar uma ou todas como lidas, tempo real, exemplos no modo demo. Deeplinks: `/pessoal/emprestimo/{id}` e `/agenda/evento/{id}` abrem o item (ou avisam "Este item não existe mais"), `/fechamento?ciclo=` abre o ciclo, `/tarefas/{id}` abre a aba de tarefas (não há tela de detalhe de tarefa).
+
+Fase 4 (push), mesma branch:
+- **Firebase:** projeto `omnilar-ef002`. Configuração pública (Web e Android) em `lib/core/config/firebase_config.dart` e em `web/firebase-messaging-sw.js`; sem o plugin do Gradle nem o `google-services.json` no repositório. A chave da conta de serviço fica só no secret `FCM_SERVICE_ACCOUNT` do Supabase.
+- **App:** `PushService` pede a permissão só pelo toque em "Ativar notificações" (Ajustes › Aplicativo › Notificações), grava o token em `device_tokens` (`web`, `ios_pwa` ou `android`), atualiza o token e o invalida ao sair da conta. No iPhone fora do site instalado mostra o passo a passo; com a permissão negada, o caminho para reativar. Usa o token clássico do FCM (`getToken`, marcado como obsoleto na versão 17 do plugin, que trouxe um modo novo de envio por id de instalação).
+- **Site:** `manifest.json` e `index.html` com nome, descrição e cores do Omni Lar. Os ícones ainda são os padrões do Flutter.
+- **Migration 0066:** `pg_net`; `claim_pending_notifications` (reserva para envio, só `service_role`); notificação com push pendente chama a função `notify` depois do commit; `push_after` para o horário silencioso.
+- **Função `notify`** (`verify_jwt=false`, não recebe dados de quem chama): busca as pendentes, respeita o push desligado por grupo, o horário silencioso (o aviso espera o fim dele; sai na próxima chamada, e o agendador da fase 5 garante uma por hora) e "esconder valores"; 3 ou mais avisos de uma vez viram "Você tem N avisos novos"; apaga token que o FCM diz não valer mais.
+- Ensaio com rollback de 0064, 0065 e 0066 juntas: aviso sem aparelho fica só no sino, com aparelho chama a função, grupo volta a pendente, só a função reserva.
+
+Fica para as próximas rodadas: aceite de empréstimo (decisão 5a: o banco não aceita o status `pendingAcceptance` hoje e o fechamento teria de ignorar empréstimo não aceito), os gatilhos informativos restantes (despesas, caixinhas, compras, projetos, importação, casa), push (fase 4, depende do projeto Firebase), agendados (fase 5), preferências nos Ajustes (fase 6) e Assistente (fase 7). As transferências do Super Pix já nascem confirmadas no fechamento, então `transfer_pending` e `transfer_confirmed` precisam ser repensados antes.
+
 ## 1. O que existe hoje (conferido em 15/10/2026)
 
 | Peça | Situação |
@@ -214,7 +232,7 @@ Coluna **Quando**: *na hora* (gatilho no banco) ou *agendada* (`pg_cron`). Colun
 
 ## 7. Decisões pendentes do dono
 
-**Antes de começar, pergunte se ele segue as recomendações (⭐) ou escolhe outra letra.**
+**Decididas em 16/10/2026: o dono segue todas as recomendações (⭐).** Primeira rodada: fases 1 a 3 da seção 8 (base, sino e gatilhos na hora); o push fica para quando houver um projeto Firebase (ainda não existe).
 
 1. **Aviso de despesa lançada por outro** (`expense_added`)
    - a) ⭐ Ligado, agrupado (várias seguidas da mesma pessoa viram um aviso)

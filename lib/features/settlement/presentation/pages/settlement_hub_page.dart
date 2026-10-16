@@ -28,11 +28,16 @@ import '../../../p2p/presentation/cubit/p2p_cubit.dart';
 class SettlementHubPage extends StatelessWidget {
   final FinancialCycle? initialCycle;
 
-  const SettlementHubPage({super.key, this.initialCycle});
+  /// Um dia do ciclo a abrir (o deeplink `?ciclo=` das notificações).
+  final DateTime? initialCycleDate;
+
+  const SettlementHubPage({super.key, this.initialCycle, this.initialCycleDate});
 
   FinancialCycle _resolveInitialCycle(BuildContext context) {
     if (initialCycle != null) return initialCycle!;
     try {
+      final date = initialCycleDate;
+      if (date != null) return context.read<FinanceCubit>().cycleSchedule.cycleFor(date);
       final financeCycle = context.read<FinanceCubit>().state.currentCycle;
       return financeCycle;
     } catch (_) {

@@ -51,6 +51,9 @@ dependencies:
   mobile_scanner: ^7.4.2
   http: ^1.6.0
   pdf: ^3.13.1
+  firebase_core: ^5.0.0
+  firebase_messaging: ^17.0.0
+  web: ^1.1.1
 
 dev_dependencies:
   flutter_test:

@@ -23,6 +23,7 @@ import '../../../finance/presentation/widgets/folego_gauge_card.dart';
 import '../../../finance/presentation/widgets/cycle_funding_planner_card.dart';
 import '../../../finance/presentation/widgets/expense_timeline_item.dart';
 import '../../../finance/presentation/widgets/expense_detail_desktop_pane.dart';
+import '../../../notifications/presentation/widgets/notification_bell_button.dart';
 import '../widgets/home_skeleton.dart';
 
 class HomePage extends StatefulWidget {
@@ -107,10 +108,7 @@ class _HomePageContentState extends State<_HomePageContent> {
         actions: [
           const ThemeToggleButton(),
           const PrivacyToggleButton(),
-          IconButton(
-            icon: const Icon(Icons.notifications_none_rounded),
-            onPressed: () {},
-          ),
+          const NotificationBellButton(),
         ],
       ),
       body: BlocBuilder<FinanceCubit, FinanceState>(
