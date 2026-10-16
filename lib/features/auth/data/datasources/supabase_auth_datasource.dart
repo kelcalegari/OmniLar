@@ -20,12 +20,17 @@ class SupabaseAuthDataSource implements AuthDataSource {
   bool _isDemoMode = false;
   bool _isRestoringSession = false;
 
+  /// A sessão aberta pelo código de redefinição só vale depois que a nova
+  /// senha for gravada; até lá o app não deve entrar.
+  bool _isResettingPassword = false;
+
   SupabaseAuthDataSource(this._client) {
     _initAuthStateListener();
   }
 
   void _initAuthStateListener() {
     _client.auth.onAuthStateChange.listen((data) async {
+      if (_isResettingPassword) return;
       final user = data.session?.user;
       if (user == null) {
         _currentUser = null;
@@ -225,6 +230,63 @@ class SupabaseAuthDataSource implements AuthDataSource {
       throw AuthFailure(authErrorMessage(e));
     } catch (e) {
       throw AuthFailure('Erro ao reenviar o código: $e');
+    }
+  }
+
+  @override
+  Future<void> requestPasswordReset(String email) async {
+    try {
+      await _client.auth.resetPasswordForEmail(email.trim());
+    } on AuthException catch (e) {
+      throw AuthFailure(authErrorMessage(e));
+    } catch (e) {
+      throw AuthFailure('Erro ao enviar o código: $e');
+    }
+  }
+
+  @override
+  Future<UserProfile> resetPasswordWithCode({
+    required String email,
+    required String code,
+    required String newPassword,
+  }) async {
+    _isDemoMode = false;
+    _isResettingPassword = true;
+    try {
+      final res = await _client.auth.verifyOTP(
+        email: email.trim(),
+        token: code.trim(),
+        type: OtpType.recovery,
+      );
+      final user = res.user;
+      if (user == null) {
+        throw const AuthFailure('Código inválido ou expirado. Peça um novo.');
+      }
+
+      try {
+        await _client.auth.updateUser(UserAttributes(password: newPassword));
+      } on AuthException catch (e) {
+        // Mesma senha de antes: a pessoa já a conhece, então só entra
+        if (e.code != 'same_password') {
+          // O código já foi gasto: fecha a sessão para não entrar sem a senha nova
+          await _client.auth.signOut();
+          throw AuthFailure(
+            '${authErrorMessage(e)} Peça um novo código para tentar de novo.',
+          );
+        }
+      }
+
+      _isResettingPassword = false;
+      await _loadProfileAndHouse(user);
+      return _currentUser ??
+          UserProfile(id: user.id, email: user.email ?? '', fullName: email);
+    } on AuthException catch (e) {
+      throw AuthFailure(authErrorMessage(e));
+    } catch (e) {
+      if (e is Failure) rethrow;
+      throw AuthFailure('Erro ao redefinir a senha: $e');
+    } finally {
+      _isResettingPassword = false;
     }
   }
 

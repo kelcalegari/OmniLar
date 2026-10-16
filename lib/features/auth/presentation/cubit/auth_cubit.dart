@@ -190,6 +190,35 @@ class AuthCubit extends Cubit<AuthState> {
     }
   }
 
+  /// Envia o código de redefinição de senha. Lança a falha para a tela mostrar.
+  Future<void> requestPasswordReset(String email) {
+    return _repository.requestPasswordReset(email);
+  }
+
+  /// Troca a senha com o código e entra. Lança a falha para a tela mostrar,
+  /// sem mexer no estado (o roteador tiraria a pessoa da tela).
+  Future<void> resetPasswordWithCode({
+    required String email,
+    required String code,
+    required String newPassword,
+  }) async {
+    final user = await _repository.resetPasswordWithCode(
+      email: email,
+      code: code,
+      newPassword: newPassword,
+    );
+    final house = _repository.currentHouse;
+    emit(
+      AuthState(
+        status: house != null
+            ? AuthStatus.authenticatedWithHouse
+            : AuthStatus.authenticatedNoHouse,
+        user: user,
+        house: house,
+      ),
+    );
+  }
+
   /// Desiste da confirmação (e-mail errado ou já confirmado pelo link).
   void cancelEmailConfirmation() {
     emit(const AuthState(status: AuthStatus.unauthenticated));

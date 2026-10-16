@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:go_router/go_router.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/widgets/omni_logo.dart';
 import '../cubit/auth_cubit.dart';
@@ -297,6 +298,21 @@ class _LoginPageState extends State<LoginPage> {
                             return null;
                           },
                         ),
+
+                        // Esqueci minha senha (Apenas Entrar)
+                        if (!_isSignUp)
+                          Align(
+                            alignment: Alignment.centerRight,
+                            child: TextButton(
+                              onPressed: isLoading
+                                  ? null
+                                  : () => context.push(
+                                      '/login/recuperar-senha',
+                                      extra: _emailController.text.trim(),
+                                    ),
+                              child: const Text('Esqueci minha senha'),
+                            ),
+                          ),
 
                         // Confirmação da senha (Apenas Cadastro)
                         if (_isSignUp) ...[

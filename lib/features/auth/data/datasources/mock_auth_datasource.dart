@@ -213,6 +213,36 @@ class MockAuthDataSource implements AuthDataSource {
   }
 
   @override
+  Future<void> requestPasswordReset(String email) async {
+    // Como no Supabase: responde igual exista a conta ou não
+    await Future.delayed(const Duration(milliseconds: 100));
+  }
+
+  @override
+  Future<UserProfile> resetPasswordWithCode({
+    required String email,
+    required String code,
+    required String newPassword,
+  }) async {
+    await Future.delayed(const Duration(milliseconds: 200));
+    final normalizedEmail = email.trim().toLowerCase();
+    final user = _users[normalizedEmail];
+    if (user == null || code.trim() != mockConfirmationCode) {
+      throw const AuthFailure('Código inválido ou expirado. Peça um novo.');
+    }
+    _passwords[normalizedEmail] = newPassword;
+    // O código chega por e-mail, então também confirma a conta
+    _unconfirmedEmails.remove(normalizedEmail);
+
+    _currentUser = user;
+    _authStateController.add(_currentUser);
+    final userHouses = await getUserHouses();
+    _currentHouse = userHouses.isNotEmpty ? userHouses.first : null;
+    _houseStateController.add(_currentHouse);
+    return user;
+  }
+
+  @override
   Future<void> signInDemo({required String memberId}) async {
     await Future.delayed(const Duration(milliseconds: 200));
     final user = _users.values.firstWhere(

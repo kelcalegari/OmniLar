@@ -30,6 +30,16 @@ abstract class AuthRepository {
 
   /// Reenvia o código de confirmação do cadastro.
   Future<void> resendSignUpCode(String email);
+
+  /// Envia o código de redefinição de senha. Não revela se o e-mail tem conta.
+  Future<void> requestPasswordReset(String email);
+
+  /// Confere o código de redefinição, grava a nova senha e abre a sessão.
+  Future<UserProfile> resetPasswordWithCode({
+    required String email,
+    required String code,
+    required String newPassword,
+  });
   Future<void> signInDemo({required String memberId});
   Future<void> signOut();
   Future<UserProfile> updateProfile({

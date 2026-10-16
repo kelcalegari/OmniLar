@@ -220,4 +220,56 @@ void main() {
       expect(cubit.state.pendingEmail, 'novo@omnilar.com');
     });
   });
+
+  group('Esqueci minha senha', () {
+    late MockAuthDataSource dataSource;
+    late AuthCubit cubit;
+
+    setUp(() {
+      dataSource = MockAuthDataSource(startAuthenticated: false);
+      cubit = AuthCubit(AuthRepositoryImpl(dataSource));
+    });
+
+    tearDown(() {
+      cubit.close();
+      dataSource.dispose();
+    });
+
+    test('pedir código não revela se o e-mail existe', () async {
+      await cubit.requestPasswordReset('ninguem@omnilar.com');
+      await cubit.requestPasswordReset('carlos@omnilar.com');
+
+      expect(cubit.state.status, AuthStatus.unauthenticated);
+    });
+
+    test('código errado lança falha e continua deslogado', () async {
+      await expectLater(
+        cubit.resetPasswordWithCode(
+          email: 'carlos@omnilar.com',
+          code: '000000',
+          newPassword: 'novaSenha1',
+        ),
+        throwsA(isA<AuthFailure>()),
+      );
+      expect(cubit.state.isAuthenticated, isFalse);
+    });
+
+    test('código certo troca a senha e entra na casa', () async {
+      await cubit.resetPasswordWithCode(
+        email: 'carlos@omnilar.com',
+        code: MockAuthDataSource.mockConfirmationCode,
+        newPassword: 'novaSenha1',
+      );
+
+      expect(cubit.state.status, AuthStatus.authenticatedWithHouse);
+      expect(cubit.state.user?.email, 'carlos@omnilar.com');
+
+      // A senha antiga deixa de valer e a nova passa a valer
+      await cubit.signOut();
+      await cubit.signInWithEmailPassword('carlos@omnilar.com', '123456');
+      expect(cubit.state.status, AuthStatus.failure);
+      await cubit.signInWithEmailPassword('carlos@omnilar.com', 'novaSenha1');
+      expect(cubit.state.status, AuthStatus.authenticatedWithHouse);
+    });
+  });
 }

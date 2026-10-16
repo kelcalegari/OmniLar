@@ -12,6 +12,7 @@ import '../../features/auth/presentation/cubit/auth_cubit.dart';
 import '../../features/auth/presentation/cubit/auth_state.dart';
 import '../../features/auth/presentation/pages/login_page.dart';
 import '../../features/auth/presentation/pages/confirm_email_page.dart';
+import '../../features/auth/presentation/pages/reset_password_page.dart';
 import '../../features/auth/presentation/pages/house_onboarding_page.dart';
 import '../../features/admin/presentation/cubit/account_access_cubit.dart';
 import '../../features/admin/presentation/pages/account_pending_page.dart';
@@ -159,6 +160,14 @@ class AppRouter {
         name: 'login-confirmar-email',
         parentNavigatorKey: _rootNavigatorKey,
         builder: (context, state) => const ConfirmEmailPage(),
+      ),
+      GoRoute(
+        path: '/login/recuperar-senha',
+        name: 'login-recuperar-senha',
+        parentNavigatorKey: _rootNavigatorKey,
+        // O e-mail vai por `extra`, não pela URL
+        builder: (context, state) =>
+            ResetPasswordPage(initialEmail: state.extra as String?),
       ),
       GoRoute(
         path: '/conta/em-analise',

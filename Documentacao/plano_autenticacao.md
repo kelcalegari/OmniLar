@@ -72,7 +72,15 @@ Itens originais da fase:
 - Mensagens de erro do Supabase traduzidas num único ponto (mapear `AuthException.code`).
 - Validação de e-mail com regex simples e confirmação da senha no cadastro.
 
-### Fase 2 — Esqueci minha senha
+### Fase 2 — Esqueci minha senha ✅ código pronto (branch `feat/auth-recuperar-senha`, feita a partir da Fase 1, 16/10/2026)
+
+**O que foi feito:** link "Esqueci minha senha" na aba Entrar → `ResetPasswordPage` em `/login/recuperar-senha` (o e-mail vai por `extra`, nunca pela URL). Passo 1: e-mail → `resetPasswordForEmail`, com mensagem neutra. Passo 2: código + nova senha + confirmação → `verifyOTP(recovery)` e `updateUser(password)` numa só chamada. Enquanto a senha nova não é gravada, o datasource segura o aviso de sessão aberta, para o app não entrar antes da hora. Se a gravação falhar, a sessão é fechada e a tela pede um código novo; se a senha for igual à antiga, a pessoa só entra. Ao terminar, a pessoa já está logada. Há 3 testes de cubit e 1 de widget.
+
+**Depende do template "Reset password" com `{{ .Token }}`.** O template padrão do Supabase manda só um link, que abre o site e ainda não é tratado pelo app. Sem o template novo, este fluxo não funciona.
+
+**Ainda não testado com conta real.**
+
+Itens originais da fase:
 - Link "Esqueci minha senha" na aba Entrar → tela `/login/recuperar-senha`: e-mail → `resetPasswordForEmail` → código → `verifyOTP(type: OtpType.recovery)`, que abre uma sessão → nova senha → `updateUser(password:)`.
 - Não revelar se o e-mail existe: mensagem neutra ("se houver conta, enviamos um código").
 
