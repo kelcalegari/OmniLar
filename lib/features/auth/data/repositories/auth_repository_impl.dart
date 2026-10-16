@@ -104,6 +104,11 @@ class AuthRepositoryImpl implements AuthRepository {
   }
 
   @override
+  Future<UserProfile?> signInWithGoogle() {
+    return _dataSource.signInWithGoogle();
+  }
+
+  @override
   Future<void> signInDemo({required String memberId}) {
     return _dataSource.signInDemo(memberId: memberId);
   }

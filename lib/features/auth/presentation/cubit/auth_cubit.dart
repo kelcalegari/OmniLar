@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../../../core/errors/failures.dart';
 import '../../domain/entities/user_profile.dart';
@@ -254,6 +255,32 @@ class AuthCubit extends Cubit<AuthState> {
   /// Desiste da confirmação (e-mail errado ou já confirmado pelo link).
   void cancelEmailConfirmation() {
     emit(const AuthState(status: AuthStatus.unauthenticated));
+  }
+
+  Future<void> signInWithGoogle() async {
+    emit(state.copyWith(status: AuthStatus.loading, errorMessage: null));
+    try {
+      final user = await _repository.signInWithGoogle();
+      if (user == null) {
+        // Web: a página já está indo para o Google. Celular: a pessoa desistiu.
+        if (!kIsWeb) emit(const AuthState(status: AuthStatus.unauthenticated));
+        return;
+      }
+      final house = _repository.currentHouse;
+      emit(
+        AuthState(
+          status: house != null
+              ? AuthStatus.authenticatedWithHouse
+              : AuthStatus.authenticatedNoHouse,
+          user: user,
+          house: house,
+        ),
+      );
+    } catch (e) {
+      emit(
+        state.copyWith(status: AuthStatus.failure, errorMessage: e.toString()),
+      );
+    }
   }
 
   Future<void> signInDemo({String memberId = 'member_carlos'}) async {

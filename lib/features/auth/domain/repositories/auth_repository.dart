@@ -59,6 +59,10 @@ abstract class AuthRepository {
   /// Confere um código da troca de e-mail. Devolve `true` quando a troca
   /// terminou e `false` quando ainda falta o código do outro endereço.
   Future<bool> confirmEmailChange({required String email, required String code});
+  /// Entra com a conta Google. Na web a página vai para o Google e volta
+  /// logada, então devolve `null`; no celular devolve o usuário, ou `null`
+  /// se a pessoa desistiu.
+  Future<UserProfile?> signInWithGoogle();
   Future<void> signInDemo({required String memberId});
   Future<void> signOut();
   Future<UserProfile> updateProfile({

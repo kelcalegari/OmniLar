@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
+import '../../../../core/network/google_auth_config.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/widgets/omni_logo.dart';
 import '../cubit/auth_cubit.dart';
@@ -11,7 +12,10 @@ import '../../../shopping/presentation/cubit/shopping_cubit.dart';
 import '../../../calendar/presentation/cubit/calendar_cubit.dart';
 
 class LoginPage extends StatefulWidget {
-  const LoginPage({super.key});
+  /// Mostra o "Continuar com Google". Sem valor, segue a configuração do app.
+  final bool? showGoogleSignIn;
+
+  const LoginPage({super.key, this.showGoogleSignIn});
 
   @override
   State<LoginPage> createState() => _LoginPageState();
@@ -371,6 +375,39 @@ class _LoginPageState extends State<LoginPage> {
                                   ),
                                 ),
                         ),
+                        // Continuar com Google
+                        if (widget.showGoogleSignIn ??
+                            GoogleAuthConfig.isAvailable) ...[
+                          const SizedBox(height: 12),
+                          OutlinedButton.icon(
+                            onPressed: isLoading
+                                ? null
+                                : () => context
+                                      .read<AuthCubit>()
+                                      .signInWithGoogle(),
+                            icon: const Text(
+                              'G',
+                              style: TextStyle(
+                                fontSize: 18,
+                                fontWeight: FontWeight.bold,
+                                color: Color(0xFF4285F4),
+                              ),
+                            ),
+                            label: const Text(
+                              'Continuar com Google',
+                              style: TextStyle(fontWeight: FontWeight.w600),
+                            ),
+                            style: OutlinedButton.styleFrom(
+                              padding: const EdgeInsets.symmetric(vertical: 14),
+                              side: BorderSide(
+                                color: Colors.grey.withValues(alpha: 0.4),
+                              ),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                            ),
+                          ),
+                        ],
                         const SizedBox(height: 24),
 
                         // Divisor Demonstração

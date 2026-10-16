@@ -303,6 +303,13 @@ class MockAuthDataSource implements AuthDataSource {
   }
 
   @override
+  Future<UserProfile?> signInWithGoogle() async {
+    throw const AuthFailure(
+      'Entrar com Google não está disponível no modo demonstração.',
+    );
+  }
+
+  @override
   Future<void> signInDemo({required String memberId}) async {
     await Future.delayed(const Duration(milliseconds: 200));
     final user = _users.values.firstWhere(

@@ -2,7 +2,9 @@ import '../../../../core/domain/value_objects/cycle_schedule.dart';
 import 'dart:async';
 import 'dart:math';
 import 'package:flutter/foundation.dart';
+import 'package:google_sign_in/google_sign_in.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import '../../../../core/network/google_auth_config.dart';
 import '../../../../core/errors/failures.dart';
 import '../../domain/entities/user_profile.dart';
 import '../../domain/entities/house.dart';
@@ -393,6 +395,76 @@ class SupabaseAuthDataSource implements AuthDataSource {
     }
   }
 
+  bool _googleInitialized = false;
+
+  @override
+  Future<UserProfile?> signInWithGoogle() async {
+    _isDemoMode = false;
+    try {
+      if (kIsWeb) {
+        // Volta para /login; o Supabase troca o código pela sessão ao abrir
+        await _client.auth.signInWithOAuth(
+          OAuthProvider.google,
+          redirectTo: '${Uri.base.origin}/login',
+        );
+        return null;
+      }
+
+      final google = GoogleSignIn.instance;
+      if (!_googleInitialized) {
+        await google.initialize(
+          serverClientId: GoogleAuthConfig.webClientId,
+          clientId: defaultTargetPlatform == TargetPlatform.iOS
+              ? GoogleAuthConfig.iosClientId
+              : null,
+        );
+        _googleInitialized = true;
+      }
+
+      final GoogleSignInAccount account;
+      try {
+        account = await google.authenticate();
+      } on GoogleSignInException catch (e) {
+        if (e.code == GoogleSignInExceptionCode.canceled ||
+            e.code == GoogleSignInExceptionCode.interrupted) {
+          return null;
+        }
+        throw AuthFailure('Não foi possível entrar com o Google (${e.code.name}).');
+      }
+
+      final idToken = account.authentication.idToken;
+      if (idToken == null) {
+        throw const AuthFailure('O Google não devolveu a identificação da conta.');
+      }
+      final authorization = await account.authorizationClient
+          .authorizationForScopes(const ['email', 'profile']);
+
+      final res = await _client.auth.signInWithIdToken(
+        provider: OAuthProvider.google,
+        idToken: idToken,
+        accessToken: authorization?.accessToken,
+      );
+      final user = res.user;
+      if (user == null) {
+        throw const AuthFailure('Falha ao entrar com o Google.');
+      }
+      await _loadProfileAndHouse(user);
+      return _currentUser ??
+          UserProfile(
+            id: user.id,
+            email: user.email ?? '',
+            fullName: user.userMetadata?['full_name'] as String? ??
+                user.email ??
+                'Usuário',
+          );
+    } on AuthException catch (e) {
+      throw AuthFailure(authErrorMessage(e));
+    } catch (e) {
+      if (e is Failure) rethrow;
+      throw AuthFailure('Erro ao entrar com o Google: $e');
+    }
+  }
+
   @override
   Future<void> signInDemo({required String memberId}) async {
     _isDemoMode = true;
@@ -423,6 +495,12 @@ class SupabaseAuthDataSource implements AuthDataSource {
   Future<void> signOut() async {
     _isDemoMode = false;
     await _client.auth.signOut();
+    // No celular, esquece a conta Google para poder escolher outra
+    if (_googleInitialized) {
+      try {
+        await GoogleSignIn.instance.signOut();
+      } catch (_) {}
+    }
     _currentUser = null;
     _currentHouse = null;
     _authStateController.add(null);

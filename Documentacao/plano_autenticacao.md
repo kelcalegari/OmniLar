@@ -106,7 +106,30 @@ Itens originais da fase:
 - **Alterar e-mail:** tela própria → `updateUser(email:)` → códigos (no e-mail novo e, com a troca segura, também no antigo) → `verifyOTP(type: OtpType.emailChange)`. Mostrar "aguardando confirmação de <novo>" com reenviar/cancelar.
 - **Migration 0071:** gatilho `AFTER UPDATE OF email ON auth.users` que copia o e-mail para `profiles.email`. Será validada com rollback antes de aplicar e só aplicada com o OK do dono.
 
-### Fase 4 — Entrar com Google
+### Fase 4 — Entrar com Google ✅ código pronto (branch `feat/auth-google`, feita a partir da Fase 3, 16/10/2026)
+
+**O que foi feito:**
+- Botão "Continuar com Google" na tela de login. Fica escondido até ser ligado (`GoogleAuthConfig`, em `lib/core/network/google_auth_config.dart`).
+- **Web:** `signInWithOAuth` volta para `/login`; o Supabase troca o código pela sessão ao abrir a página.
+- **Android/iOS:** `google_sign_in` 7 → `idToken` (e `accessToken`) → `signInWithIdToken`. Desistir na tela do Google só volta ao login.
+- Sair também esquece a conta Google no celular.
+- Os testes cobrem o botão escondido e a falha mostrada. O build da web com o botão ligado compila.
+- A migration 0071 foi aplicada em 16/10/2026.
+
+**Para ligar (dono):**
+1. Google Cloud → APIs e serviços → Tela de consentimento OAuth (nome Omni Lar, e-mail de suporte, domínio `omnilar.web.app`).
+2. Credenciais → criar cliente OAuth **Aplicativo da Web**. Origem: `https://omnilar.web.app`. URI de redirecionamento: `https://rygxmpwzofgieodvhpcy.supabase.co/auth/v1/callback`.
+3. Criar cliente **Android**: pacote `br.com.omnilar.app` + SHA-1 de debug e de release (`keytool -list -v -keystore ...`).
+4. (Se for publicar no iOS) criar cliente **iOS** e pôr o URL scheme invertido do ID iOS em `ios/Runner/Info.plist` (`CFBundleURLTypes`).
+5. Supabase → Authentication → Providers → Google: ligar, colar o Client ID/Secret do cliente Web e, em "Authorized Client IDs", os IDs Web, Android e iOS. No iOS, ligar também "Skip nonce checks" (o token nativo do iOS vem com nonce).
+6. Supabase → URL Configuration → Redirect URLs: `https://omnilar.web.app/**` e o endereço local de desenvolvimento.
+7. Build: `--dart-define=GOOGLE_SIGN_IN=true` (web) e, no celular, também `--dart-define=GOOGLE_WEB_CLIENT_ID=...` e, no iOS, `--dart-define=GOOGLE_IOS_CLIENT_ID=...`. Os IDs não são segredo: depois de criados, podem virar o valor padrão no código, como a chave pública do Supabase.
+
+**Fica para depois:** "Criar senha" para quem entrou só pelo Google (hoje o painel só explica que a conta não tem senha).
+
+**Ainda não testado com conta real.**
+
+Itens originais da fase:
 - Botão "Continuar com Google" na tela de login e na landing da web.
 - **Web:** `signInWithOAuth(OAuthProvider.google, redirectTo: <origem atual>)`. O PKCE troca o código na volta ao site; conferir que o router espera a sessão (splash) em vez de mandar para `/landing`.
 - **Android/iOS:** pacote `google_sign_in` → `idToken`/`accessToken` → `auth.signInWithIdToken(provider: OAuthProvider.google, ...)`. iOS: `GIDClientID` e o URL scheme invertido no `Info.plist`.
