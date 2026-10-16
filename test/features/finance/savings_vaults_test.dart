@@ -121,6 +121,57 @@ void main() {
       expect(await ds.getVaultReturnsForCycle(cycle.next(1)), const Money.zero());
     });
 
+    test('Depósito tirado do Caixa do ciclo desfaz a devolução', () async {
+      final ds = MockFinanceDataSource();
+      final before = await ds.getCycleSummary(cycle);
+
+      await ds.withdrawFromVault(
+        vaultId: 'vault_reserva',
+        memberId: 'member_carlos',
+        amount: const Money(15000),
+        description: 'Reforçar o Caixa do ciclo',
+        returnToCycleStart: cycle.startDate,
+      );
+      await ds.depositToVault(
+        vaultId: 'vault_viagem',
+        memberId: 'member_carlos',
+        amount: const Money(5000),
+        description: 'Devolução errada',
+        fromCycleStart: cycle.startDate,
+      );
+
+      expect(await ds.getVaultReturnsForCycle(cycle), const Money(10000));
+      expect((await ds.getCycleSummary(cycle)).folego, before.folego + const Money(10000));
+      final history = await ds.getVaultTransactions('vault_viagem');
+      expect(history.first.takenFromCycle, isTrue);
+
+      // Do Caixa só volta o que as caixinhas devolveram
+      final viagem = (await ds.getSavingsVaults()).firstWhere((v) => v.id == 'vault_viagem').currentBalance;
+      await expectLater(
+        ds.depositToVault(
+          vaultId: 'vault_viagem',
+          memberId: 'member_carlos',
+          amount: const Money(10001),
+          description: 'Demais',
+          fromCycleStart: cycle.startDate,
+        ),
+        throwsA(isA<ServerFailure>()),
+      );
+      expect(
+        (await ds.getSavingsVaults()).firstWhere((v) => v.id == 'vault_viagem').currentBalance,
+        viagem,
+      );
+
+      // Depósito de fora não mexe no Caixa do ciclo
+      await ds.depositToVault(
+        vaultId: 'vault_viagem',
+        memberId: 'member_carlos',
+        amount: const Money(7000),
+        description: 'Aporte',
+      );
+      expect(await ds.getVaultReturnsForCycle(cycle), const Money(10000));
+    });
+
     test('Resgate sem motivo é recusado e não mexe no saldo', () async {
       final ds = MockFinanceDataSource();
       final balance = (await ds.getSavingsVaults()).firstWhere((v) => v.id == 'vault_reserva').currentBalance;
@@ -183,6 +234,33 @@ void main() {
       expect(find.text('Quem está guardando?'), findsOneWidget);
       expect(find.text('Valor a Guardar:'), findsOneWidget);
       expect(find.text('Confirmar e Guardar'), findsOneWidget);
+
+      await tester.tap(find.text('Cancelar'));
+      await tester.pumpAndSettle();
+    });
+
+    testWidgets('Guardar oferece tirar do Caixa do ciclo quando houve devolução', (tester) async {
+      final cubit = sl<FinanceCubit>();
+      await cubit.loadCycleData();
+      final vault = cubit.state.savingsVaults.first;
+      await tester.runAsync(() => cubit.withdrawFromVault(
+            vaultId: vault.id,
+            memberId: 'member_carlos',
+            amount: const Money(3000),
+            description: 'Reforçar o Caixa do ciclo',
+            returnToCycleStart: cubit.cycleSchedule.cycleFor(DateTime.now()).startDate,
+          ));
+
+      await tester.pumpWidget(buildTestWidget());
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('Guardar').first);
+      await tester.pumpAndSettle();
+
+      expect(find.text('De fora'), findsOneWidget);
+      await tester.tap(find.text('Do Caixa do ciclo'));
+      await tester.pumpAndSettle();
+      expect(find.textContaining('Disponível para voltar'), findsOneWidget);
 
       await tester.tap(find.text('Cancelar'));
       await tester.pumpAndSettle();

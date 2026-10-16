@@ -140,12 +140,14 @@ class DynamicFinanceDataSource implements FinanceDataSource {
     required String memberId,
     required Money amount,
     required String description,
+    DateTime? fromCycleStart,
   }) =>
       _active.depositToVault(
         vaultId: vaultId,
         memberId: memberId,
         amount: amount,
         description: description,
+        fromCycleStart: fromCycleStart,
       );
 
   @override

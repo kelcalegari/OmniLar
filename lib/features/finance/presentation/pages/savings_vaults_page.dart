@@ -153,7 +153,7 @@ class SavingsVaultsPage extends StatelessWidget {
     );
   }
 
-  void _showDepositDialog(BuildContext context, FinanceCubit cubit, SavingsVault vault, List<dynamic> members) {
+  Future<void> _showDepositDialog(BuildContext context, FinanceCubit cubit, SavingsVault vault, List<dynamic> members) async {
     int depositCents = 10000; // R$ 100,00 padrão
     final authRepo = sl<AuthRepository>();
     final defaultId = authRepo.isDemoMode ? 'member_carlos' : (authRepo.currentUser?.id ?? '');
@@ -161,6 +161,15 @@ class SavingsVaultsPage extends StatelessWidget {
     String selectedMemberId =
         authRepo.isDemoMode && members.isNotEmpty ? members.first.id as String : defaultId;
     final descController = TextEditingController(text: 'Aporte para ${vault.name}');
+
+    // Do Caixa do ciclo em andamento só volta o que as caixinhas devolveram a ele
+    final currentCycle = cubit.cycleSchedule.cycleFor(DateTime.now());
+    var availableFromCycle = const Money.zero();
+    try {
+      availableFromCycle = await sl<FinanceRepository>().getVaultReturnsForCycle(currentCycle);
+    } catch (_) {}
+    var fromCycle = false;
+    if (!context.mounted) return;
 
     showDialog(
       context: context,
@@ -191,6 +200,27 @@ class SavingsVaultsPage extends StatelessWidget {
                   ),
                   const SizedBox(height: 16),
                   ],
+                  if (availableFromCycle.isPositive) ...[
+                    const Text('De onde vem o dinheiro?', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.grey)),
+                    const SizedBox(height: 6),
+                    SegmentedButton<bool>(
+                      segments: const [
+                        ButtonSegment(value: false, label: Text('De fora')),
+                        ButtonSegment(value: true, label: Text('Do Caixa do ciclo')),
+                      ],
+                      selected: {fromCycle},
+                      onSelectionChanged: (s) => setDialogState(() => fromCycle = s.first),
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      fromCycle
+                          ? 'O valor sai do Caixa do ciclo ${currentCycle.label}. Disponível para voltar: '
+                              '${availableFromCycle.format()} (o que as caixinhas devolveram ao ciclo).'
+                          : 'Dinheiro novo: o Caixa do ciclo não muda.',
+                      style: const TextStyle(fontSize: 11, color: Colors.grey),
+                    ),
+                    const SizedBox(height: 16),
+                  ],
                   const Text('Valor a Guardar:', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.grey)),
                   const SizedBox(height: 6),
                   MoneyInputField(
@@ -220,6 +250,16 @@ class SavingsVaultsPage extends StatelessWidget {
               FilledButton(
                 onPressed: () async {
                   if (depositCents <= 0) return;
+                  if (fromCycle && depositCents > availableFromCycle.cents) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text(
+                          'Do Caixa do ciclo só podem voltar ${availableFromCycle.format()}.',
+                        ),
+                      ),
+                    );
+                    return;
+                  }
 
                   final messenger = ScaffoldMessenger.of(context);
                   Navigator.pop(dialogCtx);
@@ -228,11 +268,14 @@ class SavingsVaultsPage extends StatelessWidget {
                     memberId: selectedMemberId,
                     amount: Money(depositCents),
                     description: descController.text.trim(),
+                    fromCycleStart: fromCycle ? currentCycle.startDate : null,
                   );
                   showSaveFeedback(
                     messenger,
                     ok: ok,
-                    success: 'Guardado ${Money(depositCents).format()} na caixinha! 🔒',
+                    success: fromCycle
+                        ? '${Money(depositCents).format()} voltou do Caixa do ciclo para a caixinha! 🔒'
+                        : 'Guardado ${Money(depositCents).format()} na caixinha! 🔒',
                     failure: cubit.state.errorMessage,
                   );
                 },
@@ -302,7 +345,7 @@ class SavingsVaultsPage extends StatelessWidget {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              '${t.isDeposit ? 'Entrada' : t.returnedToCycle ? 'Devolvido ao ciclo' : 'Saída'} • ${memberName(t.memberId)}',
+                              '${t.takenFromCycle ? 'Veio do Caixa do ciclo' : t.isDeposit ? 'Entrada' : t.returnedToCycle ? 'Devolvido ao ciclo' : 'Saída'} • ${memberName(t.memberId)}',
                               style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
                             ),
                             if (t.description.isNotEmpty)

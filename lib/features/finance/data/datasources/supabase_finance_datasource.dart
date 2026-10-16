@@ -383,12 +383,15 @@ class SupabaseFinanceDataSource implements FinanceDataSource {
       String dateOnly(DateTime d) => d.toIso8601String().split('T')[0];
       final rows = await client
           .from('savings_transactions')
-          .select('amount_cents')
+          .select('amount_cents, type')
           .eq('house_id', _houseId)
-          .eq('type', 'withdraw')
           .gte('cycle_start_date', dateOnly(cycle.startDate))
           .lte('cycle_start_date', dateOnly(cycle.endDate));
-      return Money(rows.fold<int>(0, (acc, r) => acc + (r['amount_cents'] as num).toInt()));
+      // Depósito tirado do Caixa do ciclo desfaz parte do que as caixinhas devolveram
+      return Money(rows.fold<int>(0, (acc, r) {
+        final cents = (r['amount_cents'] as num).toInt();
+        return acc + (r['type'] == 'withdraw' ? cents : -cents);
+      }));
     } catch (_) {
       return const Money.zero();
     }
@@ -1040,6 +1043,7 @@ class SupabaseFinanceDataSource implements FinanceDataSource {
     required String memberId,
     required Money amount,
     required String description,
+    DateTime? fromCycleStart,
   }) async {
     try {
       // Saldo e extrato mudam juntos no banco, com a caixinha travada
@@ -1048,6 +1052,8 @@ class SupabaseFinanceDataSource implements FinanceDataSource {
         'p_type': 'deposit',
         'p_amount_cents': amount.cents,
         'p_description': description,
+        if (fromCycleStart != null)
+          'p_cycle_start_date': fromCycleStart.toIso8601String().split('T')[0],
       });
     } catch (e) {
       throw ServerFailure('Erro ao depositar na caixinha: $e');

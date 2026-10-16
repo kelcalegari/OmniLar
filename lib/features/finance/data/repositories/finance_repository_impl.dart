@@ -133,6 +133,10 @@ class FinanceRepositoryImpl implements FinanceRepository {
       _dataSource.getVaultTransactions(vaultId);
 
   @override
+  Future<Money> getVaultReturnsForCycle(FinancialCycle cycle) =>
+      _dataSource.getVaultReturnsForCycle(cycle);
+
+  @override
   Future<void> createSavingsVault(SavingsVault vault) => _dataSource.createSavingsVault(vault);
 
   @override
@@ -141,12 +145,14 @@ class FinanceRepositoryImpl implements FinanceRepository {
     required String memberId,
     required Money amount,
     required String description,
+    DateTime? fromCycleStart,
   }) =>
       _dataSource.depositToVault(
         vaultId: vaultId,
         memberId: memberId,
         amount: amount,
         description: description,
+        fromCycleStart: fromCycleStart,
       );
 
   @override

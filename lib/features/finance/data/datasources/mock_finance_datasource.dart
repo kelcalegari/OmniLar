@@ -413,8 +413,8 @@ class MockFinanceDataSource implements FinanceDataSource {
   @override
   Future<Money> getVaultReturnsForCycle(FinancialCycle cycle) async {
     final cents = _savingsTransactions
-        .where((t) => t.returnedToCycle && cycle.contains(t.cycleStartDate!))
-        .fold<int>(0, (acc, t) => acc + t.amount.cents);
+        .where((t) => t.cycleStartDate != null && cycle.contains(t.cycleStartDate!))
+        .fold<int>(0, (acc, t) => acc + (t.isWithdraw ? t.amount.cents : -t.amount.cents));
     return Money(cents);
   }
 
@@ -825,9 +825,21 @@ class MockFinanceDataSource implements FinanceDataSource {
     required String memberId,
     required Money amount,
     required String description,
+    DateTime? fromCycleStart,
   }) async {
     final index = _savingsVaults.indexWhere((v) => v.id == vaultId);
     if (index != -1) {
+      // Como no banco: do Caixa do ciclo só sai o que as caixinhas devolveram a ele
+      if (fromCycleStart != null) {
+        final available = await getVaultReturnsForCycle(
+          FinancialCycle(start: fromCycleStart, end: fromCycleStart),
+        );
+        if (amount.cents > available.cents) {
+          throw ServerFailure(
+            'O Caixa do ciclo só tem ${available.format()} vindo das caixinhas para devolver.',
+          );
+        }
+      }
       final current = _savingsVaults[index];
       _savingsVaults[index] = current.copyWith(
         currentBalance: current.currentBalance + amount,
@@ -840,6 +852,7 @@ class MockFinanceDataSource implements FinanceDataSource {
         type: 'deposit',
         description: description,
         date: DateTime.now(),
+        cycleStartDate: fromCycleStart,
       ));
     }
   }

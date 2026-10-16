@@ -655,6 +655,7 @@ class FinanceCubit extends Cubit<FinanceState> {
     required String memberId,
     required Money amount,
     required String description,
+    DateTime? fromCycleStart,
   }) async {
     try {
       await _repository.depositToVault(
@@ -662,6 +663,7 @@ class FinanceCubit extends Cubit<FinanceState> {
         memberId: memberId,
         amount: amount,
         description: description,
+        fromCycleStart: fromCycleStart,
       );
       await loadCycleData(cycle: state.currentCycle);
       return true;

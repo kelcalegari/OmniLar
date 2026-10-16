@@ -30,7 +30,8 @@ abstract class FinanceDataSource {
   /// anterior deixou mais os resgates de caixinha devolvidos ao ciclo.
   Future<Money> getOpeningBalance(FinancialCycle cycle);
 
-  /// Resgates de caixinha devolvidos ao Caixa deste ciclo.
+  /// Resgates de caixinha devolvidos ao Caixa deste ciclo, menos os depósitos
+  /// em caixinha tirados dele.
   Future<Money> getVaultReturnsForCycle(FinancialCycle cycle);
   Future<FinancialCycleSummary> getCycleSummary(FinancialCycle cycle);
 
@@ -75,6 +76,7 @@ abstract class FinanceDataSource {
     required String memberId,
     required Money amount,
     required String description,
+    DateTime? fromCycleStart,
   });
   Future<void> withdrawFromVault({
     required String vaultId,
