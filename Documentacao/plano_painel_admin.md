@@ -1,6 +1,8 @@
 # Omni Lar — painel administrativo
 
-Ideia registrada em 15/10/2026. Um painel para o dono do Omni Lar (não o dono de uma casa) gerenciar todas as contas do app: aprovar contas novas, marcar contas como Premium ou Free e acompanhar o uso. **Fica para depois das pendências de [pendencias_proxima_sessao.md](pendencias_proxima_sessao.md) e do [plano_notificacoes.md](plano_notificacoes.md).** Peça aprovação antes de cada migration, como sempre.
+Ideia registrada em 15/10/2026 e revista em 16/10/2026. Um painel para o dono do Omni Lar (não o dono de uma casa) gerenciar todas as contas do app: aprovar contas novas, marcar contas como Premium ou Free e acompanhar o uso. Peça aprovação antes de cada migration, como sempre.
+
+**Prioridade (revisão de 16/10/2026):** o site agora está aberto em https://omnilar.web.app e qualquer pessoa consegue se cadastrar. Por isso a **fase A** (base, aprovação de contas e painel parte 1, seção 10) deixa de esperar as outras pendências. A **fase B** (planos Free e Premium) continua para depois, quando houver uso que justifique: hoje são 2 contas e 1 casa.
 
 ## 1. Objetivo
 
@@ -11,15 +13,21 @@ Ideia registrada em 15/10/2026. Um painel para o dono do Omni Lar (não o dono d
 
 Fora do escopo agora: cobrança automática (cartão, Pix recorrente, loja), que pode vir depois em cima do mesmo campo de plano.
 
-## 2. O que já existe (conferido em 15/10/2026)
+## 2. O que já existe (conferido em 16/10/2026)
 
 | Peça | Situação |
 |---|---|
-| Contas | Supabase Auth (`auth.users`) e `profiles` (`id`, `full_name`, `email`, `phone`, `avatar_url`, `pix_key`, `created_at`). O gatilho `on_auth_user_created` (`handle_new_user`) cria o perfil ao cadastrar |
+| Contas | Supabase Auth (`auth.users`) e `profiles` (`id`, `full_name`, `email`, `phone`, `avatar_url`, `pix_key`, `created_at`). O gatilho `on_auth_user_created` (`handle_new_user`) cria o perfil ao cadastrar. O último acesso fica em `auth.users.last_sign_in_at`, que o app não lê |
 | Papéis | Só dentro da casa (`house_members.role`: dono, administrador, morador). **Não existe** papel de administrador do app |
-| Uso de IA | Tabela `ai_usage` e cota diária de **50 leituras por casa** (`DEFAULT_DAILY_QUOTA_PER_HOUSE` em `supabase/functions/_shared/usage.ts`); quem informa a própria chave de IA (BYOK) não tem limite |
+| Entrar numa casa | Pelas funções `create_house_with_owner` e `join_house_with_invite`, **mas também direto nas tabelas**: a regra `houses_insert_authenticated` deixa qualquer usuário logado inserir em `houses`, e `house_members_insert_owner_or_admin` deixa o dono ou administrador de uma casa incluir alguém em `house_members` |
+| `profiles` | A pessoa lê o próprio perfil e o dos moradores das casas dela, e altera o próprio perfil (`profiles_update_own`) |
+| Uso de IA | Tabela `ai_usage` e cota diária de **50 leituras por casa** (`DEFAULT_DAILY_QUOTA_PER_HOUSE` em `supabase/functions/_shared/usage.ts`), contada nas Edge Functions `assistant`, `capture-read` e `import-read`; quem informa a própria chave de IA (BYOK) não tem limite. As funções conferem a casa, não o status da conta |
+| Notificações | Existem (migrations 0064 a 0066): `enqueue_notification`, sino no app, push pelo FCM. As categorias aceitas são `casa`, `despesas`, `fechamento`, `emprestimos`, `caixinhas`, `compras`, `tarefas`, `agenda`, `projetos` e `assistente`; **não há categoria de conta** |
+| E-mail | Só os do Supabase Auth (confirmação de cadastro, link mágico, troca de senha). Não há serviço de e-mail para avisos do app |
+| Exclusão de conta | **Não existe** a função `delete-account` (as Edge Functions são `assistant`, `capture-read`, `import-read` e `notify`) |
 | Auditoria | Tabela `audit_log`, com gatilhos nas tabelas financeiras |
 | Plano ou status da conta | Não existe |
+| Site | Público em https://omnilar.web.app (Firebase Hosting) |
 
 ## 3. Quem é administrador do app
 
@@ -27,16 +35,17 @@ Fora do escopo agora: cobrança automática (cartão, Pix recorrente, loja), que
 - **Função `is_platform_admin()`** (`security definer`) usada pelas regras de acesso e pelas funções do painel.
 - **Ninguém do app vira administrador sozinho**: não há caminho na tela para se incluir, e a tabela não aceita escrita direta.
 - **A chave de serviço do Supabase nunca vai para o app.** Toda ação do painel é uma função do banco ou uma Edge Function que confere `is_platform_admin()`.
+- **Ser administrador do app não abre os dados das casas**: `is_platform_admin()` não entra nas regras de acesso das tabelas financeiras.
 
 ## 4. Status da conta e aprovação
 
 ### 4.1. Estados
 | Status | O que a pessoa consegue fazer |
 |---|---|
-| `pending` | Entra no app e vê a tela "Sua conta está em análise" (com o e-mail e um botão de sair). Não cria casa nem entra em casa |
+| `pending` | Entra no app e vê a tela "Sua conta está em análise" (com o e-mail e um botão de sair). Não cria casa, não entra em casa e não usa a IA |
 | `active` | Usa o app normalmente |
 | `rejected` | Vê "Seu acesso não foi aprovado" e o motivo, se houver |
-| `suspended` | Vê "Sua conta está suspensa"; os dados continuam guardados. As casas onde ela é moradora continuam funcionando para os outros |
+| `suspended` | Vê "Sua conta está suspensa"; os dados continuam guardados. As casas onde ela é moradora continuam funcionando para os outros. Ela não usa a IA nem entra em outra casa |
 
 ### 4.2. Parâmetros (tabela `app_settings`, uma linha só)
 - **`require_approval`** (liga/desliga): ligado, conta nova nasce `pending`; desligado, nasce `active`.
@@ -46,17 +55,21 @@ Fora do escopo agora: cobrança automática (cartão, Pix recorrente, loja), que
 - Mudar um parâmetro vale para as contas novas; as que já estão esperando continuam esperando (o painel tem "Aprovar todas as pendentes").
 
 ### 4.3. Onde a regra é aplicada
-- O `handle_new_user` passa a gravar o status inicial conforme os parâmetros.
-- **No banco, não só na tela**: as funções e regras de acesso que criam casa (`create_house_with_owner`) e entram em casa (`join_house_with_invite`) recusam conta que não está `active`. Uma função `is_account_active()` concentra a regra.
+Uma função `is_account_active(user_id)` concentra a regra, e ela vale **no banco, não só na tela**, em todos os caminhos:
+- **Status inicial**: o `handle_new_user` grava o status conforme os parâmetros.
+- **Criar casa**: `create_house_with_owner` **e** a regra `houses_insert_authenticated` (inserção direta em `houses`) recusam conta que não está `active`.
+- **Entrar em casa**: `join_house_with_invite` **e** a regra `house_members_insert_owner_or_admin` recusam incluir uma conta que não está `active`, mesmo quando quem inclui é o dono da casa.
+- **IA**: `_shared/usage.ts` confere o status de quem chama antes de contar a cota; conta `pending`, `rejected` ou `suspended` recebe "Sua conta não está liberada para usar a IA".
 - **Contas que já existem** viram `active` na migration (não ficam presas esperando).
 - O app consulta o status ao abrir e quando a sessão muda; a tela de espera atualiza sozinha quando o administrador aprova (tempo real na própria linha).
 
-## 5. Planos Free e Premium
+## 5. Planos Free e Premium (fase B)
 
 ### 5.1. Onde o plano fica
-- Colunas na conta: `plan` (`free` ou `premium`), `plan_expires_at` (vazio = sem validade), `plan_note` (motivo, por exemplo "família", "testador").
+- Colunas na conta: `plan` (`free` ou `premium`), `plan_expires_at` (vazio = sem validade), `plan_note` (motivo, por exemplo "família", "testador", "conta inicial").
 - Vencida a validade, a conta volta a Free sozinha (conferido na hora de usar; um job diário só arruma o que aparece no painel).
-- **Qual plano vale numa casa**: ver decisão 1 (a recomendação é a casa ser Premium quando o dono dela é Premium).
+- **Qual plano vale numa casa**: ver decisão 1. Na recomendação, a casa segue o plano de **quem é o dono dela no momento**: se o dono sai ou passa a casa para outra pessoa, vale o plano do novo dono.
+- **Contas que já existem**: ver decisão 9. Hoje a casa usa 50 leituras de IA por dia; se as contas atuais virassem Free com o limite da tabela abaixo, cairiam para 10 sem aviso.
 
 ### 5.2. O que muda entre os planos (proposta, ver decisão 3)
 | Recurso | Free | Premium |
@@ -70,12 +83,12 @@ Fora do escopo agora: cobrança automática (cartão, Pix recorrente, loja), que
 | Projetos compartilhados | 1 ativo | Sem limite |
 | Notificações | Todas | Todas |
 
-O que é essencial para dividir as contas da casa (lançar, fechar o ciclo, empréstimos, compras, tarefas, agenda) nunca é cortado no Free.
+O que é essencial para dividir as contas da casa (lançar, fechar o ciclo, empréstimos, compras, tarefas, agenda, caixinhas) nunca é cortado no Free.
 
 ### 5.3. Onde o limite é aplicado
-- **Cota de IA**: a função que hoje usa `DEFAULT_DAILY_QUOTA_PER_HOUSE` passa a ler o plano da casa (`plan_limits` por plano).
-- **Casas, moradores e projetos**: nas funções do banco que criam (`create_house_with_owner`, convite, `set_project_participants`), com mensagem clara ("No plano Free a casa tem até 4 moradores").
-- **Recursos de tela** (PDF dos relatórios): o app esconde o botão e mostra "Recurso Premium"; o que gasta servidor também é conferido no servidor.
+- **Cota de IA**: `_shared/usage.ts` passa a ler o plano da casa (`plan_limits` por plano) em vez de `DEFAULT_DAILY_QUOTA_PER_HOUSE`.
+- **Casas, moradores e projetos**: nas funções do banco que criam (`create_house_with_owner`, convite, `set_project_participants`) **e nas regras de inserção direta** (as mesmas da seção 4.3), com mensagem clara ("No plano Free a casa tem até 4 moradores").
+- **PDF dos relatórios**: é gerado no aparelho, então o limite só pode ficar na tela (o app esconde o botão e mostra "Recurso Premium"). Para esse recurso basta; o que gasta servidor (IA) é sempre conferido no servidor.
 - Os limites ficam numa tabela **`plan_limits`** (plano × recurso × valor), editável no painel, em vez de números no código.
 - **Rebaixar** de Premium para Free nunca apaga nada: o que passou do limite continua visível e editável, só não dá para criar mais.
 
@@ -86,7 +99,7 @@ Recomendação (decisão 5): **rota `/admin` dentro do próprio app**, que só a
 
 ### 6.2. Telas
 1. **Visão geral**: contas por status e por plano, contas novas na semana, casas ativas (com lançamento nos últimos 30 dias), leituras de IA no dia e no mês, contas esperando aprovação (com atalho).
-2. **Contas**: lista com busca (nome, e-mail) e filtros (status, plano, criada entre datas). Colunas: nome, e-mail, status, plano e validade, casas, criada em, último acesso.
+2. **Contas**: lista com busca (nome, e-mail) e filtros (status, plano, criada entre datas). Colunas: nome, e-mail, status, plano e validade, casas, criada em, último acesso (`auth.users.last_sign_in_at`, lido por uma função `security definer` do painel).
 3. **Detalhe da conta**: dados do perfil, casas e papel em cada uma, plano e histórico de mudanças, uso de IA, e as ações: **Aprovar**, **Recusar** (com motivo), **Suspender** e **Reativar**, **Tornar Premium** (com validade e observação), **Voltar para Free**.
 4. **Aprovações pendentes**: fila com aprovar ou recusar em lote.
 5. **Configurações**: os parâmetros da seção 4.2 e a tabela de limites da seção 5.2.
@@ -95,16 +108,18 @@ Recomendação (decisão 5): **rota `/admin` dentro do próprio app**, que só a
 ### 6.3. Privacidade
 - O painel mostra **dados da conta e números de uso**, nunca os dados financeiros das casas (despesas, valores, empréstimos). Isso fica escrito nas regras: as funções do painel só devolvem contagens e metadados.
 - Toda ação do painel fica registrada (tabela `admin_audit_log`) e não pode ser apagada pelo painel.
-- Excluir conta (LGPD) segue o fluxo próprio `delete-account` previsto na arquitetura, com confirmação dupla; o painel só dispara.
+- **Exclusão de conta (LGPD)**: o fluxo `delete-account` ainda não existe. Fica como trabalho próprio (decisão 10), fora das fases A e B; até lá, o painel só suspende.
 
 ## 7. Avisos para a pessoa
 
-Ligados ao [plano_notificacoes.md](plano_notificacoes.md) (grupo novo "Conta"), e por e-mail enquanto as notificações não existem:
+Pelas notificações que já existem (`enqueue_notification`), com uma **categoria nova `conta`** (a migration acrescenta à regra `notifications_category_check` e às preferências). Avisos de conta são essenciais (não dá para desligar):
 - Conta aprovada ("Sua conta foi aprovada. Bem-vindo ao Omni Lar").
 - Conta recusada ou suspensa, com o motivo.
 - Plano mudou ("Sua conta agora é Premium até 31/12/2026").
 - Premium vencendo em 7 dias e vencido.
-- Para os administradores: "3 contas esperando aprovação" (uma vez por dia, se houver).
+- Para os administradores: "3 contas esperando aprovação" (uma vez por dia, se houver; depende do agendador da fase 5 das notificações).
+
+**Limite:** quem está esperando aprovação ainda não ativou as notificações, então o aviso de aprovação aparece no sino quando ela abrir o app, e a tela de espera já muda sozinha. **E-mail** de aprovação ou recusa não sai pelo Supabase Auth (ele só manda os e-mails de login); precisaria de um serviço de e-mail (Resend, SendGrid ou outro) chamado por uma Edge Function, com conta e chave próprias. Ver decisão 8.
 
 ## 8. Estrutura no banco (resumo)
 
@@ -113,19 +128,21 @@ Ligados ao [plano_notificacoes.md](plano_notificacoes.md) (grupo novo "Conta"), 
 | `platform_admins` | Quem administra o app |
 | `account_status` (ou colunas em `profiles`) | `status`, `status_reason`, `approved_by`, `approved_at`, `plan`, `plan_expires_at`, `plan_note` (decisão 6) |
 | `app_settings` | Parâmetros da aprovação e do plano inicial |
-| `plan_limits` | Limites por plano e recurso |
+| `plan_limits` | Limites por plano e recurso (fase B) |
 | `admin_audit_log` | Histórico das ações do painel |
-| `is_platform_admin()`, `is_account_active()`, `house_plan(house_id)` | Funções usadas pelas regras de acesso |
+| `is_platform_admin()`, `is_account_active(user_id)`, `house_plan(house_id)` | Funções usadas pelas regras de acesso, pelas funções do banco e pelas Edge Functions |
+| Regras `houses_insert_authenticated` e `house_members_insert_owner_or_admin` | Passam a exigir conta `active` (e, na fase B, os limites do plano) |
+| Categoria `conta` em `notifications` | Avisos de aprovação, recusa, suspensão e plano |
 | `admin_list_accounts`, `admin_set_account_status`, `admin_set_plan`, `admin_update_settings`, `admin_overview` | Funções do painel, todas conferindo `is_platform_admin()` e gravando no histórico |
 
-As colunas de status e plano **não podem ser alteradas pelo próprio usuário** (a regra de atualização de `profiles` hoje deixa a pessoa editar o próprio perfil; por isso a recomendação é uma tabela separada).
+As colunas de status e plano **não podem ser alteradas pelo próprio usuário** (a regra `profiles_update_own` deixa a pessoa editar o próprio perfil; por isso a recomendação é uma tabela separada).
 
 ## 9. Decisões pendentes do dono
 
-**Antes de começar, pergunte se ele segue as recomendações (⭐) ou escolhe outra letra.**
+**Antes de começar, pergunte se ele segue as recomendações (⭐) ou escolhe outra letra.** As decisões 1, 3, 4 e 9 são da fase B e podem esperar.
 
 1. **O plano vale para quem?**
-   - a) ⭐ Para a conta, e a casa é Premium quando o dono dela é Premium (os moradores usam o que o dono tem)
+   - a) ⭐ Para a conta, e a casa é Premium quando quem é o dono dela no momento é Premium (os moradores usam o que o dono tem)
    - b) Para a casa, independente das contas
    - c) Para cada conta, separadamente (cada morador vê os recursos do próprio plano dentro da mesma casa)
 2. **Quem chega por convite de uma casa precisa de aprovação?**
@@ -148,21 +165,33 @@ As colunas de status e plano **não podem ser alteradas pelo próprio usuário**
 7. **Conta esperando aprovação**
    - a) ⭐ Entra no app e vê a tela de espera
    - b) Nem consegue entrar (o login é recusado com a mensagem)
-8. **Aviso por e-mail** de aprovação e recusa antes das notificações existirem
-   - a) ⭐ Sim, pelo e-mail do Supabase Auth (modelo próprio)
-   - b) Não; a pessoa descobre ao abrir o app
+8. **Como a pessoa fica sabendo da aprovação ou recusa** (revista: o e-mail do Supabase Auth não serve para isso)
+   - a) ⭐ Pelo app: a tela de espera muda sozinha e o aviso fica no sino (sem e-mail por enquanto)
+   - b) Também por e-mail, por um serviço de e-mail (Resend ou outro) e uma Edge Function: exige criar a conta no serviço e guardar a chave no Supabase
+9. **Contas que já existem quando os planos chegarem** (nova)
+   - a) ⭐ Viram Premium sem validade, com a observação "conta inicial": nada muda para quem já usa
+   - b) Viram Free, e o Free passa a ter 50 leituras de IA por dia (o que a casa tem hoje)
+   - c) Viram Free com os limites da tabela (a casa cai de 50 para 10 leituras por dia)
+10. **Exclusão de conta (LGPD)** (nova)
+    - a) ⭐ Trabalho próprio depois das fases A e B: Edge Function `delete-account` com confirmação dupla, que apaga perfil e dados pessoais e tira a pessoa das casas sem apagar o histórico financeiro dos outros moradores
+    - b) Entrar já na fase A
+    - c) Por enquanto, só a suspensão; exclusão a pedido, feita à mão
 
 ## 10. Ordem de implementação sugerida
 
-1. **Base** (migration): `platform_admins`, `account_status`, `app_settings`, `admin_audit_log`, funções de conferência; contas atuais como `active` e Free; a conta do dono como administrador (feito à mão por ele).
-2. **Aprovação**: status inicial no `handle_new_user`, bloqueio no banco para criar e entrar em casa, tela de espera no app.
-3. **Painel, parte 1**: visão geral, lista de contas, detalhe, aprovar, recusar, suspender e configurações.
-4. **Planos**: `plan_limits`, `house_plan()`, cota de IA por plano, limites de casas, moradores e projetos, e "Recurso Premium" nas telas.
-5. **Painel, parte 2**: trocar plano com validade, histórico e aprovação em lote.
-6. **Avisos** (e-mail agora, notificações quando existirem).
+**Fase A (agora, com o site aberto):**
+1. **Base** (migration): `platform_admins`, `account_status`, `app_settings`, `admin_audit_log`, `is_platform_admin()` e `is_account_active()`; contas atuais como `active`; a conta do dono como administrador (feito à mão por ele).
+2. **Aprovação**: status inicial no `handle_new_user`; bloqueio no banco em todos os caminhos da seção 4.3 (funções e regras de inserção direta); conferência em `_shared/usage.ts`; tela de espera no app.
+3. **Painel, parte 1**: visão geral, lista de contas, detalhe, aprovar, recusar, suspender, reativar, aprovação em lote e configurações.
+4. **Avisos no app**: categoria `conta` e os avisos de aprovação, recusa e suspensão.
+
+**Fase B (quando houver uso que justifique):**
+5. **Planos**: `plan_limits`, `house_plan()`, contas atuais conforme a decisão 9, cota de IA por plano, limites de casas, moradores e projetos (também nas regras de inserção direta) e "Recurso Premium" nas telas.
+6. **Painel, parte 2**: trocar plano com validade, histórico de planos e avisos de plano (mudou, vencendo, vencido).
 
 ## 11. Testes
 
-- Banco: ensaio com rollback de cada função do painel como administrador e como usuário comum (recusado); conta `pending` tentando criar e entrar em casa (recusada); usuário tentando mudar o próprio status ou plano (recusado); limites de cada plano.
-- App: tela de espera, rota `/admin` invisível e recusada para quem não é administrador, telas do painel no modo demo.
-- O dono testa com sessão real: cadastrar uma conta nova com a aprovação ligada e desligada, aprovar pelo painel e ver a tela mudar sozinha.
+- **Banco** (ensaio com rollback): cada função do painel como administrador e como usuário comum (recusado); conta `pending` tentando criar casa pela função **e** inserindo direto em `houses` (recusada); dono de uma casa tentando incluir uma conta `pending` direto em `house_members` (recusado); `join_house_with_invite` com conta `pending` (recusado) e com convite válido e `auto_approve_invited` ligado (aprovada); usuário tentando mudar o próprio status ou plano (recusado); administrador do app tentando ler despesas de uma casa da qual não é morador (recusado); na fase B, os limites de cada plano.
+- **Edge Functions**: conta `pending` ou `suspended` chamando `capture-read`, `import-read` e `assistant` recebe a recusa antes de gastar cota.
+- **App**: tela de espera, rota `/admin` invisível e recusada para quem não é administrador, telas do painel no modo demo.
+- **O dono testa com sessão real**: cadastrar uma conta nova com a aprovação ligada e desligada, aprovar pelo painel e ver a tela mudar sozinha e o aviso chegar no sino.
