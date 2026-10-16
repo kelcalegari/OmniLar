@@ -92,11 +92,14 @@ class _AssistantChatPageState extends State<AssistantChatPage> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final isDesktop = !context.isMobile;
+    // Teclado aberto: o painel encolhe e sobe junto, para o campo continuar à vista
+    final keyboard = MediaQuery.viewInsetsOf(context).bottom;
 
     return Container(
       constraints: BoxConstraints(
-        maxHeight: MediaQuery.of(context).size.height * (isDesktop ? 0.85 : 0.9),
+        maxHeight: (MediaQuery.sizeOf(context).height - keyboard) * (isDesktop ? 0.85 : 0.9) + keyboard,
       ),
+      padding: EdgeInsets.only(bottom: keyboard),
       child: Column(
         children: [
           // Header

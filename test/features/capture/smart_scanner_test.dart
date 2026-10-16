@@ -25,13 +25,22 @@ void main() {
       expect(proposal.totalAmount, equals(const Money(21540))); // R$ 215,40
     });
 
-    test('Parser de URL de QR Code NFC-e retorna itens da nota', () {
-      const nfcUrl = 'https://sefaz.sp.gov.br/nfce/qrcode?p=3526101234567890';
+    test('QR de NFC-e online não inventa loja, valor nem itens', () {
+      const nfcUrl = 'https://sefaz.sp.gov.br/nfce/qrcode?p=35261012345678901234567890123456789012345678|2|1|1|ABCDEF';
       final proposal = BoletoParser.parseNfceQrCodeUrl(nfcUrl);
 
       expect(proposal.documentType, equals(DocumentType.nfce));
-      expect(proposal.items.isNotEmpty, isTrue);
-      expect(proposal.houseAmount.cents, greaterThan(0));
+      expect(proposal.items, isEmpty);
+      expect(proposal.merchantOrBeneficiary, isNull);
+      expect(proposal.totalAmount.cents, 0);
+    });
+
+    test('QR de NFC-e em contingência traz o valor total', () {
+      const nfcUrl = 'https://sefaz.sp.gov.br/nfce/qrcode?p=35261012345678901234567890123456789012345678|2|1|16|142.50|6a6b|1|ABCDEF';
+      final proposal = BoletoParser.parseNfceQrCodeUrl(nfcUrl);
+
+      expect(proposal.totalAmount.cents, 14250);
+      expect(proposal.items, isEmpty);
     });
   });
 

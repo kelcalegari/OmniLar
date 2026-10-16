@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 import '../../../../core/theme/app_colors.dart';
+import '../../../../core/utils/responsive.dart';
 import '../../../../core/widgets/omni_logo.dart';
 import '../../../../core/widgets/theme_toggle_button.dart';
 import '../../../auth/presentation/cubit/auth_cubit.dart';
@@ -24,6 +25,8 @@ class WebLandingPage extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
+    // Celular: cabeçalho enxuto, para o botão da demo não sair da tela
+    final compact = context.isMobile;
 
     return Scaffold(
       backgroundColor: isDark ? const Color(0xFF0B0F19) : const Color(0xFFF8FAFC),
@@ -43,7 +46,7 @@ class WebLandingPage extends StatelessWidget {
               child: ConstrainedBox(
                 constraints: const BoxConstraints(maxWidth: 1240),
                 child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 24),
+                  padding: EdgeInsets.symmetric(horizontal: compact ? 12 : 24),
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
@@ -62,8 +65,8 @@ class WebLandingPage extends StatelessWidget {
                               color: isDark ? Colors.white : const Color(0xFF0F172A),
                             ),
                           ),
-                          const SizedBox(width: 10),
-                          Container(
+                          if (!compact) const SizedBox(width: 10),
+                          if (!compact) Container(
                             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                             decoration: BoxDecoration(
                               color: AppColors.primary.withValues(alpha: 0.15),
@@ -86,30 +89,30 @@ class WebLandingPage extends StatelessWidget {
                         mainAxisSize: MainAxisSize.min,
                         children: [
                           const ThemeToggleButton(),
-                          const SizedBox(width: 12),
+                          SizedBox(width: compact ? 0 : 12),
                           TextButton(
                             onPressed: () => context.push('/login'),
                             style: TextButton.styleFrom(
                               foregroundColor: isDark ? Colors.white : const Color(0xFF1E293B),
-                              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                              padding: EdgeInsets.symmetric(horizontal: compact ? 8 : 16, vertical: 12),
                             ),
                             child: const Text(
                               'Entrar',
                               style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
                             ),
                           ),
-                          const SizedBox(width: 8),
+                          SizedBox(width: compact ? 4 : 8),
                           FilledButton.icon(
                             onPressed: () => _startDemo(context),
                             icon: const Icon(Icons.flash_on_rounded, size: 16),
-                            label: const Text(
-                              'Testar Demo Online ⚡',
+                            label: Text(
+                              compact ? 'Demo' : 'Testar Demo Online ⚡',
                               style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
                             ),
                             style: FilledButton.styleFrom(
                               backgroundColor: AppColors.primary,
                               foregroundColor: Colors.white,
-                              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+                              padding: EdgeInsets.symmetric(horizontal: compact ? 12 : 20, vertical: 14),
                               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                               elevation: 0,
                             ),

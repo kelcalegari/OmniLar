@@ -140,6 +140,13 @@ class _SmartScannerPageState extends State<SmartScannerPage> {
           setState(() {
             _currentProposal = proposal;
           });
+          if (proposal.totalAmount.cents == 0) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('O QR da nota não traz valor nem itens. Digite o valor ou fotografe o cupom para a IA ler.'),
+              ),
+            );
+          }
           break;
         } else if (const {44, 47, 48}.contains(BoletoCodeReader.digitsOf(raw).length)) {
           final proposal = _proposalFromCode(raw, quiet: true);
@@ -239,7 +246,7 @@ class _SmartScannerPageState extends State<SmartScannerPage> {
   }
 
   void _simulateNfceScan() {
-    final proposal = BoletoParser.parseNfceQrCodeUrl('https://sefaz.sp.gov.br/nfce/qrcode?p=3526101234567890');
+    final proposal = BoletoParser.demoNfceProposal();
     setState(() {
       _currentProposal = proposal;
     });

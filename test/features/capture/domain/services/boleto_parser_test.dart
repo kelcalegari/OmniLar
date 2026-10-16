@@ -33,8 +33,8 @@ void main() {
       expect(dateFactor1368, equals(DateTime(2026, 2, 25)));
     });
 
-    test('RN03 e RN09: Parse de NFC-e gera itens e calcula divisão entre Casa e Pessoal', () {
-      final proposal = BoletoParser.parseNfceQrCodeUrl('https://sefaz.sp.gov.br/nfce/qrcode?p=123');
+    test('RN03 e RN09: Cupom NFC-e com itens calcula divisão entre Casa e Pessoal', () {
+      final proposal = BoletoParser.demoNfceProposal();
 
       expect(proposal.documentType, DocumentType.nfce);
       expect(proposal.items.length, 4);

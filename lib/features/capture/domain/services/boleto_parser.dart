@@ -119,16 +119,43 @@ class BoletoParser {
     }
   }
 
-  /// Parser para URLs de QR Code de NFC-e (SEFAZ)
+  /// Parser para URLs de QR Code de NFC-e (SEFAZ). O QR não traz loja nem
+  /// itens; só o QR de contingência (offline) traz o valor total. O resto o
+  /// usuário completa na revisão.
   static CaptureProposal parseNfceQrCodeUrl(String url) {
     return CaptureProposal(
       id: 'prop_nfce_${DateTime.now().millisecondsSinceEpoch}',
       documentType: DocumentType.nfce,
       title: 'Nota Fiscal (NFC-e)',
-      totalAmount: const Money(14250), // Mock inicial simulado de cupom de mercado
+      totalAmount: Money(nfceTotalCentsFromUrl(url) ?? 0),
+      date: DateTime.now(),
+      rawCode: url,
+      capturedAt: DateTime.now(),
+    );
+  }
+
+  /// Valor total do QR de NFC-e emitida em contingência
+  /// (p=chave|versão|ambiente|dia|valor|...). O QR online não traz valor.
+  static int? nfceTotalCentsFromUrl(String url) {
+    final p = Uri.tryParse(url)?.queryParameters['p'];
+    if (p == null) return null;
+    final parts = p.split('|');
+    if (parts.length < 8) return null;
+    final value = double.tryParse(parts[4].replaceAll(',', '.'));
+    if (value == null || value <= 0) return null;
+    return (value * 100).round();
+  }
+
+  /// Cupom de mercado fictício, só para o botão de simulação do modo demo.
+  static CaptureProposal demoNfceProposal() {
+    return CaptureProposal(
+      id: 'prop_nfce_${DateTime.now().millisecondsSinceEpoch}',
+      documentType: DocumentType.nfce,
+      title: 'Nota Fiscal (NFC-e)',
+      totalAmount: const Money(14250),
       date: DateTime.now(),
       merchantOrBeneficiary: 'Supermercado Pão de Açúcar',
-      rawCode: url,
+      rawCode: 'https://sefaz.sp.gov.br/nfce/qrcode?p=3526101234567890',
       capturedAt: DateTime.now(),
       items: [
         const InvoiceItemDraft(
