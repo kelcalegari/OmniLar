@@ -8,6 +8,7 @@ enum AuthStatus {
   unauthenticated,
   authenticatedNoHouse,
   authenticatedWithHouse,
+  awaitingEmailConfirmation,
   failure,
 }
 
@@ -17,15 +18,21 @@ class AuthState extends Equatable {
   final House? house;
   final String? errorMessage;
 
+  /// E-mail de um cadastro que ainda espera o código de confirmação. Fica
+  /// guardado também durante carregamento e erro, para a tela não se perder.
+  final String? pendingEmail;
+
   const AuthState({
     this.status = AuthStatus.initial,
     this.user,
     this.house,
     this.errorMessage,
+    this.pendingEmail,
   });
 
   bool get isAuthenticated => user != null;
   bool get hasHouse => house != null;
+  bool get isAwaitingEmailConfirmation => user == null && pendingEmail != null;
 
   AuthState copyWith({
     AuthStatus? status,
@@ -38,9 +45,10 @@ class AuthState extends Equatable {
       user: user ?? this.user,
       house: house ?? this.house,
       errorMessage: errorMessage,
+      pendingEmail: pendingEmail,
     );
   }
 
   @override
-  List<Object?> get props => [status, user, house, errorMessage];
+  List<Object?> get props => [status, user, house, errorMessage, pendingEmail];
 }

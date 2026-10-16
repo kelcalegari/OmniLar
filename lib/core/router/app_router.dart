@@ -11,6 +11,7 @@ import '../../features/auth/domain/repositories/auth_repository.dart';
 import '../../features/auth/presentation/cubit/auth_cubit.dart';
 import '../../features/auth/presentation/cubit/auth_state.dart';
 import '../../features/auth/presentation/pages/login_page.dart';
+import '../../features/auth/presentation/pages/confirm_email_page.dart';
 import '../../features/auth/presentation/pages/house_onboarding_page.dart';
 import '../../features/admin/presentation/cubit/account_access_cubit.dart';
 import '../../features/admin/presentation/pages/account_pending_page.dart';
@@ -61,7 +62,9 @@ class AppRouter {
       final location = state.uri.path;
       final isSplash = location == '/splash';
       final isLanding = location == '/landing' || location == '/';
-      final isLoggingIn = location == '/login';
+      // Inclui as telas filhas do login (confirmação de e-mail)
+      final isLoggingIn = location == '/login' || location.startsWith('/login/');
+      final isConfirmingEmail = location == '/login/confirmar-email';
       final isOnboarding = location == '/onboarding/house';
       final isAccountPending = location == '/conta/em-analise';
       final isAdmin = location == '/admin';
@@ -87,6 +90,11 @@ class AppRouter {
 
       // 2. Não autenticado -> na Web vai para a Landing Page (vitrine com Demo), no mobile vai para /login
       if (authState.status == AuthStatus.unauthenticated || !authState.isAuthenticated) {
+        // 2.0. Cadastro esperando o código do e-mail
+        if (authState.isAwaitingEmailConfirmation) {
+          return isConfirmingEmail ? null : '/login/confirmar-email';
+        }
+        if (isConfirmingEmail) return '/login';
         if (kIsWeb) {
           if (isLanding || isLoggingIn) return null;
           return '/landing';
@@ -145,6 +153,12 @@ class AppRouter {
         name: 'login',
         parentNavigatorKey: _rootNavigatorKey,
         builder: (context, state) => const LoginPage(),
+      ),
+      GoRoute(
+        path: '/login/confirmar-email',
+        name: 'login-confirmar-email',
+        parentNavigatorKey: _rootNavigatorKey,
+        builder: (context, state) => const ConfirmEmailPage(),
       ),
       GoRoute(
         path: '/conta/em-analise',

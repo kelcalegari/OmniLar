@@ -85,7 +85,16 @@ class MockAuthDataSource implements AuthDataSource {
   UserProfile? _currentUser;
   House? _currentHouse;
 
-  MockAuthDataSource({bool startAuthenticated = true}) {
+  /// Simula o Supabase com a confirmação de e-mail ligada: o cadastro só
+  /// abre a sessão depois do código [mockConfirmationCode].
+  final bool requireEmailConfirmation;
+  static const mockConfirmationCode = '123456';
+  final Set<String> _unconfirmedEmails = {};
+
+  MockAuthDataSource({
+    bool startAuthenticated = true,
+    this.requireEmailConfirmation = false,
+  }) {
     if (startAuthenticated) {
       _currentUser = _users['carlos@omnilar.com'];
       _currentHouse = _houses['house_nossa_casa'];
@@ -123,6 +132,9 @@ class MockAuthDataSource implements AuthDataSource {
     if (user == null || savedPassword != password) {
       throw const AuthFailure('E-mail ou senha inválidos.');
     }
+    if (_unconfirmedEmails.contains(normalizedEmail)) {
+      throw EmailNotConfirmedFailure(normalizedEmail);
+    }
 
     _currentUser = user;
     _authStateController.add(_currentUser);
@@ -141,7 +153,7 @@ class MockAuthDataSource implements AuthDataSource {
   }
 
   @override
-  Future<UserProfile> signUpWithEmailPassword({
+  Future<UserProfile?> signUpWithEmailPassword({
     required String email,
     required String password,
     required String fullName,
@@ -163,12 +175,41 @@ class MockAuthDataSource implements AuthDataSource {
     _users[normalizedEmail] = newUser;
     _passwords[normalizedEmail] = password;
 
+    if (requireEmailConfirmation) {
+      _unconfirmedEmails.add(normalizedEmail);
+      return null;
+    }
+
     _currentUser = newUser;
     _currentHouse = null;
     _authStateController.add(_currentUser);
     _houseStateController.add(null);
 
     return newUser;
+  }
+
+  @override
+  Future<UserProfile> verifySignUpCode({
+    required String email,
+    required String code,
+  }) async {
+    await Future.delayed(const Duration(milliseconds: 200));
+    final normalizedEmail = email.trim().toLowerCase();
+    final user = _users[normalizedEmail];
+    if (user == null || code.trim() != mockConfirmationCode) {
+      throw const AuthFailure('Código inválido ou expirado. Peça um novo.');
+    }
+    _unconfirmedEmails.remove(normalizedEmail);
+    _currentUser = user;
+    _currentHouse = null;
+    _authStateController.add(_currentUser);
+    _houseStateController.add(null);
+    return user;
+  }
+
+  @override
+  Future<void> resendSignUpCode(String email) async {
+    await Future.delayed(const Duration(milliseconds: 100));
   }
 
   @override

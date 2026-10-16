@@ -8,6 +8,7 @@ import '../../domain/entities/user_profile.dart';
 import '../../domain/entities/house.dart';
 import '../../domain/entities/house_member_info.dart';
 import 'auth_datasource.dart';
+import 'auth_error_messages.dart';
 
 class SupabaseAuthDataSource implements AuthDataSource {
   final SupabaseClient _client;
@@ -137,20 +138,25 @@ class SupabaseAuthDataSource implements AuthDataSource {
       return _currentUser ??
           UserProfile(id: user.id, email: user.email ?? '', fullName: email);
     } on AuthException catch (e) {
-      throw AuthFailure(e.message);
+      if (e.code == 'email_not_confirmed') {
+        throw EmailNotConfirmedFailure(email.trim());
+      }
+      throw AuthFailure(authErrorMessage(e));
     } catch (e) {
+      if (e is Failure) rethrow;
       throw AuthFailure('Erro ao fazer login: $e');
     }
   }
 
   @override
-  Future<UserProfile> signUpWithEmailPassword({
+  Future<UserProfile?> signUpWithEmailPassword({
     required String email,
     required String password,
     required String fullName,
   }) async {
     _isDemoMode = false;
     try {
+      // O perfil e o status da conta são criados pelo gatilho handle_new_user
       final res = await _client.auth.signUp(
         email: email.trim(),
         password: password,
@@ -162,37 +168,63 @@ class SupabaseAuthDataSource implements AuthDataSource {
         throw const AuthFailure('Falha ao criar conta: tente novamente.');
       }
 
-      // Upsert inicial no profile
-      await _client.from('profiles').upsert({
-        'id': user.id,
-        'full_name': fullName.trim(),
-      });
-
       if (res.session == null) {
-        try {
-          final loginRes = await _client.auth.signInWithPassword(
-            email: email.trim(),
-            password: password,
+        // Com a confirmação ligada, um e-mail já cadastrado volta como usuário
+        // sem identidades (o Supabase não diz que o e-mail existe)
+        if (user.identities != null && user.identities!.isEmpty) {
+          throw const AuthFailure(
+            'Este e-mail já tem uma conta. Entre com sua senha.',
           );
-          if (loginRes.user != null) {
-            await _loadProfileAndHouse(loginRes.user!);
-            return _currentUser ??
-                UserProfile(
-                  id: loginRes.user!.id,
-                  email: email,
-                  fullName: fullName,
-                );
-          }
-        } catch (_) {}
+        }
+        // Conta criada: falta confirmar o e-mail com o código enviado
+        return null;
       }
 
       await _loadProfileAndHouse(user);
       return _currentUser ??
           UserProfile(id: user.id, email: user.email ?? '', fullName: fullName);
     } on AuthException catch (e) {
-      throw AuthFailure(e.message);
+      throw AuthFailure(authErrorMessage(e));
     } catch (e) {
+      if (e is Failure) rethrow;
       throw AuthFailure('Erro ao cadastrar usuário: $e');
+    }
+  }
+
+  @override
+  Future<UserProfile> verifySignUpCode({
+    required String email,
+    required String code,
+  }) async {
+    try {
+      final res = await _client.auth.verifyOTP(
+        email: email.trim(),
+        token: code.trim(),
+        type: OtpType.signup,
+      );
+      final user = res.user;
+      if (user == null) {
+        throw const AuthFailure('Código inválido ou expirado. Peça um novo.');
+      }
+      await _loadProfileAndHouse(user);
+      return _currentUser ??
+          UserProfile(id: user.id, email: user.email ?? '', fullName: email);
+    } on AuthException catch (e) {
+      throw AuthFailure(authErrorMessage(e));
+    } catch (e) {
+      if (e is Failure) rethrow;
+      throw AuthFailure('Erro ao confirmar o e-mail: $e');
+    }
+  }
+
+  @override
+  Future<void> resendSignUpCode(String email) async {
+    try {
+      await _client.auth.resend(type: OtpType.signup, email: email.trim());
+    } on AuthException catch (e) {
+      throw AuthFailure(authErrorMessage(e));
+    } catch (e) {
+      throw AuthFailure('Erro ao reenviar o código: $e');
     }
   }
 
@@ -321,7 +353,7 @@ class SupabaseAuthDataSource implements AuthDataSource {
       _authStateController.add(_currentUser);
       return _currentUser!;
     } on AuthException catch (e) {
-      throw AuthFailure(e.message);
+      throw AuthFailure(authErrorMessage(e));
     } catch (e) {
       if (e is Failure) rethrow;
       throw ServerFailure('Erro ao atualizar perfil: $e');

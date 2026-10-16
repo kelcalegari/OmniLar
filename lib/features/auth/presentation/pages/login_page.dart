@@ -23,13 +23,17 @@ class _LoginPageState extends State<LoginPage> {
   final _nameController = TextEditingController();
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
+  final _confirmPasswordController = TextEditingController();
   bool _obscurePassword = true;
+
+  static final _emailPattern = RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$');
 
   @override
   void dispose() {
     _nameController.dispose();
     _emailController.dispose();
     _passwordController.dispose();
+    _confirmPasswordController.dispose();
     super.dispose();
   }
 
@@ -256,7 +260,8 @@ class _LoginPageState extends State<LoginPage> {
                             ),
                           ),
                           validator: (val) {
-                            if (val == null || !val.contains('@')) {
+                            if (val == null ||
+                                !_emailPattern.hasMatch(val.trim())) {
                               return 'Informe um e-mail válido';
                             }
                             return null;
@@ -292,6 +297,31 @@ class _LoginPageState extends State<LoginPage> {
                             return null;
                           },
                         ),
+
+                        // Confirmação da senha (Apenas Cadastro)
+                        if (_isSignUp) ...[
+                          const SizedBox(height: 16),
+                          TextFormField(
+                            controller: _confirmPasswordController,
+                            obscureText: _obscurePassword,
+                            decoration: InputDecoration(
+                              labelText: 'Confirme a senha',
+                              prefixIcon: const Icon(
+                                Icons.lock_outline_rounded,
+                              ),
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                            ),
+                            validator: (val) {
+                              if (_isSignUp &&
+                                  val != _passwordController.text) {
+                                return 'As senhas não conferem';
+                              }
+                              return null;
+                            },
+                          ),
+                        ],
                         const SizedBox(height: 24),
 
                         // Botão Ação Principal

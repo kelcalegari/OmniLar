@@ -14,11 +14,22 @@ abstract class AuthDataSource {
   bool get isRestoringSession => false;
 
   Future<UserProfile> signInWithEmailPassword(String email, String password);
-  Future<UserProfile> signUpWithEmailPassword({
+  /// Devolve `null` quando a conta foi criada mas espera a confirmação do
+  /// e-mail (código enviado para a caixa postal).
+  Future<UserProfile?> signUpWithEmailPassword({
     required String email,
     required String password,
     required String fullName,
   });
+
+  /// Confirma o e-mail do cadastro com o código recebido e abre a sessão.
+  Future<UserProfile> verifySignUpCode({
+    required String email,
+    required String code,
+  });
+
+  /// Reenvia o código de confirmação do cadastro.
+  Future<void> resendSignUpCode(String email);
   Future<void> signInDemo({required String memberId});
   Future<void> signOut();
   Future<UserProfile> updateProfile({

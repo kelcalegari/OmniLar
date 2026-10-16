@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import '../../../../core/errors/failures.dart';
 import '../../domain/entities/user_profile.dart';
 import '../../domain/entities/house.dart';
 import '../../domain/repositories/auth_repository.dart';
@@ -94,6 +95,21 @@ class AuthCubit extends Cubit<AuthState> {
           house: house,
         ),
       );
+    } on EmailNotConfirmedFailure catch (e) {
+      // Conta criada mas não confirmada: manda um código novo e abre a tela dele
+      String? resendError;
+      try {
+        await _repository.resendSignUpCode(e.email);
+      } catch (err) {
+        resendError = err.toString();
+      }
+      emit(
+        AuthState(
+          status: AuthStatus.awaitingEmailConfirmation,
+          pendingEmail: e.email,
+          errorMessage: resendError,
+        ),
+      );
     } catch (e) {
       emit(
         state.copyWith(status: AuthStatus.failure, errorMessage: e.toString()),
@@ -113,12 +129,70 @@ class AuthCubit extends Cubit<AuthState> {
         password: password,
         fullName: fullName,
       );
+      if (user == null) {
+        emit(
+          AuthState(
+            status: AuthStatus.awaitingEmailConfirmation,
+            pendingEmail: email.trim(),
+          ),
+        );
+        return;
+      }
       emit(AuthState(status: AuthStatus.authenticatedNoHouse, user: user));
     } catch (e) {
       emit(
         state.copyWith(status: AuthStatus.failure, errorMessage: e.toString()),
       );
     }
+  }
+
+  Future<void> verifySignUpCode(String code) async {
+    final email = state.pendingEmail;
+    if (email == null) return;
+    emit(state.copyWith(status: AuthStatus.loading, errorMessage: null));
+    try {
+      final user = await _repository.verifySignUpCode(email: email, code: code);
+      final house = _repository.currentHouse;
+      emit(
+        AuthState(
+          status: house != null
+              ? AuthStatus.authenticatedWithHouse
+              : AuthStatus.authenticatedNoHouse,
+          user: user,
+          house: house,
+        ),
+      );
+    } catch (e) {
+      emit(
+        state.copyWith(status: AuthStatus.failure, errorMessage: e.toString()),
+      );
+    }
+  }
+
+  /// Reenvia o código; devolve `true` se o envio deu certo.
+  Future<bool> resendSignUpCode() async {
+    final email = state.pendingEmail;
+    if (email == null) return false;
+    try {
+      await _repository.resendSignUpCode(email);
+      emit(
+        state.copyWith(
+          status: AuthStatus.awaitingEmailConfirmation,
+          errorMessage: null,
+        ),
+      );
+      return true;
+    } catch (e) {
+      emit(
+        state.copyWith(status: AuthStatus.failure, errorMessage: e.toString()),
+      );
+      return false;
+    }
+  }
+
+  /// Desiste da confirmação (e-mail errado ou já confirmado pelo link).
+  void cancelEmailConfirmation() {
+    emit(const AuthState(status: AuthStatus.unauthenticated));
   }
 
   Future<void> signInDemo({String memberId = 'member_carlos'}) async {

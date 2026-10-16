@@ -148,4 +148,76 @@ void main() {
       },
     );
   });
+
+  group('Cadastro com confirmação de e-mail', () {
+    late MockAuthDataSource dataSource;
+    late AuthCubit cubit;
+
+    setUp(() {
+      dataSource = MockAuthDataSource(
+        startAuthenticated: false,
+        requireEmailConfirmation: true,
+      );
+      cubit = AuthCubit(AuthRepositoryImpl(dataSource));
+    });
+
+    tearDown(() {
+      cubit.close();
+      dataSource.dispose();
+    });
+
+    Future<void> signUp() => cubit.signUpWithEmailPassword(
+      email: ' novo@omnilar.com ',
+      password: 'password123',
+      fullName: 'Novo Membro',
+    );
+
+    test('cadastro sem sessão fica aguardando o código', () async {
+      await signUp();
+
+      expect(cubit.state.status, AuthStatus.awaitingEmailConfirmation);
+      expect(cubit.state.pendingEmail, 'novo@omnilar.com');
+      expect(cubit.state.isAuthenticated, isFalse);
+      expect(cubit.state.isAwaitingEmailConfirmation, isTrue);
+    });
+
+    test('código errado emite failure e mantém o e-mail pendente', () async {
+      await signUp();
+      await cubit.verifySignUpCode('000000');
+
+      expect(cubit.state.status, AuthStatus.failure);
+      expect(cubit.state.errorMessage, contains('Código inválido'));
+      expect(cubit.state.isAwaitingEmailConfirmation, isTrue);
+    });
+
+    test('código certo abre a sessão sem casa', () async {
+      await signUp();
+      await cubit.verifySignUpCode(MockAuthDataSource.mockConfirmationCode);
+
+      expect(cubit.state.status, AuthStatus.authenticatedNoHouse);
+      expect(cubit.state.user?.fullName, 'Novo Membro');
+      expect(cubit.state.pendingEmail, isNull);
+    });
+
+    test('login antes de confirmar leva de volta à confirmação', () async {
+      await signUp();
+      cubit.cancelEmailConfirmation();
+      expect(cubit.state.status, AuthStatus.unauthenticated);
+
+      await cubit.signInWithEmailPassword('novo@omnilar.com', 'password123');
+
+      expect(cubit.state.status, AuthStatus.awaitingEmailConfirmation);
+      expect(cubit.state.pendingEmail, 'novo@omnilar.com');
+      expect(cubit.state.errorMessage, isNull);
+    });
+
+    test('reenviar código mantém a espera', () async {
+      await signUp();
+      final sent = await cubit.resendSignUpCode();
+
+      expect(sent, isTrue);
+      expect(cubit.state.status, AuthStatus.awaitingEmailConfirmation);
+      expect(cubit.state.pendingEmail, 'novo@omnilar.com');
+    });
+  });
 }

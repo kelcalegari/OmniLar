@@ -33,7 +33,7 @@ class AuthRepositoryImpl implements AuthRepository {
   }
 
   @override
-  Future<UserProfile> signUpWithEmailPassword({
+  Future<UserProfile?> signUpWithEmailPassword({
     required String email,
     required String password,
     required String fullName,
@@ -43,6 +43,19 @@ class AuthRepositoryImpl implements AuthRepository {
       password: password,
       fullName: fullName,
     );
+  }
+
+  @override
+  Future<UserProfile> verifySignUpCode({
+    required String email,
+    required String code,
+  }) {
+    return _dataSource.verifySignUpCode(email: email, code: code);
+  }
+
+  @override
+  Future<void> resendSignUpCode(String email) {
+    return _dataSource.resendSignUpCode(email);
   }
 
   @override
