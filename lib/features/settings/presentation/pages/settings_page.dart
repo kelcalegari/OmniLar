@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 import '../../../../core/di/service_locator.dart';
+import '../../../admin/domain/entities/account_access.dart';
 import '../../../admin/presentation/cubit/account_access_cubit.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/utils/clipboard_helper.dart';
@@ -2722,9 +2723,23 @@ class _SettingsPageState extends State<SettingsPage> {
         // Administração do app: só para quem administra o Omni Lar (migration 0068)
         BlocBuilder<AccountAccessCubit, AccountAccessState>(
           bloc: sl<AccountAccessCubit>(),
-          builder: (context, access) => !access.isAdmin
-              ? const SizedBox.shrink()
-              : Padding(
+          builder: (context, access) => Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              if (access.access != null)
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+                  child: Text(
+                    access.access!.plan == AccountPlan.premium && access.access!.planExpiresAt != null
+                        ? 'Seu plano: Premium até ${access.access!.planExpiresAt!.day.toString().padLeft(2, '0')}/'
+                            '${access.access!.planExpiresAt!.month.toString().padLeft(2, '0')}/${access.access!.planExpiresAt!.year}'
+                        : 'Seu plano: ${access.access!.plan.label}',
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(fontSize: 12, color: Colors.grey),
+                  ),
+                ),
+              if (access.isAdmin)
+                Padding(
                   padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
                   child: FilledButton.tonalIcon(
                     onPressed: () => context.push('/admin'),
@@ -2733,6 +2748,8 @@ class _SettingsPageState extends State<SettingsPage> {
                     style: FilledButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 14)),
                   ),
                 ),
+            ],
+          ),
         ),
         _signOutOnlyButton(context),
       ],

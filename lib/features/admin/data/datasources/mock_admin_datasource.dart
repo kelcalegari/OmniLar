@@ -13,6 +13,16 @@ class MockAdminDataSource implements AdminDataSource {
   final _changes = StreamController<void>.broadcast();
   final _audit = <AdminAuditEntry>[];
   var _settings = const AdminSettings();
+  final _limits = <PlanLimit>[
+    const PlanLimit(plan: AccountPlan.free, resource: PlanResource.aiReadsPerDay, maxValue: 10),
+    const PlanLimit(plan: AccountPlan.free, resource: PlanResource.housesOwned, maxValue: 1),
+    const PlanLimit(plan: AccountPlan.free, resource: PlanResource.membersPerHouse, maxValue: 4),
+    const PlanLimit(plan: AccountPlan.free, resource: PlanResource.activeProjects, maxValue: 1),
+    const PlanLimit(plan: AccountPlan.premium, resource: PlanResource.aiReadsPerDay, maxValue: 100),
+    const PlanLimit(plan: AccountPlan.premium, resource: PlanResource.housesOwned, maxValue: 3),
+    const PlanLimit(plan: AccountPlan.premium, resource: PlanResource.membersPerHouse, maxValue: 20),
+    const PlanLimit(plan: AccountPlan.premium, resource: PlanResource.activeProjects),
+  ];
 
   late final List<AdminAccount> _accounts;
 
@@ -30,6 +40,8 @@ class MockAdminDataSource implements AdminDataSource {
         approvedAt: now.subtract(const Duration(days: 120)),
         houses: 1,
         isAdmin: true,
+        plan: AccountPlan.premium,
+        planNote: 'conta inicial',
       ),
       AdminAccount(
         userId: 'member_marina',
@@ -40,6 +52,8 @@ class MockAdminDataSource implements AdminDataSource {
         lastSignInAt: now.subtract(const Duration(days: 1)),
         approvedAt: now.subtract(const Duration(days: 110)),
         houses: 1,
+        plan: AccountPlan.premium,
+        planNote: 'conta inicial',
       ),
       AdminAccount(
         userId: 'demo_pending_1',
@@ -68,7 +82,8 @@ class MockAdminDataSource implements AdminDataSource {
   }
 
   @override
-  Future<AccountAccess> getMyAccess() async => const AccountAccess(status: AccountStatus.active, isAdmin: true);
+  Future<AccountAccess> getMyAccess() async =>
+      const AccountAccess(status: AccountStatus.active, isAdmin: true, plan: AccountPlan.premium);
 
   @override
   Stream<void> watchMyAccess() => const Stream.empty();
@@ -82,10 +97,19 @@ class MockAdminDataSource implements AdminDataSource {
     for (final a in _accounts) {
       byStatus[a.status] = (byStatus[a.status] ?? 0) + 1;
     }
+    final byPlan = <AccountPlan, int>{};
+    for (final a in _accounts) {
+      byPlan[a.plan] = (byPlan[a.plan] ?? 0) + 1;
+    }
     final weekAgo = DateTime.now().subtract(const Duration(days: 7));
+    final in30 = DateTime.now().add(const Duration(days: 30));
     return AdminOverview(
       accountsTotal: _accounts.length,
       accountsByStatus: byStatus,
+      accountsByPlan: byPlan,
+      premiumExpiring30d: _accounts
+          .where((a) => a.plan == AccountPlan.premium && a.planExpiresAt != null && a.planExpiresAt!.isBefore(in30))
+          .length,
       accountsNew7d: _accounts.where((a) => a.createdAt?.isAfter(weekAgo) ?? false).length,
       housesTotal: 1,
       housesActive30d: 1,
@@ -197,6 +221,68 @@ class MockAdminDataSource implements AdminDataSource {
 
   @override
   Future<List<AdminAuditEntry>> listAudit({int limit = 100}) async => _audit.take(limit).toList();
+
+  @override
+  Future<int> setPlan(List<String> userIds, AccountPlan plan, {DateTime? expiresAt, String? note}) async {
+    if (plan == AccountPlan.premium && expiresAt != null && !expiresAt.isAfter(DateTime.now())) {
+      throw const ServerFailure('A validade do Premium precisa ser uma data futura.');
+    }
+    final cleanNote = (note?.trim().isEmpty ?? true) ? null : note!.trim();
+    final expires = plan == AccountPlan.premium ? expiresAt : null;
+    var changed = 0;
+    for (final id in userIds.toSet()) {
+      final index = _accounts.indexWhere((a) => a.userId == id);
+      if (index == -1) continue;
+      final old = _accounts[index];
+      if (old.plan == plan && old.planExpiresAt == expires && old.planNote == cleanNote) continue;
+      _accounts[index] = old.copyWith(
+        plan: plan,
+        planExpiresAt: expires,
+        clearPlanExpiresAt: expires == null,
+        planNote: cleanNote,
+        clearPlanNote: cleanNote == null,
+      );
+      _audit.insert(
+        0,
+        AdminAuditEntry(
+          createdAt: DateTime.now(),
+          action: 'set_plan',
+          actorName: 'Carlos Demo',
+          targetUserId: id,
+          targetName: old.fullName,
+          details: {
+            'from': old.plan.name,
+            'to': plan.name,
+            'expires_at': expires?.toUtc().toIso8601String(),
+            'note': cleanNote,
+          },
+        ),
+      );
+      changed++;
+    }
+    return changed;
+  }
+
+  @override
+  Future<List<PlanLimit>> getPlanLimits() async => List.unmodifiable(_limits);
+
+  @override
+  Future<void> setPlanLimit(AccountPlan plan, PlanResource resource, int? maxValue) async {
+    if (maxValue != null && maxValue < 0) throw const ServerFailure('O limite não pode ser negativo.');
+    final index = _limits.indexWhere((l) => l.plan == plan && l.resource == resource);
+    if (index == -1) throw const ServerFailure('Limite não encontrado.');
+    final old = _limits[index].maxValue;
+    _limits[index] = PlanLimit(plan: plan, resource: resource, maxValue: maxValue);
+    _audit.insert(
+      0,
+      AdminAuditEntry(
+        createdAt: DateTime.now(),
+        action: 'set_plan_limit',
+        actorName: 'Carlos Demo',
+        details: {'plan': plan.name, 'resource': resource.key, 'from': old, 'to': maxValue},
+      ),
+    );
+  }
 
   @override
   Future<void> setPlatformAdmin(String userId, bool isAdmin) async {

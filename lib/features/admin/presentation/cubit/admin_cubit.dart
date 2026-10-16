@@ -13,6 +13,7 @@ class AdminState extends Equatable {
   final List<AdminAccount> accounts;
   final List<AdminAccount> pending;
   final AdminSettings? settings;
+  final List<PlanLimit> planLimits;
   final List<AdminAuditEntry> audit;
   final String search;
   final AccountStatus? statusFilter;
@@ -24,6 +25,7 @@ class AdminState extends Equatable {
     this.accounts = const [],
     this.pending = const [],
     this.settings,
+    this.planLimits = const [],
     this.audit = const [],
     this.search = '',
     this.statusFilter,
@@ -36,6 +38,7 @@ class AdminState extends Equatable {
     List<AdminAccount>? accounts,
     List<AdminAccount>? pending,
     AdminSettings? settings,
+    List<PlanLimit>? planLimits,
     List<AdminAuditEntry>? audit,
     String? search,
     AccountStatus? statusFilter,
@@ -48,6 +51,7 @@ class AdminState extends Equatable {
         accounts: accounts ?? this.accounts,
         pending: pending ?? this.pending,
         settings: settings ?? this.settings,
+        planLimits: planLimits ?? this.planLimits,
         audit: audit ?? this.audit,
         search: search ?? this.search,
         statusFilter: clearStatusFilter ? null : (statusFilter ?? this.statusFilter),
@@ -56,7 +60,7 @@ class AdminState extends Equatable {
 
   @override
   List<Object?> get props =>
-      [status, overview, accounts, pending, settings, audit, search, statusFilter, errorMessage];
+      [status, overview, accounts, pending, settings, planLimits, audit, search, statusFilter, errorMessage];
 }
 
 /// Painel administrativo: visão geral, contas, aprovações, configurações e histórico.
@@ -74,6 +78,7 @@ class AdminCubit extends Cubit<AdminState> {
         _dataSource.listAccounts(status: AccountStatus.pending),
         _dataSource.getSettings(),
         _dataSource.listAudit(),
+        _dataSource.getPlanLimits(),
       ]);
       if (isClosed) return;
       emit(state.copyWith(
@@ -83,6 +88,7 @@ class AdminCubit extends Cubit<AdminState> {
         pending: results[2] as List<AdminAccount>,
         settings: results[3] as AdminSettings,
         audit: results[4] as List<AdminAuditEntry>,
+        planLimits: results[5] as List<PlanLimit>,
       ));
     } catch (e) {
       if (!isClosed) emit(state.copyWith(status: AdminLoadStatus.failure, errorMessage: _clean(e)));
@@ -115,6 +121,17 @@ class AdminCubit extends Cubit<AdminState> {
   Future<bool> updateSettings(AdminSettings settings) async =>
       await _act(() async {
         await _dataSource.updateSettings(settings);
+        return 1;
+      }) !=
+      null;
+
+  /// Devolve quantas contas mudaram, ou nulo se o banco recusou.
+  Future<int?> setPlan(List<String> userIds, AccountPlan plan, {DateTime? expiresAt, String? note}) =>
+      _act(() => _dataSource.setPlan(userIds, plan, expiresAt: expiresAt, note: note));
+
+  Future<bool> setPlanLimit(AccountPlan plan, PlanResource resource, int? maxValue) async =>
+      await _act(() async {
+        await _dataSource.setPlanLimit(plan, resource, maxValue);
         return 1;
       }) !=
       null;

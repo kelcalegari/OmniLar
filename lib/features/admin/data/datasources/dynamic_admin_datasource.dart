@@ -46,4 +46,15 @@ class DynamicAdminDataSource implements AdminDataSource {
 
   @override
   Future<void> setPlatformAdmin(String userId, bool isAdmin) => _active.setPlatformAdmin(userId, isAdmin);
+
+  @override
+  Future<int> setPlan(List<String> userIds, AccountPlan plan, {DateTime? expiresAt, String? note}) =>
+      _active.setPlan(userIds, plan, expiresAt: expiresAt, note: note);
+
+  @override
+  Future<List<PlanLimit>> getPlanLimits() => _active.getPlanLimits();
+
+  @override
+  Future<void> setPlanLimit(AccountPlan plan, PlanResource resource, int? maxValue) =>
+      _active.setPlanLimit(plan, resource, maxValue);
 }

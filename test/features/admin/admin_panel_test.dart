@@ -146,6 +146,69 @@ void main() {
     });
   });
 
+  group('Planos Free e Premium', () {
+    test('Leitura do plano e do limite', () {
+      final access = AccountAccess.fromJson({
+        'status': 'active',
+        'plan': 'premium',
+        'plan_expires_at': '2026-12-31T23:59:59Z',
+      });
+      expect(access.plan, AccountPlan.premium);
+      expect(access.planExpiresAt, isNotNull);
+      expect(AccountAccess.fromJson({'status': 'active'}).plan, AccountPlan.free);
+
+      final limit = PlanLimit.fromJson({'plan': 'free', 'resource': 'members_per_house', 'max_value': 4})!;
+      expect(limit.resource, PlanResource.membersPerHouse);
+      expect(limit.maxValue, 4);
+      expect(PlanLimit.fromJson({'plan': 'free', 'resource': 'desconhecido'}), isNull);
+      expect(PlanLimit.fromJson({'plan': 'premium', 'resource': 'active_projects'})!.maxValue, isNull);
+    });
+
+    test('Trocar plano registra no histórico e recusa validade passada', () async {
+      final ds = MockAdminDataSource();
+      final until = DateTime.now().add(const Duration(days: 60));
+      expect(await ds.setPlan(['demo_pending_1'], AccountPlan.premium, expiresAt: until, note: 'testador'), 1);
+
+      final detail = await ds.getAccountDetail('demo_pending_1');
+      expect(detail.account.plan, AccountPlan.premium);
+      expect(detail.account.planNote, 'testador');
+      expect(detail.history.single.description, startsWith('Plano: Free → Premium até '));
+      // Repetir não muda nada
+      expect(await ds.setPlan(['demo_pending_1'], AccountPlan.premium, expiresAt: until, note: 'testador'), 0);
+
+      await expectLater(
+        ds.setPlan(['demo_pending_2'], AccountPlan.premium, expiresAt: DateTime.now().subtract(const Duration(days: 1))),
+        throwsA(isA<ServerFailure>()),
+      );
+
+      // Voltar para Free tira a validade
+      await ds.setPlan(['demo_pending_1'], AccountPlan.free);
+      final back = await ds.getAccountDetail('demo_pending_1');
+      expect(back.account.plan, AccountPlan.free);
+      expect(back.account.planExpiresAt, isNull);
+
+      final overview = await ds.getOverview();
+      expect(overview.countPlan(AccountPlan.premium), 2);
+    });
+
+    test('Limites editáveis, sem limite quando vazio', () async {
+      final ds = MockAdminDataSource();
+      await ds.setPlanLimit(AccountPlan.free, PlanResource.aiReadsPerDay, 20);
+      await ds.setPlanLimit(AccountPlan.premium, PlanResource.housesOwned, null);
+      final limits = await ds.getPlanLimits();
+      int? value(AccountPlan p, PlanResource r) =>
+          limits.firstWhere((l) => l.plan == p && l.resource == r).maxValue;
+      expect(value(AccountPlan.free, PlanResource.aiReadsPerDay), 20);
+      expect(value(AccountPlan.premium, PlanResource.housesOwned), isNull);
+      await expectLater(
+        ds.setPlanLimit(AccountPlan.free, PlanResource.housesOwned, -1),
+        throwsA(isA<ServerFailure>()),
+      );
+      final audit = await ds.listAudit();
+      expect(audit.first.description, 'Limite do Premium: Casas como dono 3 → sem limite');
+    });
+  });
+
   group('Status da própria conta', () {
     late _MockAuthRepository auth;
     late _MockAdminDataSource ds;
@@ -219,6 +282,32 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.text('Nenhuma conta esperando aprovação.'), findsOneWidget);
       expect(find.text('2 conta(s) aprovada(s).'), findsOneWidget);
+    });
+
+    testWidgets('Configurações mostram os limites dos planos e o detalhe troca o plano', (tester) async {
+      tester.view.physicalSize = const Size(1400, 1400);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+
+      await tester.pumpWidget(const MaterialApp(home: AdminPage(initialTab: 'configuracoes')));
+      await tester.pumpAndSettle();
+      expect(find.text('Limites dos planos'), findsOneWidget);
+      expect(find.text('Moradores por casa'), findsOneWidget);
+      expect(find.text('sem limite'), findsOneWidget);
+
+      await tester.tap(find.text('Contas'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Marina Demo'));
+      await tester.pumpAndSettle();
+      expect(find.textContaining('Plano: Premium'), findsOneWidget);
+      await tester.tap(find.text('Mudar plano'));
+      await tester.pumpAndSettle();
+      expect(find.text('Plano de Marina Demo'), findsOneWidget);
+      await tester.tap(find.text('Free').last);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Salvar'));
+      await tester.pumpAndSettle();
+      expect(find.text('Marina Demo agora é Free.'), findsOneWidget);
     });
 
     testWidgets('Recusar pede o motivo antes', (tester) async {

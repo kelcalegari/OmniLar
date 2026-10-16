@@ -20,6 +20,9 @@ String _dayTime(DateTime? d) {
   return '${_day(d)} ${two(d.hour)}:${two(d.minute)}';
 }
 
+String _planText(AccountPlan plan, DateTime? expiresAt) =>
+    plan == AccountPlan.premium && expiresAt != null ? 'Premium até ${_day(expiresAt)}' : plan.label;
+
 Color _statusColor(AccountStatus s) => switch (s) {
       AccountStatus.active => AppColors.creditGreen,
       AccountStatus.pending => Colors.orange,
@@ -94,7 +97,7 @@ class _AdminView extends StatelessWidget {
                     _OverviewTab(state: state),
                     _AccountsTab(state: state),
                     _ApprovalsTab(state: state),
-                    _SettingsTab(settings: state.settings ?? const AdminSettings()),
+                    _SettingsTab(settings: state.settings ?? const AdminSettings(), planLimits: state.planLimits),
                     _AuditTab(entries: state.audit),
                   ],
                 ),
@@ -199,6 +202,9 @@ class _OverviewTab extends StatelessWidget {
             tile('Contas', '${o.accountsTotal}', Icons.people_alt_rounded),
             for (final s in AccountStatus.values)
               tile(s.label, '${o.count(s)}', Icons.circle, color: _statusColor(s)),
+            tile('Free', '${o.countPlan(AccountPlan.free)}', Icons.workspace_premium_outlined, color: Colors.grey),
+            tile('Premium', '${o.countPlan(AccountPlan.premium)}', Icons.workspace_premium_rounded, color: Colors.amber),
+            tile('Premium vencendo em 30 dias', '${o.premiumExpiring30d}', Icons.event_busy_rounded, color: Colors.amber),
             tile('Contas novas em 7 dias', '${o.accountsNew7d}', Icons.person_add_alt_1_rounded),
             tile('Casas', '${o.housesTotal}', Icons.home_rounded),
             tile('Casas ativas em 30 dias', '${o.housesActive30d}', Icons.home_work_rounded),
@@ -311,6 +317,122 @@ class _StatusChip extends StatelessWidget {
   }
 }
 
+class _PlanChip extends StatelessWidget {
+  final AccountPlan plan;
+
+  const _PlanChip(this.plan);
+
+  @override
+  Widget build(BuildContext context) {
+    final premium = plan == AccountPlan.premium;
+    final color = premium ? Colors.amber.shade700 : Colors.grey;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      decoration: BoxDecoration(color: color.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(8)),
+      child: Text(plan.label, style: TextStyle(color: color, fontSize: 11, fontWeight: FontWeight.bold)),
+    );
+  }
+}
+
+/// Troca o plano de uma conta, com validade opcional do Premium e observação.
+Future<void> _changePlan(BuildContext context, AdminAccount account) async {
+  final cubit = context.read<AdminCubit>();
+  final messenger = ScaffoldMessenger.of(context);
+  var plan = account.plan;
+  DateTime? expiresAt = account.planExpiresAt;
+  final note = TextEditingController(text: account.planNote ?? '');
+
+  final confirmed = await showDialog<bool>(
+    context: context,
+    builder: (dialogCtx) => StatefulBuilder(
+      builder: (context, setDialogState) => AlertDialog(
+        title: Text('Plano de ${account.fullName}'),
+        content: SizedBox(
+          width: 380,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              SegmentedButton<AccountPlan>(
+                segments: [
+                  for (final p in AccountPlan.values) ButtonSegment(value: p, label: Text(p.label)),
+                ],
+                selected: {plan},
+                onSelectionChanged: (s) => setDialogState(() => plan = s.first),
+              ),
+              if (plan == AccountPlan.premium) ...[
+                const SizedBox(height: 12),
+                Row(
+                  children: [
+                    Expanded(
+                      child: OutlinedButton.icon(
+                        onPressed: () async {
+                          final now = DateTime.now();
+                          final picked = await showDatePicker(
+                            context: context,
+                            initialDate: expiresAt ?? DateTime(now.year, now.month + 1, now.day),
+                            firstDate: now.add(const Duration(days: 1)),
+                            lastDate: DateTime(now.year + 10),
+                            helpText: 'Premium válido até',
+                          );
+                          if (picked != null) {
+                            // Vale até o fim do dia escolhido
+                            setDialogState(() => expiresAt = DateTime(picked.year, picked.month, picked.day, 23, 59, 59));
+                          }
+                        },
+                        icon: const Icon(Icons.event_rounded, size: 16),
+                        label: Text(expiresAt == null ? 'Sem validade' : 'Válido até ${_day(expiresAt)}'),
+                      ),
+                    ),
+                    if (expiresAt != null)
+                      IconButton(
+                        tooltip: 'Tirar a validade',
+                        onPressed: () => setDialogState(() => expiresAt = null),
+                        icon: const Icon(Icons.close_rounded, size: 18),
+                      ),
+                  ],
+                ),
+              ],
+              const SizedBox(height: 12),
+              TextField(
+                controller: note,
+                decoration: InputDecoration(
+                  labelText: 'Observação (opcional)',
+                  hintText: 'Ex.: família, testador',
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                ),
+              ),
+              const SizedBox(height: 8),
+              const Text(
+                'A casa segue o plano de quem é o dono dela. Voltar para Free não apaga nada: '
+                'o que passou do limite continua, só não dá para criar mais.',
+                style: TextStyle(fontSize: 11, color: Colors.grey),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(dialogCtx, false), child: const Text('Cancelar')),
+          FilledButton(onPressed: () => Navigator.pop(dialogCtx, true), child: const Text('Salvar')),
+        ],
+      ),
+    ),
+  );
+  if (confirmed != true) return;
+  final changed = await cubit.setPlan(
+    [account.userId],
+    plan,
+    expiresAt: plan == AccountPlan.premium ? expiresAt : null,
+    note: note.text,
+  );
+  showSaveFeedback(
+    messenger,
+    ok: changed != null,
+    success: changed == 0 ? 'Nada mudou no plano.' : '${account.fullName} agora é ${_planText(plan, expiresAt)}.',
+    failure: cubit.state.errorMessage,
+  );
+}
+
 class _AccountTile extends StatelessWidget {
   final AdminAccount account;
   final Widget? leading;
@@ -335,11 +457,19 @@ class _AccountTile extends StatelessWidget {
       ),
       subtitle: Text(
         '${account.email}\nCriada em ${_day(account.createdAt)} · último acesso ${_day(account.lastSignInAt)} · '
-        '${account.houses} casa(s)',
+        '${account.houses} casa(s) · ${_planText(account.plan, account.planExpiresAt)}',
         style: const TextStyle(fontSize: 12),
       ),
       isThreeLine: true,
-      trailing: _StatusChip(account.status),
+      trailing: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.end,
+        children: [
+          _StatusChip(account.status),
+          const SizedBox(height: 4),
+          _PlanChip(account.plan),
+        ],
+      ),
       onTap: () => showAccountDetail(context, account.userId),
     );
   }
@@ -457,6 +587,14 @@ Future<void> showAccountDetail(BuildContext context, String userId) async {
                       ),
                     if (a.statusReason != null && a.statusReason!.isNotEmpty)
                       Text('Motivo: ${a.statusReason}', style: const TextStyle(fontSize: 12)),
+                    Padding(
+                      padding: const EdgeInsets.only(top: 4),
+                      child: Text(
+                        'Plano: ${_planText(a.plan, a.planExpiresAt)}'
+                        '${(a.planNote ?? '').isEmpty ? '' : ' (${a.planNote})'}',
+                        style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+                      ),
+                    ),
                     if (a.isAdmin)
                       const Padding(
                         padding: EdgeInsets.only(top: 4),
@@ -471,7 +609,10 @@ Future<void> showAccountDetail(BuildContext context, String userId) async {
                       const Text('Nenhuma casa.', style: TextStyle(fontSize: 12, color: Colors.grey))
                     else
                       for (final h in detail.houses)
-                        Text('${h.name} · ${h.roleLabel} desde ${_day(h.joinedAt)}', style: const TextStyle(fontSize: 13)),
+                        Text(
+                          '${h.name} · ${h.roleLabel} desde ${_day(h.joinedAt)} · casa ${h.plan.label}',
+                          style: const TextStyle(fontSize: 13),
+                        ),
                     const SizedBox(height: 12),
                     Text(
                       'Leituras de IA: ${detail.aiReadsToday} hoje, ${detail.aiReadsMonth} no mês',
@@ -533,6 +674,10 @@ Future<void> showAccountDetail(BuildContext context, String userId) async {
                   }),
                   child: Text(a.isAdmin ? 'Tirar administração' : 'Tornar administrador'),
                 ),
+              TextButton(
+                onPressed: () => act(() => _changePlan(context, a)),
+                child: const Text('Mudar plano'),
+              ),
               TextButton(onPressed: () => Navigator.pop(dialogCtx), child: const Text('Fechar')),
             ],
           );
@@ -622,8 +767,9 @@ class _ApprovalsTabState extends State<_ApprovalsTab> {
 // -------------------------------------------------------------- Configurações
 class _SettingsTab extends StatefulWidget {
   final AdminSettings settings;
+  final List<PlanLimit> planLimits;
 
-  const _SettingsTab({required this.settings});
+  const _SettingsTab({required this.settings, this.planLimits = const []});
 
   @override
   State<_SettingsTab> createState() => _SettingsTabState();
@@ -719,6 +865,117 @@ class _SettingsTabState extends State<_SettingsTab> {
               'Última mudança em ${_dayTime(s.updatedAt)}${s.updatedByName == null ? '' : ' por ${s.updatedByName}'}',
               style: const TextStyle(fontSize: 12, color: Colors.grey),
             ),
+          ),
+        const Divider(height: 40),
+        const Text('Limites dos planos', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+        const SizedBox(height: 4),
+        const Text(
+          'A casa segue o plano de quem é o dono dela. O essencial da casa e o PDF dos relatórios nunca são limitados. '
+          'Toque num valor para mudar.',
+          style: TextStyle(fontSize: 12, color: Colors.grey),
+        ),
+        const SizedBox(height: 8),
+        _PlanLimitsTable(limits: widget.planLimits),
+      ],
+    );
+  }
+}
+
+class _PlanLimitsTable extends StatelessWidget {
+  final List<PlanLimit> limits;
+
+  const _PlanLimitsTable({required this.limits});
+
+  int? _value(AccountPlan plan, PlanResource resource) =>
+      limits.where((l) => l.plan == plan && l.resource == resource).firstOrNull?.maxValue;
+
+  Future<void> _edit(BuildContext context, AccountPlan plan, PlanResource resource) async {
+    final cubit = context.read<AdminCubit>();
+    final messenger = ScaffoldMessenger.of(context);
+    final current = _value(plan, resource);
+    final controller = TextEditingController(text: current?.toString() ?? '');
+    String? error;
+    final result = await showDialog<(bool, int?)>(
+      context: context,
+      builder: (dialogCtx) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: Text('${resource.label} · ${plan.label}'),
+          content: TextField(
+            controller: controller,
+            autofocus: true,
+            keyboardType: TextInputType.number,
+            decoration: InputDecoration(
+              labelText: 'Limite',
+              helperText: 'Vazio = sem limite',
+              errorText: error,
+              border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+            ),
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(dialogCtx), child: const Text('Cancelar')),
+            FilledButton(
+              onPressed: () {
+                final text = controller.text.trim();
+                if (text.isEmpty) {
+                  Navigator.pop(dialogCtx, (true, null));
+                  return;
+                }
+                final value = int.tryParse(text);
+                if (value == null || value < 0) {
+                  setDialogState(() => error = 'Digite um número inteiro, 0 ou maior');
+                  return;
+                }
+                Navigator.pop(dialogCtx, (true, value));
+              },
+              child: const Text('Salvar'),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (result == null) return;
+    final ok = await cubit.setPlanLimit(plan, resource, result.$2);
+    showSaveFeedback(messenger, ok: ok, success: 'Limite salvo.', failure: cubit.state.errorMessage);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    Widget cell(AccountPlan plan, PlanResource resource) {
+      final value = _value(plan, resource);
+      return InkWell(
+        borderRadius: BorderRadius.circular(8),
+        onTap: () => _edit(context, plan, resource),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
+          child: Text(
+            value == null ? 'sem limite' : '$value',
+            textAlign: TextAlign.center,
+            style: const TextStyle(fontWeight: FontWeight.w600),
+          ),
+        ),
+      );
+    }
+
+    return Table(
+      columnWidths: const {0: FlexColumnWidth(2.2), 1: FlexColumnWidth(), 2: FlexColumnWidth()},
+      defaultVerticalAlignment: TableCellVerticalAlignment.middle,
+      children: [
+        TableRow(
+          children: [
+            const SizedBox.shrink(),
+            for (final p in AccountPlan.values)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 4),
+                child: Text(p.label, textAlign: TextAlign.center, style: const TextStyle(fontWeight: FontWeight.bold)),
+              ),
+          ],
+        ),
+        for (final r in PlanResource.values)
+          TableRow(
+            children: [
+              Text(r.label, style: const TextStyle(fontSize: 13)),
+              for (final p in AccountPlan.values) cell(p, r),
+            ],
           ),
       ],
     );

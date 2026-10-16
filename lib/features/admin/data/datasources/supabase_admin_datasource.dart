@@ -126,4 +126,34 @@ class SupabaseAdminDataSource implements AdminDataSource {
   Future<void> setPlatformAdmin(String userId, bool isAdmin) => _call(() async {
         await client.rpc('admin_set_platform_admin', params: {'p_user_id': userId, 'p_is_admin': isAdmin});
       }, 'Erro ao mudar o acesso de administrador');
+
+  @override
+  Future<int> setPlan(List<String> userIds, AccountPlan plan, {DateTime? expiresAt, String? note}) =>
+      _call(() async {
+        final changed = await client.rpc('admin_set_plan', params: {
+          'p_user_ids': userIds,
+          'p_plan': plan.name,
+          'p_expires_at': plan == AccountPlan.premium ? expiresAt?.toUtc().toIso8601String() : null,
+          'p_note': note,
+        });
+        return (changed as num?)?.toInt() ?? 0;
+      }, 'Erro ao trocar o plano');
+
+  @override
+  Future<List<PlanLimit>> getPlanLimits() => _call(() async {
+        final rows = await client.rpc('admin_get_plan_limits');
+        return [
+          for (final r in (rows as List).cast<Map>())
+            if (PlanLimit.fromJson(Map<String, dynamic>.from(r)) case final limit?) limit,
+        ];
+      }, 'Erro ao carregar os limites dos planos');
+
+  @override
+  Future<void> setPlanLimit(AccountPlan plan, PlanResource resource, int? maxValue) => _call(() async {
+        await client.rpc('admin_set_plan_limit', params: {
+          'p_plan': plan.name,
+          'p_resource': resource.key,
+          'p_max_value': maxValue,
+        });
+      }, 'Erro ao salvar o limite');
 }

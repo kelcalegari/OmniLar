@@ -20,4 +20,12 @@ abstract class AdminDataSource {
   Future<void> updateSettings(AdminSettings settings);
   Future<List<AdminAuditEntry>> listAudit({int limit = 100});
   Future<void> setPlatformAdmin(String userId, bool isAdmin);
+
+  /// Troca o plano de uma ou várias contas (validade só vale para o Premium).
+  Future<int> setPlan(List<String> userIds, AccountPlan plan, {DateTime? expiresAt, String? note});
+
+  Future<List<PlanLimit>> getPlanLimits();
+
+  /// Nulo = sem limite.
+  Future<void> setPlanLimit(AccountPlan plan, PlanResource resource, int? maxValue);
 }

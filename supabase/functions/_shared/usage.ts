@@ -11,12 +11,27 @@ export interface AiUsageRecord {
 }
 
 /**
- * Limite diário padrão por casa no plano gratuito do sistema (quando não há chave BYOK).
+ * Limite diário usado só se o banco não responder o limite do plano da casa.
  */
-export const DEFAULT_DAILY_QUOTA_PER_HOUSE = 50;
+export const DEFAULT_DAILY_QUOTA_PER_HOUSE = 10;
 
 /**
- * Verifica se a casa ou membro atingiu a cota diária de requisições de IA gratuita.
+ * Limite diário de leituras de IA do plano da casa (migration 0069). Nulo = sem limite.
+ */
+export async function houseAiDailyLimit(
+  supabaseClient: ReturnType<typeof createClient>,
+  houseId: string,
+): Promise<number | null> {
+  const { data, error } = await supabaseClient.rpc('house_ai_daily_limit', { p_house_id: houseId });
+  if (error) {
+    console.warn('Erro ao ler o limite do plano:', error.message);
+    return DEFAULT_DAILY_QUOTA_PER_HOUSE;
+  }
+  return typeof data === 'number' ? data : null;
+}
+
+/**
+ * Verifica se a casa atingiu a cota diária de leituras de IA do plano dela.
  * Se o usuário informou sua própria chave de API (BYOK), a cota é ilimitada.
  */
 export async function checkAiDailyQuota(
@@ -24,10 +39,16 @@ export async function checkAiDailyQuota(
   houseId: string,
   memberId: string,
   hasCustomKey: boolean,
-  quotaLimit = DEFAULT_DAILY_QUOTA_PER_HOUSE,
+  quotaLimit?: number | null,
 ): Promise<{ allowed: boolean; currentCount: number; limit: number }> {
   // Usuário com chave própria não consome cota do app
   if (hasCustomKey) {
+    return { allowed: true, currentCount: 0, limit: Infinity };
+  }
+
+  // Sem limite informado, vale o do plano da casa (Free ou Premium)
+  const limit = quotaLimit === undefined ? await houseAiDailyLimit(supabaseClient, houseId) : quotaLimit;
+  if (limit === null) {
     return { allowed: true, currentCount: 0, limit: Infinity };
   }
 
@@ -43,14 +64,14 @@ export async function checkAiDailyQuota(
   if (error) {
     console.warn('Erro ao verificar ai_usage:', error.message);
     // Sem conseguir contar o uso, não libera a chave do sistema
-    return { allowed: false, currentCount: 0, limit: quotaLimit };
+    return { allowed: false, currentCount: 0, limit };
   }
 
   const currentCount = count || 0;
   return {
-    allowed: currentCount < quotaLimit,
+    allowed: currentCount < limit,
     currentCount,
-    limit: quotaLimit,
+    limit,
   };
 }
 
