@@ -24,6 +24,7 @@ import '../../../auth/domain/repositories/auth_repository.dart';
 import '../../domain/entities/capture_proposal.dart';
 import '../../domain/services/boleto_parser.dart';
 import '../../domain/services/capture_service.dart';
+import '../utils/camera_release.dart';
 import '../../../finance/presentation/cubit/finance_cubit.dart';
 import '../../../finance/domain/entities/category.dart';
 import '../../../finance/domain/entities/house_expense.dart';
@@ -52,7 +53,7 @@ class SmartScannerPage extends StatefulWidget {
   State<SmartScannerPage> createState() => _SmartScannerPageState();
 }
 
-class _SmartScannerPageState extends State<SmartScannerPage> {
+class _SmartScannerPageState extends State<SmartScannerPage> with WidgetsBindingObserver {
   final _barcodeController = TextEditingController();
   int _activeTabIndex = 0; // 0 = Câmera/Captura, 1 = Digitar Linha do Boleto
   CaptureProposal? _currentProposal;
@@ -86,6 +87,22 @@ class _SmartScannerPageState extends State<SmartScannerPage> {
   MobileScannerController? _scannerController;
   bool _isCameraActive = false;
 
+  /// Celular: câmera traseira, a que lê nota e boleto. Trocada só pelo botão.
+  CameraFacing _cameraFacing = CameraFacing.back;
+
+  /// Câmera ligando, desligando ou trocando: as próximas ordens esperam.
+  Future<void> _cameraWork = Future.value();
+  bool _isClosing = false;
+
+  /// Câmera ligada por esta tela. Não confia no estado da biblioteca, que na
+  /// web às vezes marca parada com a câmera ainda ligada.
+  bool _cameraOn = false;
+  bool _isInBackground = false;
+
+  /// A câmera só fica ligada enquanto o visor está na tela.
+  bool get _wantsCamera =>
+      !_isClosing && !_isInBackground && mounted && _activeTabIndex == 0 && _currentProposal == null && !_isProcessing;
+
   bool get _isLiveCameraSupported {
     if (kIsWeb) return true;
     return Platform.isAndroid || Platform.isIOS || Platform.isMacOS;
@@ -94,38 +111,110 @@ class _SmartScannerPageState extends State<SmartScannerPage> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _currentProposal = widget.initialProposal;
     if (_isLiveCameraSupported) {
       _initCamera();
     }
   }
 
+  /// Cria o controle da câmera. Quem liga e desliga é [_syncCamera], depois
+  /// de o visor entrar na tela; assim a câmera não fica ligada sem visor.
   void _initCamera() {
+    watchBrowserCamera();
+    final old = _scannerController;
+    _scannerController = MobileScannerController(
+      autoStart: false,
+      detectionSpeed: DetectionSpeed.noDuplicates,
+      facing: _cameraFacing,
+    );
+    if (old != null) _queueCamera(() => _releaseCamera(old));
+    setState(() => _isCameraActive = true);
+  }
+
+  /// Uma ordem de câmera por vez: ligar no meio de um desligar trava o
+  /// navegador e deixa a câmera presa ligada.
+  void _queueCamera(Future<void> Function() work) {
+    _cameraWork = _cameraWork.then((_) => work()).catchError((_) {});
+  }
+
+  Future<void> _stopCamera(MobileScannerController controller) async {
+    _cameraOn = false;
     try {
-      _scannerController?.dispose();
-      _scannerController = MobileScannerController(
-        detectionSpeed: DetectionSpeed.noDuplicates,
-        facing: kIsWeb ? CameraFacing.front : CameraFacing.back,
-      );
-      if (mounted) {
-        setState(() {
-          _isCameraActive = true;
-        });
-      }
-    } catch (_) {
-      if (mounted) {
-        setState(() {
-          _isCameraActive = false;
-        });
-      }
+      await controller.stop();
+    } finally {
+      releaseBrowserCamera();
     }
+  }
+
+  Future<void> _releaseCamera(MobileScannerController controller) async {
+    try {
+      await _stopCamera(controller);
+    } catch (_) {}
+    await controller.dispose();
+    releaseBrowserCamera();
+  }
+
+  /// Liga a câmera quando o visor aparece e desliga quando some (revisão,
+  /// linha digitável, processando ou tela fechada).
+  void _syncCamera() {
+    final controller = _scannerController;
+    if (controller == null) return;
+    _queueCamera(() async {
+      if (!identical(controller, _scannerController)) return;
+      if (_wantsCamera && !_cameraOn) {
+        try {
+          await controller.start(cameraDirection: _cameraFacing);
+          _cameraOn = true;
+        } catch (_) {
+          if (mounted) setState(() => _isCameraActive = false);
+        }
+        // Visor fechado enquanto a câmera ligava: desliga já
+        if (!_wantsCamera) await _stopCamera(controller);
+      } else if (!_wantsCamera && _cameraOn) {
+        await _stopCamera(controller);
+      }
+    });
+  }
+
+  /// Troca frontal/traseira pela direção guardada aqui: no Safari a câmera
+  /// não informa a direção e a troca automática da biblioteca não funciona.
+  void _switchCamera() {
+    final controller = _scannerController;
+    if (controller == null) return;
+    _cameraFacing = _cameraFacing == CameraFacing.back ? CameraFacing.front : CameraFacing.back;
+    _queueCamera(() async {
+      if (!identical(controller, _scannerController) || !_wantsCamera) return;
+      await _stopCamera(controller);
+      try {
+        await controller.start(cameraDirection: _cameraFacing);
+        _cameraOn = true;
+      } catch (_) {
+        // Aparelho sem a outra câmera: volta para a que funcionava
+        _cameraFacing = _cameraFacing == CameraFacing.back ? CameraFacing.front : CameraFacing.back;
+        await controller.start(cameraDirection: _cameraFacing);
+        _cameraOn = true;
+      }
+      if (!_wantsCamera) await _stopCamera(controller);
+    });
+  }
+
+  /// App ou aba do site em segundo plano: a câmera desliga e volta ao retornar.
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    _isInBackground = state == AppLifecycleState.hidden || state == AppLifecycleState.paused;
+    _syncCamera();
   }
 
   @override
   void dispose() {
     _barcodeController.dispose();
     _titleController.dispose();
-    _scannerController?.dispose();
+    WidgetsBinding.instance.removeObserver(this);
+    _isClosing = true;
+    final controller = _scannerController;
+    _scannerController = null;
+    if (controller != null) _queueCamera(() => _releaseCamera(controller));
     super.dispose();
   }
 
@@ -1065,6 +1154,10 @@ class _SmartScannerPageState extends State<SmartScannerPage> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    // Depois do quadro: o visor já entrou (ou saiu) da tela
+    if (_scannerController != null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => _syncCamera());
+    }
 
     if (_isProcessing) {
       return Padding(
@@ -1202,7 +1295,7 @@ class _SmartScannerPageState extends State<SmartScannerPage> {
                             padding: EdgeInsets.zero,
                             icon: const Icon(Icons.cameraswitch_rounded, color: Colors.white, size: 18),
                             tooltip: 'Alternar Câmera / Webcam',
-                            onPressed: () => _scannerController?.switchCamera(),
+                            onPressed: _switchCamera,
                           ),
                         ),
                       ),
