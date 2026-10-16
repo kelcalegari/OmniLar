@@ -24,6 +24,10 @@ enum PushStatus {
 
   /// Permitido e com o aparelho registrado.
   enabled,
+
+  /// Permitido, mas o aparelho não foi registrado (o motivo fica em
+  /// [PushService.lastError]).
+  failed,
 }
 
 /// Push pelo FCM (Android, navegador e iPhone com o site instalado). O app só
@@ -39,6 +43,9 @@ class PushService {
   StreamSubscription<String>? _tokenRefresh;
   StreamSubscription<RemoteMessage>? _opened;
   String? _currentUserId;
+
+  /// Motivo da última falha ao registrar o aparelho, para mostrar na tela.
+  String? lastError;
 
   PushService({required this.client, required this.isDemoMode});
 
@@ -79,8 +86,16 @@ class PushService {
     if (current == PushStatus.unsupported || current == PushStatus.needsInstall) return current;
     final settings = await FirebaseMessaging.instance.requestPermission();
     final result = _fromAuthorization(settings.authorizationStatus);
-    if (result == PushStatus.enabled) await _registerToken();
-    return result;
+    if (result != PushStatus.enabled) return result;
+    return await _registerToken() ? PushStatus.enabled : PushStatus.failed;
+  }
+
+  /// Com a permissão já dada, confere o registro deste aparelho (abrir os
+  /// Ajustes refaz o registro e mostra uma falha, se houver).
+  Future<PushStatus> refresh() async {
+    final current = await status();
+    if (current != PushStatus.enabled) return current;
+    return await _registerToken() ? PushStatus.enabled : PushStatus.failed;
   }
 
   /// Começa a acompanhar a sessão: com permissão já dada, registra o aparelho
@@ -118,22 +133,33 @@ class PushService {
     if (link != null && link.startsWith('/')) onOpenDeeplink?.call(link);
   }
 
-  Future<void> _registerToken() async {
+  /// Pede o token ao FCM e grava. Devolve se deu certo; senão, o motivo fica
+  /// em [lastError].
+  Future<bool> _registerToken() async {
     try {
       // ignore: deprecated_member_use
       final token = await FirebaseMessaging.instance.getToken(
         vapidKey: kIsWeb ? FirebaseConfig.webPushVapidKey : null,
       );
-      if (token != null) await _saveToken(token);
+      if (token == null || token.isEmpty) {
+        lastError = 'O Firebase não devolveu o código deste aparelho.';
+        return false;
+      }
+      return await _saveToken(token);
     } catch (e) {
+      lastError = 'Firebase: $e';
       debugPrint('Não foi possível registrar o aparelho para push: $e');
+      return false;
     }
   }
 
-  Future<void> _saveToken(String token) async {
+  Future<bool> _saveToken(String token) async {
     final supabase = client;
     final userId = supabase?.auth.currentUser?.id;
-    if (supabase == null || userId == null || isDemoMode()) return;
+    if (supabase == null || userId == null || isDemoMode()) {
+      lastError = 'Sem sessão: entre na conta e tente de novo.';
+      return false;
+    }
     try {
       await supabase.from('device_tokens').upsert({
         'user_id': userId,
@@ -142,8 +168,12 @@ class PushService {
         'last_seen_at': DateTime.now().toUtc().toIso8601String(),
       }, onConflict: 'token');
       _currentUserId = userId;
+      lastError = null;
+      return true;
     } catch (e) {
+      lastError = 'Banco: $e';
       debugPrint('Não foi possível gravar o aparelho para push: $e');
+      return false;
     }
   }
 

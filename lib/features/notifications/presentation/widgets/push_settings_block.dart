@@ -26,7 +26,8 @@ class _PushSettingsBlockState extends State<PushSettingsBlock> {
   @override
   void initState() {
     super.initState();
-    _service.status().then((s) {
+    // Com a permissão já dada, refaz o registro para mostrar uma falha, se houver
+    _service.refresh().then((s) {
       if (mounted) setState(() => _status = s);
     });
   }
@@ -78,6 +79,21 @@ class _PushSettingsBlockState extends State<PushSettingsBlock> {
                 ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
                 : const Icon(Icons.notifications_rounded),
             label: const Text('Ativar notificações'),
+          ),
+        ];
+      case PushStatus.failed:
+        return [
+          const _Line(icon: Icons.error_outline_rounded, color: AppColors.debtRed,
+              text: 'A permissão foi dada, mas não foi possível registrar este aparelho.'),
+          if (_service.lastError != null) ...[
+            const SizedBox(height: 8),
+            SelectableText(_service.lastError!, style: const TextStyle(fontSize: 12, color: Colors.grey)),
+          ],
+          const SizedBox(height: 12),
+          OutlinedButton.icon(
+            onPressed: _busy ? null : _enable,
+            icon: const Icon(Icons.refresh_rounded),
+            label: const Text('Tentar de novo'),
           ),
         ];
       case PushStatus.denied:
