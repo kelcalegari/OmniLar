@@ -197,7 +197,8 @@ void main() {
 
     expect(find.text('Editar Perfil da Conta'), findsOneWidget);
     expect(find.text('Nome Completo'), findsOneWidget);
-    expect(find.text('E-mail da Conta'), findsOneWidget);
+    // O e-mail de acesso agora é trocado em "Conta e segurança"
+    expect(find.text('E-mail da Conta'), findsNothing);
     expect(find.text('Chave Pix (para receber acertos e Super Pix)'), findsOneWidget);
 
     final nameField = find.widgetWithText(TextFormField, 'Nome Completo');

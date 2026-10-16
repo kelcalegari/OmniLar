@@ -242,6 +242,66 @@ class MockAuthDataSource implements AuthDataSource {
     return user;
   }
 
+  String? _pendingEmailChange;
+
+  @override
+  String? get pendingEmailChange => _pendingEmailChange;
+
+  @override
+  List<String> get signInProviders => const ['email'];
+
+  @override
+  Future<void> changePassword({
+    required String currentPassword,
+    required String newPassword,
+  }) async {
+    await Future.delayed(const Duration(milliseconds: 150));
+    final email = _currentUser?.email;
+    if (email == null) throw const AuthFailure('Usuário não autenticado.');
+    if (_passwords[email] != currentPassword) {
+      throw const AuthFailure('Senha atual incorreta.');
+    }
+    if (currentPassword == newPassword) {
+      throw const AuthFailure('A nova senha precisa ser diferente da atual.');
+    }
+    _passwords[email] = newPassword;
+  }
+
+  @override
+  Future<void> requestEmailChange(String newEmail) async {
+    await Future.delayed(const Duration(milliseconds: 150));
+    final normalized = newEmail.trim().toLowerCase();
+    if (_currentUser == null) throw const AuthFailure('Usuário não autenticado.');
+    if (normalized == _currentUser!.email) {
+      throw const AuthFailure('Este já é o seu e-mail de acesso.');
+    }
+    if (_users.containsKey(normalized)) {
+      throw const AuthFailure('Este e-mail já tem uma conta. Entre com sua senha.');
+    }
+    _pendingEmailChange = normalized;
+  }
+
+  @override
+  Future<bool> confirmEmailChange({
+    required String email,
+    required String code,
+  }) async {
+    await Future.delayed(const Duration(milliseconds: 150));
+    final pending = _pendingEmailChange;
+    final user = _currentUser;
+    if (pending == null || user == null || code.trim() != mockConfirmationCode) {
+      throw const AuthFailure('Código inválido ou expirado. Peça um novo.');
+    }
+    _users.remove(user.email);
+    final password = _passwords.remove(user.email);
+    _currentUser = user.copyWith(email: pending);
+    _users[pending] = _currentUser!;
+    if (password != null) _passwords[pending] = password;
+    _pendingEmailChange = null;
+    _authStateController.add(_currentUser);
+    return true;
+  }
+
   @override
   Future<void> signInDemo({required String memberId}) async {
     await Future.delayed(const Duration(milliseconds: 200));

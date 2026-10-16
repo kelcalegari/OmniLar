@@ -40,6 +40,25 @@ abstract class AuthDataSource {
     required String code,
     required String newPassword,
   });
+
+  /// Novo e-mail pedido que ainda espera confirmação, se houver.
+  String? get pendingEmailChange => null;
+
+  /// Formas de entrar ligadas à conta ('email', 'google').
+  List<String> get signInProviders => const ['email'];
+
+  /// Troca a senha de quem está logado, conferindo a senha atual.
+  Future<void> changePassword({
+    required String currentPassword,
+    required String newPassword,
+  });
+
+  /// Pede a troca do e-mail de acesso; o Supabase envia o(s) código(s).
+  Future<void> requestEmailChange(String newEmail);
+
+  /// Confere um código da troca de e-mail. Devolve `true` quando a troca
+  /// terminou e `false` quando ainda falta o código do outro endereço.
+  Future<bool> confirmEmailChange({required String email, required String code});
   Future<void> signInDemo({required String memberId});
   Future<void> signOut();
   Future<UserProfile> updateProfile({

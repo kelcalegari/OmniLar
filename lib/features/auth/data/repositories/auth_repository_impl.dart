@@ -77,6 +77,33 @@ class AuthRepositoryImpl implements AuthRepository {
   }
 
   @override
+  String? get pendingEmailChange => _dataSource.pendingEmailChange;
+
+  @override
+  List<String> get signInProviders => _dataSource.signInProviders;
+
+  @override
+  Future<void> changePassword({
+    required String currentPassword,
+    required String newPassword,
+  }) {
+    return _dataSource.changePassword(
+      currentPassword: currentPassword,
+      newPassword: newPassword,
+    );
+  }
+
+  @override
+  Future<void> requestEmailChange(String newEmail) {
+    return _dataSource.requestEmailChange(newEmail);
+  }
+
+  @override
+  Future<bool> confirmEmailChange({required String email, required String code}) {
+    return _dataSource.confirmEmailChange(email: email, code: code);
+  }
+
+  @override
   Future<void> signInDemo({required String memberId}) {
     return _dataSource.signInDemo(memberId: memberId);
   }

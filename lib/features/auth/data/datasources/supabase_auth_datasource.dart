@@ -20,9 +20,11 @@ class SupabaseAuthDataSource implements AuthDataSource {
   bool _isDemoMode = false;
   bool _isRestoringSession = false;
 
-  /// A sessão aberta pelo código de redefinição só vale depois que a nova
-  /// senha for gravada; até lá o app não deve entrar.
-  bool _isResettingPassword = false;
+  /// Segura os avisos de sessão do Supabase enquanto uma operação abre ou
+  /// renova a sessão por conta própria: a do código de redefinição só vale
+  /// depois da senha nova, e a conferência da senha atual não deve recarregar
+  /// perfil e casa.
+  bool _holdAuthEvents = false;
 
   SupabaseAuthDataSource(this._client) {
     _initAuthStateListener();
@@ -30,7 +32,7 @@ class SupabaseAuthDataSource implements AuthDataSource {
 
   void _initAuthStateListener() {
     _client.auth.onAuthStateChange.listen((data) async {
-      if (_isResettingPassword) return;
+      if (_holdAuthEvents) return;
       final user = data.session?.user;
       if (user == null) {
         _currentUser = null;
@@ -251,7 +253,7 @@ class SupabaseAuthDataSource implements AuthDataSource {
     required String newPassword,
   }) async {
     _isDemoMode = false;
-    _isResettingPassword = true;
+    _holdAuthEvents = true;
     try {
       final res = await _client.auth.verifyOTP(
         email: email.trim(),
@@ -276,7 +278,7 @@ class SupabaseAuthDataSource implements AuthDataSource {
         }
       }
 
-      _isResettingPassword = false;
+      _holdAuthEvents = false;
       await _loadProfileAndHouse(user);
       return _currentUser ??
           UserProfile(id: user.id, email: user.email ?? '', fullName: email);
@@ -286,7 +288,108 @@ class SupabaseAuthDataSource implements AuthDataSource {
       if (e is Failure) rethrow;
       throw AuthFailure('Erro ao redefinir a senha: $e');
     } finally {
-      _isResettingPassword = false;
+      _holdAuthEvents = false;
+    }
+  }
+
+  @override
+  String? get pendingEmailChange {
+    final pending = _client.auth.currentUser?.newEmail;
+    return (pending == null || pending.isEmpty) ? null : pending;
+  }
+
+  @override
+  List<String> get signInProviders {
+    final identities = _client.auth.currentUser?.identities ?? const [];
+    final providers = identities.map((i) => i.provider).toSet().toList();
+    return providers.isEmpty ? const ['email'] : providers;
+  }
+
+  @override
+  Future<void> changePassword({
+    required String currentPassword,
+    required String newPassword,
+  }) async {
+    final email = _client.auth.currentUser?.email;
+    if (email == null) throw const AuthFailure('Usuário não autenticado.');
+
+    _holdAuthEvents = true;
+    try {
+      // Confere a senha atual (o Supabase não exige isso por padrão)
+      try {
+        await _client.auth.signInWithPassword(
+          email: email,
+          password: currentPassword,
+        );
+      } on AuthException catch (e) {
+        if (e.code == 'invalid_credentials' ||
+            e.message.toLowerCase().contains('invalid login credentials')) {
+          throw const AuthFailure('Senha atual incorreta.');
+        }
+        rethrow;
+      }
+      await _client.auth.updateUser(
+        UserAttributes(password: newPassword, currentPassword: currentPassword),
+      );
+    } on AuthException catch (e) {
+      throw AuthFailure(authErrorMessage(e));
+    } catch (e) {
+      if (e is Failure) rethrow;
+      throw AuthFailure('Erro ao trocar a senha: $e');
+    } finally {
+      _holdAuthEvents = false;
+    }
+  }
+
+  @override
+  Future<void> requestEmailChange(String newEmail) async {
+    final trimmed = newEmail.trim();
+    final current = _client.auth.currentUser?.email ?? '';
+    if (trimmed.toLowerCase() == current.toLowerCase()) {
+      throw const AuthFailure('Este já é o seu e-mail de acesso.');
+    }
+    try {
+      await _client.auth.updateUser(UserAttributes(email: trimmed));
+    } on AuthException catch (e) {
+      throw AuthFailure(authErrorMessage(e));
+    } catch (e) {
+      throw AuthFailure('Erro ao pedir a troca do e-mail: $e');
+    }
+  }
+
+  @override
+  Future<bool> confirmEmailChange({
+    required String email,
+    required String code,
+  }) async {
+    try {
+      final res = await _client.auth.verifyOTP(
+        email: email.trim(),
+        token: code.trim(),
+        type: OtpType.emailChange,
+      );
+      // Troca segura: o primeiro código aceito ainda não devolve sessão
+      if (res.session == null) return false;
+
+      final user = res.user ?? _client.auth.currentUser;
+      final newEmail = user?.email;
+      if (user != null && newEmail != null) {
+        // O gatilho da migration 0071 também faz isso; aqui é para já aparecer
+        try {
+          await _client
+              .from('profiles')
+              .update({'email': newEmail})
+              .eq('id', user.id);
+        } catch (_) {}
+        _currentUser = _currentUser?.copyWith(email: newEmail);
+        _authStateController.add(_currentUser);
+      }
+      return true;
+    } on AuthException catch (e) {
+      throw AuthFailure(authErrorMessage(e));
+    } catch (e) {
+      if (e is Failure) rethrow;
+      throw AuthFailure('Erro ao confirmar o novo e-mail: $e');
     }
   }
 

@@ -219,6 +219,38 @@ class AuthCubit extends Cubit<AuthState> {
     );
   }
 
+  String? get pendingEmailChange => _repository.pendingEmailChange;
+  List<String> get signInProviders => _repository.signInProviders;
+
+  /// Troca a senha de quem está logado. Lança a falha para a tela mostrar.
+  Future<void> changePassword({
+    required String currentPassword,
+    required String newPassword,
+  }) {
+    return _repository.changePassword(
+      currentPassword: currentPassword,
+      newPassword: newPassword,
+    );
+  }
+
+  /// Pede a troca do e-mail. Lança a falha para a tela mostrar.
+  Future<void> requestEmailChange(String newEmail) {
+    return _repository.requestEmailChange(newEmail);
+  }
+
+  /// Confere um código da troca de e-mail; `true` quando a troca terminou.
+  Future<bool> confirmEmailChange({
+    required String email,
+    required String code,
+  }) async {
+    final done = await _repository.confirmEmailChange(email: email, code: code);
+    final user = _repository.currentUser;
+    if (done && user != null) {
+      emit(state.copyWith(user: user, errorMessage: null));
+    }
+    return done;
+  }
+
   /// Desiste da confirmação (e-mail errado ou já confirmado pelo link).
   void cancelEmailConfirmation() {
     emit(const AuthState(status: AuthStatus.unauthenticated));

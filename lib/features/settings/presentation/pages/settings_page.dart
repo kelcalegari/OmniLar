@@ -32,6 +32,7 @@ import '../../../../core/widgets/recurrence_scope_dialog.dart';
 import '../../../../core/theme/theme_cubit.dart';
 import '../../../../core/widgets/theme_toggle_button.dart';
 import '../widgets/ai_key_config_sheet.dart';
+import '../widgets/account_security_panel.dart';
 import '../../../../core/widgets/save_feedback.dart';
 
 part 'settings_groups.dart';
@@ -120,7 +121,6 @@ class _SettingsPageState extends State<SettingsPage> {
   void _showEditProfileModal(BuildContext context, UserProfile? user) {
     if (user == null) return;
     final nameController = TextEditingController(text: user.fullName);
-    final emailController = TextEditingController(text: user.email);
     final pixKeyController = TextEditingController(text: user.pixKey ?? '');
     final formKey = GlobalKey<FormState>();
     bool isSaving = false;
@@ -179,7 +179,7 @@ class _SettingsPageState extends State<SettingsPage> {
                       ),
                       const SizedBox(height: 6),
                       const Text(
-                        'Atualize seu nome de exibição, e-mail de acesso e Chave Pix para transferências e Super Pix.',
+                        'Atualize seu nome de exibição e a Chave Pix para transferências e Super Pix. E-mail e senha ficam em Conta e segurança.',
                         style: TextStyle(color: Colors.grey, fontSize: 13),
                       ),
                       const SizedBox(height: 20),
@@ -204,30 +204,6 @@ class _SettingsPageState extends State<SettingsPage> {
                       ),
                       const SizedBox(height: 16),
                       TextFormField(
-                        controller: emailController,
-                        keyboardType: TextInputType.emailAddress,
-                        decoration: InputDecoration(
-                          labelText: 'E-mail da Conta',
-                          prefixIcon: const Icon(Icons.email_outlined),
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                        ),
-                        validator: (value) {
-                          if (value == null || value.trim().isEmpty) {
-                            return 'Informe seu e-mail';
-                          }
-                          final emailRegex = RegExp(
-                            r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$',
-                          );
-                          if (!emailRegex.hasMatch(value.trim())) {
-                            return 'Informe um e-mail válido';
-                          }
-                          return null;
-                        },
-                      ),
-                      const SizedBox(height: 16),
-                      TextFormField(
                         controller: pixKeyController,
                         decoration: InputDecoration(
                           labelText: 'Chave Pix (para receber acertos e Super Pix)',
@@ -242,36 +218,6 @@ class _SettingsPageState extends State<SettingsPage> {
                         ),
                       ),
                       const SizedBox(height: 14),
-                      Container(
-                        padding: const EdgeInsets.all(12),
-                        decoration: BoxDecoration(
-                          color: Colors.amber.withValues(alpha: 0.1),
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(
-                            color: Colors.amber.withValues(alpha: 0.3),
-                          ),
-                        ),
-                        child: const Row(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Icon(
-                              Icons.info_outline_rounded,
-                              color: Colors.amber,
-                              size: 20,
-                            ),
-                            SizedBox(width: 10),
-                            Expanded(
-                              child: Text(
-                                'Ao alterar seu e-mail, pode ser necessário confirmar o novo endereço através de um link enviado para a sua caixa postal.',
-                                style: TextStyle(
-                                  fontSize: 12,
-                                  color: Colors.brown,
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
                       const SizedBox(height: 24),
                       Row(
                         children: [
@@ -303,13 +249,8 @@ class _SettingsPageState extends State<SettingsPage> {
 
                                       final newName = nameController.text
                                           .trim();
-                                      final newEmail = emailController.text
-                                          .trim();
                                       final newPixKey = pixKeyController.text
                                           .trim();
-                                      final emailChanged =
-                                          newEmail.toLowerCase() !=
-                                          user.email.toLowerCase();
                                       final messenger = ScaffoldMessenger.of(
                                         context,
                                       );
@@ -320,16 +261,13 @@ class _SettingsPageState extends State<SettingsPage> {
                                             .read<AuthCubit>()
                                             .updateProfile(
                                               fullName: newName,
-                                              email: newEmail,
                                               pixKey: newPixKey,
                                             );
                                         navigator.pop();
                                         messenger.showSnackBar(
                                           SnackBar(
-                                            content: Text(
-                                              emailChanged
-                                                  ? 'Perfil atualizado! Verifique a confirmação em $newEmail caso necessário.'
-                                                  : 'Perfil atualizado com sucesso! ✨',
+                                            content: const Text(
+                                              'Perfil atualizado com sucesso! ✨',
                                             ),
                                             backgroundColor: AppColors.primary,
                                           ),

@@ -84,7 +84,23 @@ Itens originais da fase:
 - Link "Esqueci minha senha" na aba Entrar → tela `/login/recuperar-senha`: e-mail → `resetPasswordForEmail` → código → `verifyOTP(type: OtpType.recovery)`, que abre uma sessão → nova senha → `updateUser(password:)`.
 - Não revelar se o e-mail existe: mensagem neutra ("se houver conta, enviamos um código").
 
-### Fase 3 — Conta em Configurações (e-mail e senha)
+### Fase 3 — Conta em Configurações (e-mail e senha) ✅ código pronto (branch `feat/auth-conta-seguranca`, feita a partir da Fase 2, 16/10/2026)
+
+**O que foi feito:**
+- Grupo novo **Conta e segurança** nos Ajustes (`AccountSecurityPanel`), com o e-mail atual, a troca pendente (com "Digitar código") e as formas de entrar.
+- **Alterar senha:** pede a senha atual, conferida com `signInWithPassword` sem recarregar perfil e casa, e grava a nova com `updateUser(password, currentPassword)`.
+- **Alterar e-mail:** novo e-mail → código do novo endereço → se a troca segura estiver ligada, código do e-mail atual. O passo intermediário é reconhecido porque o Supabase não devolve sessão nele.
+- O campo de e-mail saiu do "Editar perfil".
+- Busca dos Ajustes: entradas "E-mail de acesso" e "Senha".
+- Testes: 4 de cubit e 1 de widget.
+
+**Migration 0071** (`20261016100000_0071_sync_profile_email.sql`): gatilho `on_auth_user_email_changed` copia `auth.users.email` para `profiles.email`, mais uma correção única dos perfis desalinhados (hoje: 0). Foi testada em bloco com rollback: o gatilho copia o e-mail, não dispara quando muda outra coluna, `anon` não executa a função e nada ficou gravado. **Ainda não aplicada:** espera o OK do dono.
+
+**Depende do template "Change email address" com `{{ .Token }}`.** Sem ele, a troca chega só por link.
+
+**Ainda não testado com conta real.**
+
+Itens originais da fase:
 - Separar do "Editar perfil" uma seção **Conta e segurança**: e-mail atual, e-mail pendente (se houver) e métodos de acesso ligados (e-mail/senha, Google).
 - **Alterar senha:** senha atual + nova + confirmação. Confere a atual com `signInWithPassword` e depois chama `updateUser(password:)`. Quem só tem Google ganha a opção "Criar senha".
 - **Alterar e-mail:** tela própria → `updateUser(email:)` → códigos (no e-mail novo e, com a troca segura, também no antigo) → `verifyOTP(type: OtpType.emailChange)`. Mostrar "aguardando confirmação de <novo>" com reenviar/cancelar.

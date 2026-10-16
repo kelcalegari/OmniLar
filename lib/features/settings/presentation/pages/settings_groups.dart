@@ -26,6 +26,12 @@ enum _SettingsGroup {
     'Assistente, aparência e histórico',
     Icons.settings_outlined,
     Colors.blueGrey,
+  ),
+  account(
+    'Conta e segurança',
+    'E-mail de acesso e senha',
+    Icons.lock_outline_rounded,
+    Colors.teal,
   );
 
   const _SettingsGroup(this.title, this.description, this.icon, this.color);
@@ -116,6 +122,7 @@ extension _SettingsGroupViews on _SettingsPageState {
       _SettingsGroup.split => _splitBlocks(context, financeState),
       _SettingsGroup.payments => _paymentBlocks(context, financeState),
       _SettingsGroup.app => _appBlocks(context),
+      _SettingsGroup.account => const <Widget>[AccountSecurityPanel()],
     };
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -1008,7 +1015,7 @@ extension _SettingsSearch on _SettingsPageState {
         title: 'Meu perfil',
         where: 'Conta',
         icon: Icons.person_outline_rounded,
-        keywords: const ['nome', 'email', 'e-mail', 'pix pessoal', 'conta', 'perfil'],
+        keywords: const ['nome', 'pix pessoal', 'perfil'],
         action: () => _showEditProfileModal(context, authState.user),
       ),
       _SearchEntry(
@@ -1018,6 +1025,12 @@ extension _SettingsSearch on _SettingsPageState {
         keywords: const ['logout', 'deslogar', 'trocar de conta'],
         action: () => _confirmSignOut(context),
       ),
+      option(_SettingsGroup.account, 'E-mail de acesso', Icons.alternate_email_rounded, const [
+        'email', 'e-mail', 'trocar email', 'login', 'conta', 'google',
+      ]),
+      option(_SettingsGroup.account, 'Senha', Icons.password_rounded, const [
+        'trocar senha', 'alterar senha', 'seguranca', 'conta',
+      ]),
       option(_SettingsGroup.house, 'Membros da Casa e Convites', Icons.people_outline_rounded, const [
         'moradores', 'pessoas', 'convidar', 'codigo', 'convite', 'administrador', 'dono',
       ]),
