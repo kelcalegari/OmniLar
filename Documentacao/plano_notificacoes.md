@@ -22,7 +22,17 @@ Hospedagem (16/10/2026, branch `feat/hosting`): o site vai para o Firebase Hosti
 
 Categoria `conta` (migration 0068, painel administrativo): conta aprovada, reativada, recusada ou suspensa, e conta nova esperando aprovação para os administradores. É sempre essencial e não tem casa (`house_id` vazio); grava por `notify_account`, fora do `enqueue_notification` (que só entrega a moradores de uma casa).
 
-Fica para as próximas rodadas: aceite de empréstimo (decisão 5a: o banco não aceita o status `pendingAcceptance` hoje e o fechamento teria de ignorar empréstimo não aceito), os gatilhos informativos restantes (despesas, caixinhas, compras, projetos, importação, casa), push (fase 4, depende do projeto Firebase), agendados (fase 5), preferências nos Ajustes (fase 6) e Assistente (fase 7). As transferências do Super Pix já nascem confirmadas no fechamento, então `transfer_pending` e `transfer_confirmed` precisam ser repensados antes.
+Fase 5, agendador (16/10/2026, branch `feat/notificacoes-agendador`, migration 0070, aplicada):
+- **Job** `omnilar-notifications-hourly` do `pg_cron`, todo minuto 0, chama `run_notification_job()`: `run_scheduled_notifications(p_now)` (os lembretes) e depois `release_held_push_notifications()` (libera o push segurado pelo horário silencioso, que vence nos próximos 10 minutos, e chama a `notify` de novo; também recupera chamadas perdidas). Criado por `schedule_notification_jobs()`; para desligar: `select cron.unschedule('omnilar-notifications-hourly');`.
+- **Regras:** lembretes de dia saem a partir das 9h no fuso da casa (`houses.timezone`; os de conta, no de Brasília); se o job atrasar, saem na hora seguinte. Os de evento com horário saem toda hora, de 30 a 90 minutos antes. Chave de repetição por item e etapa (por exemplo `bill_due_soon:{conta}:{vencimento}:{dias}`): rodar duas vezes não repete. Preferência por grupo (`in_app`) e destinatários vêm de `enqueue_notification`; essenciais ignoram o grupo desligado. O horário silencioso vale para o push de todos, inclusive os essenciais (o aviso fica no sino na hora). `run_scheduled_notifications(p_now, p_strict)` aceita data simulada, para ensaio.
+- **Calendário do ciclo no banco:** `notification_cycle_for(casa, data)` espelha `CycleSchedule` do app (inclui troca do dia de início e dias 29 a 31).
+- **Implementados:** `bill_due_soon`, `bill_overdue`, `recurring_generated`, `invoice_closing`, `invoice_due_soon`, `cycle_closing_soon`, `cycle_ended`, `transfer_pending`, `contribution_pending`, `installment_due_soon`, `installment_overdue`, `task_due_soon`, `task_overdue`, `event_reminder` e, na categoria `conta`, `premium_expiring`, `premium_expired` e `accounts_pending_daily` (seção 6.12).
+- **Detalhes que o catálogo não dizia:** compra no cartão não gera `bill_*` (entra na fatura); conta com dono da categoria avisa só o dono; `recurring_generated` sai 5 dias antes do vencimento da conta variável recorrente; `installment_*` só vale para parcela que não entra no fechamento (as que entram são cobradas por ele); `installment_overdue` nos dias 1, 6 e 11 de atraso (devedor e credor); `cycle_ended` 1 e 4 dias depois do fim, para dono e administradores, só se o ciclo não foi fechado e a casa já existia; `contribution_pending` só no modelo de aportes fixos, 5 dias depois do início do ciclo, para quem tem aporte fixo e ainda não aportou; `task_overdue` uma vez (até 3 dias depois), para o responsável e quem criou; `event_reminder` de dia inteiro sai na véspera, às 9h.
+- **`transfer_pending` ainda não dispara:** as transferências do Super Pix nascem `confirmed` no fechamento. A regra está pronta (2, 5 e 8 dias depois do fechamento, para quem paga) para quando existir transferência pendente.
+- **Ainda fora do agendador:** `weekly_summary` (depende da tela de preferências, fase 6) e `proactive_alert`.
+- **Ensaio com rollback:** dia simulado completo (20/10), 23/10 às 8h e às 9h, 6, 7, 9, 12 e 14/11; segunda rodada sem repetir; grupo silenciado; permissões; liberação do push segurado. Com os dados reais de 16/10 nada seria enviado.
+
+Fica para as próximas rodadas: aceite de empréstimo (decisão 5a: o banco não aceita o status `pendingAcceptance` hoje e o fechamento teria de ignorar empréstimo não aceito), os gatilhos informativos restantes (despesas, caixinhas, compras, projetos, importação, casa), preferências nos Ajustes (fase 6) e Assistente (fase 7); o push (fase 4) e os agendados (fase 5) já estão feitos. As transferências do Super Pix já nascem confirmadas no fechamento, então `transfer_pending` e `transfer_confirmed` precisam ser repensados antes.
 
 ## 1. O que existe hoje (conferido em 15/10/2026)
 
@@ -233,6 +243,13 @@ Coluna **Quando**: *na hora* (gatilho no banco) ou *agendada* (`pg_cron`). Colun
 |---|---|---|---|---|---|
 | `weekly_summary` | Domingo às 19h, se ligado | Cada morador | "Semana: R$ 640,00 gastos, Fôlego R$ 1.200,00, 2 contas na semana que vem" | agendada | informativa |
 | `proactive_alert` | Gasto de uma categoria passa da média do planejamento | Moradores | "Mercado já está em 90% do previsto para o ciclo" | na hora (uma vez por categoria e ciclo) | informativa |
+
+### 6.12. Conta (sem casa; categoria `conta`, sempre essencial)
+| Tipo | Gatilho | Quem recebe | Exemplo | Quando | Peso |
+|---|---|---|---|---|---|
+| `premium_expiring` | Premium vence em até 7 dias (uma vez por validade) | A pessoa | "Seu Premium vence em 23/10/2026" (abre `/ajustes`) | agendada | essencial |
+| `premium_expired` | Premium venceu nos últimos 14 dias (uma vez por validade) | A pessoa | "Seu Premium venceu. A conta voltou para o Free" (abre `/ajustes`) | agendada | essencial |
+| `accounts_pending_daily` | Há contas esperando aprovação (uma vez por dia, a partir das 9h) | Administradores do app | "3 contas esperando aprovação" (abre `/admin?aba=aprovacoes`) | agendada | essencial |
 
 ## 7. Decisões pendentes do dono
 

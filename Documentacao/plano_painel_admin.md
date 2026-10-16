@@ -17,8 +17,8 @@ Fase B (16/10/2026, branch `feat/painel-admin-fase-b`), com ensaio no banco (rol
 - **Edge Functions**: `_shared/usage.ts` lê a cota do plano da casa (`house_ai_daily_limit`; sem resposta do banco, 10).
 - **App**: plano na lista e no detalhe da conta (e o plano de cada casa), "Mudar plano" com validade e observação, contas por plano na visão geral, tabela de limites editável em Configurações, "Seu plano" nos Ajustes. As mensagens de limite vêm do banco ("No plano Free a casa tem até 4 moradores.").
 - **No ar (16/10/2026)**: 0069 aplicada (as duas contas viraram Premium "conta inicial", a casa ficou Premium); `assistant`, `capture-read` e `import-read` republicadas com a cota do plano.
-- **Fica de fora**: avisos de Premium vencendo em 7 dias e vencido (dependem do agendador das notificações). O vencimento já vale na hora de usar.
-- **Aviso diário** "N contas esperando aprovação" ficou de fora: depende do agendador (fase 5 das notificações). No lugar, cada conta nova pendente avisa os administradores na hora.
+- **Avisos de Premium vencendo e vencido** (16/10/2026): feitos pelo agendador das notificações (migration 0070, ver `plano_notificacoes.md`). O vencimento já valia na hora de usar.
+- **Aviso diário** "N contas esperando aprovação": feito pelo agendador (0070). Além dele, cada conta nova pendente continua avisando os administradores na hora.
 
 ## 1. Objetivo
 
@@ -132,8 +132,8 @@ Pelas notificações que já existem (`enqueue_notification`), com uma **categor
 - Conta aprovada ("Sua conta foi aprovada. Bem-vindo ao Omni Lar").
 - Conta recusada ou suspensa, com o motivo.
 - Plano mudou ("Sua conta agora é Premium até 31/12/2026").
-- Premium vencendo em 7 dias e vencido.
-- Para os administradores: "3 contas esperando aprovação" (uma vez por dia, se houver; depende do agendador da fase 5 das notificações).
+- Premium vencendo em 7 dias e vencido (`premium_expiring` e `premium_expired`, migration 0070: saem a partir das 9h de Brasília, uma vez por validade; o vencido só avisa se venceu nos últimos 14 dias).
+- Para os administradores: "3 contas esperando aprovação" (`accounts_pending_daily`, 0070: uma vez por dia a partir das 9h, só se houver contas pendentes; abre `/admin?aba=aprovacoes`).
 
 **Limite:** quem está esperando aprovação ainda não ativou as notificações, então o aviso de aprovação aparece no sino quando ela abrir o app, e a tela de espera já muda sozinha. **E-mail** de aprovação ou recusa não sai pelo Supabase Auth (ele só manda os e-mails de login); precisaria de um serviço de e-mail (Resend, SendGrid ou outro) chamado por uma Edge Function, com conta e chave próprias. Ver decisão 8.
 
