@@ -476,6 +476,7 @@ class SupabaseFinanceDataSource implements FinanceDataSource {
         folego: Money(folegoCents),
         memberContributions: memberContributions,
         memberExpensesPaid: memberExpensesPaid,
+        vaultReturns: await getVaultReturnsForCycle(cycle),
       );
     } catch (e) {
       throw ServerFailure('Erro ao calcular resumo do ciclo: $e');

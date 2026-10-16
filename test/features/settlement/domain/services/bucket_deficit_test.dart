@@ -198,6 +198,7 @@ void main() {
         int expenseCents = 250000,
         List<Contribution> contributions = const [],
         Money openingBalance = const Money.zero(),
+        Money vaultReturns = const Money.zero(),
         Money surplusAlreadyRolled = const Money.zero(),
         Money surplusAlreadyRefunded = const Money.zero(),
         bool refundSurplus = false,
@@ -221,6 +222,7 @@ void main() {
           loans: const [],
           customContributionTargets: targets,
           openingBalance: openingBalance,
+          vaultReturns: vaultReturns,
           surplusAlreadyRolled: surplusAlreadyRolled,
           surplusAlreadyRefunded: surplusAlreadyRefunded,
           refundSurplus: refundSurplus,
@@ -293,6 +295,38 @@ void main() {
         expect(due(summary, 'caio'), 100000);
         // Sobram R$ 200,00 da folga
         expect(summary.houseTreasuryBalance.cents, 20000);
+      });
+
+      test('O que voltou das caixinhas não cobre o excedente: os moradores pagam', () {
+        // Gastos de R$ 3.300,00 contra um balde de R$ 3.000,00; os R$ 500,00 no
+        // Caixa vieram de um resgate devolvido ao ciclo
+        final summary = computeSurplus(
+          expenseCents: 330000,
+          openingBalance: const Money(50000),
+          vaultReturns: const Money(50000),
+        );
+
+        expect(summary.bucketDeficit.cents, 30000);
+        expect(
+          due(summary, 'ana') + due(summary, 'bia') + due(summary, 'caio'),
+          300000 + 30000,
+        );
+        // O dinheiro da caixinha continua no Caixa como sobra
+        expect(summary.houseTreasuryBalance.cents, 50000);
+        expect(summary.vaultReturns.cents, 50000);
+      });
+
+      test('Sobra anterior junto com devolução: só a sobra anterior cobre o excedente', () {
+        final summary = computeSurplus(
+          expenseCents: 330000,
+          openingBalance: const Money(80000),
+          vaultReturns: const Money(50000),
+        );
+
+        // R$ 300,00 de sobra anterior cobrem os R$ 300,00 de excedente
+        expect(summary.bucketDeficit.cents, 0);
+        expect(due(summary, 'ana') + due(summary, 'bia') + due(summary, 'caio'), 300000);
+        expect(summary.houseTreasuryBalance.cents, 50000);
       });
 
       test('Folga menor que o excedente: só a diferença é rateada', () {

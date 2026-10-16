@@ -78,7 +78,8 @@ class CyclePreviewBuilder {
           exclusive +
           projectedExtra.cents -
           bucket -
-          summary.openingBalance.cents;
+          // Só a sobra anterior cobre o excedente; o que voltou das caixinhas não
+          (summary.openingBalance.cents - summary.vaultReturns.cents);
       if (overflow > 0) projectedOverflow = Money(overflow);
     }
 

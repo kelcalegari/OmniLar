@@ -460,6 +460,7 @@ class MockFinanceDataSource implements FinanceDataSource {
       folego: folego,
       memberContributions: memberContribs,
       memberExpensesPaid: memberPaid,
+      vaultReturns: await getVaultReturnsForCycle(cycle),
     );
   }
 

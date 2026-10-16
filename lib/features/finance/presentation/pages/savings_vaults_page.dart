@@ -657,8 +657,9 @@ class _SavingsVaultsPageState extends State<SavingsVaultsPage> {
                   const SizedBox(height: 6),
                   Text(
                     returnToCycle
-                        ? 'O valor entra no Caixa do ciclo ${currentCycle.label} como dinheiro da casa: '
-                            'ajuda a pagar as contas e, no fechamento, conta como a sobra do ciclo anterior.'
+                        ? 'O valor entra no Caixa do ciclo ${currentCycle.label} para cobrir falta de dinheiro agora. '
+                            'Não diminui o que cada morador paga no ciclo: no fechamento, o que sobrar no Caixa '
+                            'pode voltar para uma caixinha.'
                         : 'O valor sai da caixinha e não entra no Caixa do ciclo.',
                     style: const TextStyle(fontSize: 11, color: Colors.grey),
                   ),

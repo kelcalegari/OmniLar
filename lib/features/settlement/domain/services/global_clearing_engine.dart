@@ -36,6 +36,7 @@ class GlobalClearingEngine {
     Money surplusAlreadyVaulted = const Money.zero(),
     Money deficitAlreadyCovered = const Money.zero(),
     Money openingBalance = const Money.zero(),
+    Money vaultReturns = const Money.zero(),
     Money surplusAlreadyRolled = const Money.zero(),
     Money surplusAlreadyRefunded = const Money.zero(),
     bool refundSurplus = false,
@@ -168,8 +169,11 @@ class GlobalClearingEngine {
       deficitAlreadyCoveredCents = deficitAlreadyCovered.cents.clamp(0, bucketDeficitCents).toInt();
       bucketDeficitCents -= deficitAlreadyCoveredCents;
       // A sobra deixada no Caixa pelo ciclo anterior é folga: cobre o excedente
-      // antes da Caixinha e do rateio entre os moradores.
-      bucketDeficitCents -= openingBalance.cents.clamp(0, bucketDeficitCents).toInt();
+      // antes da Caixinha e do rateio entre os moradores. O que voltou das
+      // caixinhas não entra: só cobriu falta de caixa, e o excedente continua
+      // sendo dos moradores (no fim, sobra no Caixa).
+      final rolledOverCents = openingBalance.cents - vaultReturns.cents;
+      bucketDeficitCents -= rolledOverCents.clamp(0, bucketDeficitCents).toInt();
 
       final vaultCents = deficitVaultBalance.cents > 0 ? deficitVaultBalance.cents : 0;
       deficitCoveredCents = vaultCents < bucketDeficitCents ? vaultCents : bucketDeficitCents;
@@ -573,6 +577,7 @@ class GlobalClearingEngine {
       bucketDeficit: Money(bucketDeficitCents),
       deficitCoveredByVault: Money(deficitCoveredCents),
       openingBalance: openingBalance,
+      vaultReturns: vaultReturns,
       surplusRefunded: Money(surplusRefundedCents),
       houseLoanReceipts: Money(houseLoanReceiptsCents),
     );

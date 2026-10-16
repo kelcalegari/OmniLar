@@ -101,6 +101,7 @@ class MockSettlementDataSource implements SettlementDataSource {
           const Money.zero();
     }
 
+    final vaultReturns = await financeDataSource.getVaultReturnsForCycle(cycle);
     final summary = engine.computeSettlement(
       cycle: cycle,
       members: members,
@@ -115,6 +116,7 @@ class MockSettlementDataSource implements SettlementDataSource {
       surplusAlreadyVaulted: Money(_surplusVaulted[cycle] ?? 0),
       deficitAlreadyCovered: Money(_deficitCovered[cycle] ?? 0),
       openingBalance: _openingBalance(cycle) + await financeDataSource.getOpeningBalance(cycle),
+      vaultReturns: vaultReturns,
       surplusAlreadyRolled: Money(_surplusRolled[cycle] ?? 0),
       surplusAlreadyRefunded: Money(_surplusRefunded[cycle] ?? 0),
       refundSurplus: options?.surplusAction == SurplusAction.refund,
@@ -122,7 +124,6 @@ class MockSettlementDataSource implements SettlementDataSource {
       houseLoansAlreadyReceived: Money(_houseLoansReceived[cycle] ?? 0),
     ).copyWith(
       isReopened: _reopenedTransfers.containsKey(cycle),
-      vaultReturns: await financeDataSource.getVaultReturnsForCycle(cycle),
     );
 
     // Consultar outro ciclo não pode apagar um fechamento já arquivado

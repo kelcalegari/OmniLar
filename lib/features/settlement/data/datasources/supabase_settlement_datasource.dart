@@ -207,6 +207,7 @@ class SupabaseSettlementDataSource implements SettlementDataSource {
           const Money.zero();
     }
 
+    final vaultReturns = await financeDataSource.getVaultReturnsForCycle(cycle);
     final summary = engine.computeSettlement(
       cycle: cycle,
       members: members,
@@ -221,6 +222,7 @@ class SupabaseSettlementDataSource implements SettlementDataSource {
       surplusAlreadyVaulted: surplusAlreadyVaulted,
       deficitAlreadyCovered: deficitAlreadyCovered,
       openingBalance: await financeDataSource.getOpeningBalance(cycle),
+      vaultReturns: vaultReturns,
       surplusAlreadyRolled: surplusAlreadyRolled,
       surplusAlreadyRefunded: surplusAlreadyRefunded,
       refundSurplus: options?.surplusAction == SurplusAction.refund,
@@ -230,7 +232,6 @@ class SupabaseSettlementDataSource implements SettlementDataSource {
     return summary.copyWith(
       isReopened: isReopened,
       dataVersion: dataVersion,
-      vaultReturns: await financeDataSource.getVaultReturnsForCycle(cycle),
     );
   }
 

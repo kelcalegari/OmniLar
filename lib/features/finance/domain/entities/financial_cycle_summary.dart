@@ -17,6 +17,10 @@ class FinancialCycleSummary extends Equatable {
   final Map<String, Money> memberContributions; // memberId -> total aportado
   final Map<String, Money> memberExpensesPaid; // memberId -> total que o membro pagou do bolso
 
+  /// Resgates de caixinha devolvidos ao Caixa deste ciclo (já somados ao
+  /// fôlego). Cobrem falta de caixa: não abatem o que cada morador deve aportar.
+  final Money vaultReturns;
+
   const FinancialCycleSummary({
     required this.cycle,
     required this.totalContributions,
@@ -25,6 +29,7 @@ class FinancialCycleSummary extends Equatable {
     required this.folego,
     required this.memberContributions,
     required this.memberExpensesPaid,
+    this.vaultReturns = const Money.zero(),
   });
 
   /// Alias para despesas pagas no ciclo
@@ -40,6 +45,13 @@ class FinancialCycleSummary extends Equatable {
         totalExpensesPaid.cents +
         committedFutureExpenses.cents -
         totalContributions.cents;
+    return Money(cents > 0 ? cents : 0);
+  }
+
+  /// Sobra do ciclo anterior sem o que voltou das caixinhas: o que pode abater
+  /// os aportes do ciclo.
+  Money get rolledOverBalance {
+    final cents = openingBalance.cents - vaultReturns.cents;
     return Money(cents > 0 ? cents : 0);
   }
 
@@ -66,5 +78,6 @@ class FinancialCycleSummary extends Equatable {
         folego,
         memberContributions,
         memberExpensesPaid,
+        vaultReturns,
       ];
 }

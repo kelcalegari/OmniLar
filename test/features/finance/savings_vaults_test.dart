@@ -259,6 +259,9 @@ void main() {
       expect(after.folego, before.folego + const Money(15000));
       // Não vira aporte de ninguém
       expect(after.totalContributions, before.totalContributions);
+      // Cobre falta de caixa, mas não abate os aportes sugeridos pelo planejador
+      expect(after.vaultReturns, const Money(15000));
+      expect(after.rolledOverBalance, before.rolledOverBalance);
 
       final history = await ds.getVaultTransactions('vault_reserva');
       expect(history.first.returnedToCycle, isTrue);
