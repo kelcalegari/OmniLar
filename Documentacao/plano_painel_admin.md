@@ -1,6 +1,6 @@
 # Omni Lar — painel administrativo
 
-Ideia registrada em 15/10/2026 e revista em 16/10/2026. Um painel para o dono do Omni Lar (não o dono de uma casa) gerenciar todas as contas do app: aprovar contas novas, marcar contas como Premium ou Free e acompanhar o uso. Peça aprovação antes de cada migration, como sempre.
+Ideia registrada em 15/10/2026 e revista em 16/10/2026. **Decisões do dono tomadas em 16/10/2026 (seção 9): todas as recomendações, com uma mudança — o PDF dos relatórios não é limitado no Free.** Um painel para o dono do Omni Lar (não o dono de uma casa) gerenciar todas as contas do app: aprovar contas novas, marcar contas como Premium ou Free e acompanhar o uso. Peça aprovação antes de cada migration, como sempre.
 
 **Prioridade (revisão de 16/10/2026):** o site agora está aberto em https://omnilar.web.app e qualquer pessoa consegue se cadastrar. Por isso a **fase A** (base, aprovação de contas e painel parte 1, seção 10) deixa de esperar as outras pendências. A **fase B** (planos Free e Premium) continua para depois, quando houver uso que justifique: hoje são 2 contas e 1 casa.
 
@@ -68,10 +68,10 @@ Uma função `is_account_active(user_id)` concentra a regra, e ela vale **no ban
 ### 5.1. Onde o plano fica
 - Colunas na conta: `plan` (`free` ou `premium`), `plan_expires_at` (vazio = sem validade), `plan_note` (motivo, por exemplo "família", "testador", "conta inicial").
 - Vencida a validade, a conta volta a Free sozinha (conferido na hora de usar; um job diário só arruma o que aparece no painel).
-- **Qual plano vale numa casa**: ver decisão 1. Na recomendação, a casa segue o plano de **quem é o dono dela no momento**: se o dono sai ou passa a casa para outra pessoa, vale o plano do novo dono.
-- **Contas que já existem**: ver decisão 9. Hoje a casa usa 50 leituras de IA por dia; se as contas atuais virassem Free com o limite da tabela abaixo, cairiam para 10 sem aviso.
+- **Qual plano vale numa casa** (decisão 1): a casa segue o plano de **quem é o dono dela no momento**: se o dono sai ou passa a casa para outra pessoa, vale o plano do novo dono.
+- **Contas que já existem** (decisão 9): viram Premium sem validade, com a observação "conta inicial". Assim a casa atual não cai das 50 leituras de IA por dia de hoje para as 10 do Free.
 
-### 5.2. O que muda entre os planos (proposta, ver decisão 3)
+### 5.2. O que muda entre os planos (decisão 3)
 | Recurso | Free | Premium |
 |---|---|---|
 | Leituras de IA (escâner, importação por PDF/foto, assistente) com a chave do app | 10 por dia por casa | 100 por dia por casa |
@@ -79,16 +79,16 @@ Uma função `is_account_active(user_id)` concentra a regra, e ela vale **no ban
 | Casas que a conta pode criar | 1 | Até 3 |
 | Moradores por casa | Até 4 | Sem limite prático (20) |
 | Importação de fatura e extrato (OFX/CSV) | Sim | Sim |
-| Relatórios: prestação de contas em PDF | Não | Sim |
+| Relatórios: prestação de contas em PDF | Sim | Sim |
 | Projetos compartilhados | 1 ativo | Sem limite |
 | Notificações | Todas | Todas |
 
-O que é essencial para dividir as contas da casa (lançar, fechar o ciclo, empréstimos, compras, tarefas, agenda, caixinhas) nunca é cortado no Free.
+O que é essencial para dividir as contas da casa (lançar, fechar o ciclo, empréstimos, compras, tarefas, agenda, caixinhas, relatórios e o PDF de prestação de contas) nunca é cortado no Free.
 
 ### 5.3. Onde o limite é aplicado
 - **Cota de IA**: `_shared/usage.ts` passa a ler o plano da casa (`plan_limits` por plano) em vez de `DEFAULT_DAILY_QUOTA_PER_HOUSE`.
 - **Casas, moradores e projetos**: nas funções do banco que criam (`create_house_with_owner`, convite, `set_project_participants`) **e nas regras de inserção direta** (as mesmas da seção 4.3), com mensagem clara ("No plano Free a casa tem até 4 moradores").
-- **PDF dos relatórios**: é gerado no aparelho, então o limite só pode ficar na tela (o app esconde o botão e mostra "Recurso Premium"). Para esse recurso basta; o que gasta servidor (IA) é sempre conferido no servidor.
+- **PDF dos relatórios**: sem limite (decisão 3). O que gasta servidor (IA) é sempre conferido no servidor.
 - Os limites ficam numa tabela **`plan_limits`** (plano × recurso × valor), editável no painel, em vez de números no código.
 - **Rebaixar** de Premium para Free nunca apaga nada: o que passou do limite continua visível e editável, só não dá para criar mais.
 
@@ -137,45 +137,22 @@ Pelas notificações que já existem (`enqueue_notification`), com uma **categor
 
 As colunas de status e plano **não podem ser alteradas pelo próprio usuário** (a regra `profiles_update_own` deixa a pessoa editar o próprio perfil; por isso a recomendação é uma tabela separada).
 
-## 9. Decisões pendentes do dono
+## 9. Decisões do dono (16/10/2026)
 
-**Antes de começar, pergunte se ele segue as recomendações (⭐) ou escolhe outra letra.** As decisões 1, 3, 4 e 9 são da fase B e podem esperar.
+O dono seguiu todas as recomendações, com uma mudança na decisão 3 (o PDF dos relatórios fica liberado no Free). As outras opções ficam registradas para o caso de alguma decisão ser revista.
 
-1. **O plano vale para quem?**
-   - a) ⭐ Para a conta, e a casa é Premium quando quem é o dono dela no momento é Premium (os moradores usam o que o dono tem)
-   - b) Para a casa, independente das contas
-   - c) Para cada conta, separadamente (cada morador vê os recursos do próprio plano dentro da mesma casa)
-2. **Quem chega por convite de uma casa precisa de aprovação?**
-   - a) ⭐ Não: convite válido aprova direto (`auto_approve_invited` ligado)
-   - b) Sim, como qualquer conta nova
-3. **Limites do Free** (seção 5.2)
-   - a) ⭐ Como na tabela: o essencial da casa nunca é cortado; o limite fica em IA, número de casas, moradores, projetos e PDF
-   - b) Free só com limite de IA, todo o resto igual
-   - c) Definir outra tabela
-4. **Teste de Premium para contas novas**
-   - a) ⭐ Não por enquanto (`trial_days = 0`); Premium só marcado à mão
-   - b) 30 dias de Premium para toda conta nova
-5. **Onde fica o painel**
-   - a) ⭐ Rota `/admin` dentro do app, visível só para administradores do app
-   - b) Um site separado (outro projeto Flutter web ou uma página simples)
-   - c) Só pelo painel do Supabase (sem tela própria)
-6. **Onde guardar status e plano**
-   - a) ⭐ Tabela separada (`account_status`), que o usuário não consegue editar
-   - b) Colunas em `profiles`, com gatilho bloqueando a edição pelo próprio usuário
-7. **Conta esperando aprovação**
-   - a) ⭐ Entra no app e vê a tela de espera
-   - b) Nem consegue entrar (o login é recusado com a mensagem)
-8. **Como a pessoa fica sabendo da aprovação ou recusa** (revista: o e-mail do Supabase Auth não serve para isso)
-   - a) ⭐ Pelo app: a tela de espera muda sozinha e o aviso fica no sino (sem e-mail por enquanto)
-   - b) Também por e-mail, por um serviço de e-mail (Resend ou outro) e uma Edge Function: exige criar a conta no serviço e guardar a chave no Supabase
-9. **Contas que já existem quando os planos chegarem** (nova)
-   - a) ⭐ Viram Premium sem validade, com a observação "conta inicial": nada muda para quem já usa
-   - b) Viram Free, e o Free passa a ter 50 leituras de IA por dia (o que a casa tem hoje)
-   - c) Viram Free com os limites da tabela (a casa cai de 50 para 10 leituras por dia)
-10. **Exclusão de conta (LGPD)** (nova)
-    - a) ⭐ Trabalho próprio depois das fases A e B: Edge Function `delete-account` com confirmação dupla, que apaga perfil e dados pessoais e tira a pessoa das casas sem apagar o histórico financeiro dos outros moradores
-    - b) Entrar já na fase A
-    - c) Por enquanto, só a suspensão; exclusão a pedido, feita à mão
+| # | Decisão | Escolha | Outras opções que existiam |
+|---|---|---|---|
+| 1 | O plano vale para quem | **a)** Para a conta; a casa é Premium quando quem é o dono dela no momento é Premium (os moradores usam o que o dono tem) | b) para a casa, independente das contas; c) para cada conta, separadamente, dentro da mesma casa |
+| 2 | Quem chega por convite precisa de aprovação | **a)** Não: convite válido aprova direto (`auto_approve_invited` ligado) | b) sim, como qualquer conta nova |
+| 3 | Limites do Free | **a, com mudança)** Como na tabela da seção 5.2: o essencial da casa nunca é cortado; o limite fica em IA, número de casas, moradores e projetos. **O PDF dos relatórios não é limitado** | b) só limite de IA; c) outra tabela |
+| 4 | Teste de Premium para contas novas | **a)** Não por enquanto (`trial_days = 0`); Premium só marcado à mão | b) 30 dias de Premium para toda conta nova |
+| 5 | Onde fica o painel | **a)** Rota `/admin` dentro do app, visível só para administradores do app | b) site separado; c) só pelo painel do Supabase |
+| 6 | Onde guardar status e plano | **a)** Tabela separada (`account_status`), que o usuário não consegue editar | b) colunas em `profiles`, com gatilho bloqueando a edição |
+| 7 | Conta esperando aprovação | **a)** Entra no app e vê a tela de espera, que muda sozinha ao ser aprovada | b) o login é recusado com a mensagem |
+| 8 | Como a pessoa fica sabendo da aprovação ou recusa | **a)** Pelo app: a tela de espera muda sozinha e o aviso fica no sino (sem e-mail por enquanto) | b) também por e-mail, com um serviço de e-mail e uma Edge Function |
+| 9 | Contas que já existem quando os planos chegarem | **a)** Viram Premium sem validade, com a observação "conta inicial" | b) Free com 50 leituras de IA por dia; c) Free com os limites da tabela |
+| 10 | Exclusão de conta (LGPD) | **a)** Trabalho próprio depois das fases A e B: Edge Function `delete-account` com confirmação dupla, que apaga perfil e dados pessoais e tira a pessoa das casas sem apagar o histórico financeiro dos outros moradores; até lá, o painel só suspende | b) entrar já na fase A; c) só suspensão, exclusão à mão |
 
 ## 10. Ordem de implementação sugerida
 
@@ -186,7 +163,7 @@ As colunas de status e plano **não podem ser alteradas pelo próprio usuário**
 4. **Avisos no app**: categoria `conta` e os avisos de aprovação, recusa e suspensão.
 
 **Fase B (quando houver uso que justifique):**
-5. **Planos**: `plan_limits`, `house_plan()`, contas atuais conforme a decisão 9, cota de IA por plano, limites de casas, moradores e projetos (também nas regras de inserção direta) e "Recurso Premium" nas telas.
+5. **Planos**: `plan_limits`, `house_plan()`, contas atuais como Premium "conta inicial" (decisão 9), cota de IA por plano, limites de casas, moradores e projetos (também nas regras de inserção direta) e "Recurso Premium" nas telas desses limites.
 6. **Painel, parte 2**: trocar plano com validade, histórico de planos e avisos de plano (mudou, vencendo, vencido).
 
 ## 11. Testes
