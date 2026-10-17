@@ -46,6 +46,12 @@ class P2PRepositoryImpl implements P2PRepository {
   Future<void> deleteLoan(String loanId) => _dataSource.deleteLoan(loanId);
 
   @override
+  Future<void> acceptLoan(String loanId) => _dataSource.acceptLoan(loanId);
+
+  @override
+  Future<void> declineLoan(String loanId) => _dataSource.declineLoan(loanId);
+
+  @override
   Future<List<P2PPaymentRecord>> getLoanPayments(String loanId) => _dataSource.getLoanPayments(loanId);
 
   @override

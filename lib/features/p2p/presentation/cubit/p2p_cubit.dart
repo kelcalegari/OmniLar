@@ -183,6 +183,28 @@ class P2PCubit extends Cubit<P2PState> {
     }
   }
 
+  Future<bool> acceptLoan(String loanId) async {
+    try {
+      await _repository.acceptLoan(loanId);
+      await loadLoans();
+      return true;
+    } catch (e) {
+      emit(state.copyWith(status: P2PStatus.failure, errorMessage: 'Erro ao aceitar o empréstimo: $e'));
+      return false;
+    }
+  }
+
+  Future<bool> declineLoan(String loanId) async {
+    try {
+      await _repository.declineLoan(loanId);
+      await loadLoans();
+      return true;
+    } catch (e) {
+      emit(state.copyWith(status: P2PStatus.failure, errorMessage: 'Erro ao recusar o empréstimo: $e'));
+      return false;
+    }
+  }
+
   Future<bool> deleteLoan(String loanId) async {
     try {
       await _repository.deleteLoan(loanId);

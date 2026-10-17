@@ -254,6 +254,17 @@ class MockP2PDataSource implements P2PDataSource {
   }
 
   @override
+  Future<void> acceptLoan(String loanId) async {
+    final index = _loans.indexWhere((l) => l.id == loanId);
+    if (index != -1) _loans[index] = _loans[index].copyWith(awaitingAcceptance: false);
+  }
+
+  @override
+  Future<void> declineLoan(String loanId) async {
+    _loans.removeWhere((l) => l.id == loanId && l.awaitingAcceptance);
+  }
+
+  @override
   Future<void> deleteLoan(String loanId) async {
     _loans.removeWhere((l) => l.id == loanId);
   }

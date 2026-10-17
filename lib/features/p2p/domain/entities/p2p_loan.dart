@@ -63,7 +63,12 @@ class P2PLoan extends Equatable {
     this.repaymentMode = LoanRepaymentMode.installments,
     this.settleInCycle = true,
     this.repayToVaultId,
+    this.awaitingAcceptance = false,
   });
+
+  /// Lançado por outra pessoa e ainda não aceito pelo devedor (migration 0082):
+  /// fica fora do Fechamento do Ciclo até o aceite.
+  final bool awaitingAcceptance;
 
   /// Acordo com o Lar criado quando uma Caixinha cobriu quem pagou a menos:
   /// cada pagamento dele volta para essa Caixinha, e não para o Caixa.
@@ -73,7 +78,7 @@ class P2PLoan extends Equatable {
   bool get isOpenEnded => repaymentMode == LoanRepaymentMode.openEnded;
 
   /// As parcelas deste empréstimo são cobradas no Fechamento do Ciclo.
-  bool get entersCycleSettlement => !isOpenEnded && settleInCycle;
+  bool get entersCycleSettlement => !isOpenEnded && settleInCycle && !awaitingAcceptance;
 
   /// Parcelas em aberto, da mais antiga para a mais nova (ordem de abatimento).
   List<P2PInstallment> get openInstallments {
@@ -143,6 +148,7 @@ class P2PLoan extends Equatable {
     LoanRepaymentMode? repaymentMode,
     bool? settleInCycle,
     String? repayToVaultId,
+    bool? awaitingAcceptance,
   }) {
     return P2PLoan(
       id: id,
@@ -160,6 +166,7 @@ class P2PLoan extends Equatable {
       repaymentMode: repaymentMode ?? this.repaymentMode,
       settleInCycle: settleInCycle ?? this.settleInCycle,
       repayToVaultId: repayToVaultId ?? this.repayToVaultId,
+      awaitingAcceptance: awaitingAcceptance ?? this.awaitingAcceptance,
     );
   }
 
@@ -180,5 +187,6 @@ class P2PLoan extends Equatable {
         repaymentMode,
         settleInCycle,
         repayToVaultId,
+        awaitingAcceptance,
       ];
 }

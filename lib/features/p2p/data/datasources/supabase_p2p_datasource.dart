@@ -25,6 +25,8 @@ class SupabaseP2PDataSource implements P2PDataSource {
           .from('p2p_loans')
           .select('*, p2p_installments(*)')
           .eq('house_id', _houseId)
+          // Recusado pelo devedor (0082): sai da lista
+          .neq('status', 'cancelled')
           .order('created_at', ascending: false);
 
       return rows.map((r) {
@@ -106,6 +108,7 @@ class SupabaseP2PDataSource implements P2PDataSource {
           attachmentUrl: r['attachment_url'] as String?,
           repaymentMode: repaymentMode,
           settleInCycle: (r['settle_in_cycle'] as bool?) ?? true,
+          awaitingAcceptance: (r['awaiting_acceptance'] as bool?) ?? false,
         );
       }).toList();
     } catch (e) {
@@ -174,6 +177,24 @@ class SupabaseP2PDataSource implements P2PDataSource {
     } catch (e) {
       if (e is Failure) rethrow;
       throw ServerFailure('Erro ao renegociar empréstimo P2P: $e');
+    }
+  }
+
+  @override
+  Future<void> acceptLoan(String loanId) async {
+    try {
+      await client.rpc('accept_p2p_loan', params: {'p_loan_id': loanId});
+    } catch (e) {
+      throw ServerFailure('Erro ao aceitar o empréstimo: $e');
+    }
+  }
+
+  @override
+  Future<void> declineLoan(String loanId) async {
+    try {
+      await client.rpc('decline_p2p_loan', params: {'p_loan_id': loanId});
+    } catch (e) {
+      throw ServerFailure('Erro ao recusar o empréstimo: $e');
     }
   }
 

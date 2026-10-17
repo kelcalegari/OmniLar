@@ -22,6 +22,10 @@ class MockP2PRepoForTest implements P2PRepository {
 
   @override
   Future<void> deleteLoan(String loanId) async => loans.removeWhere((l) => l.id == loanId);
+  @override
+  Future<void> acceptLoan(String loanId) async {}
+  @override
+  Future<void> declineLoan(String loanId) async {}
 
   @override
   Future<void> forgiveLoan(String loanId) async {}

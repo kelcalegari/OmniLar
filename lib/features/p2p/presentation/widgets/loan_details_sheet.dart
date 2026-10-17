@@ -538,6 +538,11 @@ class LoanDetailsSheet extends StatelessWidget {
           ),
           const SizedBox(height: 16),
 
+          if (loan.awaitingAcceptance) ...[
+            _AcceptanceBanner(loan: loan, borrowerName: borrowerName),
+            const SizedBox(height: 12),
+          ],
+
           // Título e Status
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -896,6 +901,100 @@ class _PaymentHistoryState extends State<_PaymentHistory> {
             amount.format(),
             style: const TextStyle(fontWeight: FontWeight.w600, color: AppColors.creditGreen),
           ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Empréstimo lançado por outra pessoa e ainda não aceito (migration 0082):
+/// o devedor aceita ou recusa; os outros veem que falta o aceite.
+class _AcceptanceBanner extends StatelessWidget {
+  final P2PLoan loan;
+  final String borrowerName;
+
+  const _AcceptanceBanner({required this.loan, required this.borrowerName});
+
+  Future<void> _accept(BuildContext context) async {
+    final messenger = ScaffoldMessenger.of(context);
+    final navigator = Navigator.of(context);
+    final ok = await context.read<P2PCubit>().acceptLoan(loan.id);
+    if (ok) navigator.pop();
+    messenger.showSnackBar(SnackBar(
+      content: Text(ok ? 'Empréstimo aceito.' : 'Não foi possível aceitar o empréstimo. Tente de novo.'),
+      backgroundColor: ok ? AppColors.creditGreen : AppColors.debtRed,
+    ));
+  }
+
+  Future<void> _decline(BuildContext context) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Recusar empréstimo?'),
+        content: Text('"${loan.title}" será cancelado e quem lançou recebe um aviso.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(dialogContext, false), child: const Text('Voltar')),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            style: FilledButton.styleFrom(backgroundColor: AppColors.debtRed),
+            child: const Text('Recusar'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !context.mounted) return;
+    final messenger = ScaffoldMessenger.of(context);
+    final navigator = Navigator.of(context);
+    final ok = await context.read<P2PCubit>().declineLoan(loan.id);
+    if (ok) navigator.pop();
+    messenger.showSnackBar(SnackBar(
+      content: Text(ok ? 'Empréstimo recusado.' : 'Não foi possível recusar o empréstimo. Tente de novo.'),
+      backgroundColor: ok ? AppColors.primary : AppColors.debtRed,
+    ));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isBorrower = context.read<P2PCubit>().state.currentUserId == loan.borrowerMemberId;
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.orange.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.orange.withValues(alpha: 0.3)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(
+            isBorrower
+                ? 'Este empréstimo foi lançado para você. Confira e aceite; até lá, ele fica fora do fechamento do ciclo.'
+                : 'Aguardando $borrowerName aceitar. Até lá, ele fica fora do fechamento do ciclo.',
+            style: const TextStyle(fontSize: 13),
+          ),
+          if (isBorrower) ...[
+            const SizedBox(height: 10),
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton(
+                    key: const Key('loan_decline'),
+                    onPressed: () => _decline(context),
+                    style: OutlinedButton.styleFrom(foregroundColor: AppColors.debtRed),
+                    child: const Text('Recusar'),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: FilledButton(
+                    key: const Key('loan_accept'),
+                    onPressed: () => _accept(context),
+                    child: const Text('Aceitar'),
+                  ),
+                ),
+              ],
+            ),
+          ],
         ],
       ),
     );

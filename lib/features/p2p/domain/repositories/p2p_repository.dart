@@ -16,5 +16,11 @@ abstract class P2PRepository {
   Future<void> forgiveLoan(String loanId);
   Future<void> renegotiateLoan(String loanId, int newInstallmentsCount, DateTime newFirstDueDate);
   Future<void> deleteLoan(String loanId);
+
+  /// O devedor aceita o empréstimo lançado por outra pessoa.
+  Future<void> acceptLoan(String loanId);
+
+  /// O devedor recusa o empréstimo ainda não aceito (ele é cancelado).
+  Future<void> declineLoan(String loanId);
   Future<List<P2PPaymentRecord>> getLoanPayments(String loanId);
 }

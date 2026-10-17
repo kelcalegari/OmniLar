@@ -166,6 +166,20 @@ class LoanCard extends StatelessWidget {
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
+                    if (loan.awaitingAcceptance) ...[
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: Colors.orange.withValues(alpha: 0.15),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: const Text(
+                          'Aguardando aceite',
+                          style: TextStyle(color: Colors.orange, fontSize: 11, fontWeight: FontWeight.bold),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                    ],
                     if (loan.isOpenEnded || !loan.settleInCycle) ...[
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),

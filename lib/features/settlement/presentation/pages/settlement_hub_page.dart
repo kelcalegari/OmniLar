@@ -24,6 +24,7 @@ import '../widgets/settlement_audit_sheet.dart';
 import '../widgets/partial_payment_dialog.dart';
 import '../../../auth/presentation/cubit/auth_cubit.dart';
 import '../../../finance/presentation/cubit/finance_cubit.dart';
+import '../../../p2p/domain/entities/p2p_loan.dart';
 import '../../../p2p/presentation/cubit/p2p_cubit.dart';
 
 class SettlementHubPage extends StatelessWidget {
@@ -84,6 +85,54 @@ class _SettlementHubContent extends StatelessWidget {
     } catch (_) {
       return true;
     }
+  }
+
+  /// Empréstimos com parcela neste ciclo que o devedor ainda não aceitou
+  /// (migration 0082): ficam fora do fechamento até o aceite.
+  Widget _buildAwaitingAcceptanceWarning(BuildContext context, FinancialCycle cycle) {
+    List<P2PLoan> waiting;
+    try {
+      waiting = context
+          .watch<P2PCubit>()
+          .state
+          .allLoans
+          .where((l) =>
+              l.awaitingAcceptance &&
+              l.status == LoanStatus.active &&
+              l.copyWith(awaitingAcceptance: false).installmentsChargedIn(cycle).isNotEmpty)
+          .toList();
+    } catch (_) {
+      waiting = const [];
+    }
+    if (waiting.isEmpty) return const SizedBox.shrink();
+
+    final titles = waiting.map((l) => l.title).join(', ');
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 16),
+      child: Container(
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: Colors.orange.withValues(alpha: 0.08),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: Colors.orange.withValues(alpha: 0.3)),
+        ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Icon(Icons.hourglass_top_rounded, color: Colors.orange, size: 18),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                waiting.length == 1
+                    ? 'O empréstimo $titles ainda não foi aceito por quem deve e fica fora deste fechamento.'
+                    : 'Os empréstimos $titles ainda não foram aceitos por quem deve e ficam fora deste fechamento.',
+                style: const TextStyle(fontSize: 12),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   /// No modelo de aportes fixos, quem entrou depois fica sem aporte até alguém
@@ -234,8 +283,10 @@ class _SettlementHubContent extends StatelessWidget {
               _buildCycleHeader(context, summary, state),
               const SizedBox(height: 16),
 
-              if (summary.status != SettlementStatus.settled)
+              if (summary.status != SettlementStatus.settled) ...[
                 _buildMissingFixedContributionWarning(context),
+                _buildAwaitingAcceptanceWarning(context, summary.cycle),
+              ],
 
               // Faturas de cartão em aberto: o que fazer com cada uma
               if (!isSettled && state.openInvoices.isNotEmpty) ...[
