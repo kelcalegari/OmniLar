@@ -161,6 +161,54 @@ O cálculo do fechamento no banco fica de fora (adiado por decisão do dono, em 
 
 **Tamanho:** etapa 1 é média (auth, compras e tarefas, faixa de aviso e testes); etapa 2 é parecida. Nenhuma das duas precisa de migration.
 
+## 13. Termos de uso e política de privacidade (17/10/2026, para decidir)
+
+**Objetivo:** ter os dois textos antes de abrir o app para pessoas de fora, com o aceite registrado e os direitos da LGPD atendidos no próprio app. Claude redige os textos a partir de como o sistema funciona de verdade e faz as telas; **não é aconselhamento jurídico**: a recomendação é que um advogado revise a versão final antes da publicação.
+
+### 13.1. O que o app faz com os dados (levantado no código e no banco em 17/10/2026)
+
+| Item | Como é hoje |
+|---|---|
+| Onde ficam os dados | Supabase, região `sa-east-1` (São Paulo), com TLS e criptografia em repouso do Supabase |
+| Cadastro | Nome, e-mail, senha (só no Supabase Auth, nunca no app), telefone, foto e chave Pix (opcionais) |
+| Dados da casa | Moradores, convites, despesas, aportes, empréstimos, caixinhas, fechamentos, faturas e extratos importados (as linhas), tarefas, compras, agenda e projetos |
+| Documentos para leitura | Foto ou PDF de nota, boleto, fatura e extrato vão para a IA (Google Gemini) pelas Edge Functions e **não ficam guardados**; o app grava só o resultado e, em `ai_usage`, a contagem de uso. Texto enviado à IA tem CPF e cartão mascarados; **foto e PDF vão inteiros** |
+| IA | Google Gemini (Google AI Studio). No plano gratuito, o Google pode usar o conteúdo para melhorar os produtos dele; no pago, não (seção 17 de `arquitetura_tecnica.md`). Quem cadastra a própria chave usa a conta Google dela |
+| Nota fiscal pelo QR | O link do QR vai para a consulta pública da Sefaz do estado, pelo servidor |
+| Notificações | Firebase Cloud Messaging (Google) recebe o token do aparelho e o texto do aviso (com "esconder valores", sem quantias) |
+| Site | Firebase Hosting (Google) |
+| Neste aparelho | Cópia local cifrada (seção 12), fila offline e rascunho da importação; apagados ao sair da conta (o rascunho fica até ser descartado) |
+| Quem vê o quê | Moradores da casa veem os dados da casa (com as regras de acesso de cada tabela); a administração do Omni Lar vê só dados da conta e números de uso, nunca valores (`plano_painel_admin.md`, 6.3) |
+| Exclusão | Em Ajustes › Conta e segurança: apaga os dados pessoais; o histórico financeiro dos outros moradores fica com o nome "Ex-morador" (migration 0081) |
+| Auditoria | `audit_log` registra mudanças financeiras da casa; `admin_audit_log`, as ações da administração |
+| O app não move dinheiro | O Pix é feito fora do app; empréstimos e fechamentos são registros entre os moradores |
+
+### 13.2. Decisões
+
+| Nº | Decisão | Recomendação | Alternativas |
+|---|---|---|---|
+| 13.1 | Quem responde pelos dados (controlador) | **a)** ⭐ Definir antes de publicar: o ideal é um CNPJ (MEI serve para começar), com nome e endereço nos textos | b) Pessoa física (o seu nome e CPF ou endereço ficam públicos nos textos) |
+| 13.2 | Contato de privacidade | **a)** ⭐ Um e-mail só para isso (no domínio próprio quando existir; até lá, um e-mail criado para o app) | b) O e-mail pessoal |
+| 13.3 | Idade mínima | **a)** ⭐ 18 anos (dinheiro e acordos entre pessoas) | b) 13 anos com consentimento dos pais |
+| 13.4 | Onde os textos aparecem | **a)** ⭐ Páginas públicas no site (`/termos` e `/privacidade`), link no cadastro e nos Ajustes | b) Só dentro do app |
+| 13.5 | Aceite | **a)** ⭐ Caixa obrigatória no cadastro ("Li e aceito os Termos e a Política"), com a versão e a data gravadas no perfil; quando a versão mudar, o app pede o aceite de novo na entrada | b) Aceite implícito ao usar |
+| 13.6 | Contas que já existem | **a)** ⭐ Pedem o aceite na próxima entrada | b) Ficam de fora |
+| 13.7 | IA | **a)** ⭐ Consentimento à parte na primeira leitura por IA, dizendo que o documento vai para o Google; e ativar o plano pago do Gemini antes de abrir para outras pessoas | b) Só na política, sem consentimento à parte |
+| 13.8 | Aviso de privacidade nos Ajustes | **a)** ⭐ Corrigir o texto atual ("mascarados no dispositivo antes de qualquer processamento"), que não vale para foto e PDF | — |
+| 13.9 | Direito de acesso e portabilidade (LGPD art. 18) | **a)** ⭐ Botão "Baixar meus dados" (arquivo JSON com perfil e o que a pessoa lançou ou de que participa) | b) Pedido por e-mail, atendido à mão |
+| 13.10 | Retenção | **a)** ⭐ Enquanto a conta existir; depois da exclusão, só o histórico financeiro sem dados pessoais. Conferir no painel do Supabase quanto tempo os backups guardam e citar no texto | b) Prazo fixo de apagar contas inativas (ex.: 2 anos sem entrar) |
+| 13.11 | Revisão jurídica | **a)** ⭐ Um advogado revisa antes da publicação | b) Publicar a versão redigida sem revisão |
+
+### 13.3. Como fazer (depois das decisões)
+
+1. **Textos:** Claude redige "Termos de uso" e "Política de privacidade" em português simples, a partir da tabela 13.1, com as lacunas das decisões 13.1 e 13.2 marcadas para você preencher; você leva ao advogado.
+2. **Páginas:** rotas públicas `/termos` e `/privacidade` no site (sem login), com a data da versão.
+3. **Aceite:** migration com `profiles.terms_version` e `profiles.terms_accepted_at`, caixa no cadastro, tela de aceite na entrada quando a versão gravada for menor que a atual.
+4. **IA:** consentimento na primeira leitura (guardado no perfil) e texto corrigido nos Ajustes.
+5. **Baixar meus dados:** função no banco que monta o JSON da própria pessoa e botão em Conta e segurança.
+
+O que depende de você: as decisões 13.1 e 13.2 (dados de quem responde e e-mail), ativar o plano pago do Gemini, conferir os backups no painel do Supabase e a revisão jurídica.
+
 ## 10. Ordem sugerida
 
 1. **Ciclos de antes da casa** (frente 1): pequena, só app, e mexe no que o dono vê todo dia.
