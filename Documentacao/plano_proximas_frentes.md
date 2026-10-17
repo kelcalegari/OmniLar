@@ -131,7 +131,7 @@ O cálculo do fechamento no banco fica de fora (adiado por decisão do dono, em 
 
 **Recomendação:** ⭐ só atualizar a seção 10 do plano para dizer que está resolvida.
 
-## 11. Aviso de "Super Pix pendente" (17/10/2026, para decidir)
+## 11. Aviso de "Super Pix pendente" (17/10/2026; o dono seguiu as ⭐, feito na branch `feat/ajustes-alertas`, migration 0084)
 
 **Como está:** no fechamento, quem fecha marca cada Super Pix como pago ou como pagamento parcial (o que falta vira acordo); o que não é marcado conta como pago (decisão do dono, "Super Pix não marcado como parcial: tratado como pago"). Por isso `confirm_cycle_settlement` grava cada transferência já como `confirmed`, e o lembrete `transfer_pending` do agendador (2, 5 e 8 dias depois do fechamento, para quem paga) nunca encontra transferência pendente. A conta do fechamento já está certa; o que falta é só lembrar quem ainda não mandou o Pix de verdade.
 
@@ -143,7 +143,7 @@ O cálculo do fechamento no banco fica de fora (adiado por decisão do dono, em 
 
 **Como fazer (c):** migration com `settlement_transfers.pix_sent_at`, uma função `mark_settlement_transfer_sent` (só quem paga ou quem recebe), o agendador passando a filtrar `pix_sent_at is null` e o aviso da 11.3; no app, o botão na lista do Super Pix do ciclo fechado e o selo "Pix enviado".
 
-## 12. Cópia local para abrir sem internet (17/10/2026, para decidir)
+## 12. Cópia local para abrir sem internet (17/10/2026; o dono seguiu as ⭐; etapa 1 feita na branch `feat/ajustes-alertas`, etapa 2 a fazer)
 
 **Como está:** sem rede, o app não abre os dados: a sessão fica guardada, mas perfil, casa e listas vêm do Supabase a cada abertura (a abertura espera até 8 s e segue sem casa). A fila offline (`lib/core/network/`) já guarda no aparelho as gravações feitas sem conexão, em `flutter_secure_storage`, e as reenvia quando a rede volta. O caso de uso mais comum é a lista de compras no mercado, com sinal ruim.
 
@@ -156,6 +156,8 @@ O cálculo do fechamento no banco fica de fora (adiado por decisão do dono, em 
 | 12.5 | Sair da conta | **a)** ⭐ Apaga a cópia local (como a fila já é apagada) | — |
 
 **Riscos:** a cópia pode estar desatualizada (por isso a faixa com a hora); dados financeiros ficam no aparelho (cifrados, e apagados ao sair). A abertura sem rede precisa de cuidado: hoje o app espera a casa para decidir a primeira tela; com a cópia, ele abre direto nela e atualiza quando a rede voltar.
+
+**Como ficou a etapa 1:** `lib/core/offline/offline_snapshot.dart` guarda as linhas cruas de cada leitura (perfil, casas, moradores, listas e itens de compra, tarefas e nomes dos responsáveis) por usuário, no armazenamento cifrado; sem rede, devolve a última cópia e acende a faixa (`offline_banner.dart`, no `builder` do app). Sair da conta apaga as cópias. A etapa 2 (ciclo em andamento e empréstimos) usa o mesmo mecanismo nas leituras de despesas, aportes, resumo e empréstimos.
 
 **Tamanho:** etapa 1 é média (auth, compras e tarefas, faixa de aviso e testes); etapa 2 é parecida. Nenhuma das duas precisa de migration.
 
