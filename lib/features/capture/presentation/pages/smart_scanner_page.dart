@@ -8,7 +8,6 @@ import '../../../finance/domain/services/pending_payment.dart';
 import '../../../finance/presentation/cubit/finance_state.dart';
 import '../../domain/services/boleto_code.dart';
 import '../../../finance/domain/services/expense_launch_defaults.dart';
-import 'dart:async' show TimeoutException;
 import 'dart:io' show Platform;
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
@@ -261,19 +260,21 @@ class _SmartScannerPageState extends State<SmartScannerPage> with WidgetsBinding
     });
 
     CaptureProposal? proposal;
-    String? failure;
+    NfceLookupError? failure;
     if (sl<AuthRepository>().isDemoMode) {
-      failure = 'No modo demonstração a nota não é consultada na Sefaz.';
+      failure = const NfceLookupError(NfceLookupReason.other, 'No modo demonstração a nota não é consultada na Sefaz.');
     } else {
       try {
         proposal = await sl<CaptureService>().lookupNfce(url);
       } on NfceLookupError catch (e) {
-        failure = e.message;
+        failure = e;
       } catch (_) {
-        failure = 'Não foi possível consultar a nota na Sefaz.';
+        failure = NfceLookupError.of(NfceLookupReason.unavailable);
       }
     }
     if (!mounted) return;
+    // Estado sem consulta (SC) não é erro: o caminho dele é a foto
+    final expected = failure?.reason == NfceLookupReason.stateWithoutLookup;
 
     if (proposal != null) {
       setState(() {
@@ -291,8 +292,8 @@ class _SmartScannerPageState extends State<SmartScannerPage> with WidgetsBinding
     final choice = await showDialog<_QrFallback>(
       context: context,
       builder: (dialogContext) => AlertDialog(
-        title: const Text('A Sefaz não entregou a nota'),
-        content: Text('$failure\n\nTire uma foto do cupom: a IA lê a loja, os itens e os valores.'),
+        title: Text(expected ? 'Leia a nota pela foto' : 'A Sefaz não entregou a nota'),
+        content: Text('${failure?.message}\n\nTire uma foto do cupom: a IA lê a loja, os itens e os valores.'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(dialogContext, _QrFallback.typeValue),
@@ -329,12 +330,14 @@ class _SmartScannerPageState extends State<SmartScannerPage> with WidgetsBinding
       return (proposal: null, failure: null);
     }
 
+    // Só o QR da Sefaz: outro QR do cupom (propaganda, Pix) fica para a IA
     String? url;
     try {
       final capture = await controller.analyzeImage(path, formats: const [BarcodeFormat.qrCode]);
       for (final barcode in capture?.barcodes ?? const <Barcode>[]) {
         final raw = barcode.rawValue?.trim();
-        if (raw != null && raw.startsWith('http')) {
+        final host = raw == null ? '' : (Uri.tryParse(raw)?.host.toLowerCase() ?? '');
+        if (host.endsWith('.gov.br')) {
           url = raw;
           break;
         }
@@ -349,10 +352,9 @@ class _SmartScannerPageState extends State<SmartScannerPage> with WidgetsBinding
       return (proposal: proposal, failure: null);
     } on NfceLookupError catch (e) {
       return (proposal: null, failure: e.message);
-    } on TimeoutException {
-      return (proposal: null, failure: 'A Sefaz demorou demais para responder.');
     } catch (_) {
-      return (proposal: null, failure: 'Não foi possível consultar a nota na Sefaz.');
+      // Inclui o tempo esgotado
+      return (proposal: null, failure: NfceLookupError.of(NfceLookupReason.unavailable).message);
     }
   }
 
@@ -394,7 +396,7 @@ class _SmartScannerPageState extends State<SmartScannerPage> with WidgetsBinding
         if (fromQr.failure != null) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text('${fromQr.failure} Os dados vieram da leitura da foto pela IA; confira antes de lançar.'),
+              content: Text('${fromQr.failure} A IA leu a foto; confira os dados antes de lançar.'),
             ),
           );
         }

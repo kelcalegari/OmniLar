@@ -134,7 +134,54 @@ void main() {
 
     test('Consulta da nota sem servidor avisa em vez de inventar dados', () async {
       final service = CaptureService(aiConfigService: AiConfigService(null));
-      expect(() => service.lookupNfce('https://x.gov.br'), throwsA(isA<NfceLookupError>()));
+      await expectLater(
+        service.lookupNfce('https://x.gov.br'),
+        throwsA(isA<NfceLookupError>().having((e) => e.reason, 'reason', NfceLookupReason.unavailable)),
+      );
+    });
+
+    test('Estado da nota vem dos 2 primeiros dígitos da chave', () {
+      const key = '42261012345678901234650010000000011000000010';
+      expect(CaptureService.nfceStateCode('https://sat.sef.sc.gov.br/nfce/consulta?p=$key|2|1|1|ABC'), '42');
+      expect(CaptureService.nfceStateCode('https://www.sefaz.rs.gov.br/NFCE/NFCE-COM.aspx?chNFe=43${key.substring(2)}'), '43');
+      expect(CaptureService.nfceStateCode('https://www.sefaz.rs.gov.br/NFCE/NFCE-COM.aspx?p=123|2'), isNull);
+    });
+
+    test('Nota de SC vai direto para a foto, sem consultar a Sefaz', () async {
+      final service = CaptureService(aiConfigService: AiConfigService(null));
+      await expectLater(
+        service.lookupNfce('https://sat.sef.sc.gov.br/nfce/consulta?p=42261012345678901234650010000000011000000010|2|1|1|ABC'),
+        throwsA(isA<NfceLookupError>()
+            .having((e) => e.reason, 'reason', NfceLookupReason.stateWithoutLookup)
+            .having((e) => e.message, 'message', contains('Santa Catarina'))),
+      );
+    });
+
+    test('QR que não é da Sefaz nem chega ao servidor', () async {
+      final service = CaptureService(aiConfigService: AiConfigService(null));
+      await expectLater(
+        service.lookupNfce('https://loja.com.br/promo?p=1'),
+        throwsA(isA<NfceLookupError>().having((e) => e.reason, 'reason', NfceLookupReason.invalidQr)),
+      );
+    });
+
+    test('Erro do servidor vira mensagem simples; cota mantém a do servidor', () {
+      final unavailable = NfceLookupError.fromServer('unavailable', 'HTTP 503 em sefaz');
+      expect(unavailable.reason, NfceLookupReason.unavailable);
+      expect(unavailable.message, 'A Sefaz não respondeu agora.');
+
+      expect(NfceLookupError.fromServer('not_found', null).reason, NfceLookupReason.notFound);
+      expect(NfceLookupError.fromServer('captcha', null).reason, NfceLookupReason.captcha);
+
+      final quota = NfceLookupError.fromServer('quota', 'Cota atingida. Adicione sua chave.');
+      expect(quota.reason, NfceLookupReason.quota);
+      expect(quota.message, 'Cota atingida. Adicione sua chave.');
+
+      final session = NfceLookupError.fromServer(null, 'Sessão inválida ou expirada.');
+      expect(session.reason, NfceLookupReason.other);
+      expect(session.message, 'Sessão inválida ou expirada.');
+
+      expect(NfceLookupError.fromServer(null, null).message, 'A Sefaz não respondeu agora.');
     });
   });
 

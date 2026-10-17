@@ -14,11 +14,29 @@ class CaptureService {
 
   CaptureService({required this.aiConfigService, this.getCurrentHouseId});
 
+  /// Estados cuja Sefaz pede verificação de pessoa antes de mostrar a nota:
+  /// nem adianta consultar, a nota vai direto para a foto.
+  static const _statesWithoutLookup = {'42': 'Santa Catarina'};
+
+  /// Código do estado (cUF) da nota, os 2 primeiros dígitos da chave de acesso.
+  static String? nfceStateCode(String qrUrl) {
+    final params = Uri.tryParse(qrUrl.trim())?.queryParameters ?? const {};
+    final key = (params['p'] ?? params['chNFe'] ?? '').split('|').first.replaceAll(RegExp(r'\D'), '');
+    return key.length == 44 ? key.substring(0, 2) : null;
+  }
+
   /// Consulta a NFC-e na Sefaz pelo link do QR (Edge Function nfce-read).
-  /// Lança [NfceLookupError] com a mensagem para o usuário quando não consegue.
+  /// Lança [NfceLookupError] com o motivo e uma mensagem simples para o usuário.
   Future<CaptureProposal> lookupNfce(String qrUrl) async {
+    final host = Uri.tryParse(qrUrl.trim())?.host.toLowerCase() ?? '';
+    if (!host.endsWith('.gov.br')) throw NfceLookupError.of(NfceLookupReason.invalidQr);
+    final state = _statesWithoutLookup[nfceStateCode(qrUrl)];
+    if (state != null) {
+      throw NfceLookupError(NfceLookupReason.stateWithoutLookup, 'Em $state a Sefaz não libera a consulta automática da nota.');
+    }
+
     final client = SupabaseConfig.client;
-    if (client == null) throw const NfceLookupError('Consulta da nota indisponível sem conexão com o servidor.');
+    if (client == null) throw NfceLookupError.of(NfceLookupReason.unavailable);
 
     final userApiKey = await aiConfigService.getUserApiKey();
     final userModel = await aiConfigService.getSelectedModel();
@@ -37,16 +55,16 @@ class CaptureService {
       data = response.data;
     } on FunctionException catch (e) {
       final details = e.details;
-      final message = details is Map ? details['error'] as String? : null;
-      throw NfceLookupError(message ?? 'Não foi possível consultar a nota na Sefaz.');
+      throw NfceLookupError.fromServer(
+        details is Map ? details['reason'] as String? : null,
+        details is Map ? details['error'] as String? : null,
+      );
     } catch (_) {
-      throw const NfceLookupError('Não foi possível consultar a nota na Sefaz.');
+      throw NfceLookupError.of(NfceLookupReason.unavailable);
     }
 
     final analysis = data is Map<String, dynamic> ? data['analysis'] : null;
-    if (analysis is! Map<String, dynamic>) {
-      throw const NfceLookupError('A Sefaz não devolveu os dados da nota.');
-    }
+    if (analysis is! Map<String, dynamic>) throw NfceLookupError.of(NfceLookupReason.unavailable);
     return nfceProposalFromAnalysis(analysis, qrUrl: qrUrl);
   }
 
@@ -235,10 +253,43 @@ class CaptureService {
   }
 }
 
-/// Falha ao consultar a NFC-e na Sefaz, com a mensagem para o usuário.
+enum NfceLookupReason { unavailable, captcha, stateWithoutLookup, notFound, invalidQr, quota, other }
+
+/// Falha ao consultar a NFC-e na Sefaz: o motivo e o que aconteceu, em
+/// palavras simples (o que fazer em seguida fica com a tela).
 class NfceLookupError implements Exception {
+  final NfceLookupReason reason;
   final String message;
-  const NfceLookupError(this.message);
+  const NfceLookupError(this.reason, this.message);
+
+  static const _messages = {
+    NfceLookupReason.unavailable: 'A Sefaz não respondeu agora.',
+    NfceLookupReason.captcha: 'A Sefaz deste estado não libera a consulta automática da nota.',
+    NfceLookupReason.notFound: 'A nota ainda não aparece na Sefaz; pode levar alguns minutos depois da compra.',
+    NfceLookupReason.invalidQr: 'Esse QR não parece ser de uma nota fiscal.',
+  };
+
+  factory NfceLookupError.of(NfceLookupReason reason) =>
+      NfceLookupError(reason, _messages[reason] ?? _messages[NfceLookupReason.unavailable]!);
+
+  /// Resposta de erro do nfce-read. Motivo conhecido usa a mensagem do app;
+  /// cota e sessão usam a do servidor, que já diz o que fazer.
+  factory NfceLookupError.fromServer(String? reason, String? serverMessage) {
+    final known = switch (reason) {
+      'unavailable' => NfceLookupReason.unavailable,
+      'captcha' => NfceLookupReason.captcha,
+      'not_found' => NfceLookupReason.notFound,
+      'invalid_qr' => NfceLookupReason.invalidQr,
+      'quota' => NfceLookupReason.quota,
+      _ => null,
+    };
+    if (known != null && _messages.containsKey(known)) return NfceLookupError.of(known);
+    final message = serverMessage?.trim();
+    return NfceLookupError(
+      known ?? NfceLookupReason.other,
+      message != null && message.isNotEmpty ? message : _messages[NfceLookupReason.unavailable]!,
+    );
+  }
 
   @override
   String toString() => message;
