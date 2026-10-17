@@ -1,6 +1,6 @@
 # Plano — Relatórios com prévia do ciclo e calendário de pagamentos
 
-Escrito em 13/10/2026 e revisado duas vezes em 14/10/2026, depois das mudanças no fechamento das migrations 0054 a 0057 (ver "Mudanças no fechamento desde a primeira versão"). Fases 0 a 5 implementadas em 14/10/2026 na branch `feat/relatorios-previa-ciclo` (ver "Situação"); as demais continuam como plano.
+Escrito em 13/10/2026 e revisado duas vezes em 14/10/2026, depois das mudanças no fechamento das migrations 0054 a 0057 (ver "Mudanças no fechamento desde a primeira versão"). Fases 0 a 5 implementadas em 14/10/2026 na branch `feat/relatorios-previa-ciclo`, já na `main` (ver "Situação"). As seções a partir de "Objetivo" são o plano original, mantido como registro.
 
 ## Situação
 

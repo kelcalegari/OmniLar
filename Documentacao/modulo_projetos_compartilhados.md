@@ -1,3 +1,5 @@
+> **Especificação original (06/10/2026).** Escrita antes do código. O que foi feito pode ser diferente: em caso de dúvida vale o código. O estado atual está em [plano_diretor_unificado.md](plano_diretor_unificado.md) e [pendencias_proxima_sessao.md](pendencias_proxima_sessao.md).
+
 # 🧳 Omni Lar: Módulo de Projetos e Viagens Compartilhadas
 
 ## 1. Visão Geral

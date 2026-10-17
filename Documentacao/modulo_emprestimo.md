@@ -1,3 +1,5 @@
+> **Especificação original (06/10/2026).** Escrita antes do código. O que foi feito pode ser diferente: em caso de dúvida vale o código. O estado atual está em [plano_diretor_unificado.md](plano_diretor_unificado.md) e [pendencias_proxima_sessao.md](pendencias_proxima_sessao.md).
+
 Documentação Funcional: Módulo de Empréstimos (P2P Familiar)
 1. Visão Geral e Propósito
    Este módulo gerencia exclusivamente as dívidas diretas entre os membros da família (ex: dinheiro vivo emprestado, Pix, ou compras pessoais feitas no cartão de crédito de outro membro). O objetivo é garantir que esses valores sejam cobrados de forma justa, permitindo flexibilidade de pagamento, renegociações amigáveis e total transparência sobre a origem da dívida, sem comprometer o histórico financeiro da casa.

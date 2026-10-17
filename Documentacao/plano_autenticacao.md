@@ -1,8 +1,10 @@
 # Plano: primeiro acesso, cadastro, confirmação de e-mail, troca de e-mail/senha e login com Google
 
-Escrito em 16/10/2026, a partir do código da branch `fix/web-mobile-ajustes` e de uma consulta só de leitura ao Supabase `rygxmpwzofgieodvhpcy`. Nada foi alterado.
+Escrito em 16/10/2026, a partir do código da branch `fix/web-mobile-ajustes` e de uma consulta só de leitura ao Supabase `rygxmpwzofgieodvhpcy`.
 
-## 1. Como está hoje
+**Situação em 17/10/2026:** as fases 1 a 3 estão na `main` e a migration 0071 está aplicada; a fase 4 (Google) está no código, escondida até a publicação. A seção 1 descreve o ponto de partida, antes dessas fases. Continuam pendentes: o teste com conta real de cada fase e, para produção, o SMTP próprio (decisão 2).
+
+## 1. Como estava antes das fases (16/10/2026)
 
 **Telas e fluxo**
 - Uma única tela, `lib/features/auth/presentation/pages/login_page.dart`, com as abas "Entrar" e "Criar Conta" (nome, e-mail, senha de no mínimo 6 caracteres) e o botão de demonstração.
@@ -94,7 +96,7 @@ Itens originais da fase:
 - Busca dos Ajustes: entradas "E-mail de acesso" e "Senha".
 - Testes: 4 de cubit e 1 de widget.
 
-**Migration 0071** (`20261016100000_0071_sync_profile_email.sql`): gatilho `on_auth_user_email_changed` copia `auth.users.email` para `profiles.email`, mais uma correção única dos perfis desalinhados (hoje: 0). Foi testada em bloco com rollback: o gatilho copia o e-mail, não dispara quando muda outra coluna, `anon` não executa a função e nada ficou gravado. **Ainda não aplicada:** espera o OK do dono.
+**Migration 0071** (`20261016100000_0071_sync_profile_email.sql`): gatilho `on_auth_user_email_changed` copia `auth.users.email` para `profiles.email`, mais uma correção única dos perfis desalinhados (hoje: 0). Foi testada em bloco com rollback: o gatilho copia o e-mail, não dispara quando muda outra coluna, `anon` não executa a função e nada ficou gravado. Aplicada em 16/10/2026.
 
 **Depende do template "Change email address" com `{{ .Token }}`.** Sem ele, a troca chega só por link.
 

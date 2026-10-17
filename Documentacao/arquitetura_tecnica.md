@@ -2,6 +2,28 @@
 
 > Complementa o [README_documento_mestre.md](README_documento_mestre.md). Projeto novo, do zero. Os valores e escolhas aqui são a **proposta inicial** e podem ser revisados na Fase 0.
 
+## 0. Como ficou implementado (17/10/2026)
+
+As seções 1 a 17 são a proposta escrita antes do código. Onde a implementação seguiu outro caminho, vale esta seção (e, para o detalhe, o código e o [pendencias_proxima_sessao.md](pendencias_proxima_sessao.md)).
+
+| Tema | Proposta | Como ficou |
+|---|---|---|
+| Cálculo do fechamento (princípio 2, seção 3.4) | Função SQL `fn_compute_settlement`, o app só exibe | O motor roda no app (`global_clearing_engine.dart`); o banco confere o plano e grava tudo numa transação (`confirm_cycle_settlement`). Levar a conta para o banco foi adiado: [fechamento_no_banco.md](fechamento_no_banco.md) |
+| Views derivadas (3.4) | `v_installment_status`, `v_cycle_summary`, `v_event_status`, `v_task_status` | Os estados são calculados no domínio do app (Dart puro, com testes) |
+| Ambientes (3.2, 12) | `dev`, `staging` e `prod`, migrations por `supabase db push` | Um projeto Supabase só (`rygxmpwzofgieodvhpcy`). Não há Supabase CLI nem Deno na máquina: as migrations são aplicadas pelo conector (antes, à mão pelo SQL Editor) e validadas antes com um bloco que termina em `RAISE EXCEPTION` (rollback) |
+| Edge Functions (7) | `capture-read`, `nfce-fetch`, `boleto-parse`, `import-parse`, `import-classify`, `assistant`, `notify`, `scheduler`, `delete-account`, `export-data` | `capture-read`, `nfce-read`, `import-read` (leitura e sugestão de categoria), `assistant` e `notify`. Boleto, OFX e CSV são lidos no app. O agendador é o `pg_cron` chamando funções SQL. `delete-account` e `export-data` não existem |
+| Cache e fila offline (10.3, 10.7) | `drift` (SQLite), cache de leitura | Sem cache local: sem rede as listas não carregam. A fila offline (`lib/core/network/`) guarda as ações no `flutter_secure_storage` e reenvia ao voltar a conexão |
+| Pacotes (10.3) | `freezed`, `json_serializable`, `drift`, `camera`, `flutter_local_notifications`, `fl_chart` | `equatable` e JSON escrito à mão, `mobile_scanner`, `image_picker`, `file_picker`, `pdf`, `firebase_messaging`, `google_sign_in`; gráficos desenhados com widgets do Flutter |
+| Pastas (10.1) | `lib/app`, `lib/shared`, `features/expenses`, `loans`, `tasks`, `import` | `lib/core` (config, di, domain, errors, network, router, security, services, theme, utils, widgets) e `lib/features` (admin, assistant, auth, calendar, capture, finance, home, notifications, p2p, projects, reconciliation, reports, routine, settings, settlement, shopping, splash) |
+| Modo demo | — | Cada fonte de dados tem a versão Supabase e a de demonstração (`Dynamic*DataSource`); os testes automatizados rodam só contra a demonstração |
+| Realtime (6) | Listas, tarefas, participantes, notificações | Tarefas, itens de compra, despesas, moradores, aportes, empréstimos e parcelas, caixinhas, eventos e participantes, notificações e status da conta |
+| Notificações (9) | `notify` grava e envia | O banco grava (`enqueue_notification`, gatilhos e `pg_cron`); a `notify` só envia o push pelo FCM. Detalhe em [plano_notificacoes.md](plano_notificacoes.md) |
+| Plataformas (15) | Em aberto | Android (APK) e web (Firebase Hosting, instalável no iPhone); sem App Store |
+| Login (2.1) | E-mail, Google, Apple, link mágico | E-mail e senha com código de confirmação; Google pronto e escondido até a publicação; sem Apple. Ver [plano_autenticacao.md](plano_autenticacao.md) |
+| Papéis (2.3) | Só na casa | Na casa (dono, administrador, morador) e, acima disso, administrador do app (`platform_admins`), com aprovação de contas e planos ([plano_painel_admin.md](plano_painel_admin.md)) |
+| CI (12) | GitHub Actions | Existe (`.github/workflows/ci.yml`): análise e testes do Flutter |
+| Observabilidade (14) | Crashlytics ou Sentry | Não há; erros ficam nos logs das Edge Functions e no console do app |
+
 ## 1. Visão Geral da Arquitetura
 
 ```mermaid
@@ -353,6 +375,8 @@ presentation (Cubit/Widget) -> domain (entidades, use cases) <- data (Supabase, 
 | Open Finance | Entra em fase futura? |
 
 ## 16. Checklist da Fase 0 (Fundação)
+
+> Lista original, mantida como registro. A fundação foi construída com as mudanças da seção 0 (um ambiente só, sem Apple, sem observabilidade).
 
 - [ ] Projeto Supabase (dev/staging/prod) e CLI configurados
 - [ ] Esquema do núcleo (`profiles`, `houses`, `house_members`, `house_invites`) com RLS e testes

@@ -1,6 +1,8 @@
 # Omni Lar: Documento Mestre (App Financeiro e Organização da Casa)
 
 > Projeto novo, construído do zero. Nenhum código, modelo ou dado do app Omni será reaproveitado. Este documento organiza todos os módulos já especificados e define a visão geral, as dependências, os princípios e a ordem de construção.
+>
+> **Escrito antes da implementação.** A visão, o glossário e as regras transversais continuam valendo. O que já foi feito e o que falta estão em [plano_diretor_unificado.md](plano_diretor_unificado.md); o detalhe técnico do dia a dia, em [pendencias_proxima_sessao.md](pendencias_proxima_sessao.md).
 
 ## 1. Visão do Produto
 
@@ -29,6 +31,9 @@ Um **Motor de Compensação Global** cruza as duas e entrega um único fechament
 | Inteligência | Captura Inteligente | [modulo_captura_inteligente.md](modulo_captura_inteligente.md) | Foto, QR Code da NFC-e, boleto, comprovante, tela de revisão |
 | Inteligência | Assistente IA | [modulo_assistente_ia.md](modulo_assistente_ia.md) | Consultas, ações por linguagem natural, alertas proativos |
 | Técnico | Arquitetura Técnica | [arquitetura_tecnica.md](arquitetura_tecnica.md) | Autenticação, Supabase (banco, RLS, storage, realtime, functions), pipeline de IA, Flutter, testes, CI, LGPD |
+| Técnico | Notificações | [plano_notificacoes.md](plano_notificacoes.md) | Sino, push pelo FCM, lembretes agendados e catálogo |
+| Técnico | Contas e acesso | [plano_autenticacao.md](plano_autenticacao.md), [plano_painel_admin.md](plano_painel_admin.md) | Cadastro, senha, Google, aprovação de contas, planos Free e Premium, painel administrativo |
+| Financeiro | Relatórios | [plano_relatorios_previa_ciclo.md](plano_relatorios_previa_ciclo.md) | Prévia do fechamento, calendário de pagamentos, próximos ciclos, exportação |
 
 ## 3. Arquitetura de Negócio
 
@@ -104,7 +109,7 @@ flowchart TD
 
 | Grupo | Ações |
 |---|---|
-| Financeiro | 🛒 Gasto da Casa, 💸 Empréstimo, 📥 Aporte, 📄 Importar fatura/extrato |
+| Financeiro | 🛒 Gasto da Casa, 💸 Empréstimo, 📥 Aporte (a importação de fatura/extrato saiu do FAB: fica num card da Casa, na fatura e no menu de cada cartão nos Ajustes) |
 | Casa | 📅 Evento, ✅ Tarefa, 🛍️ Item de compras |
 | Inteligente | 📷 Escanear, ✨ Assistente |
 
@@ -210,22 +215,27 @@ assistant_conversations, assistant_messages, assistant_actions, assistant_prefer
 
 **Marcos de validação:** ao fim da Fase 3, o casal consegue fechar um ciclo real com um único Pix. Ao fim da Fase 4, o dia a dia da casa roda no app.
 
+**Situação (17/10/2026):** as fases 0 a 6 estão implementadas e a 7 em parte (consultas e ações com confirmação; sem alertas proativos nem voz); os ciclos reais já são fechados no app. O que falta está em [plano_diretor_unificado.md](plano_diretor_unificado.md).
+
 ## 11. Decisões em Aberto
 
-- A "Casa" como credora/devedora será um membro virtual ou uma entidade própria?
+Resolvidas na implementação (17/10/2026):
+- A "Casa" como credora/devedora: o Caixa da Casa entra nos empréstimos como parte ("acordo com o Lar"), e o pagamento vai para uma caixinha.
+- Limite de moradores e modelo de convite: código de convite de uso único; o limite de moradores, casas e projetos vem do plano (Free ou Premium, [plano_painel_admin.md](plano_painel_admin.md)).
+- Monetização e custos de IA: cota diária de leituras por casa, conforme o plano; quem informa a própria chave de IA não tem limite.
+
+Ainda em aberto:
 - Alocação de pagamentos: automática (mais antigo primeiro) ou escolha manual?
 - Open Finance (conexão direta com bancos) entra no futuro?
 - Política de retenção das imagens enviadas (prazo, descarte automático).
-- Limite de membros por Casa e modelo de convite (apenas membros, conforme o Calendário).
-- Monetização e custos de IA (limites por usuário).
 - Lançamento automático pelo assistente: fora desta versão, a reavaliar depois.
-- Decisões técnicas (privacidade das dívidas P2P para o admin, motor em Dart ou só servidor, cache local, provedor de IA, plataformas, multi-Casa, moeda): ver a seção 15 de [arquitetura_tecnica.md](arquitetura_tecnica.md).
+- Decisões técnicas: ver a seção 15 de [arquitetura_tecnica.md](arquitetura_tecnica.md).
 
 ## 12. Observações sobre os Documentos Existentes
 
+- Os `modulo_*.md` e o [integracao_modulo_financeiro.md](integracao_modulo_financeiro.md) são a especificação original (06/10/2026). Onde divergem do que foi feito, vale o código e o [pendencias_proxima_sessao.md](pendencias_proxima_sessao.md).
 - O item 3.1 de [integracao_modulo_financeiro.md](integracao_modulo_financeiro.md) ainda descreve 4 abas. A seção 6 desse arquivo e este documento valem como referência (5 abas).
 - Alguns módulos citam o Omni como exemplo ou origem: o "Importador do Omni" e o "formato já usado pelo Omni" em [modulo_importacao_conciliacao.md](modulo_importacao_conciliacao.md), e o gancho de importador em [modulo_emprestimo.md](modulo_emprestimo.md). Como o projeto parte do zero, essas menções devem ser desconsideradas.
-- [ideias_do_omni_repasses.md](ideias_do_omni_repasses.md) foi uma análise do app antigo e não faz parte da especificação.
 
 ## 13. Identidade do Produto
 
@@ -250,6 +260,8 @@ assistant_conversations, assistant_messages, assistant_actions, assistant_prefer
 
 > [!WARNING]
 > O app antigo usa o nome "omni" e a pasta atual do repositório também. Antes de publicar, defina o destino do app antigo (aposentar, renomear ou manter) para evitar conflito de pacote e confusão entre os dois.
+
+Usados hoje: pacote Android `br.com.omnilar.app`, repositório `kelcalegari/OmniLar`, projeto Flutter `omni_lar`, um único projeto Supabase (`rygxmpwzofgieodvhpcy`) e o site em `omnilar.web.app` (projeto Firebase `omnilar-ef002`).
 
 **Verificações pendentes do nome**
 - [ ] Domínio no Registro.br (`omnilar.com.br`)

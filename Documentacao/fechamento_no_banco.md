@@ -7,7 +7,7 @@ Escrito em 13/10/2026. Trabalho adiado por decisão do dono do projeto: fica par
 Quem faz a conta do fechamento do ciclo é o app, no aparelho de quem fecha.
 
 1. O app lê despesas, aportes e empréstimos do ciclo e calcula tudo no motor de compensação (`lib/features/settlement/domain/services/global_clearing_engine.dart`, cerca de 580 linhas): quanto cada morador deve, quem recebe de volta, o Super Pix, a sobra do Caixa, o que vai para caixinha e o que vira acordo.
-2. O app monta um "plano de fechamento" e o envia para a RPC `confirm_cycle_settlement` (versão atual na migration 0037).
+2. O app monta um "plano de fechamento" e o envia para a RPC `confirm_cycle_settlement` (versão atual na migration 0044; conferido em 17/10/2026).
 3. O banco confere o plano e grava tudo em uma transação: ou o ciclo fecha por inteiro, ou nada muda.
 
 O princípio 2 do `arquitetura_tecnica.md` já prevê o cálculo no banco.

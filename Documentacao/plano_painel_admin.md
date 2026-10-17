@@ -11,7 +11,7 @@ Fase A feita no código, com ensaio no banco (rollback):
 - **Edge Functions**: `_shared/auth.ts` chama `is_account_active` antes de qualquer leitura de IA (`assistant`, `capture-read`, `import-read`).
 - **App**: `AccountAccessCubit` (status da conta, tempo real), tela `/conta/em-analise` (em análise, recusada ou suspensa, com campo de convite e sair), rota `/admin` só para administradores, botão "Administração do Omni Lar" nos Ajustes, painel com Visão geral, Contas (busca e filtro), detalhe da conta (aprovar, recusar, suspender, reativar, tornar ou tirar administrador), Aprovações (em lote), Configurações e Histórico; modo demo com contas de exemplo.
 - **No ar (16/10/2026)**: 0068 aplicada; `assistant`, `capture-read` e `import-read` publicadas com a conferência (chamada sem sessão devolve a mensagem da própria função); a conta do dono incluída em `platform_admins` (registro no histórico). As duas contas que já existiam ficaram `active`; a aprovação está ligada.
-- **Falta**: merge do app e teste com sessão real (seção 11).
+- **App na `main`** desde 16/10/2026. Falta o teste com sessão real (seção 11). A tela de espera passou a conferir o status também ao voltar ao app, a cada 15 s e pelo botão "Verificar agora" (commit `44ccb23`), e o modo demo não mostra o painel (`0f5c296`).
 Fase B (16/10/2026, branch `feat/painel-admin-fase-b`), com ensaio no banco (rollback):
 - **Migration 0069**: `account_status.plan`, `plan_expires_at` e `plan_note` (contas existentes viram Premium "conta inicial"); `plan_limits` com os limites da seção 5.2 (o PDF fica de fora, decisão 3); `account_plan(user_id)` (Premium vencido conta como Free), `house_plan(house_id)` (plano do dono no momento), `plan_limit(plan, resource)` e `house_ai_daily_limit(house_id)` (para as Edge Functions, só para quem mora na casa); limites nos gatilhos de `houses` (casas como dono), `house_members` (moradores, também na inserção direta e no convite) e `shared_projects` (projeto ativo novo ou reaberto); `my_account_access` devolve o plano; painel com `admin_set_plan` (em lote, validade futura, observação, aviso "Plano alterado" à pessoa), `admin_get_plan_limits`, `admin_set_plan_limit` e o plano em `admin_list_accounts`, `admin_account_detail` e `admin_overview` (contas por plano, Premium vencendo em 30 dias).
 - **Edge Functions**: `_shared/usage.ts` lê a cota do plano da casa (`house_ai_daily_limit`; sem resposta do banco, 10).
@@ -29,7 +29,9 @@ Fase B (16/10/2026, branch `feat/painel-admin-fase-b`), com ensaio no banco (rol
 
 Fora do escopo agora: cobrança automática (cartão, Pix recorrente, loja), que pode vir depois em cima do mesmo campo de plano.
 
-## 2. O que já existe (conferido em 16/10/2026)
+## 2. O que existia antes do painel (conferido em 16/10/2026)
+
+> Registro do ponto de partida. O que foi feito está na seção 0; a exclusão de conta (`delete-account`) continua sem existir.
 
 | Peça | Situação |
 |---|---|

@@ -1,141 +1,80 @@
-# 🗺️ Omni Lar: Plano Diretor Unificado (Mobile, Web & Produção)
+# Omni Lar — onde estamos e o que falta
 
-Este plano unifica o **Roadmap de Engenharia & Produção** do aplicativo com o **Plano Estratégico de Diferenciação Web/Desktop**, estabelecendo uma visão única do que já foi construído e o caminho exato para a conclusão e publicação do produto nas lojas e na web.
+Reescrito em 17/10/2026. É o painel de cima do projeto: o que já funciona, o que falta e onde está o detalhe de cada coisa. A visão do produto está em [README_documento_mestre.md](README_documento_mestre.md); o estado técnico do dia a dia, as decisões do dono e os testes manuais pendentes estão em [pendencias_proxima_sessao.md](pendencias_proxima_sessao.md), que é o ponto de partida de cada sessão.
 
----
+## 1. Situação geral (17/10/2026)
 
-## 📊 1. Painel Geral de Status do Projeto
+| Item | Situação |
+|---|---|
+| Código | `main` no GitHub (`kelcalegari/OmniLar`), com tudo das branches de decisões, notificações, login, painel administrativo e pendências |
+| Qualidade | `flutter analyze` sem erros nem warnings; 610 testes automatizados passando (só contra o modo demo, nenhum contra o Supabase); CI no GitHub Actions (`.github/workflows/ci.yml`) |
+| Banco | Supabase `rygxmpwzofgieodvhpcy`, migrations 0001 a 0075 aplicadas |
+| Edge Functions | `capture-read`, `assistant`, `import-read`, `nfce-read` (com login) e `notify` (chamada pelo banco) |
+| Site | https://omnilar.web.app (Firebase Hosting, projeto `omnilar-ef002`), publicado em 17/10/2026 |
+| Android | APK de release gerado à mão (`flutter build apk --release`), ainda assinado com a chave de debug |
+| iPhone | Sem App Store: o app é usado como site instalado na Tela de Início (PWA) |
+| Uso | Uma casa ("Nossa Casa"), duas contas; o dono testa com sessão real |
 
-```mermaid
-pie title Status Global das Funcionalidades
-    "Concluído (Mobile Core + Engine + RLS)" : 85
-    "Em Progresso (Web/Desktop Executivo)" : 10
-    "Pendências (Push, Deploy & Lojas)" : 5
-```
+## 2. O que já funciona
 
-| Frente / Plataforma | Status Geral | Cobertura de Testes |
-|---|---|---|
-| **Motor Financeiro & Super Pix** (Cents, Balde Comum, P2P, Caixinha) | 100% Concluído ✅ | 100% Automatizado |
-| **Mobile Core** (Despesas, Recorrentes, Tarefas, Compras, Agenda, OCR) | 100% Concluído ✅ | 100% Automatizado |
-| **Backend & Segurança** (Supabase RLS, Biometria RN07, Fila Offline AES) | 95% Concluído ✅ | 100% Automatizado |
-| **Web & Desktop Executivo** (Dual-Pane, Atalhos, Importação, Relatórios) | 50% Concluído 🔄 | Testes em expansão |
-| **Publicação & Lojas** (FCM Push, Keystore, Landing Page, Web instalável no iPhone) | 20% Concluído ⏳ | Preparação final |
+**Dinheiro da casa**
+- Caixa da Casa por ciclo, com dia de início configurável (inclusive 29 a 31 e troca a partir do próximo ciclo), três modelos de rateio (porcentagem, aportes fixos e por categoria) e categoria com dono.
+- Despesas compostas (sub-itens com responsável), contas recorrentes geradas no banco, contas a pagar com boleto (código guardado e copiado), compra no cartão dentro da fatura, pagamento da fatura pelo titular ou pelo Caixa.
+- Fechamento do ciclo atômico (Super Pix, memória de cálculo, retrato do fechamento, reabrir), sobra do Caixa, pagamento parcial e acordos com o Lar.
+- Empréstimos entre moradores (parcelas, pagamento parcial, perdão, renegociação, exclusão controlada) e caixinhas (meta com prazo, histórico, transferência, depósito e resgate ligados ao ciclo).
+- Importação de fatura e extrato (OFX, CSV, PDF e foto por IA), com conciliação, regras aprendidas, estorno, divisão de linha e desfazer.
+- Relatórios com prévia do fechamento, calendário de pagamentos, próximos ciclos, saldo do Caixa por dia e exportação em CSV e PDF.
+- Projetos compartilhados (viagens, reformas) com rateio próprio entre participantes.
 
-> **Confiabilidade da Base:** **510 testes automatizados passando (100% verde)**, `flutter analyze` com zero erros e zero warnings (14/10/2026).
+**Rotina**
+- Agenda (eventos, participantes necessários, respostas, séries com "repetir até"), tarefas e lista de compras compartilhadas, tudo em tempo real.
+- Fila offline para os lançamentos simples, marcar e excluir itens e tarefas.
 
----
+**Captura e IA**
+- Escâner de nota (QR da NFC-e consultado na Sefaz; SC vai direto para a foto), boleto (código de barras e linha digitável conferidos) e foto lida por IA (Gemini), sempre com revisão antes de gravar.
+- Assistente com propostas que só gravam depois de confirmadas.
 
-## 🏛️ 2. O Que Já Está 100% Implementado
+**Contas e administração**
+- Cadastro com confirmação por código, "Esqueci minha senha", troca de e-mail e senha; login com Google pronto e escondido até a publicação.
+- Aprovação de contas novas, planos Free e Premium e painel administrativo (`/admin`).
+- Notificações: sino com tempo real, gatilhos na hora, lembretes agendados (`pg_cron`) e push pelo FCM (Android, navegador e iPhone instalado). O envio do push ainda não foi visto chegar num aparelho.
 
-### 💰 Motor Contábil & Financeiro
-- [x] **Tratamento Estrito de Moeda:** 100% dos cálculos em centavos inteiros (`Money` em cents), eliminando erros de ponto flutuante.
-- [x] **Três Modelos de Rateio:** Proporcional aos rendimentos, Dono 100% e Aportes Fixos (**Balde Comum** com compensação automática de excedentes).
-- [x] **Despesas Compostas & Boletos Segmentados:** Suporte a faturas unificadas (ex: Condomínio dividindo Água, Gás, Taxa e Obras com donos diferentes).
-- [x] **Contas Retroativas & Passivos:** Identificação automática de contas vencidas (`isOverdue`), arrasto de dívidas pendentes de ciclos anteriores e histórico navegável.
-- [x] **P2P Flexível:** Parcelamento (1x a 12x), juros/desconto, pagamento parcial, anistia (perdão) e **empréstimos do lar via Caixinha / sem vencimento compulsório**.
-- [x] **Global Clearing Engine (Super Pix):** Matriz de liquidação ótima que compensa dívidas coletivas e mútuas no menor número de transferências Pix.
+## 3. O que falta
 
-### 📱 Experiência Mobile & Rotina
-- [x] **Organização Completa:** Agenda do Lar (dia/semana/mês), Tarefas Domésticas e Lista de Compras compartilhadas.
-- [x] **Realtime Sync:** Sincronização em tempo real entre moradores via Supabase Realtime Channels.
-- [x] **Fila Offline Resiliente:** Operações salvas localmente com criptografia de hardware (`FlutterSecureStorage`) e sincronização pós-reconexão.
-- [x] **Segurança e Risco (RN07):** Autenticação biométrica (`local_auth`) obrigatória para ações irreversíveis (Perdão, Renegociação e Fechamento do Ciclo).
-- [x] **Identidade Visual:** Splash Screen nativa e customizada sem telas brancas, ícones adaptativos e logotipo vetorial responsivo.
+### 3.1. Agora (depende do dono)
+- Testes manuais com sessão real dos itens de 15, 16 e 17/10 (lista em `pendencias_proxima_sessao.md`).
+- Confirmar que um push chega no celular.
 
-### 🖥️ Estação Web/Desktop (Fase 1 Parcial)
-- [x] **Dual-Pane no Fechamento do Ciclo:** Super Pix à esquerda e Memória de Cálculo aberta simultaneamente à direita dispensando modais.
-- [x] **Dual-Pane na Tela Inicial (Home):** Painel estático [`ExpenseDetailDesktopPane`](file:///c:/Projetos/OmniLar/lib/features/finance/presentation/widgets/expense_detail_desktop_pane.dart) exibindo detalhes de despesas lado a lado.
-- [x] **Sidebar Executiva Estável:** Largura fixa de 152px com indicador de status de conexão (`Online / Omni Cloud`).
-- [x] **Atalhos Globais de Teclado:** `Ctrl + N` (nova despesa) e `Esc` (fechar painéis/modais).
+### 3.2. Antes de abrir para outras casas
+- **Levar o cálculo do fechamento para o banco:** adiado por decisão do dono; plano em [fechamento_no_banco.md](fechamento_no_banco.md).
+- **Alertas do Supabase:** revogar `anon` nas funções de gatilho, otimizar as regras de acesso (`(select auth.uid())`), índices nas chaves estrangeiras e proteção contra senha vazada (detalhe em `pendencias_proxima_sessao.md`).
+- **IA no plano pago:** no plano gratuito o Google pode usar o conteúdo enviado (seção 17 de [arquitetura_tecnica.md](arquitetura_tecnica.md)).
+- **SMTP próprio** para os e-mails de confirmação e senha (o padrão do Supabase tem limite baixo) — ver [plano_autenticacao.md](plano_autenticacao.md).
+- **Exclusão de conta (LGPD):** Edge Function `delete-account` (decisão 10 de [plano_painel_admin.md](plano_painel_admin.md)).
 
----
+### 3.3. Publicação
+- Chave de assinatura própria do Android e pacote `.aab` para a Google Play.
+- Login com Google (configuração no Google Cloud e no Supabase, Fase 4 de `plano_autenticacao.md`).
+- Termos de uso e política de privacidade; domínio próprio (trocar o endereço obriga a reinstalar o site no iPhone e reativar as notificações).
 
-## 🎯 3. Mapa de Pendências Unificado (O Que Falta Fazer)
+### 3.4. Evolução (sem data)
+- Notificações: aceite de empréstimo pelo devedor, gatilhos informativos restantes, preferências nos Ajustes, resumo semanal e alertas do Assistente ([plano_notificacoes.md](plano_notificacoes.md), seção 0).
+- Cópia local para abrir sem internet (hoje a fila offline só cobre a conexão que cai no meio do uso).
+- Web/desktop: área de soltura de arquivos na importação, modo grade dos lançamentos e atalho `Ctrl + F`.
+- Leitura de boleto de condomínio com os itens (água, gás, fundo de reserva) já separados.
+- "Criar senha" para quem entrou só pelo Google.
 
-```mermaid
-flowchart TD
-    subgraph BlocoA["Frente 1: Estação Executiva Web & Desktop"]
-        W1[2.1 Drag & Drop OFX/CSV/PDF] --> W2[2.2 Modo Grade / Planilha Rápida]
-        W2 --> W3[3.2 Gráficos Interativos Hover]
-        W3 --> W4[3.3 Exportação PDF & Excel XLSX]
-        W4 --> W5[4.1 Landing Page Pública & Demo em 1 Clique]
-    end
+## 4. Documentos
 
-    subgraph BlocoB["Frente 2: Notificações & OCR de Nuvem"]
-        M1[Push FCM: Android, Web e iPhone PWA] --> M2[Extração Condomínio na Edge Function]
-    end
-
-    subgraph BlocoC["Frente 3: Preparação para Lojas & Produção"]
-        P1[Assinatura Android Keystore / AAB] --> P2[Web instalável no iPhone - PWA]
-        P2 --> P3[Políticas de Privacidade & Domínio Oficial]
-    end
-
-    BlocoA -.-> BlocoC
-    BlocoB -.-> BlocoC
-```
-
----
-
-### 🔹 Frente 1: Conclusão da Estação Executiva Web/Desktop
-
-#### 1. Entrada de Dados em Lote (Drag & Drop)
-- **Área de Soltura (`Dropzone`) na Web:** Permitir arrastar extratos bancários e faturas de cartão (`OFX`, `CSV`, `PDF`) direto na janela do navegador.
-- **Conciliação Inteligente:** Leitura instantânea gerando o modal de "Rachar a Fatura", separando o que é da Casa, o que é de cada pessoa e o que vira empréstimo P2P.
-
-#### 2. Produtividade & Modo Planilha
-- **Modo Grade Tabular:** Visualização em tabela compacta de lançamentos com edição direta por células via teclado (`Tab`/`Enter`), ideal para conferência rápida de dezenas de gastos.
-- **Atalho de Busca:** Foco imediato na barra de busca com `Ctrl + F`.
-
-#### 3. Inteligência Analítica & Exportação
-- **Gráficos com Hover:** Tooltips flutuantes nos gráficos de Fôlego e Categorias em telas grandes.
-- **Exportação de Balanço Executivo:**
-  - Geração de relatório consolidado em **PDF diagramado** (prestação de contas do mês).
-  - Exportação da planilha do ciclo em formato **Excel (`.xlsx`)** estruturado.
-
-#### 4. Landing Page Institucional & Onboarding Web
-- **Apresentação Pública na Raiz (`/`):** Página institucional atraente explicando a proposta de valor (Super Pix, divisão justa, paz no lar).
-- **Experimentar Demo em 1 Clique:** Acesso imediato à Demonstração funcional no navegador sem exigir login ou download.
-
----
-
-### 🔹 Frente 2: Comunicação Ativa & IA de Nuvem
-
-#### 1. Notificações Push (Android, Web e iPhone instalado)
-- **Firebase Cloud Messaging (FCM)** como canal único: Android nativo, navegador e iPhone com o site instalado na Tela de Início (PWA, iOS 16.4+).
-- **Sem APNs nativo:** o app não vai para a App Store, então o iPhone usa o Web Push pelo FCM. Detalhes, limitações do iPhone e catálogo em [plano_notificacoes.md](plano_notificacoes.md).
-- Entregas: tabela `device_tokens`, edge function `notify` (FCM HTTP v1), `web/firebase-messaging-sw.js`, `manifest.json` revisado, botão "Ativar notificações" e passo a passo de instalação no iPhone.
-- Disparo de alertas essenciais:
-  - *"Fulano solicitou um empréstimo P2P de R$ X"*;
-  - *"Nova tarefa atribuída a você: Comprar pó de café"*;
-  - *"O ciclo financeiro fecha em 3 dias. Confira seus lançamentos."*
-
-#### 2. OCR Especializado de Boletos de Condomínio
-- Ajuste no prompt estruturado do Gemini na Edge Function `capture-read` para reconhecer automaticamente tabelas com taxas condominiais, rateio de água, gás e fundo de reserva, preenchendo a despesa composta com 1 clique no app.
-
----
-
-### 🔹 Frente 3: Publicação & Lojas (Release Engineering)
-
-#### 1. Android (Google Play)
-- Configuração de `key.properties` e geração do keystore de release.
-- Fixação do `applicationId: br.com.omnilar.app` e versionamento semântico no `build.gradle`.
-- Geração do pacote de produção `.aab` (Android App Bundle).
-
-#### 2. iOS (site instalado, sem App Store)
-- O app **não será publicado na App Store**. No iPhone, o OmniLar é usado como site instalado na Tela de Início (PWA).
-- Preparar a versão web para instalação: `manifest.json` com nome, `id`, cores e ícones do OmniLar; meta tags e `apple-touch-icon` no `web/index.html`; hospedagem em HTTPS no domínio oficial.
-- Push no iPhone pelo FCM/Web Push (ver Frente 2).
-
-#### 3. Conformidade & Suporte
-- Publicação dos termos de uso e política de privacidade obrigatórios para as lojas.
-
----
-
-## 📅 4. Cronograma de Execução Recomendado
-
-| Etapa | Foco Principal | Entregáveis |
-|---|---|---|
-| **Sprint 1** | **Web Produtividade & Relatórios** | Drag & Drop OFX/CSV, Modo Grade, Exportação PDF/Excel |
-| **Sprint 2** | **Landing Page & Vitrine Web** | Página pública na rota `/`, botão Demo 1-clique |
-| **Sprint 3** | **Notificações Push & Edge IA** | Push pelo FCM (Android, web e iPhone instalado), OCR de condomínio |
-| **Sprint 4** | **Engenharia de Release** | Assinatura do `.aab` e publicação na Google Play; versão web instalável (PWA) para iPhone |
+| Documento | Para quê |
+|---|---|
+| [pendencias_proxima_sessao.md](pendencias_proxima_sessao.md) | Estado técnico atual, como trabalhar no projeto, decisões do dono, testes manuais pendentes e lista das migrations |
+| [README_documento_mestre.md](README_documento_mestre.md) | Visão do produto, glossário, módulos e regras transversais |
+| [arquitetura_tecnica.md](arquitetura_tecnica.md) | Arquitetura (proposta original e, na seção 0, como ficou) e regras da IA |
+| [plano_notificacoes.md](plano_notificacoes.md) | Notificações: andamento, catálogo e decisões |
+| [plano_painel_admin.md](plano_painel_admin.md) | Aprovação de contas, planos e painel |
+| [plano_autenticacao.md](plano_autenticacao.md) | Cadastro, senha, e-mail e Google |
+| [plano_importacao_conciliacao.md](plano_importacao_conciliacao.md) | Importação de fatura e extrato |
+| [plano_relatorios_previa_ciclo.md](plano_relatorios_previa_ciclo.md) | Relatórios, prévia e exportação |
+| [fechamento_no_banco.md](fechamento_no_banco.md) | Trabalho adiado: cálculo do fechamento no banco |
+| `modulo_*.md` e [integracao_modulo_financeiro.md](integracao_modulo_financeiro.md) | Especificação original de cada módulo (06/10/2026); pode divergir do que foi feito, e em caso de dúvida vale o código |

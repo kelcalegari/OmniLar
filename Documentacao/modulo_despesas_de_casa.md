@@ -1,3 +1,5 @@
+> **Especificação original (06/10/2026).** Escrita antes do código. O que foi feito pode ser diferente: em caso de dúvida vale o código. O estado atual está em [plano_diretor_unificado.md](plano_diretor_unificado.md) e [pendencias_proxima_sessao.md](pendencias_proxima_sessao.md).
+
 Documentação Funcional: Módulo de Despesas da Casa
 1. Visão Geral e Propósito
    Este módulo atua como o cérebro financeiro da residência. Ele substitui a lógica exaustiva de "dividir notinha por notinha" pelo conceito de Caixa da Casa (Fundo Comum). O sistema gerencia as contas recorrentes e despesas avulsas com base no Ciclo Financeiro real da família (quando o dinheiro entra vs. quando as contas vencem) e oferece flexibilidade total na divisão dos custos através de três modelos de rateio, garantindo que o orçamento seja justo e sem atritos.
