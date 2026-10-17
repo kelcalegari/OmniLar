@@ -24,6 +24,8 @@ class SearchShortcut {
       final context = node.context;
       if (context == null || !context.mounted || !node.canRequestFocus) continue;
       if (!(ModalRoute.of(context)?.isCurrent ?? true)) continue;
+      // Aba escondida (as abas do app ficam vivas, só desligadas): não conta
+      if (!TickerMode.valuesOf(context).enabled) continue;
       node.requestFocus();
       return true;
     }
