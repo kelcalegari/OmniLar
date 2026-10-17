@@ -48,6 +48,7 @@ REGRAS DE CONVERSÃO FINANCEIRA:
    - Marque 'is_itemized' como true apenas se os itens individuais estiverem legíveis.
 4. Identifique o código de barras ou linha digitável numérica do boleto se presente.
 5. Datas devem estar no formato ISO YYYY-MM-DD.
+6. Descontos, abatimentos e créditos devem vir como item com 'amount_cents' NEGATIVO; o sistema abate esse valor dos demais itens.
 
 Retorne EXCLUSIVAMENTE um objeto JSON válido seguindo a estrutura:
 {
@@ -72,6 +73,62 @@ Retorne EXCLUSIVAMENTE um objeto JSON válido seguindo a estrutura:
   "raw_notes": string | null
 }
 `;
+
+function formatBrl(cents: number): string {
+  return `R$ ${(cents / 100).toFixed(2).replace('.', ',')}`;
+}
+
+/**
+ * O banco só aceita itens com amount_cents > 0. Descontos (itens negativos) são
+ * abatidos proporcionalmente dos itens positivos, mantendo a soma igual ao total.
+ * Itens zerados são descartados. Se o desconto consumir tudo, o documento deixa
+ * de ser itemizado.
+ */
+function normalizeItems(result: DocumentAnalysisResult): void {
+  if (!Array.isArray(result.items) || result.items.length === 0) return;
+
+  const items = result.items
+    .map((it) => ({ ...it, amount_cents: Math.round(Number(it.amount_cents) || 0) }))
+    .filter((it) => it.amount_cents !== 0);
+  const positives = items.filter((it) => it.amount_cents > 0);
+  const discount = items
+    .filter((it) => it.amount_cents < 0)
+    .reduce((sum, it) => sum - it.amount_cents, 0);
+  const positiveSum = positives.reduce((sum, it) => sum + it.amount_cents, 0);
+
+  if (discount === 0) {
+    result.items = positives;
+    return;
+  }
+
+  const note = (msg: string) => {
+    result.raw_notes = (result.raw_notes ? result.raw_notes + '. ' : '') + msg;
+  };
+
+  if (positiveSum - discount < positives.length) {
+    result.items = [];
+    result.is_itemized = false;
+    note(`Desconto de ${formatBrl(discount)} maior que os itens; documento lançado sem detalhamento`);
+    return;
+  }
+
+  const shares = positives.map((it) => (it.amount_cents * discount) / positiveSum);
+  const cuts = shares.map((s) => Math.floor(s));
+  let remainder = discount - cuts.reduce((a, b) => a + b, 0);
+  const order = shares
+    .map((s, i) => [s - cuts[i], i] as [number, number])
+    .sort((a, b) => b[0] - a[0]);
+  for (let k = 0; remainder > 0; k = (k + 1) % order.length) {
+    const i = order[k][1];
+    if (positives[i].amount_cents - cuts[i] > 1) {
+      cuts[i]++;
+      remainder--;
+    }
+  }
+
+  result.items = positives.map((it, i) => ({ ...it, amount_cents: it.amount_cents - cuts[i] }));
+  note(`Desconto de ${formatBrl(discount)} abatido proporcionalmente dos itens`);
+}
 
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -160,6 +217,9 @@ serve(async (req) => {
       tokensOut: response.tokensUsed || 0,
       status: 'success',
     });
+
+    // Descontos negativos viram abatimento nos itens (o banco exige amount_cents > 0)
+    normalizeItems(result);
 
     // Validação de consistência de centavos: se itemized, verifica o balanço dos sub-itens
     if (result.is_itemized && result.items && result.items.length > 0) {

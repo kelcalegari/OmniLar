@@ -119,6 +119,33 @@ class CaptureService {
     );
   }
 
+  /// Itens (título, centavos) prontos para gravar: o banco só aceita valor
+  /// maior que zero. Descontos (valores negativos) são abatidos
+  /// proporcionalmente dos itens positivos, mantendo a soma; itens zerados
+  /// saem. Se o desconto engolir os itens, volta vazio (sem detalhamento).
+  static List<(String, int)> absorbDiscounts(List<(String, int)> lines) {
+    final positives = lines.where((l) => l.$2 > 0).toList();
+    final discount = lines.where((l) => l.$2 < 0).fold<int>(0, (sum, l) => sum - l.$2);
+    if (discount == 0) return positives;
+
+    final positiveSum = positives.fold<int>(0, (sum, l) => sum + l.$2);
+    if (positiveSum - discount < positives.length) return const [];
+
+    final shares = [for (final l in positives) l.$2 * discount / positiveSum];
+    final cuts = [for (final s in shares) s.floor()];
+    var remainder = discount - cuts.fold<int>(0, (a, b) => a + b);
+    final order = List<int>.generate(positives.length, (i) => i)
+      ..sort((a, b) => (shares[b] - cuts[b]).compareTo(shares[a] - cuts[a]));
+    for (var k = 0; remainder > 0; k = (k + 1) % order.length) {
+      final i = order[k];
+      if (positives[i].$2 - cuts[i] > 1) {
+        cuts[i]++;
+        remainder--;
+      }
+    }
+    return [for (var i = 0; i < positives.length; i++) (positives[i].$1, positives[i].$2 - cuts[i])];
+  }
+
   /// Processa arquivo de imagem ou documento PDF via Edge Function e Gemini Vision OCR.
   /// Aplica a regra "Código Primeiro": tenta identificar linha digitável de boleto antes da IA.
   Future<CaptureProposal> processDocumentFile({
@@ -193,10 +220,19 @@ class CaptureService {
           final rawItems = analysis['items'] as List<dynamic>? ?? [];
           final items = <InvoiceItemDraft>[];
 
-          for (int i = 0; i < rawItems.length; i++) {
-            final itemMap = rawItems[i] as Map<String, dynamic>;
-            final itemTitle = itemMap['title'] as String? ?? 'Item ${i + 1}';
-            final itemAmountCents = (itemMap['amount_cents'] as num?)?.toInt() ?? 0;
+          // Desconto do boleto (linha negativa) é abatido dos demais itens:
+          // o banco só aceita itens com valor maior que zero
+          final lines = absorbDiscounts([
+            for (final (i, raw) in rawItems.indexed)
+              if (raw is Map)
+                (
+                  (raw['title'] as String?) ?? 'Item ${i + 1}',
+                  (raw['amount_cents'] as num?)?.round() ?? 0,
+                ),
+          ]);
+
+          for (int i = 0; i < lines.length; i++) {
+            final (itemTitle, itemAmountCents) = lines[i];
 
             items.add(
               InvoiceItemDraft(
