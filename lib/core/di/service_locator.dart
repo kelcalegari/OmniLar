@@ -87,6 +87,7 @@ import '../../features/capture/domain/services/capture_service.dart';
 import '../../features/finance/data/offline/house_expense_offline_codec.dart';
 import '../../features/shopping/data/offline/shopping_item_offline_codec.dart';
 import '../../features/calendar/data/offline/calendar_offline_codec.dart';
+import '../offline/offline_snapshot.dart';
 
 final sl = GetIt.instance;
 
@@ -280,6 +281,11 @@ Future<void> initServiceLocator() async {
   });
   sl.registerLazySingleton<CalendarRepository>(() => CalendarRepositoryImpl(sl(), sl<OfflineSyncService>()));
   sl.registerLazySingleton<CalendarCubit>(() => CalendarCubit(sl(), sl<AuthRepository>()));
+
+  // Cópia local para abrir sem internet: por conta logada no Supabase
+  OfflineSnapshot.instance = OfflineSnapshot(
+    currentUserId: () => SupabaseConfig.client?.auth.currentUser?.id,
+  );
 
   // Notificações (sino): quem grava é o banco; o app lê e marca como lida
   sl.registerLazySingleton<NotificationsDataSource>(() {

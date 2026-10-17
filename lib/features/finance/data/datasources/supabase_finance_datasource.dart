@@ -20,6 +20,7 @@ import '../../domain/entities/audit_entry.dart';
 import '../../domain/services/cycle_expense_filter.dart';
 import '../../domain/services/credit_card_invoice_calculator.dart';
 import 'finance_datasource.dart';
+import '../../../../core/offline/offline_snapshot.dart';
 
 class SupabaseFinanceDataSource implements FinanceDataSource {
   final SupabaseClient client;
@@ -98,12 +99,15 @@ class SupabaseFinanceDataSource implements FinanceDataSource {
   @override
   Future<List<HouseMember>> getMembers() async {
     try {
-      final rows = await client
-          .from('house_members')
-          .select('id, user_id, role, default_split_percent, default_fixed_amount_cents, profile:profiles(full_name, avatar_url, pix_key)')
-          .eq('house_id', _houseId)
-          .filter('left_at', 'is', null)
-          .order('joined_at', ascending: true);
+      final rows = await OfflineSnapshot.instance.rows(
+        'members_$_houseId',
+        () async => await client
+            .from('house_members')
+            .select('id, user_id, role, default_split_percent, default_fixed_amount_cents, profile:profiles(full_name, avatar_url, pix_key)')
+            .eq('house_id', _houseId)
+            .filter('left_at', 'is', null)
+            .order('joined_at', ascending: true),
+      );
 
       if (rows.isEmpty) {
         final current = client.auth.currentUser;

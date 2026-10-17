@@ -8,6 +8,7 @@ import '../../domain/entities/event_participant.dart';
 import '../../domain/entities/task_item.dart';
 import '../../domain/services/event_recurrence.dart';
 import 'calendar_datasource.dart';
+import '../../../../core/offline/offline_snapshot.dart';
 
 class SupabaseCalendarDataSource implements CalendarDataSource {
   final SupabaseClient client;
@@ -497,7 +498,10 @@ class SupabaseCalendarDataSource implements CalendarDataSource {
         query = query.or('is_completed.eq.false,completed_at.gte.$cutoff');
       }
 
-      final rows = await query.order('created_at', ascending: false);
+      final rows = await OfflineSnapshot.instance.rows(
+        'tasks_${_houseId}_$includeArchived',
+        () async => await query.order('created_at', ascending: false),
+      );
 
       final userIds = <String>{};
       for (final r in rows) {
@@ -510,10 +514,13 @@ class SupabaseCalendarDataSource implements CalendarDataSource {
       final Map<String, String> profileNames = {};
       if (userIds.isNotEmpty) {
         try {
-          final profiles = await client
-              .from('profiles')
-              .select('id, full_name')
-              .filter('id', 'in', userIds.toList());
+          final profiles = await OfflineSnapshot.instance.rows(
+            'task_profiles_$_houseId',
+            () async => await client
+                .from('profiles')
+                .select('id, full_name')
+                .filter('id', 'in', userIds.toList()),
+          );
           for (final prof in profiles) {
             final id = prof['id'] as String?;
             final fullName = prof['full_name'] as String?;

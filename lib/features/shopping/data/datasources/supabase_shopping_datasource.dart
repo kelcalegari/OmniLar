@@ -14,6 +14,7 @@ import '../../domain/entities/shopping_item.dart';
 import '../../domain/entities/shopping_list.dart';
 import '../../domain/entities/shopping_trip.dart';
 import 'shopping_datasource.dart';
+import '../../../../core/offline/offline_snapshot.dart';
 
 class SupabaseShoppingDataSource implements ShoppingDataSource {
   final SupabaseClient client;
@@ -40,11 +41,14 @@ class SupabaseShoppingDataSource implements ShoppingDataSource {
   @override
   Future<List<ShoppingList>> getLists() async {
     try {
-      final rows = await client
-          .from('shopping_lists')
-          .select()
-          .eq('house_id', _houseId)
-          .order('created_at', ascending: true);
+      final rows = await OfflineSnapshot.instance.rows(
+        'shopping_lists_$_houseId',
+        () async => await client
+            .from('shopping_lists')
+            .select()
+            .eq('house_id', _houseId)
+            .order('created_at', ascending: true),
+      );
 
       if (rows.isEmpty) {
         final userId = client.auth.currentUser?.id;
@@ -88,11 +92,14 @@ class SupabaseShoppingDataSource implements ShoppingDataSource {
   @override
   Future<List<ShoppingItem>> getItems(String listId) async {
     try {
-      final rows = await client
-          .from('shopping_items')
-          .select()
-          .eq('list_id', listId)
-          .order('created_at', ascending: false);
+      final rows = await OfflineSnapshot.instance.rows(
+        'shopping_items_$listId',
+        () async => await client
+            .from('shopping_items')
+            .select()
+            .eq('list_id', listId)
+            .order('created_at', ascending: false),
+      );
 
       return rows.map((r) {
         final estCents = r['estimated_cents'] as int?;

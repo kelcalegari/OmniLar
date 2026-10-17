@@ -12,6 +12,7 @@ import '../../domain/entities/house.dart';
 import '../../domain/entities/house_member_info.dart';
 import 'auth_datasource.dart';
 import 'auth_error_messages.dart';
+import '../../../../core/offline/offline_snapshot.dart';
 
 class SupabaseAuthDataSource implements AuthDataSource {
   final SupabaseClient _client;
@@ -64,11 +65,11 @@ class SupabaseAuthDataSource implements AuthDataSource {
 
   Future<void> _loadProfileAndHouse(User user) async {
     try {
-      final profileRow = await _client
-          .from('profiles')
-          .select()
-          .eq('id', user.id)
-          .maybeSingle();
+      // Sem rede, perfil e casa vêm da cópia local (abre direto na casa)
+      final profileRow = await OfflineSnapshot.instance.row(
+        'profile',
+        () async => await _client.from('profiles').select().eq('id', user.id).maybeSingle(),
+      );
 
       final fullName = (profileRow != null && profileRow['full_name'] != null)
           ? profileRow['full_name'] as String
@@ -526,6 +527,8 @@ class SupabaseAuthDataSource implements AuthDataSource {
   @override
   Future<void> signOut() async {
     _isDemoMode = false;
+    // A cópia local é desta conta: sai junto
+    await OfflineSnapshot.instance.clearAll();
     await _client.auth.signOut();
     // No celular, esquece a conta Google para poder escolher outra
     if (_googleInitialized) {
@@ -641,13 +644,16 @@ class SupabaseAuthDataSource implements AuthDataSource {
     if (userId == null) return [];
 
     try {
-      final rows = await _client
-          .from('house_members')
-          .select('house:houses(*)')
-          .eq('user_id', userId)
-          // Casa de onde o usuário já saiu não é mais dele
-          .isFilter('left_at', null)
-          .order('joined_at');
+      final rows = await OfflineSnapshot.instance.rows(
+        'houses',
+        () async => await _client
+            .from('house_members')
+            .select('house:houses(*)')
+            .eq('user_id', userId)
+            // Casa de onde o usuário já saiu não é mais dele
+            .isFilter('left_at', null)
+            .order('joined_at'),
+      );
 
       final houses = <House>[];
       for (final r in rows) {
