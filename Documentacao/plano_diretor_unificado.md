@@ -7,8 +7,8 @@ Reescrito em 17/10/2026. É o painel de cima do projeto: o que já funciona, o q
 | Item | Situação |
 |---|---|
 | Código | `main` no GitHub (`kelcalegari/OmniLar`), com tudo das branches de decisões, notificações, login, painel administrativo e pendências |
-| Qualidade | `flutter analyze` sem erros nem warnings; 610 testes automatizados passando (só contra o modo demo, nenhum contra o Supabase); CI no GitHub Actions (`.github/workflows/ci.yml`) |
-| Banco | Supabase `rygxmpwzofgieodvhpcy`, migrations 0001 a 0075 aplicadas |
+| Qualidade | `flutter analyze` sem erros nem warnings; 636 testes automatizados passando (só contra o modo demo, nenhum contra o Supabase); CI no GitHub Actions (`.github/workflows/ci.yml`) |
+| Banco | Supabase `rygxmpwzofgieodvhpcy`, migrations 0001 a 0084 aplicadas; Edge Functions `capture-read`, `assistant`, `import-read`, `nfce-read`, `notify` e `delete-account` |
 | Edge Functions | `capture-read`, `assistant`, `import-read`, `nfce-read` (com login) e `notify` (chamada pelo banco) |
 | Site | https://omnilar.web.app (Firebase Hosting, projeto `omnilar-ef002`), publicado em 17/10/2026 |
 | Android | APK de release gerado à mão (`flutter build apk --release`), ainda assinado com a chave de debug |
@@ -41,16 +41,17 @@ Reescrito em 17/10/2026. É o painel de cima do projeto: o que já funciona, o q
 
 ## 3. O que falta
 
+Feito em 17/10/2026 e registrado em [plano_proximas_frentes.md](plano_proximas_frentes.md): primeiro ciclo da casa, alertas do Supabase (0076 a 0078), preferências de notificação, resumo semanal, avisos informativos, alertas de gasto, aceite de empréstimo, exclusão de conta (`delete-account`), marca "Pix enviado", arrastar arquivo, `Ctrl + F`, busca e tabela nos lançamentos, troca de ciclo mais rápida e cópia local para abrir sem internet.
+
 ### 3.1. Agora (depende do dono)
 - Testes manuais com sessão real dos itens de 15, 16 e 17/10 (lista em `pendencias_proxima_sessao.md`).
 - Confirmar que um push chega no celular.
 
 ### 3.2. Antes de abrir para outras casas
 - **Levar o cálculo do fechamento para o banco:** adiado por decisão do dono; plano em [fechamento_no_banco.md](fechamento_no_banco.md).
-- **Alertas do Supabase:** revogar `anon` nas funções de gatilho, otimizar as regras de acesso (`(select auth.uid())`), índices nas chaves estrangeiras e proteção contra senha vazada (detalhe em `pendencias_proxima_sessao.md`).
+- **Proteção contra senha vazada:** ligar no painel do Supabase (Auth); os outros alertas foram tratados nas migrations 0076 a 0078.
 - **IA no plano pago:** no plano gratuito o Google pode usar o conteúdo enviado (seção 17 de [arquitetura_tecnica.md](arquitetura_tecnica.md)).
 - **SMTP próprio** para os e-mails de confirmação e senha (o padrão do Supabase tem limite baixo) — ver [plano_autenticacao.md](plano_autenticacao.md).
-- **Exclusão de conta (LGPD):** Edge Function `delete-account` (decisão 10 de [plano_painel_admin.md](plano_painel_admin.md)).
 
 ### 3.3. Publicação
 - Chave de assinatura própria do Android e pacote `.aab` para a Google Play.
@@ -58,10 +59,8 @@ Reescrito em 17/10/2026. É o painel de cima do projeto: o que já funciona, o q
 - Termos de uso e política de privacidade; domínio próprio (trocar o endereço obriga a reinstalar o site no iPhone e reativar as notificações).
 
 ### 3.4. Evolução (sem data)
-- Notificações: aceite de empréstimo pelo devedor, gatilhos informativos restantes, preferências nos Ajustes, resumo semanal e alertas do Assistente ([plano_notificacoes.md](plano_notificacoes.md), seção 0).
-- Cópia local para abrir sem internet (hoje a fila offline só cobre a conexão que cai no meio do uso).
-- Web/desktop: área de soltura de arquivos na importação, modo grade dos lançamentos e atalho `Ctrl + F`.
-- Leitura de boleto de condomínio com os itens (água, gás, fundo de reserva) já separados.
+- Leitura de boleto de condomínio com os itens (água, gás, fundo de reserva) já separados (precisa de um boleto real para testar).
+- Notificações informativas que ficaram de fora (projetos e mudanças da casa).
 - "Criar senha" para quem entrou só pelo Google.
 
 ## 4. Documentos
