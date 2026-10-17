@@ -147,6 +147,14 @@ void main() {
       expect(CaptureService.nfceStateCode('https://www.sefaz.rs.gov.br/NFCE/NFCE-COM.aspx?p=123|2'), isNull);
     });
 
+    test('Só SC vai direto para a foto', () {
+      const sc = 'https://sat.sef.sc.gov.br/nfce/consulta?p=42261012345678901234650010000000011000000010|2|1|1|ABC';
+      const sp = 'https://www.nfce.fazenda.sp.gov.br/qrcode?p=35261012345678901234650010000000011000000010|2|1|1|ABC';
+      expect(CaptureService.photoOnlyState(sc), 'Santa Catarina');
+      expect(CaptureService.photoOnlyState(sp), isNull);
+      expect(CaptureService.photoOnlyState('https://loja.com.br/promo'), isNull);
+    });
+
     test('Nota de SC vai direto para a foto, sem consultar a Sefaz', () async {
       final service = CaptureService(aiConfigService: AiConfigService(null));
       await expectLater(

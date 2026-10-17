@@ -251,9 +251,23 @@ class _SmartScannerPageState extends State<SmartScannerPage> with WidgetsBinding
     }
   }
 
-  /// QR da NFC-e lido ao vivo: busca loja, itens e total na Sefaz. Se a Sefaz
-  /// não entregar (SC pede verificação de pessoa), pede a foto do cupom para a IA.
+  /// QR da NFC-e lido ao vivo: busca loja, itens e total na Sefaz. Nota de
+  /// estado sem consulta (SC) abre a câmera direto, sem aviso; se a Sefaz de
+  /// outro estado não entregar, pede a foto do cupom para a IA.
   Future<void> _lookupNfce(String url) async {
+    if (CaptureService.photoOnlyState(url) != null && !sl<AuthRepository>().isDemoMode) {
+      // O mesmo QR na frente da câmera não abre a foto de novo ao voltar
+      _failedQrUrl = url;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          duration: Duration(seconds: 3),
+          content: Text('Fotografe o cupom inteiro: a IA lê a loja, os itens e os valores.'),
+        ),
+      );
+      await _pickImage(ImageSource.camera, trySefaz: false);
+      return;
+    }
+
     setState(() {
       _isProcessing = true;
       _processingMessage = 'Consultando a nota na Sefaz...';
@@ -273,8 +287,6 @@ class _SmartScannerPageState extends State<SmartScannerPage> with WidgetsBinding
       }
     }
     if (!mounted) return;
-    // Estado sem consulta (SC) não é erro: o caminho dele é a foto
-    final expected = failure?.reason == NfceLookupReason.stateWithoutLookup;
 
     if (proposal != null) {
       setState(() {
@@ -292,7 +304,7 @@ class _SmartScannerPageState extends State<SmartScannerPage> with WidgetsBinding
     final choice = await showDialog<_QrFallback>(
       context: context,
       builder: (dialogContext) => AlertDialog(
-        title: Text(expected ? 'Leia a nota pela foto' : 'A Sefaz não entregou a nota'),
+        title: const Text('A Sefaz não entregou a nota'),
         content: Text('${failure?.message}\n\nTire uma foto do cupom: a IA lê a loja, os itens e os valores.'),
         actions: [
           TextButton(
@@ -343,7 +355,8 @@ class _SmartScannerPageState extends State<SmartScannerPage> with WidgetsBinding
         }
       }
     } catch (_) {}
-    if (url == null) return (proposal: null, failure: null);
+    // Nota de SC: a IA lê a foto, sem aviso (é o caminho normal desse estado)
+    if (url == null || CaptureService.photoOnlyState(url) != null) return (proposal: null, failure: null);
 
     if (mounted) setState(() => _processingMessage = 'Consultando a nota na Sefaz...');
     try {

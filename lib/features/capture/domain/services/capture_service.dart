@@ -25,12 +25,16 @@ class CaptureService {
     return key.length == 44 ? key.substring(0, 2) : null;
   }
 
+  /// Nome do estado da nota quando a Sefaz dele não libera a consulta (SC):
+  /// essa nota vai direto para a foto.
+  static String? photoOnlyState(String qrUrl) => _statesWithoutLookup[nfceStateCode(qrUrl)];
+
   /// Consulta a NFC-e na Sefaz pelo link do QR (Edge Function nfce-read).
   /// Lança [NfceLookupError] com o motivo e uma mensagem simples para o usuário.
   Future<CaptureProposal> lookupNfce(String qrUrl) async {
     final host = Uri.tryParse(qrUrl.trim())?.host.toLowerCase() ?? '';
     if (!host.endsWith('.gov.br')) throw NfceLookupError.of(NfceLookupReason.invalidQr);
-    final state = _statesWithoutLookup[nfceStateCode(qrUrl)];
+    final state = photoOnlyState(qrUrl);
     if (state != null) {
       throw NfceLookupError(NfceLookupReason.stateWithoutLookup, 'Em $state a Sefaz não libera a consulta automática da nota.');
     }
