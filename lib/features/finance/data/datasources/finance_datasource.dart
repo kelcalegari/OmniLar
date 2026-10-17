@@ -33,7 +33,13 @@ abstract class FinanceDataSource {
   /// Resgates de caixinha devolvidos ao Caixa deste ciclo, menos os depósitos
   /// em caixinha tirados dele.
   Future<Money> getVaultReturnsForCycle(FinancialCycle cycle);
-  Future<FinancialCycleSummary> getCycleSummary(FinancialCycle cycle);
+  /// Resumo do ciclo. Com [expenses] e [contributions] já lidos do mesmo
+  /// ciclo, reaproveita as listas em vez de buscá-las de novo.
+  Future<FinancialCycleSummary> getCycleSummary(
+    FinancialCycle cycle, {
+    List<HouseExpense>? expenses,
+    List<Contribution>? contributions,
+  });
 
   /// Início da casa: o mais antigo entre a criação da casa e o lançamento mais
   /// antigo (despesa ou aporte). Null quando não se sabe.

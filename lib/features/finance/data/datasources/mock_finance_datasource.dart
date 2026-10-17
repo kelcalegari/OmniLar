@@ -437,9 +437,13 @@ class MockFinanceDataSource implements FinanceDataSource {
   }
 
   @override
-  Future<FinancialCycleSummary> getCycleSummary(FinancialCycle cycle) async {
-    final cycleExpenses = await getExpensesForCycle(cycle);
-    final cycleContributions = await getContributionsForCycle(cycle);
+  Future<FinancialCycleSummary> getCycleSummary(
+    FinancialCycle cycle, {
+    List<HouseExpense>? expenses,
+    List<Contribution>? contributions,
+  }) async {
+    final cycleExpenses = expenses ?? await getExpensesForCycle(cycle);
+    final cycleContributions = contributions ?? await getContributionsForCycle(cycle);
 
     Money totalContrib = const Money.zero();
     final memberContribs = <String, Money>{};

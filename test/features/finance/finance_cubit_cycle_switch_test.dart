@@ -4,7 +4,9 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:omni_lar/core/domain/value_objects/financial_cycle.dart';
 import 'package:omni_lar/features/finance/data/datasources/mock_finance_datasource.dart';
 import 'package:omni_lar/features/finance/data/repositories/finance_repository_impl.dart';
+import 'package:omni_lar/features/finance/domain/entities/contribution.dart';
 import 'package:omni_lar/features/finance/domain/entities/financial_cycle_summary.dart';
+import 'package:omni_lar/features/finance/domain/entities/house_expense.dart';
 import 'package:omni_lar/features/finance/presentation/cubit/finance_cubit.dart';
 import 'package:omni_lar/features/finance/presentation/cubit/finance_state.dart';
 
@@ -14,13 +16,59 @@ class _SlowCycleDataSource extends MockFinanceDataSource {
   final release = Completer<void>();
 
   @override
-  Future<FinancialCycleSummary> getCycleSummary(FinancialCycle cycle) async {
+  Future<FinancialCycleSummary> getCycleSummary(
+    FinancialCycle cycle, {
+    List<HouseExpense>? expenses,
+    List<Contribution>? contributions,
+  }) async {
     if (cycle == slowCycle) await release.future;
-    return super.getCycleSummary(cycle);
+    return super.getCycleSummary(cycle, expenses: expenses, contributions: contributions);
+  }
+}
+
+/// Fonte de demonstração que conta as leituras de despesas, aportes e início da casa.
+class _CountingDataSource extends MockFinanceDataSource {
+  final expenseReads = <FinancialCycle>[];
+  int contributionReads = 0;
+  int startDateReads = 0;
+
+  @override
+  Future<List<HouseExpense>> getExpensesForCycle(FinancialCycle cycle) {
+    expenseReads.add(cycle);
+    return super.getExpensesForCycle(cycle);
+  }
+
+  @override
+  Future<List<Contribution>> getContributionsForCycle(FinancialCycle cycle) {
+    contributionReads++;
+    return super.getContributionsForCycle(cycle);
+  }
+
+  @override
+  Future<DateTime?> getHouseStartDate() {
+    startDateReads++;
+    return super.getHouseStartDate();
   }
 }
 
 void main() {
+  test('Carregar um ciclo lê despesas e aportes uma vez só', () async {
+    final ds = _CountingDataSource();
+    final cubit = FinanceCubit(FinanceRepositoryImpl(ds));
+    await cubit.loadCycleData();
+    final current = cubit.state.currentCycle;
+
+    // O ciclo e o anterior (histórico do planejador); o resumo reaproveita
+    expect(ds.expenseReads.where((c) => c == current), hasLength(1));
+    expect(ds.contributionReads, 1);
+    expect(ds.startDateReads, 1);
+
+    // Navegar não relê o início da casa
+    await cubit.loadCycleData(cycle: cubit.cycleSchedule.previous(current));
+    expect(ds.startDateReads, 1);
+    await cubit.close();
+  });
+
   group('FinanceCubit: troca de ciclo', () {
     test('Resposta atrasada de um ciclo não sobrescreve o ciclo pedido depois', () async {
       final ds = _SlowCycleDataSource();

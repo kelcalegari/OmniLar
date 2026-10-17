@@ -60,8 +60,12 @@ class DynamicFinanceDataSource implements FinanceDataSource {
   Future<DateTime?> getHouseStartDate() => _active.getHouseStartDate();
 
   @override
-  Future<FinancialCycleSummary> getCycleSummary(FinancialCycle cycle) =>
-      _active.getCycleSummary(cycle);
+  Future<FinancialCycleSummary> getCycleSummary(
+    FinancialCycle cycle, {
+    List<HouseExpense>? expenses,
+    List<Contribution>? contributions,
+  }) =>
+      _active.getCycleSummary(cycle, expenses: expenses, contributions: contributions);
 
   @override
   Future<void> addExpense(HouseExpense expense) => _active.addExpense(expense);

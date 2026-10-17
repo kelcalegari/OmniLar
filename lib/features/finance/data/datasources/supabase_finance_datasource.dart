@@ -356,6 +356,12 @@ class SupabaseFinanceDataSource implements FinanceDataSource {
 
   @override
   Future<Money> getOpeningBalance(FinancialCycle cycle) async {
+    final parts = await Future.wait([_rolledSurplus(cycle), getVaultReturnsForCycle(cycle)]);
+    return parts[0] + parts[1];
+  }
+
+  /// Sobra que o fechamento do ciclo anterior deixou no Caixa.
+  Future<Money> _rolledSurplus(FinancialCycle cycle) async {
     var rolledCents = 0;
     try {
       String dateOnly(DateTime d) => d.toIso8601String().split('T')[0];
@@ -372,9 +378,7 @@ class SupabaseFinanceDataSource implements FinanceDataSource {
           .maybeSingle();
       rolledCents = (row?['surplus_rolled_cents'] as num?)?.toInt() ?? 0;
     } catch (_) {}
-    // O resgate de caixinha devolvido ao ciclo também é dinheiro da casa no Caixa
-    final returned = await getVaultReturnsForCycle(cycle);
-    return Money(rolledCents + returned.cents);
+    return Money(rolledCents);
   }
 
   @override
@@ -480,14 +484,26 @@ class SupabaseFinanceDataSource implements FinanceDataSource {
   }
 
   @override
-  Future<FinancialCycleSummary> getCycleSummary(FinancialCycle cycle) async {
+  Future<FinancialCycleSummary> getCycleSummary(
+    FinancialCycle cycle, {
+    List<HouseExpense>? expenses,
+    List<Contribution>? contributions,
+  }) async {
     try {
-      final expenses = await getExpensesForCycle(cycle);
-      final contributions = await getContributionsForCycle(cycle);
+      // O que não veio pronto é lido junto com a sobra e as devoluções das caixinhas
+      final expensesFuture = expenses != null ? Future.value(expenses) : getExpensesForCycle(cycle);
+      final contributionsFuture =
+          contributions != null ? Future.value(contributions) : getContributionsForCycle(cycle);
+      final rolledFuture = _rolledSurplus(cycle);
+      final vaultReturnsFuture = getVaultReturnsForCycle(cycle);
+      await Future.wait<void>([expensesFuture, contributionsFuture, rolledFuture, vaultReturnsFuture]);
+      final cycleExpenses = await expensesFuture;
+      final cycleContributions = await contributionsFuture;
+      final vaultReturns = await vaultReturnsFuture;
 
       final memberContributions = <String, Money>{};
       int totalContributionsCents = 0;
-      for (final c in contributions) {
+      for (final c in cycleContributions) {
         totalContributionsCents += c.amount.cents;
         final current = memberContributions[c.memberId]?.cents ?? 0;
         memberContributions[c.memberId] = Money(current + c.amount.cents);
@@ -497,7 +513,7 @@ class SupabaseFinanceDataSource implements FinanceDataSource {
       int committedFutureExpensesCents = 0;
       final memberExpensesPaid = <String, Money>{};
 
-      for (final exp in expenses) {
+      for (final exp in cycleExpenses) {
         if (exp.isPaid) {
           totalExpensesPaidCents += exp.amount.cents;
           final current = memberExpensesPaid[exp.paidByMemberId]?.cents ?? 0;
@@ -507,8 +523,8 @@ class SupabaseFinanceDataSource implements FinanceDataSource {
         }
       }
 
-      // A sobra deixada pelo ciclo anterior entra como folga do Caixa
-      final openingBalance = await getOpeningBalance(cycle);
+      // A sobra deixada pelo ciclo anterior e as devoluções das caixinhas entram como folga do Caixa
+      final openingBalance = await rolledFuture + vaultReturns;
       final folegoCents = openingBalance.cents +
           totalContributionsCents -
           (totalExpensesPaidCents + committedFutureExpensesCents);
@@ -521,7 +537,7 @@ class SupabaseFinanceDataSource implements FinanceDataSource {
         folego: Money(folegoCents),
         memberContributions: memberContributions,
         memberExpensesPaid: memberExpensesPaid,
-        vaultReturns: await getVaultReturnsForCycle(cycle),
+        vaultReturns: vaultReturns,
       );
     } catch (e) {
       throw ServerFailure('Erro ao calcular resumo do ciclo: $e');

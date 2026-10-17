@@ -45,8 +45,12 @@ class FinanceRepositoryImpl implements FinanceRepository {
       _dataSource.getContributionsForCycle(cycle);
 
   @override
-  Future<FinancialCycleSummary> getCycleSummary(FinancialCycle cycle) =>
-      _dataSource.getCycleSummary(cycle);
+  Future<FinancialCycleSummary> getCycleSummary(
+    FinancialCycle cycle, {
+    List<HouseExpense>? expenses,
+    List<Contribution>? contributions,
+  }) =>
+      _dataSource.getCycleSummary(cycle, expenses: expenses, contributions: contributions);
 
   @override
   Future<void> addExpense(HouseExpense expense) async {

@@ -123,6 +123,9 @@ class FinanceCubit extends Cubit<FinanceState> {
   Future<void> loadCycleData({FinancialCycle? cycle}) async {
     var targetCycle = _alignToHouse(cycle ?? state.currentCycle);
     if (isBeforeFirstCycle(targetCycle)) targetCycle = firstCycle!;
+    // O início da casa só muda com lançamento novo: relê ao recarregar o mesmo
+    // ciclo (depois de gravar ou de um aviso de outro aparelho), não ao navegar
+    final refreshStartDate = state.houseStartDate == null || targetCycle == state.currentCycle;
     final sequence = ++_loadSequence;
     emit(state.copyWith(status: FinanceStatus.loading, currentCycle: targetCycle));
 
@@ -131,9 +134,16 @@ class FinanceCubit extends Cubit<FinanceState> {
       final membersFuture = _repository.getMembers();
       final categoriesFuture = _repository.getCategories();
       final paymentMethodsFuture = _repository.getPaymentMethods();
-      final summaryFuture = _repository.getCycleSummary(targetCycle);
       final expensesFuture = _repository.getExpensesForCycle(targetCycle);
       final contributionsFuture = _repository.getContributionsForCycle(targetCycle);
+      // O resumo reaproveita as despesas e os aportes já lidos
+      final summaryFuture = Future.wait<Object>([expensesFuture, contributionsFuture]).then(
+        (lists) => _repository.getCycleSummary(
+          targetCycle,
+          expenses: lists[0] as List<HouseExpense>,
+          contributions: lists[1] as List<Contribution>,
+        ),
+      );
       final vaultsFuture = _repository.getSavingsVaults();
       // As três abaixo são opcionais: se falharem, vale o que já se tinha
       final splitModelFuture = Future<String?>.sync(
@@ -146,9 +156,9 @@ class FinanceCubit extends Cubit<FinanceState> {
       final invoiceCodesFuture = Future<List<CardInvoiceCode>?>.sync(
         () => _repository.getCardInvoiceCodes(),
       ).catchError((_) => null);
-      final startDateFuture = Future<DateTime?>.sync(
-        () => _repository.getHouseStartDate(),
-      ).catchError((_) => null);
+      final startDateFuture = refreshStartDate
+          ? Future<DateTime?>.sync(() => _repository.getHouseStartDate()).catchError((_) => null)
+          : Future<DateTime?>.value(state.houseStartDate);
       final historicalFuture = Future<List<HouseExpense>>.sync(
         () => _repository.getExpensesForCycle(cycleSchedule.previous(targetCycle)),
       ).catchError((_) => <HouseExpense>[]);

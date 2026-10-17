@@ -42,7 +42,12 @@ class _FakeFinanceRepository implements FinanceRepository {
   @override
   Future<List<Contribution>> getContributionsForCycle(FinancialCycle cycle) async => [];
   @override
-  Future<FinancialCycleSummary> getCycleSummary(FinancialCycle cycle) async => throw UnimplementedError();
+  Future<FinancialCycleSummary> getCycleSummary(
+    FinancialCycle cycle, {
+    List<HouseExpense>? expenses,
+    List<Contribution>? contributions,
+  }) async =>
+      throw UnimplementedError();
   @override
   Future<List<ExpenseCategory>> getCategories() async => [];
   @override
