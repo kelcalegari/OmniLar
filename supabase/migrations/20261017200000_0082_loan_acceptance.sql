@@ -161,7 +161,6 @@ begin
 end;
 $$;
 
-revoke execute on function public.guard_p2p_loan_acceptance() from public, anon, authenticated;
 revoke execute on function public.accept_p2p_loan_on_payment() from public, anon, authenticated;
 revoke execute on function public.accept_p2p_loan(uuid) from public, anon;
 grant execute on function public.accept_p2p_loan(uuid) to authenticated, service_role;

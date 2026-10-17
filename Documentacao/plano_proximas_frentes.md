@@ -4,17 +4,17 @@ Escrito em 17/10/2026, a pedido do dono, a partir da lista do que ainda falta es
 
 ## Andamento (17/10/2026)
 
-O dono seguiu todas as recomendações ⭐. Feito na branch `feat/proximas-frentes` (ainda sem merge na `main`), com 622 testes passando:
+O dono seguiu todas as recomendações ⭐. Feito na branch `feat/proximas-frentes`, com 622 testes passando; merge na `main`, migrations 0076 a 0082 aplicadas e `delete-account` publicada em 17/10/2026:
 
 | Frente | Situação |
 |---|---|
 | 1. Ciclos de antes da casa | Feito (só app) |
-| 2. Alertas do Supabase | Migrations 0076 a 0078 escritas e ensaiadas; **não aplicadas** |
-| 3. Exclusão de conta | Migration 0081 e função `delete-account` escritas, ensaiadas no banco; **não aplicadas nem publicadas** |
+| 2. Alertas do Supabase | Migrations 0076 a 0078 escritas e ensaiadas |
+| 3. Exclusão de conta | Migration 0081 e função `delete-account` escritas, ensaiadas no banco |
 | 4.1 Preferências de notificação | Feito (tela nos Ajustes) |
-| 4.2 Resumo semanal | Migration 0079; **não aplicada**. Mudou do plano: o Fôlego ficou fora do texto (a conta dele é do app); semana sem gasto e sem conta não gera aviso |
-| 4.3 Gatilhos informativos | Migration 0080 (`expense_added`, `shopping_completed`, `import_confirmed`); **não aplicada** |
-| 4.4 Aceite de empréstimo | Migration 0082 e telas; **não aplicada** |
+| 4.2 Resumo semanal | Migration 0079. Mudou do plano: o Fôlego ficou fora do texto (a conta dele é do app); semana sem gasto e sem conta não gera aviso |
+| 4.3 Gatilhos informativos | Migration 0080 (`expense_added`, `shopping_completed`, `import_confirmed`) |
+| 4.4 Aceite de empréstimo | Migration 0082 e telas |
 | 4.5, 5, 6.3, 7, 8 | Ficaram para depois, como recomendado |
 | 6.1 e 6.2 | Feitos (arrastar arquivo na importação; `Ctrl + F` nos Ajustes e no painel do administrador; lançamentos não têm busca) |
 | 9 | Feito (seção 10 da importação atualizada) |
