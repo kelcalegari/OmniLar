@@ -4,7 +4,7 @@ import { GeminiProvider } from '../_shared/ai_provider.ts';
 import { maskSensitiveData } from '../_shared/mask.ts';
 import { checkAiDailyQuota, recordAiUsage } from '../_shared/usage.ts';
 import { HttpError, requireHouseMember } from '../_shared/auth.ts';
-import { type NfceAnalysis, allowedUrl, decodeBody, frameUrl, pageText, parseStandardLayout, sefazError } from './page.ts';
+import { type NfceAnalysis, allowedUrl, decodeBody, frameUrl, pageText, parseStandardLayout, sefazError, asksForCaptcha } from './page.ts';
 
 /**
  * Consulta a NFC-e pelo link do QR Code: baixa a página pública da Sefaz do
@@ -118,6 +118,14 @@ serve(async (req) => {
 
     if (parsed) {
       return json({ success: true, source: 'sefaz', analysis: parsed });
+    }
+
+    if (asksForCaptcha(page.html) || /SecurityVerify/i.test(page.url.pathname)) {
+      return json({
+        success: false,
+        captcha: true,
+        error: 'A Sefaz deste estado pede uma verificação de segurança antes de mostrar a nota.',
+      }, 422);
     }
 
     const refusal = sefazError(page.html);

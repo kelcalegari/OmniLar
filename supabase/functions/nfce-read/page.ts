@@ -184,6 +184,11 @@ export function sefazError(html: string): string | null {
   return null;
 }
 
+/** Sefaz que pede verificação de pessoa (captcha) antes de mostrar a nota, como SC. */
+export function asksForCaptcha(html: string): boolean {
+  return /cf-turnstile|challenges\.cloudflare\.com\/turnstile|g-recaptcha|hcaptcha|SecurityVerify|CaptchaField/i.test(html);
+}
+
 /** Página só com moldura: segue o primeiro frame do governo. */
 export function frameUrl(html: string, base: URL): URL | null {
   const src = /<i?frame[^>]+src=["']([^"']+)["']/i.exec(html)?.[1];
