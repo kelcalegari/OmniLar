@@ -54,7 +54,7 @@ Escrito em 16/10/2026, a partir do código da branch `fix/web-mobile-ajustes` e 
 - Providers → Email: ligar "Confirm email" e "Secure email change" (confirmação nos dois endereços).
 - Email Templates (Confirm signup, Reset password, Change email address, Reauthentication): texto em português com o código `{{ .Token }}`, se a decisão 1 for o código.
 - URL Configuration: `site_url` = `https://omnilar.web.app`; redirect URLs com `https://omnilar.web.app/**` (para o Google na web).
-- Google Cloud: tela de consentimento e clientes OAuth (Web; Android com o SHA-1 de debug e de release; iOS). Depois, Supabase → Providers → Google com o Client ID/Secret do cliente Web e os IDs de Android/iOS em "Authorized Client IDs".
+- (Adiado até a publicação, ver Fase 4) Google Cloud: tela de consentimento e clientes OAuth (Web; Android com o SHA-1 de debug e de release; iOS). Depois, Supabase → Providers → Google com o Client ID/Secret do cliente Web e os IDs de Android/iOS em "Authorized Client IDs".
 
 ### Fase 1 — Cadastro com confirmação de e-mail ✅ código pronto (branch `feat/auth-cadastro-confirmacao`, 16/10/2026)
 
@@ -106,7 +106,9 @@ Itens originais da fase:
 - **Alterar e-mail:** tela própria → `updateUser(email:)` → códigos (no e-mail novo e, com a troca segura, também no antigo) → `verifyOTP(type: OtpType.emailChange)`. Mostrar "aguardando confirmação de <novo>" com reenviar/cancelar.
 - **Migration 0071:** gatilho `AFTER UPDATE OF email ON auth.users` que copia o e-mail para `profiles.email`. Será validada com rollback antes de aplicar e só aplicada com o OK do dono.
 
-### Fase 4 — Entrar com Google ✅ código pronto (branch `feat/auth-google`, feita a partir da Fase 3, 16/10/2026)
+### Fase 4 — Entrar com Google ⏸️ adiada até a publicação (código já na `main`, botão escondido)
+
+**Decisão do dono (16/10/2026):** a configuração do Google (Google Cloud e Supabase) só será feita quando o app sair dos testes internos e ele decidir publicar. Até lá o botão continua escondido (`GOOGLE_SIGN_IN` desligado) e ninguém precisa mexer nisso. Os passos abaixo valem para esse momento.
 
 **O que foi feito:**
 - Botão "Continuar com Google" na tela de login. Fica escondido até ser ligado (`GoogleAuthConfig`, em `lib/core/network/google_auth_config.dart`).
@@ -144,5 +146,5 @@ Itens originais da fase:
 
 ## 4. Ordem e dependências
 
-Fase 0 (SMTP e templates) → Fase 1 → Fase 2 → Fase 3 → Fase 4 → Fase 5.
+Fase 0 (SMTP e templates) → Fase 1 → Fase 2 → Fase 3 → Fase 5. A Fase 4 (Google) fica para a publicação.
 A Fase 4 depende só da parte Google da Fase 0 e pode andar em paralelo com as Fases 2 e 3. Cada fase vira uma branch própria, com merge quando o dono pedir.
