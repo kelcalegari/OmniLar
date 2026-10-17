@@ -1909,7 +1909,7 @@ class _SettlementHubContent extends StatelessWidget {
  onCopied:
       const SnackBar(
         content: Text(
-          'Veredito do Super Pix copiado! Pronto para colar no WhatsApp.',
+          'Veredito do Super Pix copiado!',
         ),
       ),
     );
@@ -1937,7 +1937,7 @@ class _SettlementHubContent extends StatelessWidget {
             const SizedBox(width: 8),
             Expanded(
               child: Text(
-                'Cobrança para ${transfer.fromMemberName} copiada! Pronto para colar no WhatsApp. 💬',
+                'Cobrança para ${transfer.fromMemberName} copiada! 💬',
               ),
             ),
           ],

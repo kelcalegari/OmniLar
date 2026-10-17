@@ -139,7 +139,7 @@ class _SettlementAuditSheetState extends State<SettlementAuditSheet> {
             const SizedBox(width: 8),
             Expanded(
               child: Text(
-                'Memória de cálculo de ${audit.memberName} copiada! Pronto para colar no WhatsApp.',
+                'Memória de cálculo de ${audit.memberName} copiada!',
               ),
             ),
           ],

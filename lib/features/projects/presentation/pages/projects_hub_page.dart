@@ -368,7 +368,7 @@ class _ProjectsHubPageState extends State<ProjectsHubPage> {
  buffer.toString(),
  onCopied:
       const SnackBar(
-        content: Text('Resumo do rateio copiado! Pronto para compartilhar com os participantes.'),
+        content: Text('Resumo do rateio copiado!'),
       ),
     );
   }
@@ -381,7 +381,7 @@ class _ProjectsHubPageState extends State<ProjectsHubPage> {
  msg,
  onCopied:
       const SnackBar(
-        content: Text('Mensagem de cobrança copiada para o WhatsApp!'),
+        content: Text('Mensagem de cobrança copiada!'),
       ),
     );
   }
