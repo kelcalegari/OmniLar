@@ -81,9 +81,10 @@ class MockAdminDataSource implements AdminDataSource {
     ];
   }
 
+  /// Quem experimenta o demo não administra o app: sem o atalho do painel.
   @override
   Future<AccountAccess> getMyAccess() async =>
-      const AccountAccess(status: AccountStatus.active, isAdmin: true, plan: AccountPlan.premium);
+      const AccountAccess(status: AccountStatus.active, plan: AccountPlan.premium);
 
   @override
   Stream<void> watchMyAccess() => const Stream.empty();
