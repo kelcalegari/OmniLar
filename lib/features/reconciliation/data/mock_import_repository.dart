@@ -99,6 +99,19 @@ class MockImportRepository implements ImportRepository {
       [for (final stored in _imports.take(limit)) stored.batch];
 
   @override
+  Future<List<LoanPurchase>> purchasesOfLoan(String loanId) async => [
+        for (final stored in _imports)
+          if (!stored.batch.isUndone)
+            for (final record in stored.records)
+              if (record.loanId == loanId)
+                LoanPurchase(
+                  date: record.line.date,
+                  title: record.title ?? record.line.description,
+                  amount: record.line.amount,
+                ),
+      ]..sort((a, b) => a.date.compareTo(b.date));
+
+  @override
   Future<void> undoImport(String batchId) async {
     final index = _imports.indexWhere((stored) => stored.batch.id == batchId);
     if (index < 0) throw const NotFoundFailure('Importação não encontrada.');
@@ -155,6 +168,9 @@ class DynamicImportRepository implements ImportRepository {
 
   @override
   Future<void> undoImport(String batchId) => _active.undoImport(batchId);
+
+  @override
+  Future<List<LoanPurchase>> purchasesOfLoan(String loanId) => _active.purchasesOfLoan(loanId);
 
   @override
   Future<List<ImportRule>> getRules(String paymentMethodId) => _active.getRules(paymentMethodId);

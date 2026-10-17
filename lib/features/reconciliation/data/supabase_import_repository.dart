@@ -164,6 +164,30 @@ class SupabaseImportRepository implements ImportRepository {
   }
 
   @override
+  Future<List<LoanPurchase>> purchasesOfLoan(String loanId) async {
+    if (!isUuid(loanId)) return const [];
+    try {
+      final rows = await client
+          .from('import_lines')
+          .select('line_date, title, description, amount_cents, import_batches!inner(status)')
+          .eq('house_id', _houseId)
+          .eq('loan_id', loanId)
+          .eq('import_batches.status', 'confirmed')
+          .order('line_date');
+      return [
+        for (final row in rows)
+          LoanPurchase(
+            date: DateTime.parse(row['line_date'] as String),
+            title: (row['title'] as String?) ?? (row['description'] as String? ?? ''),
+            amount: Money((row['amount_cents'] as num).toInt()),
+          ),
+      ];
+    } catch (e) {
+      throw _failure('Erro ao carregar as compras do empréstimo', e);
+    }
+  }
+
+  @override
   Future<void> undoImport(String batchId) async {
     try {
       await client.rpc('undo_import', params: {'p_batch_id': batchId});

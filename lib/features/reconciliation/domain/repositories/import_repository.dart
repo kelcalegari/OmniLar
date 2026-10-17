@@ -53,6 +53,15 @@ class ImportRule {
   });
 }
 
+/// Compra da fatura que virou (parte de) um empréstimo, para o detalhe dele.
+class LoanPurchase {
+  final DateTime date;
+  final String title;
+  final Money amount;
+
+  const LoanPurchase({required this.date, required this.title, required this.amount});
+}
+
 abstract class ImportRepository {
   /// Grava tudo o que a revisão decidiu, de uma vez: despesas, empréstimos,
   /// correções e o registro da importação. Se algo falha, nada é gravado.
@@ -75,4 +84,7 @@ abstract class ImportRepository {
   /// Guarda as regras; a de um estabelecimento que já tinha regra é trocada.
   Future<void> saveRules(String paymentMethodId, List<ImportRule> rules);
   Future<void> deleteRule(String ruleId);
+
+  /// Compras de importações ativas que formam o empréstimo [loanId], por data.
+  Future<List<LoanPurchase>> purchasesOfLoan(String loanId);
 }

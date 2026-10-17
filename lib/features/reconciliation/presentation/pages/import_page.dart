@@ -671,12 +671,16 @@ class _ImportPageState extends State<ImportPage> {
   static const _loanPrefix = 'loan:';
 
   /// Opção marcada para [line]. Null quando é empréstimo ainda sem devedor.
-  static String? _destinationKeyOf(ImportedStatementLine line, List<HouseMember> debtors) {
+  static String? _destinationKeyOf(
+    ImportedStatementLine line,
+    List<HouseMember> debtors, {
+    bool allowPersonal = true,
+  }) {
     switch (line.destination) {
       case LineDestination.house:
         return _houseKey;
       case LineDestination.cardOwnerPersonal:
-        return _personalKey;
+        return allowPersonal ? _personalKey : null;
       case LineDestination.ignored:
         return _ignoredKey;
       case LineDestination.splitP2P:
@@ -705,7 +709,7 @@ class _ImportPageState extends State<ImportPage> {
 
   static List<DropdownMenuItem<String>> _destinationItems(
     List<HouseMember> debtors,
-    String payerName, {
+    String? payerName, {
     required bool colored,
   }) {
     TextStyle style(Color color, {bool bold = false}) => TextStyle(
@@ -727,10 +731,11 @@ class _ImportPageState extends State<ImportPage> {
             style: style(AppColors.debtRed, bold: true),
           ),
         ),
-      DropdownMenuItem(
-        value: _personalKey,
-        child: Text('Pessoal de $payerName', style: style(Colors.blueGrey)),
-      ),
+      if (payerName != null)
+        DropdownMenuItem(
+          value: _personalKey,
+          child: Text('Pessoal de $payerName', style: style(Colors.blueGrey)),
+        ),
       DropdownMenuItem(
         value: _ignoredKey,
         child: Text('Ignorar', style: style(Colors.grey)),
@@ -1411,6 +1416,9 @@ class _ImportPageState extends State<ImportPage> {
                   onPressed: _busy ? null : _pickInvoicePayment,
                   onDeleted: _busy ? null : () => _update(session.withInvoicePayment(null)),
                 ),
+              if (session.isHouseCard)
+                const Text('Quem paga: Caixa da Casa', style: TextStyle(fontSize: 13))
+              else
               Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
@@ -1788,7 +1796,7 @@ class _ImportPageState extends State<ImportPage> {
 
     final debtors = [
       for (final member in state.members)
-        if (member.id != session.payerMemberId) member,
+        if (session.canOwe(member.id)) member,
     ];
 
     if (_selected.isEmpty) {
@@ -1828,7 +1836,11 @@ class _ImportPageState extends State<ImportPage> {
                 : (key) {
                     if (key != null) _bulk((line) => _withDestinationKey(line, key));
                   },
-            items: _destinationItems(debtors, _memberName(session.payerMemberId), colored: false),
+            items: _destinationItems(
+              debtors,
+              session.isHouseCard ? null : _memberName(session.payerMemberId),
+              colored: false,
+            ),
           ),
           if (state.categories.isNotEmpty)
             DropdownButton<String>(
@@ -2043,16 +2055,17 @@ class _ImportPageState extends State<ImportPage> {
     final rejected = session.matchOf(line.id);
     final debtors = [
       for (final HouseMember member in state.members)
-        if (member.id != session.payerMemberId) member,
+        if (session.canOwe(member.id)) member,
     ];
-    final payerName = _memberName(session.payerMemberId);
+    // Cartão da Casa não tem dono para ter gasto pessoal
+    final payerName = session.isHouseCard ? null : _memberName(session.payerMemberId);
 
     return Wrap(
       spacing: 12,
       crossAxisAlignment: WrapCrossAlignment.center,
       children: [
         DropdownButton<String>(
-          value: _destinationKeyOf(line, debtors),
+          value: _destinationKeyOf(line, debtors, allowPersonal: payerName != null),
           hint: const Text('Quem deve?', style: TextStyle(fontSize: 12, color: AppColors.debtRed)),
           underline: const SizedBox.shrink(),
           isDense: true,
