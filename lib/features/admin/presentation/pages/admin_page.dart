@@ -7,6 +7,7 @@ import '../../../../core/widgets/save_feedback.dart';
 import '../../domain/entities/account_access.dart';
 import '../../domain/entities/admin_models.dart';
 import '../cubit/admin_cubit.dart';
+import '../../../../core/widgets/search_shortcut.dart';
 
 String _day(DateTime? d) {
   if (d == null) return '—';
@@ -235,10 +236,19 @@ class _AccountsTab extends StatefulWidget {
 
 class _AccountsTabState extends State<_AccountsTab> {
   late final _searchController = TextEditingController(text: widget.state.search);
+  final _searchFocus = FocusNode();
+
+  @override
+  void initState() {
+    super.initState();
+    SearchShortcut.register(_searchFocus);
+  }
 
   @override
   void dispose() {
+    SearchShortcut.unregister(_searchFocus);
     _searchController.dispose();
+    _searchFocus.dispose();
     super.dispose();
   }
 
@@ -252,6 +262,7 @@ class _AccountsTabState extends State<_AccountsTab> {
           padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
           child: TextField(
             controller: _searchController,
+            focusNode: _searchFocus,
             decoration: InputDecoration(
               prefixIcon: const Icon(Icons.search_rounded),
               hintText: 'Buscar por nome ou e-mail',

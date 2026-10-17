@@ -35,6 +35,7 @@ import '../../../../core/widgets/theme_toggle_button.dart';
 import '../widgets/ai_key_config_sheet.dart';
 import '../widgets/account_security_panel.dart';
 import '../../../../core/widgets/save_feedback.dart';
+import '../../../../core/widgets/search_shortcut.dart';
 
 part 'settings_groups.dart';
 
@@ -75,11 +76,20 @@ class _SettingsPageState extends State<SettingsPage> {
   void _reloadAudit() => setState(() => _auditVersion++);
 
   final _searchController = TextEditingController();
+  final _searchFocus = FocusNode();
   String _searchQuery = '';
 
   @override
+  void initState() {
+    super.initState();
+    SearchShortcut.register(_searchFocus);
+  }
+
+  @override
   void dispose() {
+    SearchShortcut.unregister(_searchFocus);
     _searchController.dispose();
+    _searchFocus.dispose();
     super.dispose();
   }
 
@@ -91,6 +101,7 @@ class _SettingsPageState extends State<SettingsPage> {
   Widget _searchField() {
     return TextField(
       controller: _searchController,
+      focusNode: _searchFocus,
       onChanged: (value) => setState(() => _searchQuery = value),
       textInputAction: TextInputAction.search,
       decoration: InputDecoration(

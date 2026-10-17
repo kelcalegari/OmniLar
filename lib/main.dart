@@ -16,6 +16,7 @@ import 'features/calendar/presentation/cubit/calendar_cubit.dart';
 import 'features/auth/domain/repositories/auth_repository.dart';
 import 'features/notifications/data/push/push_service.dart';
 import 'features/notifications/presentation/cubit/notifications_cubit.dart';
+import 'core/widgets/search_shortcut.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -87,6 +88,7 @@ class OmniLarApp extends StatelessWidget {
             ],
             locale: const Locale('pt', 'BR'),
             routerConfig: AppRouter.router,
+            builder: (context, child) => SearchShortcut.listener(child: child ?? const SizedBox.shrink()),
           );
         },
       ),

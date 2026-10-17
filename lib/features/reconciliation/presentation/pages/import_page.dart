@@ -1,8 +1,9 @@
 import '../../../finance/domain/services/pending_payment.dart';
 import 'dart:async';
-import 'dart:typed_data';
 
+import 'package:desktop_drop/desktop_drop.dart';
 import 'package:file_picker/file_picker.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:intl/intl.dart';
@@ -72,6 +73,9 @@ class _ImportPageState extends State<ImportPage> {
   ImportDraft? _draft;
   Timer? _draftTimer;
   bool _busy = false;
+
+  /// Um arquivo está sendo arrastado sobre a página.
+  bool _dragging = false;
   String? _fileWarning;
   Set<FinancialCycle> _closedCycles = const {};
   ClosedCyclePolicy _closedCyclePolicy = ClosedCyclePolicy.adjustInCurrentCycle;
@@ -211,46 +215,73 @@ class _ImportPageState extends State<ImportPage> {
     try {
       final files = await FilePicker.pickFiles(
         type: FileType.custom,
-        allowedExtensions: ['ofx', 'csv', 'txt', ...ImportAiService.mimeTypes.keys],
+        allowedExtensions: _allowedExtensions,
       );
       if (files.isEmpty) return;
 
       final file = files.first;
-      final bytes = await file.readAsBytes();
-      final sourceType =
-          source.isCreditCard ? StatementSourceType.creditCard : StatementSourceType.bankAccount;
-
-      // PDF e foto não têm estrutura: quem lê é a IA, e a revisão confere
-      final mimeType = ImportAiService.mimeTypeOf(file.name);
-      if (mimeType != null) {
-        await _readWithAi(source, file.name, bytes, mimeType, sourceType);
-        return;
-      }
-
-      final content = StatementParser.decodeBytes(bytes);
-      final isOfx = file.name.toLowerCase().endsWith('.ofx') || content.contains('<STMTTRN>');
-      if (!isOfx) {
-        await _importCsv(source, file.name, content, sourceType);
-        return;
-      }
-
-      final lines = StatementParser.parseOfx(content, source: sourceType);
-      if (lines.isEmpty) {
-        _showMessage('Nenhum lançamento encontrado no arquivo selecionado.', error: true);
-        return;
-      }
-
-      String? warning;
-      if (isOfx && StatementParser.isCreditCardOfx(content) != source.isCreditCard) {
-        warning = source.isCreditCard
-            ? 'Este arquivo parece ser o extrato de uma conta, e não a fatura de um cartão. Confira a origem escolhida.'
-            : 'Este arquivo parece ser a fatura de um cartão, e não o extrato de uma conta. Confira a origem escolhida.';
-      }
-      _csv = null;
-      await _start(source, file.name, lines, warning: warning);
+      await _readFile(source, file.name, await file.readAsBytes());
     } catch (e) {
       _showMessage('Erro ao importar arquivo: $e', error: true);
     }
+  }
+
+  static final _allowedExtensions = ['ofx', 'csv', 'txt', ...ImportAiService.mimeTypes.keys];
+
+  /// Arquivo solto sobre a página (navegador e computador).
+  Future<void> _onDrop(List<DropItem> files, FinanceState state) async {
+    setState(() => _dragging = false);
+    if (files.isEmpty || _busy) return;
+    final source = _sourceOf(state);
+    if (source == null) {
+      _showMessage('Escolha primeiro o cartão ou a conta de origem.', error: true);
+      return;
+    }
+    final file = files.first;
+    final extension = file.name.contains('.') ? file.name.split('.').last.toLowerCase() : '';
+    if (!_allowedExtensions.contains(extension)) {
+      _showMessage('Formato não aceito. Use OFX, CSV, PDF ou foto da fatura.', error: true);
+      return;
+    }
+    try {
+      await _readFile(source, file.name, await file.readAsBytes());
+    } catch (e) {
+      _showMessage('Erro ao importar arquivo: $e', error: true);
+    }
+  }
+
+  Future<void> _readFile(PaymentMethod source, String fileName, Uint8List bytes) async {
+    final sourceType =
+        source.isCreditCard ? StatementSourceType.creditCard : StatementSourceType.bankAccount;
+
+    // PDF e foto não têm estrutura: quem lê é a IA, e a revisão confere
+    final mimeType = ImportAiService.mimeTypeOf(fileName);
+    if (mimeType != null) {
+      await _readWithAi(source, fileName, bytes, mimeType, sourceType);
+      return;
+    }
+
+    final content = StatementParser.decodeBytes(bytes);
+    final isOfx = fileName.toLowerCase().endsWith('.ofx') || content.contains('<STMTTRN>');
+    if (!isOfx) {
+      await _importCsv(source, fileName, content, sourceType);
+      return;
+    }
+
+    final lines = StatementParser.parseOfx(content, source: sourceType);
+    if (lines.isEmpty) {
+      _showMessage('Nenhum lançamento encontrado no arquivo selecionado.', error: true);
+      return;
+    }
+
+    String? warning;
+    if (isOfx && StatementParser.isCreditCardOfx(content) != source.isCreditCard) {
+      warning = source.isCreditCard
+          ? 'Este arquivo parece ser o extrato de uma conta, e não a fatura de um cartão. Confira a origem escolhida.'
+          : 'Este arquivo parece ser a fatura de um cartão, e não o extrato de uma conta. Confira a origem escolhida.';
+    }
+    _csv = null;
+    await _start(source, fileName, lines, warning: warning);
   }
 
   /// CSV: lê com as colunas guardadas para este cartão ou conta; sem elas,
@@ -1060,30 +1091,65 @@ class _ImportPageState extends State<ImportPage> {
       body: BlocBuilder<FinanceCubit, FinanceState>(
         builder: (context, state) {
           final session = _session;
-          return ResponsiveContainer(
-            maxWidth: 920,
-            child: ListView(
-              // Folga no fim para o botão de ações rápidas não cobrir o Confirmar
-              padding: const EdgeInsets.only(bottom: 96),
+          return DropTarget(
+            enable: !_busy,
+            onDragEntered: (_) => setState(() => _dragging = true),
+            onDragExited: (_) => setState(() => _dragging = false),
+            onDragDone: (detail) => _onDrop(detail.files, state),
+            child: Stack(
               children: [
-                _originCard(state),
-                if (_resultMessage != null) _banner(_resultMessage!, AppColors.creditGreen, Icons.check_circle_outline_rounded),
-                if (_resultWarnings.isNotEmpty)
-                  _banner(
-                    'A importação foi gravada, mas parte dos movimentos não pôde ser registrada:',
-                    AppColors.folegoWarning,
-                    Icons.warning_amber_rounded,
+                ResponsiveContainer(
+                  maxWidth: 920,
+                  child: ListView(
+                    // Folga no fim para o botão de ações rápidas não cobrir o Confirmar
+                    padding: const EdgeInsets.only(bottom: 96),
                     children: [
-                      for (final warning in _resultWarnings)
-                        Padding(
-                          padding: const EdgeInsets.only(top: 6, left: 26),
-                          child: Text(warning, style: const TextStyle(fontSize: 12)),
+                      _originCard(state),
+                      if (_resultMessage != null) _banner(_resultMessage!, AppColors.creditGreen, Icons.check_circle_outline_rounded),
+                      if (_resultWarnings.isNotEmpty)
+                        _banner(
+                          'A importação foi gravada, mas parte dos movimentos não pôde ser registrada:',
+                          AppColors.folegoWarning,
+                          Icons.warning_amber_rounded,
+                          children: [
+                            for (final warning in _resultWarnings)
+                              Padding(
+                                padding: const EdgeInsets.only(top: 6, left: 26),
+                                child: Text(warning, style: const TextStyle(fontSize: 12)),
+                              ),
+                          ],
                         ),
+                      if (session != null) ..._review(state, session),
+                      if (_rules.isNotEmpty) _rulesCard(state),
+                      if (_history.isNotEmpty) _historyCard(),
                     ],
                   ),
-                if (session != null) ..._review(state, session),
-                if (_rules.isNotEmpty) _rulesCard(state),
-                if (_history.isNotEmpty) _historyCard(),
+                ),
+                if (_dragging)
+                  Positioned.fill(
+                    child: IgnorePointer(
+                      child: Container(
+                        margin: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: AppColors.primary.withValues(alpha: 0.12),
+                          border: Border.all(color: AppColors.primary, width: 2),
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                        alignment: Alignment.center,
+                        child: const Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(Icons.file_download_outlined, size: 40, color: AppColors.primary),
+                            SizedBox(height: 8),
+                            Text(
+                              'Solte o arquivo para importar',
+                              style: TextStyle(fontWeight: FontWeight.bold, color: AppColors.primary),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
               ],
             ),
           );
@@ -1130,6 +1196,11 @@ class _ImportPageState extends State<ImportPage> {
       ),
     );
   }
+
+  /// Navegador e computador aceitam arrastar o arquivo.
+  bool get _canDropFiles =>
+      kIsWeb ||
+      const {TargetPlatform.windows, TargetPlatform.macOS, TargetPlatform.linux}.contains(defaultTargetPlatform);
 
   Widget _originCard(FinanceState state) {
     final sources = state.paymentMethods.where(_canImport).toList();
@@ -1197,6 +1268,11 @@ class _ImportPageState extends State<ImportPage> {
                 label: Text(_session == null ? 'Escolher arquivo' : 'Trocar arquivo'),
                 onPressed: source == null || _busy ? null : () => _pickFile(source),
               ),
+              if (_canDropFiles)
+                const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 10),
+                  child: Text('ou arraste o arquivo para esta página', style: TextStyle(color: Colors.grey, fontSize: 13)),
+                ),
               if (isDemo)
                 OutlinedButton(
                   onPressed: source == null || _busy ? null : () => _useSample(source),
