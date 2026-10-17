@@ -33,6 +33,7 @@ class NotificationPreferences extends Equatable {
     NotificationCategory.agenda,
     NotificationCategory.projetos,
     NotificationCategory.casa,
+    NotificationCategory.assistente,
   ];
 
   /// Grupos com preferência gravada; os que faltam valem o padrão (tudo ligado).
@@ -91,7 +92,7 @@ class NotificationPreferences extends Equatable {
         NotificationCategory.agenda => 'Agenda',
         NotificationCategory.projetos => 'Projetos',
         NotificationCategory.casa => 'Casa e moradores',
-        NotificationCategory.assistente => 'Assistente',
+        NotificationCategory.assistente => 'Alertas de gasto',
         NotificationCategory.conta => 'Conta',
       };
 

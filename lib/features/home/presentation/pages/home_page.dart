@@ -15,6 +15,8 @@ import '../../../finance/presentation/cubit/finance_state.dart';
 import '../../../finance/domain/entities/house_expense.dart';
 import '../../../finance/domain/repositories/finance_repository.dart';
 import '../../../finance/domain/services/cycle_expense_grouping.dart';
+import '../../../finance/domain/services/expense_search.dart';
+import '../../../../core/widgets/search_shortcut.dart';
 import '../../../finance/presentation/widgets/card_invoice_group_tile.dart';
 import '../../../finance/presentation/widgets/card_invoice_payment_sheet.dart';
 import '../../../settlement/domain/entities/settlement_summary.dart';
@@ -63,6 +65,25 @@ class _HomePageContent extends StatefulWidget {
 class _HomePageContentState extends State<_HomePageContent> {
   String _selectedExpenseFilter = 'all'; // 'all', 'mine', 'recurring', 'bills'
   String? _selectedExpenseId;
+
+  /// Busca nos lançamentos do ciclo (Ctrl + F no computador).
+  final _searchController = TextEditingController();
+  final _searchFocus = FocusNode();
+  String _searchQuery = '';
+
+  @override
+  void initState() {
+    super.initState();
+    SearchShortcut.register(_searchFocus);
+  }
+
+  @override
+  void dispose() {
+    SearchShortcut.unregister(_searchFocus);
+    _searchController.dispose();
+    _searchFocus.dispose();
+    super.dispose();
+  }
 
   /// Faturas abertas na lista de gastos (pela chave da fatura).
   final Set<String> _expandedInvoices = {};
@@ -730,6 +751,15 @@ class _HomePageContentState extends State<_HomePageContent> {
             expense.isRecurring;
       }
       return true;
+    }).where((expense) {
+      if (_searchQuery.trim().isEmpty) return true;
+      return expenseMatchesSearch(
+        expense,
+        _searchQuery,
+        categoryName: state.categories.where((c) => c.id == expense.categoryId).firstOrNull?.name,
+        payerName: state.members.where((m) => m.id == expense.paidByMemberId).firstOrNull?.name,
+        paymentMethodName: state.paymentMethods.where((m) => m.id == expense.paymentMethodId).firstOrNull?.name,
+      );
     }).toList();
 
     return Column(
@@ -765,15 +795,41 @@ class _HomePageContentState extends State<_HomePageContent> {
             ],
           ),
         ),
+        const SizedBox(height: 8),
+        TextField(
+          key: const Key('expense_search'),
+          controller: _searchController,
+          focusNode: _searchFocus,
+          onChanged: (value) => setState(() => _searchQuery = value),
+          textInputAction: TextInputAction.search,
+          decoration: InputDecoration(
+            hintText: 'Buscar nos lançamentos',
+            prefixIcon: const Icon(Icons.search_rounded),
+            suffixIcon: _searchQuery.isEmpty
+                ? null
+                : IconButton(
+                    icon: const Icon(Icons.close_rounded),
+                    tooltip: 'Limpar busca',
+                    onPressed: () => setState(() {
+                      _searchController.clear();
+                      _searchQuery = '';
+                    }),
+                  ),
+            isDense: true,
+            border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
+          ),
+        ),
         const SizedBox(height: 12),
         if (filteredExpenses.isEmpty)
           Container(
             padding: const EdgeInsets.all(24),
             alignment: Alignment.center,
             child: Text(
-              _selectedExpenseFilter == 'all'
-                  ? 'Nenhuma despesa lançada neste ciclo'
-                  : 'Nenhum gasto encontrado para este filtro',
+              _searchQuery.trim().isNotEmpty
+                  ? 'Nenhum lançamento encontrado para "${_searchQuery.trim()}"'
+                  : _selectedExpenseFilter == 'all'
+                      ? 'Nenhuma despesa lançada neste ciclo'
+                      : 'Nenhum gasto encontrado para este filtro',
               style: theme.textTheme.bodyMedium?.copyWith(color: Colors.grey),
             ),
           )
