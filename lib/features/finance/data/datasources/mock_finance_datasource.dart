@@ -18,6 +18,9 @@ import '../../domain/services/cycle_expense_filter.dart';
 import 'finance_datasource.dart';
 
 class MockFinanceDataSource implements FinanceDataSource {
+  /// Empréstimos que o Caixa liberou no ciclo (vêm do P2P de demonstração).
+  Future<Money> Function(FinancialCycle cycle)? houseLoansFundedIn;
+
   final List<AuditEntry> _auditLogs = [];
   final List<HouseMember> _members = [
     const HouseMember(
@@ -465,8 +468,12 @@ class MockFinanceDataSource implements FinanceDataSource {
       }
     }
 
+    // Empréstimos que o Caixa liberou no ciclo também saíram dele
+    final loansFunded = await houseLoansFundedIn?.call(cycle) ?? const Money.zero();
+
     // Fôlego = Dinheiro da casa no início + Aportes - (Despesas Pagas + Contas a vencer do ciclo)
-    final folego = await getOpeningBalance(cycle) + totalContrib - (totalPaid + committedFuture);
+    final folego =
+        await getOpeningBalance(cycle) + totalContrib - (totalPaid + committedFuture) - loansFunded;
 
     return FinancialCycleSummary(
       cycle: cycle,
@@ -477,6 +484,7 @@ class MockFinanceDataSource implements FinanceDataSource {
       memberContributions: memberContribs,
       memberExpensesPaid: memberPaid,
       vaultReturns: await getVaultReturnsForCycle(cycle),
+      houseLoansFunded: loansFunded,
     );
   }
 

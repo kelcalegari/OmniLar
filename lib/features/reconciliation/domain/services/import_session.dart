@@ -965,6 +965,10 @@ class ImportSession {
       }
     }
 
+    final todayDate = DateTime(today.year, today.month, today.day);
+    final invoiceDay = invoiceDueDate ?? todayDate;
+    final loanFundedOn =
+        closedCycles.contains(schedule.cycleFor(invoiceDay)) ? todayDate : invoiceDay;
     final dueLabel = invoiceDueDate != null ? ' (venc. ${_dayMonth.format(invoiceDueDate!)})' : '';
     final loans = <P2PLoan>[];
     for (final entry in loanLines.entries) {
@@ -993,6 +997,10 @@ class ImportSession {
           createdAt: today,
           // Quem deve paga junto com a fatura
           firstDueDate: invoiceDueDate ?? today.add(const Duration(days: 30)),
+          // Cartão da Casa: a fatura sai do Caixa do ciclo dela (ou do atual,
+          // como ajuste, se esse ciclo já fechou)
+          houseFunding: isHouseCard ? HouseLoanFunding.cycle : null,
+          fundedOn: isHouseCard ? loanFundedOn : null,
         ),
       );
     }

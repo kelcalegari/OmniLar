@@ -367,9 +367,15 @@ class GlobalClearingEngine {
       }
     }
 
+    // Empréstimos que o Caixa liberou neste ciclo (0086): o dinheiro saiu dele
+    final houseLoansFundedCents = loans
+        .where((loan) => loan.fundedFromCycle(cycle))
+        .fold<int>(0, (acc, loan) => acc + loan.totalAmount.cents);
+
     int treasuryAfterClosing() =>
         openingBalance.cents +
         houseLoanReceiptsCents -
+        houseLoansFundedCents -
         // O que um fechamento anterior deste ciclo deixou a receber ou perdoou
         houseShortfallAlreadySettled.cents +
         members.fold<int>(0, (acc, m) => acc + (contributionTargets[m.id]?.cents ?? 0)) -

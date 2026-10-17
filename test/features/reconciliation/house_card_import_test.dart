@@ -78,6 +78,27 @@ void main() {
       expect(byBorrower['kelvynn']!.totalAmount.cents, 19188 + 4032);
     });
 
+    test('a dívida sai do Caixa do ciclo da fatura, ou do atual se ele fechou', () {
+      var session = start(_card());
+      session = session.withLine(owes(session, 'a', 'cristiano'));
+      final loan = plan(session).loans.single;
+      expect(loan.houseFunding, HouseLoanFunding.cycle);
+      expect(loan.fundedOn, DateTime(2026, 10, 14));
+
+      final adjusted = session
+          .buildPlan(
+            members: _members,
+            categories: _categories,
+            schedule: schedule,
+            closedCycles: {schedule.cycleFor(DateTime(2026, 10, 14))},
+            now: DateTime(2026, 11, 3, 15, 30),
+            newId: newId,
+          )
+          .loans
+          .single;
+      expect(adjusted.fundedOn, DateTime(2026, 11, 3));
+    });
+
     test('gasto pessoal não existe: bloqueia até dizer quem deve', () {
       var session = start(_card());
       session = session.withLine(
@@ -115,6 +136,7 @@ void main() {
       expect(loan.lenderMemberId, 'kelvynn');
       expect(loan.borrowerMemberId, 'cristiano');
       expect(loan.lenderMemberId, isNot(P2PLoan.houseLenderId));
+      expect(loan.houseFunding, isNull);
     });
 
     test('o dono não pode dever para si mesmo', () {

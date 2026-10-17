@@ -18,6 +18,8 @@ Map<String, dynamic> p2pLoanToJson(P2PLoan loan, {String? id}) => {
   'repaymentMode': loan.repaymentMode.name,
   'settleInCycle': loan.settleInCycle,
   'repayToVaultId': loan.repayToVaultId,
+  'houseFunding': loan.houseFunding?.name,
+  'fundedOn': loan.fundedOn?.toIso8601String(),
   'installments': [
     for (final inst in loan.installments)
       {
@@ -57,6 +59,8 @@ P2PLoan p2pLoanFromJson(Map<String, dynamic> json) {
     ),
     settleInCycle: json['settleInCycle'] as bool? ?? true,
     repayToVaultId: json['repayToVaultId'] as String?,
+    houseFunding: HouseLoanFunding.values.where((v) => v.name == json['houseFunding']).firstOrNull,
+    fundedOn: DateTime.tryParse(json['fundedOn'] as String? ?? ''),
     installments: [
       for (final raw in (json['installments'] as List<dynamic>? ?? const []))
         P2PInstallment(

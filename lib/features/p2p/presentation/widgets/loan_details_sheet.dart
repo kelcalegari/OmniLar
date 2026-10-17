@@ -615,6 +615,16 @@ class LoanDetailsSheet extends StatelessWidget {
               ),
             ],
           ),
+          if (loan.houseFunding != null) ...[
+            const SizedBox(height: 4),
+            Text(
+              loan.houseFunding == HouseLoanFunding.cycle
+                  ? 'Saiu do Caixa do ciclo em ${DateFormat('dd/MM/yyyy').format(loan.fundedOn!)}'
+                  : 'Saiu de uma caixinha em ${DateFormat('dd/MM/yyyy').format(loan.fundedOn!)}: os pagamentos voltam para ela',
+              key: const Key('loan_house_funding_info'),
+              style: theme.textTheme.bodySmall,
+            ),
+          ],
           _LoanPurchases(loan: loan),
           const SizedBox(height: 16),
 
