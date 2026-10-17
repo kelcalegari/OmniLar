@@ -27,7 +27,12 @@ import '../../../finance/presentation/widgets/cycle_funding_planner_card.dart';
 import '../../../finance/presentation/widgets/expense_timeline_item.dart';
 import '../../../finance/presentation/widgets/expense_detail_desktop_pane.dart';
 import '../../../notifications/presentation/widgets/notification_bell_button.dart';
+import '../../../calendar/presentation/cubit/calendar_cubit.dart';
+import '../../../calendar/presentation/cubit/calendar_state.dart';
+import '../../../shopping/presentation/cubit/shopping_cubit.dart';
+import '../../../shopping/presentation/cubit/shopping_state.dart';
 import '../widgets/home_skeleton.dart';
+import '../widgets/shortcut_subtitles.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -583,12 +588,19 @@ class _HomePageContentState extends State<_HomePageContent> {
   }
 
   Widget _buildQuickShortcuts(BuildContext context, ThemeData theme) {
+    // Contagens reais da lista de compras e das tarefas da casa
+    final shopping = context.watch<ShoppingCubit>().state;
+    final calendar = context.watch<CalendarCubit>().state;
+    final shoppingLoaded = shopping.status != ShoppingCubitStatus.initial &&
+        shopping.status != ShoppingCubitStatus.loading;
+    final tasksLoaded = calendar.status == CalendarCubitStatus.loaded;
+
     final shortcuts = [
       _ShortcutItem(
         icon: Icons.shopping_bag_outlined,
         iconColor: AppColors.primaryLight,
         title: 'Compras',
-        subtitle: '4 itens',
+        subtitle: shoppingShortcutSubtitle(shopping.items, loaded: shoppingLoaded),
         route: '/compras',
       ),
       _ShortcutItem(
@@ -602,7 +614,7 @@ class _HomePageContentState extends State<_HomePageContent> {
         icon: Icons.task_alt_rounded,
         iconColor: AppColors.accent,
         title: 'Tarefas',
-        subtitle: '2 hoje',
+        subtitle: tasksShortcutSubtitle(calendar.tasks, loaded: tasksLoaded),
         route: '/tarefas',
       ),
       _ShortcutItem(
