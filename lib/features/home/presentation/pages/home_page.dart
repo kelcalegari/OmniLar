@@ -16,6 +16,7 @@ import '../../../finance/domain/entities/house_expense.dart';
 import '../../../finance/domain/repositories/finance_repository.dart';
 import '../../../finance/domain/services/cycle_expense_grouping.dart';
 import '../../../finance/domain/services/expense_search.dart';
+import '../../../finance/presentation/widgets/expense_grid_table.dart';
 import '../../../../core/widgets/search_shortcut.dart';
 import '../../../finance/presentation/widgets/card_invoice_group_tile.dart';
 import '../../../finance/presentation/widgets/card_invoice_payment_sheet.dart';
@@ -70,6 +71,9 @@ class _HomePageContentState extends State<_HomePageContent> {
   final _searchController = TextEditingController();
   final _searchFocus = FocusNode();
   String _searchQuery = '';
+
+  /// No computador, os lançamentos podem aparecer em tabela.
+  bool _gridView = false;
 
   @override
   void initState() {
@@ -774,9 +778,24 @@ class _HomePageContentState extends State<_HomePageContent> {
                 fontWeight: FontWeight.bold,
               ),
             ),
-            Text(
-              '${filteredExpenses.length} de ${state.expenses.length} lançamentos',
-              style: theme.textTheme.bodySmall,
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  '${filteredExpenses.length} de ${state.expenses.length} lançamentos',
+                  style: theme.textTheme.bodySmall,
+                ),
+                if (isDesktop) ...[
+                  const SizedBox(width: 8),
+                  IconButton(
+                    key: const Key('expense_view_toggle'),
+                    tooltip: _gridView ? 'Ver em lista' : 'Ver em tabela',
+                    icon: Icon(_gridView ? Icons.view_agenda_outlined : Icons.table_rows_outlined, size: 20),
+                    visualDensity: VisualDensity.compact,
+                    onPressed: () => setState(() => _gridView = !_gridView),
+                  ),
+                ],
+              ],
             ),
           ],
         ),
@@ -832,6 +851,15 @@ class _HomePageContentState extends State<_HomePageContent> {
                       : 'Nenhum gasto encontrado para este filtro',
               style: theme.textTheme.bodyMedium?.copyWith(color: Colors.grey),
             ),
+          )
+        else if (isDesktop && _gridView)
+          ExpenseGridTable(
+            expenses: filteredExpenses,
+            categories: state.categories,
+            members: state.members,
+            paymentMethods: state.paymentMethods,
+            selectedExpenseId: _selectedExpenseId,
+            onSelect: (id) => setState(() => _selectedExpenseId = _selectedExpenseId == id ? null : id),
           )
         else
           ...groupCardInvoices(filteredExpenses, state.paymentMethods).map((entry) {
