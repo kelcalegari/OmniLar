@@ -10,6 +10,7 @@ import 'package:omni_lar/features/admin/data/datasources/mock_admin_datasource.d
 import 'package:omni_lar/features/admin/domain/entities/account_access.dart';
 import 'package:omni_lar/features/admin/domain/entities/admin_models.dart';
 import 'package:omni_lar/features/admin/presentation/cubit/account_access_cubit.dart';
+import 'package:omni_lar/features/admin/presentation/pages/account_pending_page.dart';
 import 'package:omni_lar/features/admin/presentation/pages/admin_page.dart';
 import 'package:omni_lar/features/auth/domain/entities/user_profile.dart';
 import 'package:omni_lar/features/auth/domain/repositories/auth_repository.dart';
@@ -254,6 +255,63 @@ void main() {
       await Future<void>.delayed(Duration.zero);
       expect(cubit.state.isBlocked, isFalse);
       await cubit.close();
+    });
+  });
+
+  group('Tela de espera', () {
+    setUpAll(() async {
+      if (!sl.isRegistered<AccountAccessCubit>()) await initServiceLocator();
+    });
+
+    testWidgets('Pergunta o status ao voltar ao app, de tempos em tempos e no botão', (tester) async {
+      final auth = _MockAuthRepository();
+      final ds = _MockAdminDataSource();
+      when(() => auth.authStateChanges).thenAnswer((_) => const Stream.empty());
+      when(() => auth.isDemoMode).thenReturn(false);
+      when(() => auth.currentUser).thenReturn(const UserProfile(id: 'u1', fullName: 'Ana', email: 'ana@x.com'));
+      // Sem aviso em tempo real, como com o app em segundo plano
+      when(() => ds.watchMyAccess()).thenAnswer((_) => const Stream.empty());
+      var status = AccountStatus.pending;
+      var calls = 0;
+      when(() => ds.getMyAccess()).thenAnswer((_) async {
+        calls++;
+        return AccountAccess(status: status);
+      });
+
+      final cubit = AccountAccessCubit(ds, auth);
+      final previous = sl<AccountAccessCubit>();
+      sl.unregister<AccountAccessCubit>();
+      sl.registerSingleton<AccountAccessCubit>(cubit);
+      addTearDown(() async {
+        sl.unregister<AccountAccessCubit>();
+        sl.registerSingleton<AccountAccessCubit>(previous);
+        await cubit.close();
+      });
+
+      await tester.pumpWidget(const MaterialApp(home: AccountPendingPage(pollInterval: Duration(seconds: 1))));
+      await tester.pump();
+      expect(cubit.state.isBlocked, isTrue);
+      var before = calls;
+
+      await tester.pump(const Duration(seconds: 1));
+      expect(calls, before + 1, reason: 'consulta periódica');
+
+      before = calls;
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+      await tester.pump();
+      expect(calls, before + 1, reason: 'consulta ao voltar ao app');
+
+      status = AccountStatus.active;
+      await tester.tap(find.text('Verificar agora'));
+      await tester.pump();
+      expect(cubit.state.isBlocked, isFalse);
+
+      // Fora da tela, para de consultar
+      await tester.pumpWidget(const SizedBox());
+      before = calls;
+      await tester.pump(const Duration(seconds: 3));
+      expect(calls, before);
     });
   });
 

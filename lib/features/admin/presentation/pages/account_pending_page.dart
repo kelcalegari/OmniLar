@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
@@ -11,21 +13,49 @@ import '../cubit/account_access_cubit.dart';
 /// suspensa. Muda sozinha quando o administrador aprova; com um convite
 /// válido de uma casa, a conta em análise é aprovada na hora.
 class AccountPendingPage extends StatefulWidget {
-  const AccountPendingPage({super.key});
+  /// Intervalo da consulta do status enquanto a tela está aberta.
+  @visibleForTesting
+  final Duration pollInterval;
+
+  const AccountPendingPage({super.key, this.pollInterval = const Duration(seconds: 15)});
 
   @override
   State<AccountPendingPage> createState() => _AccountPendingPageState();
 }
 
-class _AccountPendingPageState extends State<AccountPendingPage> {
+class _AccountPendingPageState extends State<AccountPendingPage> with WidgetsBindingObserver {
   final _codeController = TextEditingController();
   bool _joining = false;
+  bool _checking = false;
   String? _codeError;
+  Timer? _poll;
+
+  @override
+  void initState() {
+    super.initState();
+    // O aviso em tempo real se perde com o app em segundo plano: a tela
+    // também pergunta ao voltar para o app e de tempos em tempos
+    WidgetsBinding.instance.addObserver(this);
+    _poll = Timer.periodic(widget.pollInterval, (_) => sl<AccountAccessCubit>().refresh());
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) sl<AccountAccessCubit>().refresh();
+  }
 
   @override
   void dispose() {
+    _poll?.cancel();
+    WidgetsBinding.instance.removeObserver(this);
     _codeController.dispose();
     super.dispose();
+  }
+
+  Future<void> _checkNow() async {
+    setState(() => _checking = true);
+    await sl<AccountAccessCubit>().refresh();
+    if (mounted) setState(() => _checking = false);
   }
 
   Future<void> _join() async {
@@ -133,6 +163,14 @@ class _AccountPendingPageState extends State<AccountPendingPage> {
                       ),
                     ],
                     const SizedBox(height: 20),
+                    OutlinedButton.icon(
+                      onPressed: _checking ? null : _checkNow,
+                      icon: _checking
+                          ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
+                          : const Icon(Icons.refresh_rounded),
+                      label: const Text('Verificar agora'),
+                    ),
+                    const SizedBox(height: 8),
                     TextButton.icon(
                       onPressed: () => sl<AuthCubit>().signOut(),
                       icon: const Icon(Icons.logout_rounded),
