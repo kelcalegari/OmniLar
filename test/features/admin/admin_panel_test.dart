@@ -317,7 +317,7 @@ void main() {
 
   group('Tela do painel (modo demo)', () {
     setUpAll(() async {
-      await initServiceLocator();
+      if (!sl.isRegistered<AccountAccessCubit>()) await initServiceLocator();
     });
 
     testWidgets('Mostra a visão geral e aprova todas as contas pendentes', (tester) async {
