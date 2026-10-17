@@ -135,7 +135,7 @@ O cálculo do fechamento no banco fica de fora (adiado por decisão do dono, em 
 
 **Recomendação:** ⭐ só atualizar a seção 10 do plano para dizer que está resolvida.
 
-## 11. Aviso de "Super Pix pendente" (17/10/2026; o dono seguiu as ⭐, feito na branch `feat/ajustes-alertas`, migration 0084)
+## 11. Aviso de "Super Pix pendente" (17/10/2026; o dono seguiu as ⭐, feito (na `main` e publicado em 17/10/2026), migration 0084)
 
 **Como está:** no fechamento, quem fecha marca cada Super Pix como pago ou como pagamento parcial (o que falta vira acordo); o que não é marcado conta como pago (decisão do dono, "Super Pix não marcado como parcial: tratado como pago"). Por isso `confirm_cycle_settlement` grava cada transferência já como `confirmed`, e o lembrete `transfer_pending` do agendador (2, 5 e 8 dias depois do fechamento, para quem paga) nunca encontra transferência pendente. A conta do fechamento já está certa; o que falta é só lembrar quem ainda não mandou o Pix de verdade.
 
@@ -147,7 +147,7 @@ O cálculo do fechamento no banco fica de fora (adiado por decisão do dono, em 
 
 **Como fazer (c):** migration com `settlement_transfers.pix_sent_at`, uma função `mark_settlement_transfer_sent` (só quem paga ou quem recebe), o agendador passando a filtrar `pix_sent_at is null` e o aviso da 11.3; no app, o botão na lista do Super Pix do ciclo fechado e o selo "Pix enviado".
 
-## 12. Cópia local para abrir sem internet (17/10/2026; o dono seguiu as ⭐; etapas 1 e 2 feitas na branch `feat/ajustes-alertas`)
+## 12. Cópia local para abrir sem internet (17/10/2026; o dono seguiu as ⭐; etapas 1 e 2 feitas (na `main` e publicadas em 17/10/2026))
 
 **Como está:** sem rede, o app não abre os dados: a sessão fica guardada, mas perfil, casa e listas vêm do Supabase a cada abertura (a abertura espera até 8 s e segue sem casa). A fila offline (`lib/core/network/`) já guarda no aparelho as gravações feitas sem conexão, em `flutter_secure_storage`, e as reenvia quando a rede volta. O caso de uso mais comum é a lista de compras no mercado, com sinal ruim.
 
@@ -165,7 +165,7 @@ O cálculo do fechamento no banco fica de fora (adiado por decisão do dono, em 
 
 **Tamanho:** etapa 1 é média (auth, compras e tarefas, faixa de aviso e testes); etapa 2 é parecida. Nenhuma das duas precisa de migration.
 
-## 13. Termos de uso e política de privacidade (17/10/2026; o dono seguiu as ⭐; feito na branch `feat/ajustes-alertas`, migration 0085)
+## 13. Termos de uso e política de privacidade (17/10/2026; o dono seguiu as ⭐; feito (na `main` e publicado em 17/10/2026), migration 0085)
 
 **Objetivo:** ter os dois textos antes de abrir o app para pessoas de fora, com o aceite registrado e os direitos da LGPD atendidos no próprio app. Claude redige os textos a partir de como o sistema funciona de verdade e faz as telas; **não é aconselhamento jurídico**: a recomendação é que um advogado revise a versão final antes da publicação.
 
