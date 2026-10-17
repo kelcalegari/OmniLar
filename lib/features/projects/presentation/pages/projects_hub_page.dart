@@ -4,7 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../../../core/theme/app_colors.dart';
-import '../../../../core/utils/clipboard_helper.dart';
+import '../../../../core/utils/share_helper.dart';
 import '../../../../core/widgets/omni_logo.dart';
 import '../../domain/entities/project_settlement_summary.dart';
 import '../../domain/entities/shared_project.dart';
@@ -337,7 +337,7 @@ class _ProjectsHubPageState extends State<ProjectsHubPage> {
                       const SizedBox(width: 4),
                       IconButton(
                         icon: const Icon(Icons.chat_bubble_outline_rounded, size: 18),
-                        tooltip: 'Copiar mensagem para o WhatsApp',
+                        tooltip: 'Enviar mensagem no WhatsApp',
                         onPressed: () => _copySingleProjectTransfer(context, proj, t),
                       ),
                     ],
@@ -363,7 +363,7 @@ class _ProjectsHubPageState extends State<ProjectsHubPage> {
         buffer.writeln('• ${t.fromMemberName} transfere ${t.amount.formatted} para ${t.toMemberName} (${t.description})');
       }
     }
-    copyWithFeedback(
+    shareText(
  context,
  buffer.toString(),
  onCopied:
@@ -376,7 +376,7 @@ class _ProjectsHubPageState extends State<ProjectsHubPage> {
   void _copySingleProjectTransfer(BuildContext context, SharedProject project, SuperPixTransfer t) {
     final msg =
         'Oi ${t.fromMemberName}! No fechamento do projeto "${project.title}" no Omni Lar, ficou acertado você transferir ${t.amount.formatted} para ${t.toMemberName} para quitar a sua parte (${t.description}).';
-    copyWithFeedback(
+    shareText(
  context,
  msg,
  onCopied:
