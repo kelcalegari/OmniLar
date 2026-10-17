@@ -187,7 +187,7 @@ O cálculo do fechamento no banco fica de fora (adiado por decisão do dono, em 
 
 | Nº | Decisão | Recomendação | Alternativas |
 |---|---|---|---|
-| 13.1 | Quem responde pelos dados (controlador) | **a)** ⭐ Definir antes de publicar: o ideal é um CNPJ (MEI serve para começar), com nome e endereço nos textos | b) Pessoa física (o seu nome e CPF ou endereço ficam públicos nos textos) |
+| 13.1 | Quem responde pelos dados (controlador) | **a)** ⭐ Sem CNPJ por enquanto (17/10/2026): a pessoa física do dono, identificada pelo nome completo e pelo e-mail de contato (sem CPF nem endereço nos textos), enquanto o app for usado por convidados; trocar para o CNPJ antes da abertura ao público (os textos deixam isso num lugar só) | b) Esperar o CNPJ para redigir |
 | 13.2 | Contato de privacidade | **a)** ⭐ Um e-mail só para isso (no domínio próprio quando existir; até lá, um e-mail criado para o app) | b) O e-mail pessoal |
 | 13.3 | Idade mínima | **a)** ⭐ 18 anos (dinheiro e acordos entre pessoas) | b) 13 anos com consentimento dos pais |
 | 13.4 | Onde os textos aparecem | **a)** ⭐ Páginas públicas no site (`/termos` e `/privacidade`), link no cadastro e nos Ajustes | b) Só dentro do app |
