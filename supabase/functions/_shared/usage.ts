@@ -1,4 +1,4 @@
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.8';
+import type { UserClient } from './auth.ts';
 
 export interface AiUsageRecord {
   houseId: string;
@@ -19,7 +19,7 @@ export const DEFAULT_DAILY_QUOTA_PER_HOUSE = 10;
  * Limite diário de leituras de IA do plano da casa (migration 0069). Nulo = sem limite.
  */
 export async function houseAiDailyLimit(
-  supabaseClient: ReturnType<typeof createClient>,
+  supabaseClient: UserClient,
   houseId: string,
 ): Promise<number | null> {
   const { data, error } = await supabaseClient.rpc('house_ai_daily_limit', { p_house_id: houseId });
@@ -35,7 +35,7 @@ export async function houseAiDailyLimit(
  * Se o usuário informou sua própria chave de API (BYOK), a cota é ilimitada.
  */
 export async function checkAiDailyQuota(
-  supabaseClient: ReturnType<typeof createClient>,
+  supabaseClient: UserClient,
   houseId: string,
   memberId: string,
   hasCustomKey: boolean,
@@ -79,7 +79,7 @@ export async function checkAiDailyQuota(
  * Registra o consumo de IA na tabela public.ai_usage para auditoria e controle de limites.
  */
 export async function recordAiUsage(
-  supabaseClient: ReturnType<typeof createClient>,
+  supabaseClient: UserClient,
   record: AiUsageRecord,
 ): Promise<void> {
   try {

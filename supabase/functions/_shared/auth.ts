@@ -1,4 +1,7 @@
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.8';
+import { createClient, type SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2.39.8';
+
+/** Cliente do Supabase com o JWT do usuário (o tipo que `createClient` devolve). */
+export type UserClient = SupabaseClient<any, 'public', any>;
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -16,7 +19,7 @@ export interface HouseMemberContext {
   userId: string;
   houseId: string;
   /** Cliente com o JWT do usuário: toda leitura/escrita passa pelo RLS. */
-  supabaseClient: ReturnType<typeof createClient>;
+  supabaseClient: UserClient;
 }
 
 /**
