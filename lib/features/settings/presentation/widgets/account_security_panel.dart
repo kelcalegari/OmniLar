@@ -1,3 +1,7 @@
+import 'dart:convert';
+
+import 'package:file_picker/file_picker.dart';
+import 'package:go_router/go_router.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -121,6 +125,31 @@ class _AccountSecurityPanelState extends State<AccountSecurityPanel> {
             const SizedBox(height: 16),
             _card(
               context,
+              title: 'Seus dados',
+              actionLabel: 'Baixar',
+              onAction: () => _downloadMyData(context),
+              children: [
+                const Padding(
+                  padding: EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+                  child: Text(
+                    'Baixe um arquivo com os dados da sua conta e o que você lançou ou de que participa nas casas.',
+                    style: TextStyle(color: Colors.grey, fontSize: 13),
+                  ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(8, 0, 8, 0),
+                  child: Wrap(
+                    children: [
+                      TextButton(onPressed: () => context.push('/termos'), child: const Text('Termos de uso')),
+                      TextButton(onPressed: () => context.push('/privacidade'), child: const Text('Política de privacidade')),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            _card(
+              context,
               title: 'Excluir conta',
               actionLabel: hasPassword ? 'Excluir' : null,
               actionColor: AppColors.debtRed,
@@ -141,6 +170,22 @@ class _AccountSecurityPanelState extends State<AccountSecurityPanel> {
         );
       },
     );
+  }
+
+  Future<void> _downloadMyData(BuildContext context) async {
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      final json = await context.read<AuthCubit>().exportMyData();
+      final stamp = DateTime.now().toIso8601String().split('T').first;
+      await FilePicker.saveFile(
+        fileName: 'omnilar-meus-dados-$stamp.json',
+        bytes: Uint8List.fromList(utf8.encode(json)),
+        mimeType: 'application/json',
+        dialogTitle: 'Salvar os seus dados',
+      );
+    } catch (e) {
+      messenger.showSnackBar(SnackBar(content: Text('$e'), backgroundColor: AppColors.debtRed));
+    }
   }
 
   void _openDeletion() {

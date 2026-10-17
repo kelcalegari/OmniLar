@@ -517,13 +517,15 @@ extension _SettingsGroupViews on _SettingsPageState {
                 SizedBox(width: 10),
                 Expanded(
                   child: Text(
-                    'Privacidade LGPD: seus dados bancários, CPF e números de cartão são mascarados no dispositivo antes de qualquer processamento.',
+                    'Privacidade: fotos e arquivos vão inteiros para a IA do Google (Gemini) e não ficam guardados; '
+                    'nos textos enviados, CPF e número de cartão são mascarados antes. Detalhes na Política de privacidade.',
                     style: TextStyle(fontSize: 12, color: AppColors.primary),
                   ),
                 ),
               ],
             ),
           ),
+          const AiConsentTile(),
         ],
       ),
       _panel(

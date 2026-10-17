@@ -1,3 +1,4 @@
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
@@ -25,6 +26,9 @@ class _LoginPageState extends State<LoginPage> {
   final _formKey = GlobalKey<FormState>();
   bool _isSignUp = false;
 
+  /// Cadastro só com os Termos e a Política aceitos.
+  bool _acceptedTerms = false;
+
   final _nameController = TextEditingController();
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
@@ -46,6 +50,12 @@ class _LoginPageState extends State<LoginPage> {
     if (!_formKey.currentState!.validate()) return;
 
     final cubit = context.read<AuthCubit>();
+    if (_isSignUp && !_acceptedTerms) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Para criar a conta, aceite os Termos de uso e a Política de privacidade.')),
+      );
+      return;
+    }
     if (_isSignUp) {
       cubit.signUpWithEmailPassword(
         email: _emailController.text,
@@ -350,6 +360,43 @@ class _LoginPageState extends State<LoginPage> {
                               }
                               return null;
                             },
+                          ),
+                          const SizedBox(height: 8),
+                          CheckboxListTile(
+                            key: const Key('signup_terms_checkbox'),
+                            value: _acceptedTerms,
+                            onChanged: (v) => setState(() => _acceptedTerms = v ?? false),
+                            controlAffinity: ListTileControlAffinity.leading,
+                            contentPadding: EdgeInsets.zero,
+                            dense: true,
+                            title: Text.rich(
+                              TextSpan(
+                                text: 'Tenho 18 anos ou mais e aceito os ',
+                                children: [
+                                  TextSpan(
+                                    text: 'Termos de uso',
+                                    style: const TextStyle(
+                                      color: AppColors.primary,
+                                      fontWeight: FontWeight.w600,
+                                      decoration: TextDecoration.underline,
+                                    ),
+                                    recognizer: TapGestureRecognizer()..onTap = () => context.push('/termos'),
+                                  ),
+                                  const TextSpan(text: ' e a '),
+                                  TextSpan(
+                                    text: 'Política de privacidade',
+                                    style: const TextStyle(
+                                      color: AppColors.primary,
+                                      fontWeight: FontWeight.w600,
+                                      decoration: TextDecoration.underline,
+                                    ),
+                                    recognizer: TapGestureRecognizer()..onTap = () => context.push('/privacidade'),
+                                  ),
+                                  const TextSpan(text: '.'),
+                                ],
+                              ),
+                              style: const TextStyle(fontSize: 13),
+                            ),
                           ),
                         ],
                         const SizedBox(height: 24),

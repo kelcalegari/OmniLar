@@ -161,7 +161,7 @@ O cálculo do fechamento no banco fica de fora (adiado por decisão do dono, em 
 
 **Tamanho:** etapa 1 é média (auth, compras e tarefas, faixa de aviso e testes); etapa 2 é parecida. Nenhuma das duas precisa de migration.
 
-## 13. Termos de uso e política de privacidade (17/10/2026, para decidir)
+## 13. Termos de uso e política de privacidade (17/10/2026; o dono seguiu as ⭐; feito na branch `feat/ajustes-alertas`, migration 0085)
 
 **Objetivo:** ter os dois textos antes de abrir o app para pessoas de fora, com o aceite registrado e os direitos da LGPD atendidos no próprio app. Claude redige os textos a partir de como o sistema funciona de verdade e faz as telas; **não é aconselhamento jurídico**: a recomendação é que um advogado revise a versão final antes da publicação.
 
@@ -199,7 +199,16 @@ O cálculo do fechamento no banco fica de fora (adiado por decisão do dono, em 
 | 13.10 | Retenção | **a)** ⭐ Enquanto a conta existir; depois da exclusão, só o histórico financeiro sem dados pessoais. Conferir no painel do Supabase quanto tempo os backups guardam e citar no texto | b) Prazo fixo de apagar contas inativas (ex.: 2 anos sem entrar) |
 | 13.11 | Revisão jurídica | **a)** ⭐ Um advogado revisa antes da publicação | b) Publicar a versão redigida sem revisão |
 
-### 13.3. Como fazer (depois das decisões)
+### 13.3. Como ficou
+
+- **Responsável e contato:** Kelvynn Bordin Calegari (pessoa física, sem CPF nos textos) e omnilarapp@gmail.com, em `lib/features/legal/legal_texts.dart` (`kLegalControllerName`, `kLegalContactEmail`): trocar ali pelo CNPJ e pelo e-mail do domínio.
+- **Textos:** `legal_texts.dart`, versão `kLegalVersion` = `2026-10-17`. Mudança relevante no texto: trocar a versão, e todos aceitam de novo na entrada. A seção 5 da política diz que, em testes, a leitura usa o plano gratuito do Gemini: atualizar quando o pago for ativado.
+- **Páginas públicas:** `/termos` e `/privacidade` (abrem sem login).
+- **Aceite:** caixa obrigatória no cadastro ("Tenho 18 anos ou mais e aceito..."), gravada na primeira entrada pela marca no cadastro; contas antigas ou versão nova caem em `/termos/aceite` (só quando o perfil veio do banco; o modo demo não pede).
+- **IA:** `lib/core/ai/ai_consent.dart`; leitura de foto ou PDF, nota pelo QR, importação e Assistente perguntam uma vez antes de enviar; recusar mantém o app sem IA (o Assistente usa só o entendimento local). Ajustes › Assistente IA tem a chave para permitir ou retirar, e o aviso de privacidade foi corrigido.
+- **Baixar meus dados:** Ajustes › Conta e segurança › Seus dados › Baixar (JSON gerado por `export_my_data`), com links para os dois textos.
+
+### 13.4. Como fazer (registro do plano)
 
 1. **Textos:** Claude redige "Termos de uso" e "Política de privacidade" em português simples, a partir da tabela 13.1, com as lacunas das decisões 13.1 e 13.2 marcadas para você preencher; você leva ao advogado.
 2. **Páginas:** rotas públicas `/termos` e `/privacidade` no site (sem login), com a data da versão.

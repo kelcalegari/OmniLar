@@ -235,6 +235,15 @@ class AuthCubit extends Cubit<AuthState> {
     );
   }
 
+  /// Aceita a versão atual dos Termos e da Política. Lança a falha para a tela mostrar.
+  Future<void> acceptTerms(String version) => _repository.acceptTerms(version);
+
+  /// Permite ou retira a leitura por IA. Lança a falha para a tela mostrar.
+  Future<void> setAiConsent(bool given) => _repository.setAiConsent(given);
+
+  /// Os dados da própria conta em JSON. Lança a falha para a tela mostrar.
+  Future<String> exportMyData() => _repository.exportMyData();
+
   /// O que a exclusão da conta faria. Lança a falha para a tela mostrar.
   Future<AccountDeletionPreview> getAccountDeletionPreview() => _repository.getAccountDeletionPreview();
 

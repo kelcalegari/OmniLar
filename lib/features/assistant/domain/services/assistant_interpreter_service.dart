@@ -20,6 +20,7 @@ import '../../../calendar/domain/repositories/calendar_repository.dart';
 import '../../../calendar/domain/entities/calendar_event.dart';
 import '../../../calendar/domain/entities/task_item.dart';
 import '../entities/assistant_message.dart';
+import '../../../../core/ai/ai_consent.dart';
 
 class NaturalLanguageInterpretation {
   final String textResponse;
@@ -100,7 +101,8 @@ class AssistantInterpreterService {
     final client = supabaseClient;
     final isDemo = authRepository?.isDemoMode ?? false;
 
-    if (client != null && !isDemo) {
+    // Sem a permissão da IA, vale só o entendimento local
+    if (client != null && !isDemo && await AiConsent.request()) {
       final userApiKey = await aiConfigService?.getUserApiKey();
       final userModel = await aiConfigService?.getSelectedModel();
 

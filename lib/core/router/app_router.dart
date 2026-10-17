@@ -31,6 +31,9 @@ import '../../features/projects/presentation/pages/projects_hub_page.dart';
 import '../../features/routine/presentation/pages/tasks_and_shopping_page.dart';
 import '../../features/reconciliation/presentation/pages/import_page.dart';
 import '../../features/notifications/presentation/pages/notifications_page.dart';
+import '../../features/legal/legal_page.dart';
+import '../../features/legal/legal_texts.dart';
+import '../../features/legal/terms_acceptance_page.dart';
 
 class GoRouterRefreshStream extends ChangeNotifier {
   late final StreamSubscription<dynamic> _subscription;
@@ -49,6 +52,9 @@ class GoRouterRefreshStream extends ChangeNotifier {
 
 class AppRouter {
   static final GlobalKey<NavigatorState> _rootNavigatorKey = GlobalKey<NavigatorState>(debugLabel: 'root');
+
+  /// Navegador de cima, para diálogos pedidos fora de uma tela (consentimento da IA).
+  static GlobalKey<NavigatorState> get rootNavigatorKey => _rootNavigatorKey;
 
   static final GoRouter router = GoRouter(
     navigatorKey: _rootNavigatorKey,
@@ -69,6 +75,11 @@ class AppRouter {
       final isOnboarding = location == '/onboarding/house';
       final isAccountPending = location == '/conta/em-analise';
       final isAdmin = location == '/admin';
+      final isLegalPage = location == '/termos' || location == '/privacidade';
+      final isTermsGate = location == '/termos/aceite';
+
+      // Termos e Política: páginas públicas, abertas com ou sem login
+      if (isLegalPage) return null;
 
       // 0. Enquanto estiver na rota de Splash, deixa a SplashPage coordenar o warm-up suave
       if (isSplash) {
@@ -110,6 +121,15 @@ class AppRouter {
         return isAccountPending ? null : '/conta/em-analise';
       }
       if (isAccountPending) {
+        return authState.hasHouse ? '/casa' : '/onboarding/house';
+      }
+
+      // 2.15. Falta aceitar a versão atual dos Termos e da Política (migration 0085)
+      final needsTerms = authState.user?.needsTermsAcceptance(kLegalVersion) ?? false;
+      if (needsTerms && !sl<AuthRepository>().isDemoMode) {
+        return isTermsGate ? null : '/termos/aceite';
+      }
+      if (isTermsGate) {
         return authState.hasHouse ? '/casa' : '/onboarding/house';
       }
 
@@ -168,6 +188,24 @@ class AppRouter {
         // O e-mail vai por `extra`, não pela URL
         builder: (context, state) =>
             ResetPasswordPage(initialEmail: state.extra as String?),
+      ),
+      GoRoute(
+        path: '/termos',
+        name: 'termos',
+        parentNavigatorKey: _rootNavigatorKey,
+        builder: (context, state) => const LegalPage(document: termsOfUse),
+      ),
+      GoRoute(
+        path: '/privacidade',
+        name: 'privacidade',
+        parentNavigatorKey: _rootNavigatorKey,
+        builder: (context, state) => const LegalPage(document: privacyPolicy),
+      ),
+      GoRoute(
+        path: '/termos/aceite',
+        name: 'termos-aceite',
+        parentNavigatorKey: _rootNavigatorKey,
+        builder: (context, state) => const TermsAcceptancePage(),
       ),
       GoRoute(
         path: '/conta/em-analise',

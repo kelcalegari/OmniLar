@@ -95,6 +95,15 @@ class AuthRepositoryImpl implements AuthRepository {
   }
 
   @override
+  Future<void> acceptTerms(String version) => _dataSource.acceptTerms(version);
+
+  @override
+  Future<void> setAiConsent(bool given) => _dataSource.setAiConsent(given);
+
+  @override
+  Future<String> exportMyData() => _dataSource.exportMyData();
+
+  @override
   Future<AccountDeletionPreview> getAccountDeletionPreview() => _dataSource.getAccountDeletionPreview();
 
   @override

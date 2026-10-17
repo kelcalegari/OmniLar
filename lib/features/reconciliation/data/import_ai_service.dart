@@ -9,6 +9,7 @@ import '../../../core/services/ai_config_service.dart';
 import '../../finance/domain/entities/category.dart';
 import '../domain/entities/imported_statement_line.dart';
 import '../domain/services/statement_parser.dart';
+import '../../../core/ai/ai_consent.dart';
 
 /// Fatura ou extrato lido por IA a partir de um PDF ou de uma foto.
 class AiStatementReading {
@@ -128,6 +129,11 @@ class ImportAiService {
     if (client == null || isDemoMode()) {
       throw const ServerFailure(
         'A leitura por IA não funciona no modo demo. Entre com sua conta ou use um arquivo OFX ou CSV.',
+      );
+    }
+    if (!await AiConsent.request()) {
+      throw const ServerFailure(
+        'Para ler PDF ou foto, permita a leitura por IA. Sem ela, use um arquivo OFX ou CSV.',
       );
     }
 

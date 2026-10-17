@@ -1,5 +1,6 @@
 import '../../../../core/domain/value_objects/cycle_schedule.dart';
 import 'dart:async';
+import 'dart:convert';
 import 'dart:math';
 import 'package:flutter/foundation.dart';
 import 'package:google_sign_in/google_sign_in.dart';
@@ -13,6 +14,7 @@ import '../../domain/entities/house_member_info.dart';
 import 'auth_datasource.dart';
 import 'auth_error_messages.dart';
 import '../../../../core/offline/offline_snapshot.dart';
+import '../../../legal/legal_texts.dart';
 
 class SupabaseAuthDataSource implements AuthDataSource {
   final SupabaseClient _client;
@@ -77,6 +79,18 @@ class SupabaseAuthDataSource implements AuthDataSource {
                 user.email ??
                 'Usuário');
 
+      var termsVersion = profileRow?['terms_version'] as String?;
+      // Cadastro feito com a caixa de aceite marcada: grava o aceite na primeira entrada
+      if (profileRow != null &&
+          termsVersion != kLegalVersion &&
+          user.userMetadata?['terms_version'] == kLegalVersion) {
+        try {
+          await _client.rpc('accept_terms', params: {'p_version': kLegalVersion});
+          termsVersion = kLegalVersion;
+        } catch (_) {}
+      }
+      final aiConsentRaw = profileRow?['ai_consent_at'] as String?;
+
       _currentUser = UserProfile(
         id: user.id,
         email: user.email ?? '',
@@ -84,6 +98,9 @@ class SupabaseAuthDataSource implements AuthDataSource {
         avatarUrl: profileRow?['avatar_url'] as String?,
         phone: profileRow?['phone'] as String?,
         pixKey: profileRow?['pix_key'] as String?,
+        termsVersion: termsVersion,
+        aiConsentAt: aiConsentRaw == null ? null : DateTime.tryParse(aiConsentRaw)?.toLocal(),
+        legalStatusKnown: profileRow != null,
       );
       _authStateController.add(_currentUser);
 
@@ -171,7 +188,8 @@ class SupabaseAuthDataSource implements AuthDataSource {
       final res = await _client.auth.signUp(
         email: email.trim(),
         password: password,
-        data: {'full_name': fullName.trim()},
+        // A tela só cadastra com a caixa dos Termos marcada (gravada na primeira entrada)
+        data: {'full_name': fullName.trim(), 'terms_version': kLegalVersion},
       );
 
       final user = res.user;
@@ -491,6 +509,49 @@ class SupabaseAuthDataSource implements AuthDataSource {
             createdBy: 'member_carlos',
           );
     _houseStateController.add(_currentHouse);
+  }
+
+  @override
+  Future<void> acceptTerms(String version) async {
+    if (_isDemoMode) return;
+    try {
+      await _client.rpc('accept_terms', params: {'p_version': version});
+    } catch (e) {
+      throw ServerFailure('Não foi possível registrar o aceite: $e');
+    }
+    final user = _currentUser;
+    if (user != null) {
+      _currentUser = user.copyWith(termsVersion: version);
+      _authStateController.add(_currentUser);
+    }
+  }
+
+  @override
+  Future<void> setAiConsent(bool given) async {
+    if (_isDemoMode) return;
+    try {
+      await _client.rpc('set_ai_consent', params: {'p_given': given});
+    } catch (e) {
+      throw ServerFailure('Não foi possível salvar o consentimento: $e');
+    }
+    final user = _currentUser;
+    if (user != null) {
+      _currentUser = given ? user.copyWith(aiConsentAt: DateTime.now()) : user.copyWith(clearAiConsent: true);
+      _authStateController.add(_currentUser);
+    }
+  }
+
+  @override
+  Future<String> exportMyData() async {
+    if (_isDemoMode) {
+      throw const AuthFailure('No modo demo não há dados da conta para baixar.');
+    }
+    try {
+      final data = await _client.rpc('export_my_data');
+      return const JsonEncoder.withIndent('  ').convert(data);
+    } catch (e) {
+      throw ServerFailure('Não foi possível gerar o arquivo dos seus dados: $e');
+    }
   }
 
   @override

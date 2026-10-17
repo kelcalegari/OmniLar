@@ -88,6 +88,8 @@ import '../../features/finance/data/offline/house_expense_offline_codec.dart';
 import '../../features/shopping/data/offline/shopping_item_offline_codec.dart';
 import '../../features/calendar/data/offline/calendar_offline_codec.dart';
 import '../offline/offline_snapshot.dart';
+import '../ai/ai_consent.dart';
+import '../router/app_router.dart';
 
 final sl = GetIt.instance;
 
@@ -281,6 +283,18 @@ Future<void> initServiceLocator() async {
   });
   sl.registerLazySingleton<CalendarRepository>(() => CalendarRepositoryImpl(sl(), sl<OfflineSyncService>()));
   sl.registerLazySingleton<CalendarCubit>(() => CalendarCubit(sl(), sl<AuthRepository>()));
+
+  // Consentimento da IA: guardado no perfil; perguntado sobre a tela em uso
+  AiConsent.isGiven = () {
+    final auth = sl<AuthRepository>();
+    final user = auth.currentUser;
+    return auth.isDemoMode || user == null || !user.legalStatusKnown || user.hasAiConsent;
+  };
+  AiConsent.ask = () async {
+    final context = AppRouter.rootNavigatorKey.currentContext;
+    return context != null && context.mounted && await AiConsent.showDialogIn(context);
+  };
+  AiConsent.record = () => sl<AuthRepository>().setAiConsent(true);
 
   // Cópia local para abrir sem internet: por conta logada no Supabase
   OfflineSnapshot.instance = OfflineSnapshot(

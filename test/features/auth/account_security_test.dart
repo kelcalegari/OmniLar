@@ -74,7 +74,7 @@ void main() {
   });
 
   testWidgets('painel mostra e-mail, forma de entrar e a troca pendente', (tester) async {
-    tester.view.physicalSize = const Size(400, 900);
+    tester.view.physicalSize = const Size(400, 1400);
     tester.view.devicePixelRatio = 1.0;
     addTearDown(tester.view.resetPhysicalSize);
 

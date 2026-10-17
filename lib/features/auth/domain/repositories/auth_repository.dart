@@ -71,6 +71,15 @@ abstract class AuthRepository {
   /// Exclui a conta de quem está logado (confere a senha de novo).
   Future<void> deleteAccount({required String password});
 
+  /// Registra o aceite da versão [version] dos Termos e da Política.
+  Future<void> acceptTerms(String version);
+
+  /// Permite ([given]) ou retira o consentimento para a leitura por IA.
+  Future<void> setAiConsent(bool given);
+
+  /// Os dados da própria conta, em JSON (LGPD: acesso e portabilidade).
+  Future<String> exportMyData();
+
   Future<void> signOut();
   Future<UserProfile> updateProfile({
     required String fullName,

@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:async';
 import '../../domain/entities/account_deletion_preview.dart';
 import '../../domain/entities/user_profile.dart';
@@ -250,6 +251,28 @@ class MockAuthDataSource implements AuthDataSource {
 
   @override
   List<String> get signInProviders => const ['email'];
+
+  @override
+  Future<void> acceptTerms(String version) async {
+    final user = _currentUser;
+    if (user == null) return;
+    _currentUser = user.copyWith(termsVersion: version);
+    _authStateController.add(_currentUser);
+  }
+
+  @override
+  Future<void> setAiConsent(bool given) async {
+    final user = _currentUser;
+    if (user == null) return;
+    _currentUser = given ? user.copyWith(aiConsentAt: DateTime.now()) : user.copyWith(clearAiConsent: true);
+    _authStateController.add(_currentUser);
+  }
+
+  @override
+  Future<String> exportMyData() async => jsonEncode({
+        'aviso': 'Modo demonstração: dados de exemplo.',
+        'perfil': {'nome': _currentUser?.fullName, 'email': _currentUser?.email},
+      });
 
   @override
   Future<AccountDeletionPreview> getAccountDeletionPreview() async => const AccountDeletionPreview(houses: [

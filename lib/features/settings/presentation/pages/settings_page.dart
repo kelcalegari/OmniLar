@@ -36,6 +36,7 @@ import '../widgets/ai_key_config_sheet.dart';
 import '../widgets/account_security_panel.dart';
 import '../../../../core/widgets/save_feedback.dart';
 import '../../../../core/widgets/search_shortcut.dart';
+import '../widgets/ai_consent_tile.dart';
 
 part 'settings_groups.dart';
 

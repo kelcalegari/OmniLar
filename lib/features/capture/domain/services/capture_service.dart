@@ -7,6 +7,7 @@ import '../../../../core/services/ai_config_service.dart';
 import '../entities/capture_proposal.dart';
 import 'boleto_code.dart';
 import 'boleto_parser.dart';
+import '../../../../core/ai/ai_consent.dart';
 
 class CaptureService {
   final AiConfigService aiConfigService;
@@ -41,6 +42,10 @@ class CaptureService {
 
     final client = SupabaseConfig.client;
     if (client == null) throw NfceLookupError.of(NfceLookupReason.unavailable);
+    // Layout desconhecido da Sefaz vai para a IA: precisa da permissão
+    if (!await AiConsent.request()) {
+      throw NfceLookupError.fromServer('unavailable', 'Para consultar a nota, permita a leitura por IA.');
+    }
 
     final userApiKey = await aiConfigService.getUserApiKey();
     final userModel = await aiConfigService.getSelectedModel();
@@ -134,7 +139,7 @@ class CaptureService {
     final client = SupabaseConfig.client;
 
     try {
-      if (client != null) {
+      if (client != null && await AiConsent.request()) {
         final userApiKey = await aiConfigService.getUserApiKey();
         final userModel = await aiConfigService.getSelectedModel();
 
