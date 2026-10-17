@@ -18,6 +18,7 @@ import '../../../auth/domain/entities/house.dart';
 import '../../domain/services/global_clearing_engine.dart';
 import '../../domain/services/settlement_shortfall.dart';
 import 'settlement_datasource.dart';
+import '../../../../core/offline/offline_snapshot.dart';
 
 class SupabaseSettlementDataSource implements SettlementDataSource {
   final SupabaseClient client;
@@ -620,12 +621,16 @@ class SupabaseSettlementDataSource implements SettlementDataSource {
 
   @override
   Future<bool> isCycleSettled(FinancialCycle cycle) async {
-    final row = await client
-        .from('settlements')
-        .select('status')
-        .eq('house_id', _houseId)
-        .eq('cycle_start_date', cycle.startDate.toIso8601String().split('T')[0])
-        .maybeSingle();
+    final start = cycle.startDate.toIso8601String().split('T')[0];
+    final row = await OfflineSnapshot.instance.row(
+      'settled_${_houseId}_$start',
+      () async => await client
+          .from('settlements')
+          .select('status')
+          .eq('house_id', _houseId)
+          .eq('cycle_start_date', start)
+          .maybeSingle(),
+    );
     final status = row?['status'];
     return status == 'confirmed' || status == 'completed';
   }

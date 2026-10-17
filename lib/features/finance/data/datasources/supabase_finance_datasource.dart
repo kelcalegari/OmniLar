@@ -194,10 +194,10 @@ class SupabaseFinanceDataSource implements FinanceDataSource {
   @override
   Future<List<ExpenseCategory>> getCategories() async {
     try {
-      final rows = await client
-          .from('categories')
-          .select()
-          .eq('house_id', _houseId);
+      final rows = await OfflineSnapshot.instance.rows(
+        'categories_$_houseId',
+        () async => await client.from('categories').select().eq('house_id', _houseId),
+      );
 
       if (rows.isNotEmpty) {
         return rows.map((r) {
@@ -223,11 +223,14 @@ class SupabaseFinanceDataSource implements FinanceDataSource {
   @override
   Future<List<PaymentMethod>> getPaymentMethods() async {
     try {
-      final rows = await client
-          .from('payment_methods')
-          .select()
-          .eq('house_id', _houseId)
-          .neq('is_active', false);
+      final rows = await OfflineSnapshot.instance.rows(
+        'payment_methods_$_houseId',
+        () async => await client
+            .from('payment_methods')
+            .select()
+            .eq('house_id', _houseId)
+            .neq('is_active', false),
+      );
 
       if (rows.isNotEmpty) {
         return rows.map((r) {
@@ -294,25 +297,31 @@ class SupabaseFinanceDataSource implements FinanceDataSource {
 
       // Candidatas: vencem no ciclo, estão pendentes desde antes dele ou foram
       // lançadas ou baixadas nele. A regra de competência decide quais realmente entram.
-      final rows = await client
-          .from('house_expenses')
-          .select('*, house_expense_items(*), split_rules(*)')
-          .eq('house_id', _houseId)
-          .isFilter('project_id', null)
-          .isFilter('deleted_at', null)
-          .or(
-            'and(due_date.gte.$startDate,due_date.lte.$endDate),'
-            'and(status.eq.pending,due_date.lt.$startDate),'
-            'and(date.gte."$startInstant",date.lte."$endInstant"),'
-            'and(paid_at.gte."$startInstant",paid_at.lte."$endInstant")',
-          )
-          .order('due_date', ascending: false);
+      final rows = await OfflineSnapshot.instance.rows(
+        'expenses_${_houseId}_$startDate',
+        () async => await client
+            .from('house_expenses')
+            .select('*, house_expense_items(*), split_rules(*)')
+            .eq('house_id', _houseId)
+            .isFilter('project_id', null)
+            .isFilter('deleted_at', null)
+            .or(
+              'and(due_date.gte.$startDate,due_date.lte.$endDate),'
+              'and(status.eq.pending,due_date.lt.$startDate),'
+              'and(date.gte."$startInstant",date.lte."$endInstant"),'
+              'and(paid_at.gte."$startInstant",paid_at.lte."$endInstant")',
+            )
+            .order('due_date', ascending: false),
+      );
 
-      final cardRows = await client
-          .from('payment_methods')
-          .select('id')
-          .eq('house_id', _houseId)
-          .eq('type', 'card');
+      final cardRows = await OfflineSnapshot.instance.rows(
+        'card_ids_$_houseId',
+        () async => await client
+            .from('payment_methods')
+            .select('id')
+            .eq('house_id', _houseId)
+            .eq('type', 'card'),
+      );
       final cardIds = {for (final r in cardRows) r['id'] as String};
 
       return rows
@@ -370,16 +379,19 @@ class SupabaseFinanceDataSource implements FinanceDataSource {
     try {
       String dateOnly(DateTime d) => d.toIso8601String().split('T')[0];
       // Só o ciclo imediatamente anterior conta: os ciclos são mensais
-      final row = await client
-          .from('settlements')
-          .select('surplus_rolled_cents')
-          .eq('house_id', _houseId)
-          .neq('status', 'cancelled')
-          .lt('cycle_start_date', dateOnly(cycle.startDate))
-          .gte('cycle_start_date', dateOnly(cycle.startDate.subtract(const Duration(days: 62))))
-          .order('cycle_start_date', ascending: false)
-          .limit(1)
-          .maybeSingle();
+      final row = await OfflineSnapshot.instance.row(
+        'rolled_${_houseId}_${dateOnly(cycle.startDate)}',
+        () async => await client
+            .from('settlements')
+            .select('surplus_rolled_cents')
+            .eq('house_id', _houseId)
+            .neq('status', 'cancelled')
+            .lt('cycle_start_date', dateOnly(cycle.startDate))
+            .gte('cycle_start_date', dateOnly(cycle.startDate.subtract(const Duration(days: 62))))
+            .order('cycle_start_date', ascending: false)
+            .limit(1)
+            .maybeSingle(),
+      );
       rolledCents = (row?['surplus_rolled_cents'] as num?)?.toInt() ?? 0;
     } catch (_) {}
     return Money(rolledCents);
@@ -434,12 +446,15 @@ class SupabaseFinanceDataSource implements FinanceDataSource {
   Future<Money> getVaultReturnsForCycle(FinancialCycle cycle) async {
     try {
       String dateOnly(DateTime d) => d.toIso8601String().split('T')[0];
-      final rows = await client
-          .from('savings_transactions')
-          .select('amount_cents, type')
-          .eq('house_id', _houseId)
-          .gte('cycle_start_date', dateOnly(cycle.startDate))
-          .lte('cycle_start_date', dateOnly(cycle.endDate));
+      final rows = await OfflineSnapshot.instance.rows(
+        'vault_returns_${_houseId}_${dateOnly(cycle.startDate)}',
+        () async => await client
+            .from('savings_transactions')
+            .select('amount_cents, type')
+            .eq('house_id', _houseId)
+            .gte('cycle_start_date', dateOnly(cycle.startDate))
+            .lte('cycle_start_date', dateOnly(cycle.endDate)),
+      );
       // Depósito tirado do Caixa do ciclo desfaz parte do que as caixinhas devolveram
       return Money(rows.fold<int>(0, (acc, r) {
         final cents = (r['amount_cents'] as num).toInt();
@@ -453,22 +468,25 @@ class SupabaseFinanceDataSource implements FinanceDataSource {
   @override
   Future<List<Contribution>> getContributionsForCycle(FinancialCycle cycle) async {
     try {
-      List<Map<String, dynamic>> rows;
-      try {
-        rows = await client
-            .from('contributions')
-            .select('*, profile:profiles(full_name)')
-            .eq('house_id', _houseId)
-            .gte('cycle_start_date', cycle.startDate.toIso8601String().split('T')[0])
-            .lte('cycle_start_date', cycle.endDate.toIso8601String().split('T')[0]);
-      } catch (_) {
-        rows = await client
-            .from('contributions')
-            .select()
-            .eq('house_id', _houseId)
-            .gte('cycle_start_date', cycle.startDate.toIso8601String().split('T')[0])
-            .lte('cycle_start_date', cycle.endDate.toIso8601String().split('T')[0]);
-      }
+      final start = cycle.startDate.toIso8601String().split('T')[0];
+      final end = cycle.endDate.toIso8601String().split('T')[0];
+      final rows = await OfflineSnapshot.instance.rows('contributions_${_houseId}_$start', () async {
+        try {
+          return await client
+              .from('contributions')
+              .select('*, profile:profiles(full_name)')
+              .eq('house_id', _houseId)
+              .gte('cycle_start_date', start)
+              .lte('cycle_start_date', end);
+        } catch (_) {
+          return await client
+              .from('contributions')
+              .select()
+              .eq('house_id', _houseId)
+              .gte('cycle_start_date', start)
+              .lte('cycle_start_date', end);
+        }
+      });
 
       return rows.map((r) {
         final dateStr = (r['created_at'] ?? r['cycle_start_date']) as String?;
@@ -1020,12 +1038,15 @@ class SupabaseFinanceDataSource implements FinanceDataSource {
   @override
   Future<List<SavingsVault>> getSavingsVaults() async {
     try {
-      final rows = await client
-          .from('savings_vaults')
-          .select()
-          .eq('house_id', _houseId)
-          .isFilter('deleted_at', null)
-          .order('created_at', ascending: false);
+      final rows = await OfflineSnapshot.instance.rows(
+        'vaults_$_houseId',
+        () async => await client
+            .from('savings_vaults')
+            .select()
+            .eq('house_id', _houseId)
+            .isFilter('deleted_at', null)
+            .order('created_at', ascending: false),
+      );
 
       return rows.map((r) {
         return SavingsVault(
@@ -1202,11 +1223,10 @@ class SupabaseFinanceDataSource implements FinanceDataSource {
   @override
   Future<String> getHouseSplitModel() async {
     try {
-      final row = await client
-          .from('houses')
-          .select('default_split_model')
-          .eq('id', _houseId)
-          .maybeSingle();
+      final row = await OfflineSnapshot.instance.row(
+        'split_model_$_houseId',
+        () async => await client.from('houses').select('default_split_model').eq('id', _houseId).maybeSingle(),
+      );
       return row?['default_split_model'] as String? ?? 'percentage';
     } catch (_) {
       // Coluna opcional ausente no schema remoto: assume o modelo percentual

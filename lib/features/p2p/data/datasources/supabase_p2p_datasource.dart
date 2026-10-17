@@ -6,6 +6,7 @@ import '../../domain/entities/p2p_loan.dart';
 import '../../domain/entities/p2p_installment.dart';
 import '../../domain/entities/p2p_payment_record.dart';
 import 'p2p_datasource.dart';
+import '../../../../core/offline/offline_snapshot.dart';
 
 class SupabaseP2PDataSource implements P2PDataSource {
   final SupabaseClient client;
@@ -21,13 +22,16 @@ class SupabaseP2PDataSource implements P2PDataSource {
   @override
   Future<List<P2PLoan>> getLoans() async {
     try {
-      final rows = await client
-          .from('p2p_loans')
-          .select('*, p2p_installments(*)')
-          .eq('house_id', _houseId)
-          // Recusado pelo devedor (0082): sai da lista
-          .neq('status', 'cancelled')
-          .order('created_at', ascending: false);
+      final rows = await OfflineSnapshot.instance.rows(
+        'loans_$_houseId',
+        () async => await client
+            .from('p2p_loans')
+            .select('*, p2p_installments(*)')
+            .eq('house_id', _houseId)
+            // Recusado pelo devedor (0082): sai da lista
+            .neq('status', 'cancelled')
+            .order('created_at', ascending: false),
+      );
 
       return rows.map((r) {
         final rawInstallments = (r['p2p_installments'] as List<dynamic>? ?? []);
