@@ -42,6 +42,7 @@ import '../../features/notifications/data/push/push_service.dart';
 import '../../features/notifications/presentation/cubit/notifications_cubit.dart';
 
 import '../../features/p2p/data/datasources/p2p_datasource.dart';
+import '../domain/value_objects/money.dart';
 import '../../features/p2p/data/datasources/mock_p2p_datasource.dart';
 import '../../features/p2p/data/datasources/supabase_p2p_datasource.dart';
 import '../../features/p2p/data/repositories/p2p_repository_impl.dart';
@@ -155,7 +156,14 @@ Future<void> initServiceLocator() async {
   // Finance Feature
   sl.registerLazySingleton<FinanceDataSource>(() {
     final client = SupabaseConfig.client;
-    final mock = MockFinanceDataSource();
+    final mock = MockFinanceDataSource()
+      ..houseLoansFundedIn = (cycle) async {
+        // Só roda no modo demonstração, em que o P2P também é o de demonstração
+        final loans = await sl<P2PDataSource>().getLoans();
+        return Money(loans
+            .where((loan) => loan.fundedFromCycle(cycle))
+            .fold<int>(0, (acc, loan) => acc + loan.totalAmount.cents));
+      };
     if (client != null) {
       final remote = SupabaseFinanceDataSource(
         client: client,
@@ -181,8 +189,15 @@ Future<void> initServiceLocator() async {
   sl.registerLazySingleton<P2PDataSource>(() {
     final client = SupabaseConfig.client;
     final mock = MockP2PDataSource()
-      ..depositToVault = (vaultId, memberId, amount, description) =>
+      ..depositToVault = ((vaultId, memberId, amount, description) =>
           sl<FinanceDataSource>().depositToVault(
+            vaultId: vaultId,
+            memberId: memberId,
+            amount: amount,
+            description: description,
+          ))
+      ..withdrawFromVault = (vaultId, memberId, amount, description) =>
+          sl<FinanceDataSource>().withdrawFromVault(
             vaultId: vaultId,
             memberId: memberId,
             amount: amount,

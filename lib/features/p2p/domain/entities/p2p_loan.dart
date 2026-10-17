@@ -21,6 +21,15 @@ enum LoanRepaymentMode {
   openEnded,
 }
 
+/// De onde saiu o dinheiro de um empréstimo do Caixa da Casa (0086).
+enum HouseLoanFunding {
+  /// Do Caixa do ciclo em andamento: sai da sobra do ciclo de [P2PLoan.fundedOn].
+  cycle,
+
+  /// De uma Caixinha ([P2PLoan.repayToVaultId]), para onde os pagamentos voltam.
+  vault,
+}
+
 class P2PLoan extends Equatable {
   final String id;
   final String title;
@@ -64,7 +73,23 @@ class P2PLoan extends Equatable {
     this.settleInCycle = true,
     this.repayToVaultId,
     this.awaitingAcceptance = false,
+    this.houseFunding,
+    this.fundedOn,
   });
+
+  /// Empréstimo do Caixa da Casa: de onde o dinheiro saiu (null nos acordos
+  /// antigos e nos criados pelo fechamento, que não tiram dinheiro do Caixa).
+  final HouseLoanFunding? houseFunding;
+
+  /// Dia em que o dinheiro saiu do Caixa ou da Caixinha.
+  final DateTime? fundedOn;
+
+  /// Saiu do Caixa do ciclo [cycle] (e diminui a sobra dele).
+  bool fundedFromCycle(FinancialCycle cycle) =>
+      isHouseLender &&
+      houseFunding == HouseLoanFunding.cycle &&
+      fundedOn != null &&
+      cycle.contains(fundedOn!);
 
   /// Lançado por outra pessoa e ainda não aceito pelo devedor (migration 0082):
   /// fica fora do Fechamento do Ciclo até o aceite.
@@ -149,6 +174,8 @@ class P2PLoan extends Equatable {
     bool? settleInCycle,
     String? repayToVaultId,
     bool? awaitingAcceptance,
+    HouseLoanFunding? houseFunding,
+    DateTime? fundedOn,
   }) {
     return P2PLoan(
       id: id,
@@ -167,6 +194,8 @@ class P2PLoan extends Equatable {
       settleInCycle: settleInCycle ?? this.settleInCycle,
       repayToVaultId: repayToVaultId ?? this.repayToVaultId,
       awaitingAcceptance: awaitingAcceptance ?? this.awaitingAcceptance,
+      houseFunding: houseFunding ?? this.houseFunding,
+      fundedOn: fundedOn ?? this.fundedOn,
     );
   }
 
@@ -188,5 +217,7 @@ class P2PLoan extends Equatable {
         settleInCycle,
         repayToVaultId,
         awaitingAcceptance,
+        houseFunding,
+        fundedOn,
       ];
 }

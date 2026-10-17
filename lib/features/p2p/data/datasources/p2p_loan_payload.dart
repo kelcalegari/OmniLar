@@ -24,6 +24,11 @@ Map<String, dynamic> p2pLoanPayload(P2PLoan loan, {required String houseId}) {
     'house_id': houseId,
     if (!loan.isHouseLender) 'lender_id': loan.lenderMemberId,
     'lender_is_house': loan.isHouseLender,
+    // Caixinha passa por create_house_loan, que faz o saque junto
+    if (loan.isHouseLender && loan.houseFunding == HouseLoanFunding.cycle && loan.fundedOn != null) ...{
+      'house_funding': 'cycle',
+      'funded_on': loan.fundedOn!.toIso8601String().split('T')[0],
+    },
     'repayment_mode': loan.isOpenEnded ? 'open_ended' : 'installments',
     'settle_in_cycle': loan.settleInCycle,
     'borrower_id': loan.borrowerMemberId,

@@ -48,6 +48,53 @@ class _CreateLoanPageState extends State<CreateLoanPage> {
 
   bool get _isOpenEnded => _repaymentMode == LoanRepaymentMode.openEnded;
 
+  // Empréstimo do Caixa da Casa: de onde sai o dinheiro (0086)
+  HouseLoanFunding _houseFunding = HouseLoanFunding.cycle;
+  String? _fundingVaultId;
+
+  bool get _fromHouse => _lenderId == P2PLoan.houseLenderId;
+
+  /// Só administrador empresta dinheiro da Casa.
+  bool _canLendFromHouse(List<HouseMember> members) {
+    final auth = sl<AuthRepository>();
+    final me = auth.isDemoMode ? 'member_carlos' : auth.currentUser?.id;
+    final role = members.where((m) => m.id == me).firstOrNull?.role;
+    return role == 'owner' || role == 'admin';
+  }
+
+  /// Quanto o Caixa do ciclo ou a Caixinha escolhida tem para emprestar.
+  Money? _fundingAvailable(FinanceState state) {
+    if (_houseFunding == HouseLoanFunding.cycle) return state.summary?.folego;
+    return state.savingsVaults.where((v) => v.id == _fundingVaultId).firstOrNull?.currentBalance;
+  }
+
+  /// Confere a origem do dinheiro antes de gravar. Mensagem de erro ou null.
+  String? _fundingError() {
+    if (!_fromHouse) return null;
+    final state = context.read<FinanceCubit>().state;
+    if (_houseFunding == HouseLoanFunding.vault && _fundingVaultId == null) {
+      return 'Escolha de qual caixinha sai o dinheiro.';
+    }
+    final available = _fundingAvailable(state);
+    if (available != null && available.cents < _cents) {
+      return _houseFunding == HouseLoanFunding.cycle
+          ? 'O Caixa do ciclo tem só ${available.format()} livres. Use uma caixinha ou um valor menor.'
+          : 'A caixinha tem só ${available.format()}.';
+    }
+    return null;
+  }
+
+  /// Marca de onde o dinheiro do Caixa saiu (e para onde os pagamentos voltam).
+  P2PLoan _withFunding(P2PLoan loan) {
+    if (!_fromHouse) return loan;
+    final now = DateTime.now();
+    return loan.copyWith(
+      houseFunding: _houseFunding,
+      fundedOn: DateTime(now.year, now.month, now.day),
+      repayToVaultId: _houseFunding == HouseLoanFunding.vault ? _fundingVaultId : null,
+    );
+  }
+
   @override
   void initState() {
     super.initState();
@@ -88,6 +135,7 @@ class _CreateLoanPageState extends State<CreateLoanPage> {
 
   void _swapParties() {
     if (_lenderId.isEmpty && _borrowerId.isEmpty) return;
+    if (_fromHouse) return; // O Caixa não toma empréstimo
     setState(() {
       final temp = _lenderId;
       _lenderId = _borrowerId;
@@ -261,6 +309,14 @@ class _CreateLoanPageState extends State<CreateLoanPage> {
       return;
     }
 
+    final fundingError = _fundingError();
+    if (fundingError != null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(fundingError), backgroundColor: AppColors.debtRed),
+      );
+      return;
+    }
+
     if (_isOpenEnded) {
       _submitOpenEnded();
       return;
@@ -320,7 +376,7 @@ class _CreateLoanPageState extends State<CreateLoanPage> {
       settleInCycle: _settleInCycle,
     );
 
-    _saveLoan(loan, 'Empréstimo registrado com sucesso! 🎉');
+    _saveLoan(_withFunding(loan), 'Empréstimo registrado com sucesso! 🎉');
   }
 
   /// Aguarda a gravação e só então fecha a tela e confirma ao usuário.
@@ -384,7 +440,78 @@ class _CreateLoanPageState extends State<CreateLoanPage> {
       repaymentMode: LoanRepaymentMode.openEnded,
     );
 
-    _saveLoan(loan, 'Empréstimo sem prazo registrado! O devedor pode abater quando puder.');
+    _saveLoan(_withFunding(loan), 'Empréstimo sem prazo registrado! O devedor pode abater quando puder.');
+  }
+
+  /// De onde sai o dinheiro do Caixa da Casa: do ciclo em andamento ou de uma caixinha.
+  Widget _buildHouseFunding(ThemeData theme) {
+    return BlocBuilder<FinanceCubit, FinanceState>(
+      builder: (context, state) {
+        final vaults = state.savingsVaults;
+        final available = _fundingAvailable(state);
+        final short = available != null && _cents > 0 && available.cents < _cents;
+        return Column(
+          key: const Key('loan_house_funding'),
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('De onde sai o dinheiro?', style: theme.textTheme.titleSmall),
+            const SizedBox(height: 8),
+            SizedBox(
+              width: double.infinity,
+              child: SegmentedButton<HouseLoanFunding>(
+                showSelectedIcon: false,
+                segments: const [
+                  ButtonSegment(
+                    value: HouseLoanFunding.cycle,
+                    icon: Icon(Icons.account_balance_wallet_outlined),
+                    label: Text('Caixa do ciclo'),
+                  ),
+                  ButtonSegment(
+                    value: HouseLoanFunding.vault,
+                    icon: Icon(Icons.savings_outlined),
+                    label: Text('Caixinha'),
+                  ),
+                ],
+                selected: {_houseFunding},
+                onSelectionChanged: (selection) => setState(() {
+                  _houseFunding = selection.first;
+                  if (_houseFunding == HouseLoanFunding.vault && _fundingVaultId == null && vaults.isNotEmpty) {
+                    _fundingVaultId = vaults.first.id;
+                  }
+                }),
+              ),
+            ),
+            if (_houseFunding == HouseLoanFunding.vault) ...[
+              const SizedBox(height: 12),
+              if (vaults.isEmpty)
+                const Text('A casa ainda não tem caixinha.', style: TextStyle(fontSize: 12, color: AppColors.debtRed))
+              else
+                DropdownButtonFormField<String>(
+                  key: const Key('loan_funding_vault'),
+                  initialValue: vaults.any((v) => v.id == _fundingVaultId) ? _fundingVaultId : null,
+                  decoration: const InputDecoration(labelText: 'Caixinha', border: OutlineInputBorder()),
+                  items: [
+                    for (final vault in vaults)
+                      DropdownMenuItem(
+                        value: vault.id,
+                        child: Text('${vault.name} • ${vault.currentBalance.format()}'),
+                      ),
+                  ],
+                  onChanged: (id) => setState(() => _fundingVaultId = id),
+                ),
+            ],
+            const SizedBox(height: 8),
+            Text(
+              _houseFunding == HouseLoanFunding.cycle
+                  ? 'Sai da sobra deste ciclo${available != null ? ' (livre agora: ${available.format()})' : ''}. '
+                      'O que for pago volta ao Caixa nos fechamentos.'
+                  : 'Sai da caixinha agora, e cada pagamento volta para ela.',
+              style: TextStyle(fontSize: 12, color: short ? AppColors.debtRed : Colors.grey.shade600),
+            ),
+          ],
+        );
+      },
+    );
   }
 
   Widget _buildRepaymentModeSelector(ThemeData theme) {
@@ -455,7 +582,8 @@ class _CreateLoanPageState extends State<CreateLoanPage> {
         ),
         const SizedBox(height: 16),
 
-        // Abatimentos anteriores ao Omni Lar
+        // Abatimentos anteriores ao Omni Lar (não há no dinheiro que sai agora do Caixa)
+        if (!_fromHouse)
         Material(
           color: _openEndedHasPriorPayments
               ? AppColors.accent.withValues(alpha: 0.08)
@@ -656,8 +784,11 @@ class _CreateLoanPageState extends State<CreateLoanPage> {
                           HouseMember(id: 'member_marina', name: 'Marina'),
                         ]);
 
-              final lenderName = displayMembers.where((m) => m.id == _lenderId).firstOrNull?.name ??
-                  (isDemo && _lenderId == 'member_carlos' ? 'Carlos' : 'Selecione');
+              final lenderName = _fromHouse
+                  ? 'O Caixa da Casa'
+                  : displayMembers.where((m) => m.id == _lenderId).firstOrNull?.name ??
+                      (isDemo && _lenderId == 'member_carlos' ? 'Carlos' : 'Selecione');
+              final canLendFromHouse = _canLendFromHouse(members);
               final borrowerName = displayMembers.where((m) => m.id == _borrowerId).firstOrNull?.name ??
                   (isDemo && _borrowerId == 'member_marina' ? 'Marina' : 'Selecione');
               final hasSamePartyError = _lenderId.isNotEmpty && _lenderId == _borrowerId;
@@ -689,7 +820,32 @@ class _CreateLoanPageState extends State<CreateLoanPage> {
                     Wrap(
                       spacing: 8,
                       runSpacing: 8,
-                      children: displayMembers.map((m) {
+                      children: [
+                        if (canLendFromHouse)
+                          ChoiceChip(
+                            key: const Key('loan_lender_house'),
+                            selected: _fromHouse,
+                            avatar: const Icon(Icons.home_rounded, size: 18),
+                            label: const Text('Caixa da Casa'),
+                            selectedColor: AppColors.creditGreen.withValues(alpha: 0.2),
+                            side: BorderSide(
+                              color: _fromHouse ? AppColors.creditGreen : theme.dividerColor,
+                            ),
+                            onSelected: (val) {
+                              if (!val) return;
+                              setState(() {
+                                _lenderId = P2PLoan.houseLenderId;
+                                _isHistorical = false;
+                                _paidInstallmentsCount = 0;
+                                _openEndedHasPriorPayments = false;
+                                if (_borrowerId.isEmpty && displayMembers.isNotEmpty) {
+                                  _borrowerId = displayMembers.first.id;
+                                }
+                              });
+                              _regenerateInstallments();
+                            },
+                          ),
+                        ...displayMembers.map((m) {
                         final isSelected = _lenderId == m.id;
                         return ChoiceChip(
                           selected: isSelected,
@@ -710,7 +866,8 @@ class _CreateLoanPageState extends State<CreateLoanPage> {
                             }
                           },
                         );
-                      }).toList(),
+                      }),
+                      ],
                     ),
                     const SizedBox(height: 12),
 
@@ -723,7 +880,7 @@ class _CreateLoanPageState extends State<CreateLoanPage> {
                         ),
                         icon: const Icon(Icons.swap_vert_rounded, size: 18),
                         label: const Text('Inverter Credor e Devedor', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
-                        onPressed: _swapParties,
+                        onPressed: _fromHouse ? null : _swapParties,
                       ),
                     ),
                     const SizedBox(height: 4),
@@ -807,6 +964,11 @@ class _CreateLoanPageState extends State<CreateLoanPage> {
             },
           ),
           const SizedBox(height: 24),
+
+          if (_fromHouse) ...[
+            _buildHouseFunding(theme),
+            const SizedBox(height: 20),
+          ],
 
           // Modalidade: Parcelado x Sem prazo
           _buildRepaymentModeSelector(theme),
@@ -903,7 +1065,8 @@ class _CreateLoanPageState extends State<CreateLoanPage> {
           ),
           const SizedBox(height: 20),
 
-          // Switch: Empréstimo Iniciado no Passado (Opção 1)
+          // Switch: Empréstimo Iniciado no Passado (Opção 1). O Caixa empresta agora.
+          if (!_fromHouse)
           Material(
             color: _isHistorical
                 ? AppColors.accent.withValues(alpha: 0.08)

@@ -21,6 +21,9 @@ class FinancialCycleSummary extends Equatable {
   /// fôlego). Cobrem falta de caixa: não abatem o que cada morador deve aportar.
   final Money vaultReturns;
 
+  /// Empréstimos que o Caixa liberou neste ciclo (já descontados do fôlego).
+  final Money houseLoansFunded;
+
   const FinancialCycleSummary({
     required this.cycle,
     required this.totalContributions,
@@ -30,6 +33,7 @@ class FinancialCycleSummary extends Equatable {
     required this.memberContributions,
     required this.memberExpensesPaid,
     this.vaultReturns = const Money.zero(),
+    this.houseLoansFunded = const Money.zero(),
   });
 
   /// Alias para despesas pagas no ciclo
@@ -43,7 +47,8 @@ class FinancialCycleSummary extends Equatable {
   Money get openingBalance {
     final cents = folego.cents +
         totalExpensesPaid.cents +
-        committedFutureExpenses.cents -
+        committedFutureExpenses.cents +
+        houseLoansFunded.cents -
         totalContributions.cents;
     return Money(cents > 0 ? cents : 0);
   }
@@ -79,5 +84,6 @@ class FinancialCycleSummary extends Equatable {
         memberContributions,
         memberExpensesPaid,
         vaultReturns,
+        houseLoansFunded,
       ];
 }

@@ -113,6 +113,12 @@ class SupabaseP2PDataSource implements P2PDataSource {
           repaymentMode: repaymentMode,
           settleInCycle: (r['settle_in_cycle'] as bool?) ?? true,
           awaitingAcceptance: (r['awaiting_acceptance'] as bool?) ?? false,
+          houseFunding: switch (r['house_funding'] as String?) {
+            'cycle' => HouseLoanFunding.cycle,
+            'vault' => HouseLoanFunding.vault,
+            _ => null,
+          },
+          fundedOn: DateTime.tryParse(r['funded_on'] as String? ?? ''),
         );
       }).toList();
     } catch (e) {
@@ -124,10 +130,21 @@ class SupabaseP2PDataSource implements P2PDataSource {
   Future<void> createLoan(P2PLoan loan) async {
     try {
       // Empréstimo e parcelas entram juntos: ou tudo, ou nada
+      if (loan.isHouseLender && loan.houseFunding != null) {
+        // Do Caixa da Casa: o banco confere o ciclo e faz o saque da Caixinha
+        await client.rpc('create_house_loan', params: {
+          'p_loan': p2pLoanPayload(loan, houseId: _houseId),
+          'p_funding': loan.houseFunding!.name,
+          'p_vault_id': loan.houseFunding == HouseLoanFunding.vault ? loan.repayToVaultId : null,
+        });
+        return;
+      }
       await client.rpc('create_p2p_loan', params: {
         'p_loan': p2pLoanPayload(loan, houseId: _houseId),
       });
     } catch (e) {
+      // A mensagem do banco (saldo da caixinha, ciclo fechado) vai para a tela
+      if (e is PostgrestException) throw ServerFailure(e.message);
       throw ServerFailure('Erro ao criar empréstimo P2P: $e');
     }
   }

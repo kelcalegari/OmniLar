@@ -373,6 +373,27 @@ class SupabaseFinanceDataSource implements FinanceDataSource {
     return parts[0] + parts[1];
   }
 
+  /// Empréstimos que o Caixa do ciclo liberou (0086), fora os recusados.
+  Future<Money> _houseLoansFunded(FinancialCycle cycle) async {
+    String dateOnly(DateTime d) => d.toIso8601String().split('T')[0];
+    try {
+      final rows = await OfflineSnapshot.instance.rows(
+        'house_loans_funded_${_houseId}_${dateOnly(cycle.startDate)}',
+        () async => await client
+            .from('p2p_loans')
+            .select('total_amount_cents')
+            .eq('house_id', _houseId)
+            .eq('house_funding', 'cycle')
+            .neq('status', 'cancelled')
+            .gte('funded_on', dateOnly(cycle.startDate))
+            .lte('funded_on', dateOnly(cycle.endDate)),
+      );
+      return Money(rows.fold<int>(0, (acc, r) => acc + ((r['total_amount_cents'] as num?)?.toInt() ?? 0)));
+    } catch (_) {
+      return const Money.zero();
+    }
+  }
+
   /// Sobra que o fechamento do ciclo anterior deixou no Caixa.
   Future<Money> _rolledSurplus(FinancialCycle cycle) async {
     var rolledCents = 0;
@@ -518,7 +539,11 @@ class SupabaseFinanceDataSource implements FinanceDataSource {
           contributions != null ? Future.value(contributions) : getContributionsForCycle(cycle);
       final rolledFuture = _rolledSurplus(cycle);
       final vaultReturnsFuture = getVaultReturnsForCycle(cycle);
-      await Future.wait<void>([expensesFuture, contributionsFuture, rolledFuture, vaultReturnsFuture]);
+      final loansFundedFuture = _houseLoansFunded(cycle);
+      await Future.wait<void>(
+        [expensesFuture, contributionsFuture, rolledFuture, vaultReturnsFuture, loansFundedFuture],
+      );
+      final loansFunded = await loansFundedFuture;
       final cycleExpenses = await expensesFuture;
       final cycleContributions = await contributionsFuture;
       final vaultReturns = await vaultReturnsFuture;
@@ -547,9 +572,11 @@ class SupabaseFinanceDataSource implements FinanceDataSource {
 
       // A sobra deixada pelo ciclo anterior e as devoluções das caixinhas entram como folga do Caixa
       final openingBalance = await rolledFuture + vaultReturns;
+      // Empréstimos que o Caixa liberou no ciclo também saíram dele
       final folegoCents = openingBalance.cents +
           totalContributionsCents -
-          (totalExpensesPaidCents + committedFutureExpensesCents);
+          (totalExpensesPaidCents + committedFutureExpensesCents) -
+          loansFunded.cents;
 
       return FinancialCycleSummary(
         cycle: cycle,
@@ -560,6 +587,7 @@ class SupabaseFinanceDataSource implements FinanceDataSource {
         memberContributions: memberContributions,
         memberExpensesPaid: memberExpensesPaid,
         vaultReturns: vaultReturns,
+        houseLoansFunded: loansFunded,
       );
     } catch (e) {
       throw ServerFailure('Erro ao calcular resumo do ciclo: $e');

@@ -14,6 +14,7 @@ import '../../../auth/domain/repositories/auth_repository.dart';
 import '../../../finance/domain/entities/house_member.dart';
 import '../../../finance/domain/entities/savings_vault.dart';
 import '../../../finance/presentation/cubit/finance_cubit.dart';
+import '../../../reconciliation/domain/repositories/import_repository.dart';
 import '../cubit/p2p_cubit.dart';
 import 'loan_payment_dialog.dart';
 import 'partial_payment_dialog.dart';
@@ -614,10 +615,17 @@ class LoanDetailsSheet extends StatelessWidget {
               ),
             ],
           ),
-          if (loan.description != null && loan.description!.isNotEmpty) ...[
+          if (loan.houseFunding != null) ...[
             const SizedBox(height: 4),
-            Text(loan.description!, style: theme.textTheme.bodySmall),
+            Text(
+              loan.houseFunding == HouseLoanFunding.cycle
+                  ? 'Saiu do Caixa do ciclo em ${DateFormat('dd/MM/yyyy').format(loan.fundedOn!)}'
+                  : 'Saiu de uma caixinha em ${DateFormat('dd/MM/yyyy').format(loan.fundedOn!)}: os pagamentos voltam para ela',
+              key: const Key('loan_house_funding_info'),
+              style: theme.textTheme.bodySmall,
+            ),
           ],
+          _LoanPurchases(loan: loan),
           const SizedBox(height: 16),
 
           // Card de Resumo do Empréstimo
@@ -997,6 +1005,74 @@ class _AcceptanceBanner extends StatelessWidget {
           ],
         ],
       ),
+    );
+  }
+}
+
+/// O que compõe o empréstimo: as compras da fatura que viraram dívida, uma por
+/// linha, ou a descrição escrita quando ele não veio de uma importação.
+class _LoanPurchases extends StatefulWidget {
+  final P2PLoan loan;
+
+  const _LoanPurchases({required this.loan});
+
+  @override
+  State<_LoanPurchases> createState() => _LoanPurchasesState();
+}
+
+class _LoanPurchasesState extends State<_LoanPurchases> {
+  static final _day = DateFormat('dd/MM');
+  late final Future<List<LoanPurchase>> _purchases = _load();
+
+  Future<List<LoanPurchase>> _load() async {
+    if (!sl.isRegistered<ImportRepository>()) return const [];
+    try {
+      return await sl<ImportRepository>().purchasesOfLoan(widget.loan.id);
+    } catch (_) {
+      return const []; // Sem a lista, vale a descrição
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final style = Theme.of(context).textTheme.bodySmall;
+    final description = widget.loan.description;
+    return FutureBuilder<List<LoanPurchase>>(
+      future: _purchases,
+      builder: (context, snapshot) {
+        final purchases = snapshot.data ?? const <LoanPurchase>[];
+        if (purchases.isEmpty) {
+          if (description == null || description.isEmpty) return const SizedBox.shrink();
+          return Padding(
+            padding: const EdgeInsets.only(top: 4),
+            child: Text(description, style: style),
+          );
+        }
+        return Padding(
+          padding: const EdgeInsets.only(top: 8),
+          child: Column(
+            key: const Key('loan_purchases'),
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('Compras', style: style?.copyWith(fontWeight: FontWeight.bold)),
+              for (final purchase in purchases)
+                Padding(
+                  padding: const EdgeInsets.only(top: 2),
+                  child: Row(
+                    children: [
+                      Text(_day.format(purchase.date), style: style),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(purchase.title, style: style, overflow: TextOverflow.ellipsis),
+                      ),
+                      Text(purchase.amount.formatted, style: style),
+                    ],
+                  ),
+                ),
+            ],
+          ),
+        );
+      },
     );
   }
 }

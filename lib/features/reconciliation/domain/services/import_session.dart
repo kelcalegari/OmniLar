@@ -233,6 +233,16 @@ class ImportSession {
 
   static final _dayMonth = DateFormat('dd/MM');
 
+  /// Cartão sem dono é da Casa: o Caixa paga a fatura e quem comprou deve
+  /// para o Caixa, inclusive quem está importando.
+  bool get isHouseCard => source.isCreditCard && source.ownerMemberId == null;
+
+  /// Credor das linhas marcadas como empréstimo.
+  String get lenderId => isHouseCard ? P2PLoan.houseLenderId : payerMemberId;
+
+  /// [memberId] pode dever nesta fatura? Ninguém deve para si mesmo.
+  bool canOwe(String? memberId) => memberId != null && memberId != lenderId;
+
   /// Sessão nova, com o vencimento da fatura sugerido pelas datas das compras.
   factory ImportSession.start({
     required PaymentMethod source,
@@ -349,11 +359,15 @@ class ImportSession {
       }
       final debtor = rule.assignedMemberId;
       final loanStillValid = rule.destination != LineDestination.splitP2P ||
-          (debtor != null && debtor != payerMemberId && memberIds.contains(debtor));
+          (canOwe(debtor) && memberIds.contains(debtor));
       ruled.add(line.id);
       updated.add(
         line.copyWith(
-          destination: loanStillValid ? rule.destination : LineDestination.house,
+          // No cartão da Casa não existe gasto pessoal fora do Caixa
+          destination: !loanStillValid ||
+                  (isHouseCard && rule.destination == LineDestination.cardOwnerPersonal)
+              ? LineDestination.house
+              : rule.destination,
           categoryId: categoryIds.contains(rule.categoryId) ? rule.categoryId : null,
           assignedMemberId: loanStillValid ? debtor : null,
           clearAssignedMember: !loanStillValid || debtor == null,
@@ -554,6 +568,7 @@ class ImportSession {
 
   ImportSession withPayer(String memberId) {
     // Quem paga a fatura não pode dever para si mesmo
+    if (isHouseCard) return _copy(payerMemberId: memberId);
     final fixed = [
       for (final line in lines)
         line.assignedMemberId == memberId ? line.copyWith(clearAssignedMember: true) : line,
@@ -809,9 +824,13 @@ class ImportSession {
     }
     final withoutDebtor = newLines.where((line) =>
         line.destination == LineDestination.splitP2P &&
-        (line.assignedMemberId == null || line.assignedMemberId == payerMemberId));
+        !canOwe(line.assignedMemberId));
     if (withoutDebtor.isNotEmpty) {
       issues.add('Escolha quem deve em cada linha marcada como empréstimo.');
+    }
+    if (isHouseCard &&
+        newLines.any((line) => line.destination == LineDestination.cardOwnerPersonal)) {
+      issues.add('Cartão da Casa não tem gasto pessoal: diga quem deve para o Caixa.');
     }
     return issues;
   }
@@ -937,7 +956,7 @@ class ImportSession {
           );
         case LineDestination.splitP2P:
           final debtor = line.assignedMemberId;
-          if (debtor != null && debtor != payerMemberId) {
+          if (debtor != null && canOwe(debtor)) {
             loanLines.putIfAbsent(debtor, () => []).add(line);
           }
         case LineDestination.cardOwnerPersonal:
@@ -946,6 +965,10 @@ class ImportSession {
       }
     }
 
+    final todayDate = DateTime(today.year, today.month, today.day);
+    final invoiceDay = invoiceDueDate ?? todayDate;
+    final loanFundedOn =
+        closedCycles.contains(schedule.cycleFor(invoiceDay)) ? todayDate : invoiceDay;
     final dueLabel = invoiceDueDate != null ? ' (venc. ${_dayMonth.format(invoiceDueDate!)})' : '';
     final loans = <P2PLoan>[];
     for (final entry in loanLines.entries) {
@@ -968,12 +991,16 @@ class ImportSession {
               .map((line) => '${_titleOf(line)} ${effectiveAmountOf(line).formatted}')
               .join('; '),
           totalAmount: Money(entry.value.fold<int>(0, (acc, line) => acc + effectiveAmountOf(line).cents)),
-          lenderMemberId: payerMemberId,
+          lenderMemberId: lenderId,
           borrowerMemberId: entry.key,
           installmentsCount: 1,
           createdAt: today,
           // Quem deve paga junto com a fatura
           firstDueDate: invoiceDueDate ?? today.add(const Duration(days: 30)),
+          // Cartão da Casa: a fatura sai do Caixa do ciclo dela (ou do atual,
+          // como ajuste, se esse ciclo já fechou)
+          houseFunding: isHouseCard ? HouseLoanFunding.cycle : null,
+          fundedOn: isHouseCard ? loanFundedOn : null,
         ),
       );
     }

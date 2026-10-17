@@ -122,6 +122,15 @@ class MockP2PDataSource implements P2PDataSource {
             ),
           )
         : loan;
+    // Como create_house_loan: o dinheiro sai da Caixinha junto com o empréstimo
+    if (loan.isHouseLender && loan.houseFunding == HouseLoanFunding.vault && loan.repayToVaultId != null) {
+      await withdrawFromVault?.call(
+        loan.repayToVaultId!,
+        loan.borrowerMemberId,
+        loan.totalAmount,
+        'Empréstimo: ${loan.title}',
+      );
+    }
     _loans.insert(0, withInstallments);
   }
 
@@ -136,6 +145,10 @@ class MockP2PDataSource implements P2PDataSource {
   /// banco, o pagamento de um acordo com o Lar pode ir para uma Caixinha.
   Future<void> Function(String vaultId, String memberId, Money amount, String description)?
       depositToVault;
+
+  /// Saque da Caixinha que empresta (empréstimo do Caixa da Casa).
+  Future<void> Function(String vaultId, String memberId, Money amount, String description)?
+      withdrawFromVault;
 
   Future<void> _routeHouseLoanPayment(P2PLoan loan, Money amount, String? chosenVaultId) async {
     if (!loan.isHouseLender) return;
