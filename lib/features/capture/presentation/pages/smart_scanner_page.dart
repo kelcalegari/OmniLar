@@ -8,6 +8,7 @@ import '../../../finance/domain/services/pending_payment.dart';
 import '../../../finance/presentation/cubit/finance_state.dart';
 import '../../domain/services/boleto_code.dart';
 import '../../../finance/domain/services/expense_launch_defaults.dart';
+import 'dart:async' show TimeoutException;
 import 'dart:io' show Platform;
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
@@ -99,9 +100,19 @@ class _SmartScannerPageState extends State<SmartScannerPage> with WidgetsBinding
   bool _cameraOn = false;
   bool _isInBackground = false;
 
+  /// QR que a Sefaz não entregou e o aviso que pede a foto do cupom.
+  String? _failedQrUrl;
+  bool _askingForPhoto = false;
+
   /// A câmera só fica ligada enquanto o visor está na tela.
   bool get _wantsCamera =>
-      !_isClosing && !_isInBackground && mounted && _activeTabIndex == 0 && _currentProposal == null && !_isProcessing;
+      !_isClosing &&
+      !_isInBackground &&
+      mounted &&
+      _activeTabIndex == 0 &&
+      _currentProposal == null &&
+      !_isProcessing &&
+      !_askingForPhoto;
 
   bool get _isLiveCameraSupported {
     if (kIsWeb) return true;
@@ -218,15 +229,17 @@ class _SmartScannerPageState extends State<SmartScannerPage> with WidgetsBinding
     super.dispose();
   }
 
-  /// O visor lê só o código de barras do boleto; a nota fiscal vai pela foto,
-  /// que tem o QR e também a imagem para a IA quando a Sefaz não responde.
   void _onBarcodeDetected(BarcodeCapture capture) {
-    if (_currentProposal != null || _isProcessing) return;
+    if (_currentProposal != null || _isProcessing || _askingForPhoto) return;
 
     for (final barcode in capture.barcodes) {
       final raw = barcode.rawValue?.trim();
       if (raw != null && raw.isNotEmpty) {
-        if (const {44, 47, 48}.contains(BoletoCodeReader.digitsOf(raw).length)) {
+        if (raw.startsWith('http')) {
+          // QR que a Sefaz já não entregou: não consulta de novo a cada quadro
+          if (raw != _failedQrUrl) _lookupNfce(raw);
+          break;
+        } else if (const {44, 47, 48}.contains(BoletoCodeReader.digitsOf(raw).length)) {
           final proposal = _proposalFromCode(raw, quiet: true);
           if (proposal != null) {
             setState(() {
@@ -236,6 +249,74 @@ class _SmartScannerPageState extends State<SmartScannerPage> with WidgetsBinding
           }
         }
       }
+    }
+  }
+
+  /// QR da NFC-e lido ao vivo: busca loja, itens e total na Sefaz. Se a Sefaz
+  /// não entregar (SC pede verificação de pessoa), pede a foto do cupom para a IA.
+  Future<void> _lookupNfce(String url) async {
+    setState(() {
+      _isProcessing = true;
+      _processingMessage = 'Consultando a nota na Sefaz...';
+    });
+
+    CaptureProposal? proposal;
+    String? failure;
+    if (sl<AuthRepository>().isDemoMode) {
+      failure = 'No modo demonstração a nota não é consultada na Sefaz.';
+    } else {
+      try {
+        proposal = await sl<CaptureService>().lookupNfce(url);
+      } on NfceLookupError catch (e) {
+        failure = e.message;
+      } catch (_) {
+        failure = 'Não foi possível consultar a nota na Sefaz.';
+      }
+    }
+    if (!mounted) return;
+
+    if (proposal != null) {
+      setState(() {
+        _currentProposal = proposal;
+        _isProcessing = false;
+      });
+      return;
+    }
+
+    setState(() {
+      _isProcessing = false;
+      _failedQrUrl = url;
+      _askingForPhoto = true;
+    });
+    final choice = await showDialog<_QrFallback>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('A Sefaz não entregou a nota'),
+        content: Text('$failure\n\nTire uma foto do cupom: a IA lê a loja, os itens e os valores.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, _QrFallback.typeValue),
+            child: const Text('Digitar valor'),
+          ),
+          FilledButton.icon(
+            onPressed: () => Navigator.pop(dialogContext, _QrFallback.photo),
+            icon: const Icon(Icons.photo_camera_rounded, size: 18),
+            label: const Text('Tirar foto'),
+          ),
+        ],
+      ),
+    );
+    if (!mounted) return;
+    setState(() => _askingForPhoto = false);
+
+    switch (choice) {
+      case _QrFallback.photo:
+        // A Sefaz já recusou esta nota: a foto vai direto para a IA
+        await _pickImage(ImageSource.camera, trySefaz: false);
+      case _QrFallback.typeValue:
+        setState(() => _currentProposal = BoletoParser.parseNfceQrCodeUrl(url));
+      case null:
+        break;
     }
   }
 
@@ -263,15 +344,19 @@ class _SmartScannerPageState extends State<SmartScannerPage> with WidgetsBinding
 
     if (mounted) setState(() => _processingMessage = 'Consultando a nota na Sefaz...');
     try {
-      return (proposal: await sl<CaptureService>().lookupNfce(url), failure: null);
+      // A foto já está pronta para a IA: não espera muito pela Sefaz
+      final proposal = await sl<CaptureService>().lookupNfce(url).timeout(const Duration(seconds: 10));
+      return (proposal: proposal, failure: null);
     } on NfceLookupError catch (e) {
       return (proposal: null, failure: e.message);
+    } on TimeoutException {
+      return (proposal: null, failure: 'A Sefaz demorou demais para responder.');
     } catch (_) {
       return (proposal: null, failure: 'Não foi possível consultar a nota na Sefaz.');
     }
   }
 
-  Future<void> _pickImage(ImageSource source) async {
+  Future<void> _pickImage(ImageSource source, {bool trySefaz = true}) async {
     try {
       final picker = ImagePicker();
       final image = await picker.pickImage(source: source, imageQuality: 85);
@@ -279,10 +364,10 @@ class _SmartScannerPageState extends State<SmartScannerPage> with WidgetsBinding
 
       setState(() {
         _isProcessing = true;
-        _processingMessage = 'Procurando o QR Code da nota...';
+        _processingMessage = trySefaz ? 'Procurando o QR Code da nota...' : 'Auditando imagem com inteligência artificial...';
       });
 
-      final fromQr = await _nfceFromPhoto(image.path);
+      final fromQr = trySefaz ? await _nfceFromPhoto(image.path) : (proposal: null, failure: null);
       if (fromQr.proposal != null) {
         if (mounted) {
           setState(() {
@@ -1345,8 +1430,8 @@ class _SmartScannerPageState extends State<SmartScannerPage> with WidgetsBinding
             ),
             const SizedBox(height: 8),
             Text(
-              'O visor lê o código de barras do boleto. Para nota fiscal, tire uma foto do cupom: '
-              'o app lê o QR da nota e, se a Sefaz não entregar, a IA lê a foto.',
+              'O visor lê o código de barras do boleto e o QR da nota fiscal. '
+              'Se a Sefaz do estado não entregar a nota, o app pede uma foto do cupom para a IA ler.',
               textAlign: TextAlign.center,
               style: theme.textTheme.bodySmall,
             ),
@@ -1454,7 +1539,7 @@ class _SmartScannerPageState extends State<SmartScannerPage> with WidgetsBinding
           ),
           const SizedBox(height: 8),
           const Text(
-            'Aponte para o código de barras do boleto',
+            'Aponte para o código de barras do boleto ou o QR da nota',
             style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
           ),
           const SizedBox(height: 4),
@@ -2045,3 +2130,6 @@ class _SmartScannerPageState extends State<SmartScannerPage> with WidgetsBinding
     ];
   }
 }
+
+/// O que fazer quando a Sefaz não entrega a nota do QR lido ao vivo.
+enum _QrFallback { photo, typeValue }
