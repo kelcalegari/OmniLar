@@ -32,6 +32,9 @@ SettlementSummary _summary(int p2pCents) => SettlementSummary(
     );
 
 class _FakeSettlementRepository implements SettlementRepository {
+  @override
+  Future<void> markTransferSent(String recordId) async {}
+
   int p2pCents = 10000;
   int confirmCalls = 0;
 

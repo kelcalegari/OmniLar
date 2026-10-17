@@ -424,6 +424,10 @@ class MockSettlementDataSource implements SettlementDataSource {
     );
   }
 
+  /// No modo demo as transferências não têm linha gravada: não há o que marcar.
+  @override
+  Future<void> markTransferSent(String recordId) async {}
+
   @override
   Future<void> reopenSettlement(FinancialCycle cycle) async {
     if (_cachedSettlement != null && _cachedSettlement!.cycle == cycle) {

@@ -64,6 +64,9 @@ HouseExpense expense(
 
 class _FakeSettlementRepository implements SettlementRepository {
   @override
+  Future<void> markTransferSent(String recordId) async {}
+
+  @override
   Future<SettlementSummary> getSettlementSummary(
     FinancialCycle cycle, {
     SettlementOptions? options,

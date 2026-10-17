@@ -35,4 +35,7 @@ class DynamicSettlementDataSource implements SettlementDataSource {
 
   @override
   Future<bool> isCycleSettled(FinancialCycle cycle) => _active.isCycleSettled(cycle);
+
+  @override
+  Future<void> markTransferSent(String recordId) => _active.markTransferSent(recordId);
 }

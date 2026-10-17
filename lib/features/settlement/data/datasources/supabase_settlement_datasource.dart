@@ -77,12 +77,21 @@ class SupabaseSettlementDataSource implements SettlementDataSource {
             ? DateTime.tryParse(existingSettlement['settled_at'] as String)?.toLocal()
             : null;
         // Retrato gravado no fechamento: saldos, transferências e memória de cálculo
+        final rawTransferRows =
+            existingSettlement['settlement_transfers'] as List<dynamic>? ?? [];
         final snapshot = settlementSummaryFromJson(
           existingSettlement['summary_snapshot'],
           cycle: cycle,
           settledAt: settledAt,
         );
-        if (snapshot != null) return snapshot;
+        if (snapshot != null) {
+          return snapshot.copyWith(
+            transfers: attachTransferRecords(
+              snapshot.transfers,
+              rawTransferRows.cast<Map<String, dynamic>>(),
+            ),
+          );
+        }
 
         // Fechamento anterior ao retrato: só o que o banco guarda, com os nomes atuais
         var memberNames = <String, String>{};
@@ -107,6 +116,10 @@ class SupabaseSettlementDataSource implements SettlementDataSource {
                 : TransferStatus.pending,
             paidAt: r['paid_at'] != null
                 ? DateTime.tryParse(r['paid_at'] as String)?.toLocal()
+                : null,
+            recordId: r['id'] as String,
+            pixSentAt: r['pix_sent_at'] != null
+                ? DateTime.tryParse(r['pix_sent_at'] as String)?.toLocal()
                 : null,
           );
         }).toList();
@@ -597,6 +610,15 @@ class SupabaseSettlementDataSource implements SettlementDataSource {
   }
 
   @override
+  Future<void> markTransferSent(String recordId) async {
+    try {
+      await client.rpc('mark_settlement_transfer_sent', params: {'p_transfer_id': recordId});
+    } catch (e) {
+      throw ServerFailure('Erro ao marcar o Pix: $e');
+    }
+  }
+
+  @override
   Future<bool> isCycleSettled(FinancialCycle cycle) async {
     final row = await client
         .from('settlements')
@@ -607,4 +629,34 @@ class SupabaseSettlementDataSource implements SettlementDataSource {
     final status = row?['status'];
     return status == 'confirmed' || status == 'completed';
   }
+}
+
+/// Liga cada transferência do retrato do fechamento à linha gravada em
+/// settlement_transfers (o retrato guarda os ids do cálculo, não os da tabela):
+/// mesmo pagador, recebedor e valor, das linhas mais novas para as mais antigas
+/// (num ciclo reaberto ficam as do fechamento anterior também).
+List<SuperPixTransfer> attachTransferRecords(
+  List<SuperPixTransfer> transfers,
+  List<Map<String, dynamic>> rows,
+) {
+  final remaining = [...rows]
+    ..sort((a, b) => ((b['created_at'] as String?) ?? '').compareTo((a['created_at'] as String?) ?? ''));
+  return [
+    for (final t in transfers)
+      () {
+        final match = remaining
+            .where((r) =>
+                r['from_member_id'] == t.fromMemberId &&
+                r['to_member_id'] == t.toMemberId &&
+                (r['amount_cents'] as num).toInt() == t.amount.cents)
+            .firstOrNull;
+        if (match == null) return t;
+        remaining.remove(match);
+        final sentAt = match['pix_sent_at'] as String?;
+        return t.copyWith(
+          recordId: match['id'] as String,
+          pixSentAt: sentAt == null ? null : DateTime.tryParse(sentAt)?.toLocal(),
+        );
+      }(),
+  ];
 }

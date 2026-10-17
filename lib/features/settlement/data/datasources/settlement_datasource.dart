@@ -15,4 +15,7 @@ abstract class SettlementDataSource {
 
   /// Se o ciclo já tem fechamento confirmado, sem montar o resumo inteiro.
   Future<bool> isCycleSettled(FinancialCycle cycle);
+
+  /// Marca o Super Pix [recordId] como enviado (quem paga) ou recebido (quem recebe).
+  Future<void> markTransferSent(String recordId);
 }

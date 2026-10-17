@@ -15,6 +15,13 @@ class SuperPixTransfer {
   final DateTime? paidAt;
   final String? explanation;
 
+  /// Linha gravada em settlement_transfers (só em ciclo fechado; null no
+  /// Caixa da Casa e no fechamento ainda não confirmado).
+  final String? recordId;
+
+  /// Quando alguém marcou "Já mandei o Pix" ou "Recebi" (migration 0084).
+  final DateTime? pixSentAt;
+
   const SuperPixTransfer({
     required this.id,
     required this.fromMemberId,
@@ -27,6 +34,8 @@ class SuperPixTransfer {
     this.pixKey,
     this.paidAt,
     this.explanation,
+    this.recordId,
+    this.pixSentAt,
   });
 
   SuperPixTransfer copyWith({
@@ -41,6 +50,8 @@ class SuperPixTransfer {
     String? pixKey,
     DateTime? paidAt,
     String? explanation,
+    String? recordId,
+    DateTime? pixSentAt,
   }) {
     return SuperPixTransfer(
       id: id ?? this.id,
@@ -54,6 +65,8 @@ class SuperPixTransfer {
       pixKey: pixKey ?? this.pixKey,
       paidAt: paidAt ?? this.paidAt,
       explanation: explanation ?? this.explanation,
+      recordId: recordId ?? this.recordId,
+      pixSentAt: pixSentAt ?? this.pixSentAt,
     );
   }
 }

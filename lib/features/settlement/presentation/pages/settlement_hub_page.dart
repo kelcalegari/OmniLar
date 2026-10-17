@@ -2,7 +2,10 @@ import '../../../../core/domain/value_objects/cycle_schedule.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:intl/intl.dart';
+
 import '../../../../core/di/service_locator.dart';
+import '../../../auth/domain/repositories/auth_repository.dart';
 import '../../../../core/domain/value_objects/financial_cycle.dart';
 import '../../../../core/domain/value_objects/money.dart';
 import '../../../../core/security/biometric_auth_service.dart';
@@ -1907,7 +1910,57 @@ class _SettlementHubContent extends StatelessWidget {
               ),
             ),
           ],
+          if (isSettled && transfer.recordId != null) _buildPixSentRow(context, transfer),
         ],
+      ),
+    );
+  }
+
+  /// Ciclo fechado: "Já mandei o Pix" (quem paga) ou "Recebi" (quem recebe);
+  /// depois da marca, o selo com a data (migration 0084).
+  Widget _buildPixSentRow(BuildContext context, SuperPixTransfer transfer) {
+    final sentAt = transfer.pixSentAt;
+    if (sentAt != null) {
+      return Padding(
+        padding: const EdgeInsets.only(top: 8),
+        child: Row(
+          children: [
+            const Icon(Icons.check_circle_rounded, size: 16, color: AppColors.creditGreen),
+            const SizedBox(width: 6),
+            Text(
+              'Pix enviado em ${DateFormat('dd/MM').format(sentAt)}',
+              style: const TextStyle(fontSize: 12, color: AppColors.creditGreen, fontWeight: FontWeight.w600),
+            ),
+          ],
+        ),
+      );
+    }
+    final me = sl<AuthRepository>().currentUser?.id;
+    final isPayer = me == transfer.fromMemberId;
+    final isReceiver = me == transfer.toMemberId;
+    if (!isPayer && !isReceiver) {
+      return const Padding(
+        padding: EdgeInsets.only(top: 8),
+        child: Text('Pix ainda não marcado como enviado.', style: TextStyle(fontSize: 12, color: Colors.grey)),
+      );
+    }
+    return Padding(
+      padding: const EdgeInsets.only(top: 8),
+      child: Align(
+        alignment: Alignment.centerLeft,
+        child: OutlinedButton.icon(
+          key: Key('pix_sent_${transfer.recordId}'),
+          icon: const Icon(Icons.check_rounded, size: 16),
+          label: Text(isPayer ? 'Já mandei o Pix' : 'Recebi o Pix'),
+          onPressed: () async {
+            final messenger = ScaffoldMessenger.of(context);
+            final ok = await context.read<SettlementCubit>().markTransferSent(transfer);
+            messenger.showSnackBar(SnackBar(
+              content: Text(ok ? 'Pix marcado.' : 'Não foi possível marcar o Pix. Tente de novo.'),
+              backgroundColor: ok ? AppColors.creditGreen : AppColors.debtRed,
+            ));
+          },
+        ),
       ),
     );
   }

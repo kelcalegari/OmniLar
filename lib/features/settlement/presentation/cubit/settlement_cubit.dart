@@ -1,4 +1,5 @@
 import '../../../../core/domain/value_objects/cycle_schedule.dart';
+import '../../domain/entities/super_pix_transfer.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../../../core/domain/value_objects/financial_cycle.dart';
 import '../../../finance/domain/repositories/finance_repository.dart';
@@ -313,6 +314,20 @@ class SettlementCubit extends BlocBase<SettlementState> {
       summary.totalP2PCleared.cents,
       ...transfers,
     ].join('|');
+  }
+
+  /// Marca o Pix como enviado ou recebido e relê o ciclo. Devolve se deu certo.
+  Future<bool> markTransferSent(SuperPixTransfer transfer) async {
+    final recordId = transfer.recordId;
+    final cycle = state.currentCycle ?? state.summary?.cycle;
+    if (recordId == null || cycle == null) return false;
+    try {
+      await _repository.markTransferSent(recordId);
+      await loadSettlement(cycle);
+      return true;
+    } catch (_) {
+      return false;
+    }
   }
 
   Future<void> reopenSettlement() async {

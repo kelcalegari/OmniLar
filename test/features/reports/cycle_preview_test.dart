@@ -124,6 +124,9 @@ SettlementSummary hubSummary({List<P2PLoan> loans = const []}) =>
     );
 
 class _FakeSettlementRepository implements SettlementRepository {
+  @override
+  Future<void> markTransferSent(String recordId) async {}
+
   final SettlementSummary summary;
   _FakeSettlementRepository(this.summary);
 

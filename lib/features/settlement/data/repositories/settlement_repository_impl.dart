@@ -27,4 +27,7 @@ class SettlementRepositoryImpl implements SettlementRepository {
 
   @override
   Future<bool> isCycleSettled(FinancialCycle cycle) => _dataSource.isCycleSettled(cycle);
+
+  @override
+  Future<void> markTransferSent(String recordId) => _dataSource.markTransferSent(recordId);
 }
