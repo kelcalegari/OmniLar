@@ -218,16 +218,15 @@ class _SmartScannerPageState extends State<SmartScannerPage> with WidgetsBinding
     super.dispose();
   }
 
+  /// O visor lê só o código de barras do boleto; a nota fiscal vai pela foto,
+  /// que tem o QR e também a imagem para a IA quando a Sefaz não responde.
   void _onBarcodeDetected(BarcodeCapture capture) {
     if (_currentProposal != null || _isProcessing) return;
 
     for (final barcode in capture.barcodes) {
       final raw = barcode.rawValue?.trim();
       if (raw != null && raw.isNotEmpty) {
-        if (raw.startsWith('http')) {
-          _lookupNfce(raw);
-          break;
-        } else if (const {44, 47, 48}.contains(BoletoCodeReader.digitsOf(raw).length)) {
+        if (const {44, 47, 48}.contains(BoletoCodeReader.digitsOf(raw).length)) {
           final proposal = _proposalFromCode(raw, quiet: true);
           if (proposal != null) {
             setState(() {
@@ -240,42 +239,35 @@ class _SmartScannerPageState extends State<SmartScannerPage> with WidgetsBinding
     }
   }
 
-  /// QR da NFC-e: busca loja, itens e total na Sefaz. Sem resposta, abre a
-  /// nota só com o que o QR traz e avisa o motivo.
-  Future<void> _lookupNfce(String url) async {
-    setState(() {
-      _isProcessing = true;
-      _processingMessage = 'Consultando a nota na Sefaz...';
-    });
-
-    CaptureProposal? proposal;
-    String? failure;
-    if (sl<AuthRepository>().isDemoMode) {
-      failure = 'No modo demonstração a nota não é consultada na Sefaz.';
-    } else {
-      try {
-        proposal = await sl<CaptureService>().lookupNfce(url);
-      } catch (e) {
-        failure = e is NfceLookupError ? e.message : 'Não foi possível consultar a nota na Sefaz.';
-      }
+  /// Foto com o QR da NFC-e: tenta a nota na Sefaz antes da IA. Nulo quando a
+  /// foto não tem QR de nota ou a Sefaz não entregou; aí a IA lê a foto.
+  /// Na web não há leitura de QR em foto: vai direto para a IA.
+  Future<({CaptureProposal? proposal, String? failure})> _nfceFromPhoto(String path) async {
+    final controller = _scannerController;
+    if (kIsWeb || controller == null || sl<AuthRepository>().isDemoMode) {
+      return (proposal: null, failure: null);
     }
-    if (!mounted) return;
 
-    final fallback = proposal == null ? BoletoParser.parseNfceQrCodeUrl(url) : null;
-    setState(() {
-      _currentProposal = proposal ?? fallback;
-      _isProcessing = false;
-    });
-    if (fallback != null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            fallback.totalAmount.cents == 0
-                ? '$failure Digite o valor ou fotografe o cupom para a IA ler.'
-                : '$failure O QR trouxe só o valor; fotografe o cupom para ver os itens.',
-          ),
-        ),
-      );
+    String? url;
+    try {
+      final capture = await controller.analyzeImage(path, formats: const [BarcodeFormat.qrCode]);
+      for (final barcode in capture?.barcodes ?? const <Barcode>[]) {
+        final raw = barcode.rawValue?.trim();
+        if (raw != null && raw.startsWith('http')) {
+          url = raw;
+          break;
+        }
+      }
+    } catch (_) {}
+    if (url == null) return (proposal: null, failure: null);
+
+    if (mounted) setState(() => _processingMessage = 'Consultando a nota na Sefaz...');
+    try {
+      return (proposal: await sl<CaptureService>().lookupNfce(url), failure: null);
+    } on NfceLookupError catch (e) {
+      return (proposal: null, failure: e.message);
+    } catch (_) {
+      return (proposal: null, failure: 'Não foi possível consultar a nota na Sefaz.');
     }
   }
 
@@ -287,9 +279,21 @@ class _SmartScannerPageState extends State<SmartScannerPage> with WidgetsBinding
 
       setState(() {
         _isProcessing = true;
-        _processingMessage = 'Auditando imagem com inteligência artificial...';
+        _processingMessage = 'Procurando o QR Code da nota...';
       });
 
+      final fromQr = await _nfceFromPhoto(image.path);
+      if (fromQr.proposal != null) {
+        if (mounted) {
+          setState(() {
+            _currentProposal = fromQr.proposal;
+            _isProcessing = false;
+          });
+        }
+        return;
+      }
+
+      if (mounted) setState(() => _processingMessage = 'Auditando imagem com inteligência artificial...');
       final bytes = await image.readAsBytes();
       final proposal = await sl<CaptureService>().processDocumentFile(
         bytes: bytes,
@@ -302,6 +306,13 @@ class _SmartScannerPageState extends State<SmartScannerPage> with WidgetsBinding
           _currentProposal = proposal;
           _isProcessing = false;
         });
+        if (fromQr.failure != null) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('${fromQr.failure} Os dados vieram da leitura da foto pela IA; confira antes de lançar.'),
+            ),
+          );
+        }
       }
     } catch (e) {
       if (mounted) {
@@ -1332,7 +1343,14 @@ class _SmartScannerPageState extends State<SmartScannerPage> with WidgetsBinding
                 ),
               ),
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 8),
+            Text(
+              'O visor lê o código de barras do boleto. Para nota fiscal, tire uma foto do cupom: '
+              'o app lê o QR da nota e, se a Sefaz não entregar, a IA lê a foto.',
+              textAlign: TextAlign.center,
+              style: theme.textTheme.bodySmall,
+            ),
+            const SizedBox(height: 12),
 
             // Botões de Ação para Foto / Galeria / PDF
             Row(
@@ -1436,7 +1454,7 @@ class _SmartScannerPageState extends State<SmartScannerPage> with WidgetsBinding
           ),
           const SizedBox(height: 8),
           const Text(
-            'Aponte para o QR Code da NFC-e ou Boleto',
+            'Aponte para o código de barras do boleto',
             style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
           ),
           const SizedBox(height: 4),
