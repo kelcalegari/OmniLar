@@ -147,7 +147,12 @@ class ShoppingCubit extends BlocBase<ShoppingState> {
   Future<void> deleteItem(String itemId) async {
     if (state.selectedList == null) return;
     try {
-      await _repository.deleteItem(itemId);
+      final sent = await _repository.deleteItem(itemId);
+      if (!sent) {
+        // Sem sinal: a exclusão ficou na fila e o item sai da tela agora
+        emit(state.copyWith(items: state.items.where((i) => i.id != itemId).toList()));
+        return;
+      }
       final updatedItems = await _repository.getItems(state.selectedList!.id);
       emit(state.copyWith(items: updatedItems));
     } catch (e) {

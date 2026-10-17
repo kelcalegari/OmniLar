@@ -300,6 +300,36 @@ class _AddEventSheetState extends State<AddEventSheet> {
     }
   }
 
+  static bool _sameDay(DateTime? a, DateTime? b) {
+    if (a == null || b == null) return a == b;
+    return a.year == b.year && a.month == b.month && a.day == b.day;
+  }
+
+  /// "Só esta" com o "repetir até" mudado: a data não muda nada. Devolve true
+  /// para salvar mesmo assim, false para escolher de novo e null para cancelar.
+  Future<bool?> _confirmEndDateIgnored() {
+    return showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('A data final não muda só esta'),
+        content: const Text(
+          'O "repetir até" vale para "esta e as próximas" ou para "todas". '
+          'Salvando só esta ocorrência, a série continua com a data de antes.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Salvar só esta'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Escolher de novo'),
+          ),
+        ],
+      ),
+    );
+  }
+
   Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
 
@@ -374,13 +404,24 @@ class _AddEventSheetState extends State<AddEventSheet> {
 
         RecurrenceScope scope = RecurrenceScope.thisInstanceOnly;
         if (widget.initialEvent!.isRecurring) {
-          final chosenScope = await showRecurrenceScopeDialog(
-            context: context,
-            itemTitle: updatedEvent.title,
-            isDelete: false,
-          );
-          if (chosenScope == null) return; // cancelou
-          scope = chosenScope;
+          final endDateChanged =
+              !_sameDay(widget.initialEvent!.recurrenceEndDate, _recurrenceEndDate);
+          while (true) {
+            if (!mounted) return;
+            final chosenScope = await showRecurrenceScopeDialog(
+              context: context,
+              itemTitle: updatedEvent.title,
+              isDelete: false,
+            );
+            if (chosenScope == null) return; // cancelou
+            scope = chosenScope;
+            // A data final só muda a série em "esta e as próximas" ou "todas"
+            if (scope != RecurrenceScope.thisInstanceOnly || !endDateChanged) break;
+            if (!mounted) return;
+            final keep = await _confirmEndDateIgnored();
+            if (keep == null) return;
+            if (keep) break;
+          }
         }
 
         await cubit.updateEvent(updatedEvent, scope: scope);

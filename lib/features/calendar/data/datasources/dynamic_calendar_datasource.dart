@@ -53,6 +53,9 @@ class DynamicCalendarDataSource implements CalendarDataSource {
   Future<void> cancelEvent(String eventId) => _active.cancelEvent(eventId);
 
   @override
+  Stream<void> watchEventChanges() => _active.watchEventChanges();
+
+  @override
   Future<List<TaskItem>> getTasks({bool includeArchived = false}) =>
       _active.getTasks(includeArchived: includeArchived);
 

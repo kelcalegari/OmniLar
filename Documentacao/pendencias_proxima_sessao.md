@@ -5,12 +5,12 @@ Reescrito em 13/10/2026, no fim de uma sessão longa de correções, e atualizad
 ## Estado atual
 
 - **Código:** `main` local e `origin/main` sincronizadas em 17/10/2026, com tudo das branches de decisões, notificações, login e `fix/push-registro`. Confira com `git log --oneline -5` e `git status`.
-- **Banco (Supabase `rygxmpwzofgieodvhpcy`, acessível pelo conector do Supabase):** migrations 0001 a 0071 aplicadas (as 0059, 0060 e 0061 em 15/10/2026; as 0062 e 0063 em 16/10/2026, antes do merge do código; as 0064 a 0066, das notificações, em 16/10/2026 a partir da branch `feat/notificacoes`, hoje já na `main`; a 0067, das caixinhas, a 0068, do painel administrativo (conta nova passa a esperar aprovação), e a 0069, dos planos Free e Premium, em 16/10/2026; a 0070, do agendador das notificações, em 16/10/2026 a partir da branch `feat/notificacoes-agendador`, com o job do `pg_cron` ligado; a 0071, que mantém `profiles.email` igual ao e-mail de acesso, em 16/10/2026 a partir da branch `feat/auth-conta-seguranca`). No histórico de migrations do Supabase constam só as 0022 a 0027 e as 0030 a 0071; as 0001 a 0021, a 0028 e a 0029 foram aplicadas à mão pelo SQL Editor. A próxima migration é a 0072.
+- **Banco (Supabase `rygxmpwzofgieodvhpcy`, acessível pelo conector do Supabase):** migrations 0001 a 0071 aplicadas (as 0059, 0060 e 0061 em 15/10/2026; as 0062 e 0063 em 16/10/2026, antes do merge do código; as 0064 a 0066, das notificações, em 16/10/2026 a partir da branch `feat/notificacoes`, hoje já na `main`; a 0067, das caixinhas, a 0068, do painel administrativo (conta nova passa a esperar aprovação), e a 0069, dos planos Free e Premium, em 16/10/2026; a 0070, do agendador das notificações, em 16/10/2026 a partir da branch `feat/notificacoes-agendador`, com o job do `pg_cron` ligado; a 0071, que mantém `profiles.email` igual ao e-mail de acesso, em 16/10/2026 a partir da branch `feat/auth-conta-seguranca`). As 0072 a 0075 foram aplicadas em 17/10/2026, a partir da branch `feat/pendencias-recomendadas`. No histórico de migrations do Supabase constam só as 0022 a 0027 e as 0030 a 0075; as 0001 a 0021, a 0028 e a 0029 foram aplicadas à mão pelo SQL Editor. A próxima migration é a 0076.
 - **Edge Functions:** `capture-read` versão 8 e `assistant` versão 5, ambas com `verify_jwt=true` e exigindo usuário logado que more na casa. `nfce-read` versão 3 (16/10/2026), também com `verify_jwt=true` e usuário da casa: consulta a NFC-e na Sefaz pelo link do QR (ver "Escâner" em "Como o sistema está montado hoje"); é publicada com `nfce-read/index.ts`, `nfce-read/page.ts` e os arquivos de `_shared` que ela importa. `notify` versão 1 (16/10/2026), com `verify_jwt=false`: chamada pelo banco, não recebe dados e envia os push pendentes pelo FCM; os secrets `FCM_SERVICE_ACCOUNT` e `FCM_PROJECT_ID` foram configurados pelo dono (feito, informado em 17/10/2026). Conferência de 17/10/2026: o job `omnilar-notifications-hourly` do `pg_cron` roda sem erro e há um aparelho Android registrado em `device_tokens` (17/10, 01:14 UTC), mas os 21 avisos do banco estão como `skipped` porque foram criados antes desse registro. Nenhum push saiu ainda, então o envio pelo FCM só fica comprovado quando um aviso novo chegar ao aparelho. A branch `fix/push-registro` entrou na `main` em 17/10/2026 (pede a permissão de notificação do navegador dentro do toque; o Android release declara acesso à internet e o nome "Omni Lar").
 - **Site:** publicado em https://omnilar.web.app (Firebase Hosting, projeto `omnilar-ef002`; última publicação em 16/10/2026, com a tela de espera nova). Ficaram fora dela os commits `0dd5ae5` (QR de SC abre a câmera direto) e `0f5c296` (modo demo sem o painel administrativo): publicar de novo antes de testar esses dois no site. Para publicar: `bash scripts/publicar_web.sh` (análise, testes, build e deploy), com o Firebase CLI logado na conta dona do projeto.
 - **APK Android:** `flutter build apk --release` gera `build/app/outputs/flutter-apk/app-release.apk` (cerca de 87 MB, não chega ao celular pelo envio de arquivos do Claude, que aceita até 30 MB). O release ainda é assinado com a chave de debug (`android/app/build.gradle.kts`): instala direto no celular, mas a Play Store não aceita. O último APK gerado (16/10/2026) também ficou sem os commits `0dd5ae5` e `0f5c296`.
 - **Login e cadastro (16/10/2026):** confirmação de e-mail por código, "Esqueci minha senha", "Conta e segurança" (trocar e-mail e senha) estão prontos e configurados; "Continuar com Google" também está no código, mas escondido e adiado até a publicação (decisão do dono). As branches do login e das notificações já entraram na `main` (conferido em 17/10/2026). O que o dono precisa configurar no Supabase e no Google Cloud está em `Documentacao/plano_autenticacao.md`.
-- **Qualidade:** `flutter analyze` com 0 erros e 0 warnings, e 600 testes passando (16/10/2026). Os testes automatizados rodam só contra os datasources mock (modo demo); nenhum roda contra o Supabase.
+- **Qualidade:** `flutter analyze` com 0 erros e 0 warnings, e 610 testes passando (17/10/2026). Os testes automatizados rodam só contra os datasources mock (modo demo); nenhum roda contra o Supabase.
 - **Dados no banco:** em 13/10/2026 o dono apagou todos os dados de teste (todas as tabelas de `public` e as contas de login) e recomeçou do zero; a estrutura, as funções e o histórico de migrations não mudaram. Logo depois foi criada de novo a casa "Nossa Casa", com as contas novas de kelvynn e Cristiano; o dono já lançou algumas despesas de teste nela (entre elas a recorrente "Internet", todo dia 25). Em 14/10/2026 já havia 3 fechamentos de ciclo confirmados e 3 importações feitos pelo dono com sessão real.
 
 ## O ponto mais importante
@@ -94,7 +94,7 @@ Resumo dos mecanismos que mudaram nesta sessão, para localizar as coisas.
 - **Item de compra** não tem categoria: a compra fechada vira uma despesa na categoria de mercado da casa.
 - **Participantes de evento:** editar um evento grava a lista inteira; quem foi desmarcado sai de `event_participants`.
 - **Ajustes:** quatro grupos (Casa, Divisão das despesas, Pagamentos e contas, Aplicativo). No celular e no tablet o índice abre uma página por grupo; a partir de 1024 px os grupos ficam à esquerda e o conteúdo ao lado. Moradores e convites, categorias, modelo de rateio, formas de pagamento e contas fixas ficam dentro da página, assim como a chave de IA, o tema e a auditoria (a chave de IA e a auditoria usam o parâmetro `embedded`). A importação de fatura tem página própria (`/importar`): nos Ajustes ela aparece no menu de cada cartão ou conta, e o resultado da busca leva direto a ela. Só ciclo, chave Pix e perfil abrem janela (formulários curtos). Os interruptores "Assistente Ativo", "Alertas Proativos" e "Horário Silencioso" foram removidos: não gravavam nada. O código de convite só é criado quando o dono ou um administrador toca em "Gerar código de convite". O editor do rateio guarda a edição em variáveis do método que o cria, por isso é mantido pelo `_KeptEditor` e só é recriado quando moradores, categorias ou o modelo mudam. A busca do índice ignora acentos e acha as opções (por título ou sinônimo) e o que a casa cadastrou: moradores, categorias, formas de pagamento e contas fixas. O índice e o esqueleto ficam em `settings_page.dart`; o conteúdo dos grupos, em `settings_groups.dart`.
-- **Tempo real:** tarefas, itens de compra, despesas, moradores, aportes, empréstimos (e parcelas) e caixinhas avisam os outros aparelhos (migrations 0015, 0050 e 0061). O `FinanceCubit` recarrega o ciclo e o `P2PCubit` relê os empréstimos pelo mesmo `watchHouseChanges` (cada assinatura abre o próprio canal); as parcelas não têm `house_id` e são assinadas sem filtro (o RLS entrega só as da casa). A agenda só atualiza ao recarregar.
+- **Tempo real:** tarefas, itens de compra, despesas, moradores, aportes, empréstimos (e parcelas) e caixinhas avisam os outros aparelhos (migrations 0015, 0050 e 0061). O `FinanceCubit` recarrega o ciclo e o `P2PCubit` relê os empréstimos pelo mesmo `watchHouseChanges` (cada assinatura abre o próprio canal); as parcelas não têm `house_id` e são assinadas sem filtro (o RLS entrega só as da casa). A agenda (eventos e participantes, 0074) tem assinatura própria no `CalendarCubit` (`watchEventChanges`).
 - **Situação do ciclo no Fôlego:** `SettlementRepository.isCycleSettled` lê só o `status` em `settlements`; a Home consulta a cada carga do ciclo fora do ciclo atual.
 - **Categoria:** `categories.is_variable_spend` (0060, nulo = adivinha pelo nome, `ExpenseCategory.countsAsVariableSpend`). Excluir categoria passa pela RPC `delete_category_moving_expenses` (0059), que move despesas, sub-itens, itens de compra, linhas e regras da importação e exclui na mesma transação; o rateio das despesas movidas não muda.
 - **Escâner:** nota e cupom têm "Já paguei" / "A pagar" e data editável; `SmartScannerPage.initialProposal` existe só para os testes.
@@ -105,11 +105,11 @@ Resumo dos mecanismos que mudaram nesta sessão, para localizar as coisas.
 - **Tela de espera da conta (16/10/2026):** além do aviso em tempo real, consulta o status ao voltar ao app, a cada 15 s enquanto está aberta e pelo botão "Verificar agora" (o aviso em tempo real se perde com o app em segundo plano).
 - **Ícone e nome do Android (16/10/2026):** o nome é "Omni Lar"; os ícones saem de `assets/launcher/` (quadrados com margem, fora do pacote do app) pelo `flutter_launcher_icons`. A tela de abertura do Android 12 ou mais novo ainda usa `icon_dark.png` (ver "Em aberto").
 - **Modo demo:** a conta do demo não é administradora (sem o atalho do painel; `/admin` volta para a casa).
-- **Série de eventos:** `seriesEndChange` (`event_recurrence.dart`) diz o que sai e o que entra ao trocar o "repetir até"; no Supabase as ocorrências novas são inseridas direto em `events` por quem edita (fica sendo o criador delas).
+- **Série de eventos:** `seriesEndChange` (`event_recurrence.dart`) diz o que sai e o que entra ao trocar o "repetir até"; no Supabase, editar "esta e as próximas" ou "todas" passa pela função `update_event_series` (0073), que grava o plano do app numa transação e cria as ocorrências novas no nome de quem criou a série.
 - **Caixinhas:** nascem zeradas (o saldo inicial vira depósito), toda casa nova recebe a "Reserva da Casa", e cada caixinha tem o histórico de entradas e saídas. O resgate exige o motivo e pode só sacar ou devolver ao ciclo em andamento (0062): o valor devolvido fica marcado em `savings_transactions.cycle_start_date` e entra no Caixa como dinheiro da casa, somado à sobra do ciclo anterior em `getOpeningBalance` (não vira aporte de ninguém). Ele só cobre falta de caixa: não abate os aportes sugeridos pelo planejador (`FinancialCycleSummary.rolledOverBalance`) nem o excedente do balde no fechamento com aportes fixos (`vaultReturns` no motor); no fechamento ele aparece como sobra e segue a opção escolhida para ela. O Fechamento mostra a parte "Devolvido das caixinhas" (`SettlementSummary.vaultReturns`). O depósito pode sair do Caixa do ciclo em andamento (0063), até o que as caixinhas devolveram a ele no ciclo; `getVaultReturnsForCycle` dá esse saldo (devoluções menos depósitos tirados do Caixa). Caixinha pode ser editada (nome, meta, prazo, ícone), excluída só zerada e sem acordo com o Lar ativo devolvendo para ela (`delete_savings_vault`), e transferir para outra (`transfer_between_vaults`, lançamentos ligados por `counterpart_vault_id`); depósito também exige motivo; prazo da meta mostra quanto guardar por mês e o ritmo; histórico relê sozinho, pagina e filtra; avisos `vault_movement` e `vault_goal_reached` (0067); `/caixinhas/{id}` abre o histórico.
 - **Projetos compartilhados:** usam a casa e o usuário da sessão; o acerto divide entre os participantes (`project_settlement_service.dart`); há um diálogo para editar participantes e percentuais.
 - **Agenda:** evento recorrente aceita "repetir até" (máximo de 200 ocorrências); tarefas e itens de compra podem ser editados.
-- **Fila offline:** `lib/core/network/`. Entram na fila: lançar despesa, adicionar item de compra, criar evento, criar tarefa, editar tarefa, editar item de compra, criar empréstimo, marcar item como comprado e concluir tarefa. As duas últimas gravam o estado desejado (`setItemBought`, `setTaskCompleted`), para o reenvio não inverter de novo; sem conexão a tela atualiza o item ou a tarefa sozinha.
+- **Fila offline:** `lib/core/network/`. Entram na fila: lançar despesa, adicionar item de compra, criar evento, criar tarefa, editar tarefa, editar item de compra, criar empréstimo, marcar item como comprado, concluir tarefa e excluir item de compra ou tarefa. Marcar e concluir gravam o estado desejado (`setItemBought`, `setTaskCompleted`), para o reenvio não inverter de novo; sem conexão a tela atualiza o item ou a tarefa sozinha.
 - **Formas de pagamento:** `payment_methods` tem duas colunas de dono (`owner_id` e `owner_member_id`), mantidas iguais por gatilho desde a migration 0046.
 
 ## Em aberto
@@ -118,11 +118,8 @@ Resumo dos mecanismos que mudaram nesta sessão, para localizar as coisas.
 - **Sem rede as listas não carregam:** o app não guarda cópia local. A fila offline só ajuda quando a conexão cai no meio do uso.
 - **Fora da fila offline:** pagamento de parcela (de propósito) e exclusões.
 - **Importar fatura ou extrato:** página própria em `/casa/importar` (cartão "Importar fatura ou extrato" na Casa, atalho em cada fatura e menu de cada cartão ou conta nos Ajustes; `/importar` redireciona para lá). Escolhe-se a origem e o arquivo OFX/CSV; o app compara com o que já foi lançado, e cada linha nova da Casa vira uma despesa. A confirmação grava tudo de uma vez e entra no histórico da página, de onde pode ser desfeita; a revisão em andamento fica guardada neste aparelho (ao voltar, "Revisão em andamento" oferece Retomar ou Descartar), mas não aparece em outro aparelho. A fatura de exemplo aparece só no modo demo.
-- **Fatura de cartão:** só funciona para cartão com fechamento e vencimento cadastrados; gravar `paid_at` direto na tabela de despesas continua possível para qualquer morador.
 - **Ciclo reaberto:** trocar a divisão do excedente do balde no segundo fechamento redistribui o excedente inteiro; parcelas e acordos do primeiro fechamento não são desfeitos.
-- **Acordos de reposição criados antes da migration 0037** não têm caixinha de origem (não havia nenhum no banco).
 - **Consulta da NFC-e nunca testada com nota real:** só com chave falsa, que confirmou que as Sefaz de SP e RS respondem ao servidor e que a de SC exige captcha. A leitura do layout foi conferida com uma página montada a partir do layout conhecido, não com uma nota de verdade. A Sefaz de MG derrubou a conexão no teste feito da máquina do dono; não se sabe se bloqueia robôs. Também não se sabe se alguma Sefaz bloqueia o servidor das Edge Functions.
-- **Tela de abertura no Android 12 ou mais novo:** usa `icon_dark.png`, que não é quadrado e encosta nas bordas; o Android recorta essa imagem em círculo, então o logo provavelmente aparece cortado (era o mesmo problema do ícone). Corrigir como o ícone: imagem quadrada com margem em `flutter_native_splash.android_12`.
 - **Chave de assinatura do Android:** o release usa a chave de debug. Criar a chave própria antes de distribuir o APK para mais gente; quem instalou com a chave de debug precisa desinstalar antes de instalar uma versão com a chave nova. O dono precisa guardar a chave e a senha.
 
 ### Registros da importação e dos boletos
@@ -132,79 +129,39 @@ Resumo dos mecanismos que mudaram nesta sessão, para localizar as coisas.
 - **Código do boleto da fatura:** em main, migration 0057 (tabela `card_invoice_codes`: cartão + vencimento + linha digitável). A tela "Pagar fatura" informa, troca, apaga e copia o código; o card da fatura copia. O escâner reconhece o boleto da fatura em aberto (vencimento a até 5 dias, total até 30% diferente) e guarda o código nela, sem lançar despesa (`knownInvoicesFor`). A tela de pagar conta pendente também informa ou troca o código (`BillCodeField`). O formulário esconde o campo de código em compra no cartão. As faturas em aberto e os códigos não têm limite de data (só "Pagamentos registrados" mostra 62 dias).
 - **Acesso à importação:** card "Importar fatura ou extrato" na Casa, acima do fechamento; atalho dentro de cada fatura; menu de cada cartão ou conta nos Ajustes. Saiu do Smart FAB e do painel geral dos Ajustes.
 
-### Decisões pendentes do dono, com opções e recomendação (15/10/2026)
-Levantadas em 15/10/2026, depois do merge das decisões anteriores. A numeração é a da lista apresentada ao dono naquele dia: os itens 6 (merge e push, feito), 7 (testes manuais, ver "Testes manuais pendentes"), 14 e 15 (importação e leitor de boleto, testados pelo dono) não pedem decisão. **Antes de começar, pergunte se ele segue as recomendações (marcadas com ⭐) ou se escolhe outra letra**, e peça aprovação antes de cada migration.
+### Decisões de 15/10/2026, implementadas em 17/10/2026
+O dono seguiu todas as recomendações (⭐) da lista de 15/10. O que foi feito, na branch `feat/pendencias-recomendadas` (merge na `main` em 17/10/2026), com as migrations 0072 a 0075 aplicadas e conferidas (`md5` das funções igual ao dos arquivos):
 
-1. **Despesas excluídas ficam sem categoria ao excluir a categoria** (detalhe em "Pontas deixadas pelas decisões de 15/10/2026")
-   - a) ⭐ Migration 0062: a função também move as despesas excluídas, com a mesma checagem de dono ou administrador
-   - b) Manter (despesa excluída não aparece em lugar nenhum)
-2. **"Repetir até" mudado com "só esta" não faz nada**
-   - a) ⭐ Ao escolher "só esta" com a data final mudada, avisar que ela só vale para "esta e as próximas" ou "todas" e deixar trocar a escolha
-   - b) Esconder o campo na edição "só esta" (difícil: o alcance só é escolhido ao salvar)
-   - c) Manter
-3. **Ocorrências criadas ao estender uma série ficam no nome de quem editou.** Efeito prático: o banco só deixa editar um evento a quem o criou ou a um administrador, e recusa sem avisar; quem criou a série deixa de conseguir editar essas ocorrências, sem erro na tela
-   - a) ⭐ Migration com uma função do banco que estende ou encurta a série, criando as ocorrências no nome de quem criou a série (resolve o item 4 junto)
-   - b) Manter
-4. **Estender ou encurtar uma série não é tudo-ou-nada**
-   - a) ⭐ Junto com o item 3, na mesma função do banco
-   - b) Manter
-5. **Agenda e histórico da caixinha sem tempo real**
-   - a) Ligar nos dois
-   - b) ⭐ Só na agenda, que é compartilhada pela casa (precisa de migration); o histórico da caixinha já é relido ao abrir
-   - c) Manter
-8. **Sem internet as listas não carregam**
-   - a) Guardar uma cópia local (trabalho grande)
-   - b) ⭐ Manter por enquanto (como decidido em 14/10)
-9. **Pagar parcela e exclusões fora da fila offline**
-   - a) ⭐ Pôr na fila só a exclusão de item de compra e de tarefa (excluir de novo não causa problema; comum no mercado sem sinal). Pagar parcela continua fora
-   - b) Pôr na fila todas as exclusões (risco: a exclusão de uma despesa ser recusada no reenvio por estar num ciclo fechado)
-   - c) Manter
-10. **Fatura depende do fechamento e do vencimento cadastrados; qualquer morador grava `paid_at` direto**
-    - a) ⭐ O cadastro de cartão passa a exigir os dois dias, e uma migration faz o banco só aceitar mudança de pagamento numa compra no cartão vinda da tela de pagar a fatura
-    - b) Só exigir os dias no cadastro
-    - c) Manter
-11. **Ciclo reaberto redistribui o excedente inteiro no segundo fechamento**
-    - a) ⭐ Manter (caso raro, como decidido em 14/10)
-    - b) Recalcular só a diferença
-12. **Acordos de reposição de antes da 0037 sem caixinha de origem**
-    - a) ⭐ Tirar da lista: não existia nenhum no banco
-    - b) Migration para preencher
-13. **"A revisão da importação se perde ao sair da página"** — o texto estava desatualizado: a revisão já fica guardada no aparelho (Retomar ou Descartar); só não passa para outro aparelho. O texto em "Limites conhecidos" foi corrigido em 15/10
-    - a) ⭐ Manter como está (só no aparelho)
-    - b) Guardar a revisão no servidor, para aparecer em qualquer aparelho (precisa de migration)
-16. **A troca de ciclo relê despesas e aportes duas vezes**
-    - a) Cortar a leitura repetida agora
-    - b) ⭐ Só se a troca parecer lenta para o dono
-17. **Lista de moradores desatualizada no formulário de despesa e na agenda**
-    - a) ⭐ Conferir as duas telas e fazê-las usar a lista que já atualiza em tempo real
-    - b) Manter
-18. **Conferência do banco contra as migrations (regras de acesso e índices)**
-    - a) ⭐ Comparar regras de acesso e índices com as migrations e rodar o relatório de alertas do Supabase (só leitura); se houver diferença, trazer a correção para aprovação
-    - b) Manter
-19. **Telas sem teste automatizado** (participantes de projeto, "repetir até", dia de início do ciclo, histórico da caixinha, fechar compra)
-    - a) ⭐ Escrever testes de tela para as cinco
-    - b) Manter
-
-**Conferido em 17/10/2026:** nenhum destes itens foi feito ainda. A função `delete_category_moving_expenses` continua sem `security definer` (1); a edição "só esta" não avisa sobre o "repetir até" (2); não há função de série de eventos no banco (3 e 4); `events` não está no tempo real (5); a fila offline não tem exclusões (9); nenhum gatilho protege o `paid_at` da compra no cartão (10); e só o dia de início do ciclo tem teste, no cubit (19).
-
-Ordem sugerida, se ele seguir as recomendações: 12, 1, 2, 17, 9, 19, 3 e 4 juntos, 5, 10 e 18. Precisam de migration o 1, o 3 com o 4, o 5 e o 10 (e o 18, só se houver diferença). Os itens 8, 11, 13 e 16 ficam como estão.
-
-### Pontas deixadas pelas decisões de 15/10/2026
-- **Excluir categoria deixa sem categoria as despesas já excluídas:** a função `delete_category_moving_expenses` (0059) roda com as permissões de quem chama, e o RLS esconde despesas com `deleted_at`; ao excluir a categoria, a chave estrangeira põe `category_id` nulo nelas. Não aparece no app (despesa excluída nunca é restaurada). Correção proposta: migration 0062 com a função em `security definer`, mantendo a checagem `is_house_admin`.
-- **"Repetir até" com "só esta":** a data nova é aceita sem aviso e não muda nada; só vale para "esta e as próximas" e "todas".
-- **Ocorrências criadas ao estender uma série** ficam com `created_by` de quem editou, não de quem criou a série.
-- **Estender ou encurtar uma série não é atômico:** são várias gravações seguidas do app (como já era a edição de série); uma queda no meio deixa a série pela metade.
-- **Sem tempo real:** agenda e histórico da caixinha só atualizam ao recarregar (o saldo da caixinha já atualiza).
+- **1. Excluir categoria:** `delete_category_moving_expenses` passou a `security definer` (0072) e move também as despesas excluídas; a checagem `is_house_admin` continua. Ensaio: morador comum recusado; nenhuma despesa excluída ficou sem categoria.
+- **2. "Repetir até" com "só esta":** ao salvar "só esta" com a data final mudada, o formulário avisa ("A data final não muda só esta") e deixa "Escolher de novo" ou "Salvar só esta" (`add_event_sheet.dart`).
+- **3 e 4. Série de eventos:** a edição de "esta e as próximas" ou "todas" vai inteira para a função `update_event_series` (0073), numa transação só. O app calcula o plano (`seriesEndChange`, horário de cada ocorrência, o que sai e o que entra) e a função grava. Ocorrências novas ficam no nome de quem criou a série; pode editar o criador ou um administrador. "Só esta" continua gravando direto em `events`.
+- **5. Agenda em tempo real:** `events` e `event_participants` entraram no tempo real (0074). O `CalendarCubit` assina `watchEventChanges` e relê os eventos (espera 600 ms para juntar os avisos de uma série). O histórico da caixinha continua sendo relido ao abrir.
+- **9. Fila offline:** exclusão de item de compra e de tarefa entra na fila (`deleteShoppingItem`, `deleteTask`); sem conexão o item sai da tela na hora. Pagar parcela e as demais exclusões continuam fora.
+- **10. Fatura do cartão:** o banco exige dia de fechamento e de vencimento em todo cartão (`payment_methods_card_needs_days`, 0075; o formulário já pedia os dois). O gatilho `trg_house_expenses_card_payment_guard` recusa mudar `status` ou `paid_at` (e `paid_out_of_pocket` de compra já paga) numa compra no cartão gravada direto pelo app. As funções do banco (pagar ou desfazer fatura, fechamento) passam porque rodam como dona das tabelas. Compra que passa a ser no cartão numa edição volta a ficar pendente. "Reverter para pendente" numa compra no cartão agora mostra o erro: o caminho é desfazer o pagamento da fatura.
+- **12.** Saiu da lista (não havia nenhum acordo assim).
+- **17. Lista de moradores:** conferida, sem mudança. O formulário de despesa usa a lista do `FinanceCubit` (tempo real) e monta o rateio na hora de salvar; agenda e tarefas buscam os moradores no servidor a cada abertura.
+- **18. Conferência do banco:** os índices batem com as migrations. Das regras de acesso, só as de editar e excluir forma de pagamento diferem: a parte de RLS da 0017 nunca foi aplicada, então valem as da 0001 (dono do cartão, quem criou ou administrador), mais restritas que as da 0017 (qualquer morador). Ficaram assim, de propósito. Relatório de alertas do Supabase: funções `security definer` de gatilho executáveis por `anon` (19) e por `authenticated` (54, quase todas RPCs de propósito), `pg_net` no schema `public`, proteção contra senha vazada desligada (ligar no painel do Supabase, em Auth), 54 regras de acesso que reavaliam `auth.uid()` por linha, 66 chaves estrangeiras sem índice e 13 índices não usados. Nada disso foi alterado; ver "Pontas pequenas".
+- **19. Testes de tela:** histórico da caixinha (`test/features/finance/vault_history_dialog_widget_test.dart`), "repetir até" (`test/features/calendar/event_recurrence_end_widget_test.dart`), dia de início do ciclo (em `settings_page_test.dart`), participantes do projeto (`test/features/projects/project_participants_dialog_widget_test.dart`) e fechar compra (`test/features/shopping/finish_trip_dialog_widget_test.dart`). Dois deles ignoram só o erro de estouro de layout causado pela fonte de teste (letras quadradas).
+- **Tela de abertura do Android 12+:** usa `assets/launcher/splash_android12.png` (1152×1152, logo inteiro dentro do círculo central).
+- Ficaram como estão: 8 (cópia local), 11 (ciclo reaberto), 13 (revisão da importação só no aparelho) e 16 (leitura repetida na troca de ciclo).
 
 ### Pontas pequenas, nunca tratadas
 - **Troca de ciclo:** o resumo do ciclo ainda relê despesas e aportes por dentro; cortar isso é o próximo passo se a troca parecer lenta.
-- **Lista de moradores desatualizada** depois que alguém entra na casa: corrigido nos Ajustes e, pelo tempo real, no estado financeiro; outras telas (formulário de despesa, agenda) não foram conferidas.
-- **Conferência do banco contra as migrations:** gatilhos e funções foram conferidos e batem (só faltava um gatilho da 0017, criado na 0046), e todas as tabelas têm RLS ligado. Não foi conferido o conteúdo das regras de acesso nem os índices; como as migrations 0001 a 0021 foram aplicadas à mão, pode haver outra diferença.
-- **Telas novas sem teste automatizado:** diálogo de participantes de projeto, "repetir até" do evento, diálogo do dia de início do ciclo, histórico da caixinha e diálogo de fechar compra. A regra de cada uma tem teste; a tela não.
+- **Alertas do Supabase (17/10/2026):** revogar `execute` de `anon` nas funções de gatilho `security definer`; trocar `auth.uid()` por `(select auth.uid())` nas regras de acesso; criar índice nas chaves estrangeiras mais consultadas; ligar a proteção contra senha vazada (painel do Supabase). Nenhum é urgente com uma casa só; vale fazer antes de abrir o app para outras casas.
 
 ## Testes manuais pendentes
 
 Os roteiros anteriores foram executados pelo dono até 14/10/2026. Ficam aqui só os do que entrou depois.
+
+### Decisões implementadas em 17/10 (migrations 0072 a 0075)
+Reinicie o app (ou instale o APK novo) antes.
+- **Excluir categoria** que tem despesa excluída: nada muda na tela; a exclusão continua funcionando.
+- **"Repetir até" com "só esta":** mudar a data final e salvar "Apenas este evento" mostra o aviso; "Escolher de novo" volta à escolha.
+- **Série estendida por outra pessoa:** quem criou a série estende o "repetir até" (ou um administrador estende a série de outro morador); depois, quem criou consegue editar as ocorrências novas.
+- **Agenda em tempo real:** com dois aparelhos abertos, criar, editar e excluir um evento; o outro aparelho atualiza sozinho.
+- **Fila offline:** sem internet, excluir um item de compra e uma tarefa; somem na hora e, ao voltar a conexão, somem no outro aparelho.
+- **Compra no cartão:** "Reverter para pendente" numa compra no cartão paga mostra o aviso de usar a fatura; pagar e desfazer a fatura continuam funcionando.
+- **Tela de abertura (Android 12+):** o logo aparece inteiro, sem corte.
 
 ### Nota pelo QR, tela de espera, ícone e demo (16 e 17/10/2026)
 Reinicie o app (ou instale o APK novo) antes; no site, publique de novo antes (ver "Estado atual").
@@ -292,6 +249,11 @@ Uma linha por migration, para saber onde está cada regra.
 | 0068 | Painel administrativo, fase A: administradores, status da conta, aprovação e funções do painel |
 | 0069 | Painel administrativo, fase B: planos Free e Premium, limites e troca de plano |
 | 0070 | Agendador das notificações: `pg_cron`, lembretes de contas, faturas, ciclo, empréstimos, tarefas, agenda e conta, e liberação do push segurado (branch `feat/notificacoes-agendador`) |
+| 0071 | `profiles.email` igual ao e-mail de acesso (branch `feat/auth-conta-seguranca`) |
+| 0072 | Excluir categoria move também as despesas excluídas (`delete_category_moving_expenses` em `security definer`) |
+| 0073 | Edição de série de eventos numa transação (`update_event_series`), ocorrências novas no nome de quem criou a série |
+| 0074 | Tempo real para eventos e participantes da agenda |
+| 0075 | Cartão exige dias de fechamento e vencimento; pagamento de compra no cartão só pela fatura (`guard_card_purchase_payment`) |
 
 ## Documentos relacionados
 

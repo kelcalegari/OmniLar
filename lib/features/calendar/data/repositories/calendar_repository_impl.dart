@@ -61,6 +61,9 @@ class CalendarRepositoryImpl implements CalendarRepository {
   Future<void> cancelEvent(String eventId) => _dataSource.cancelEvent(eventId);
 
   @override
+  Stream<void> watchEventChanges() => _dataSource.watchEventChanges();
+
+  @override
   Future<List<TaskItem>> getTasks({bool includeArchived = false}) =>
       _dataSource.getTasks(includeArchived: includeArchived);
 
@@ -123,7 +126,19 @@ class CalendarRepositoryImpl implements CalendarRepository {
   }
 
   @override
-  Future<void> deleteTask(String taskId) => _dataSource.deleteTask(taskId);
+  Future<bool> deleteTask(String taskId) async {
+    final sync = _offlineSync;
+    // Só o que já tem id real pode ser reenviado depois; excluir de novo não muda nada
+    if (sync == null || !sync.isActive || !isUuid(taskId)) {
+      await _dataSource.deleteTask(taskId);
+      return true;
+    }
+    return sync.runOrQueue(
+      OfflineActionType.deleteTask,
+      () => {'id': taskId},
+      () => _dataSource.deleteTask(taskId),
+    );
+  }
 
   @override
   Future<void> updateTask(TaskItem task) async {

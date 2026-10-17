@@ -18,6 +18,14 @@ class _FlakyShoppingDataSource extends Fake implements ShoppingDataSource {
     if (!online) throw Exception('SocketException: Failed host lookup');
     marks.add(bought);
   }
+
+  final deleted = <String>[];
+
+  @override
+  Future<void> deleteItem(String itemId) async {
+    if (!online) throw Exception('SocketException: Failed host lookup');
+    deleted.add(itemId);
+  }
 }
 
 class _FlakyCalendarDataSource extends MockCalendarDataSource {
@@ -33,6 +41,14 @@ class _FlakyCalendarDataSource extends MockCalendarDataSource {
   }) async {
     if (!online) throw Exception('SocketException: Failed host lookup');
     marks.add(completed);
+  }
+
+  final deleted = <String>[];
+
+  @override
+  Future<void> deleteTask(String taskId) async {
+    if (!online) throw Exception('SocketException: Failed host lookup');
+    deleted.add(taskId);
   }
 }
 
@@ -89,5 +105,37 @@ void main() {
     dataSource.online = true;
     expect((await sync.drain()).synced, 1);
     expect(dataSource.marks, [true]);
+  });
+
+  test('item de compra excluído sem sinal entra na fila e é reenviado', () async {
+    final dataSource = _FlakyShoppingDataSource();
+    final repository = ShoppingRepositoryImpl(dataSource, sync);
+    sync.registerHandler(
+      OfflineActionType.deleteShoppingItem,
+      (p) => dataSource.deleteItem(p['id'] as String),
+    );
+
+    expect(await repository.deleteItem(_itemId), isFalse);
+    expect(sync.pendingForCurrentScope.single.type, OfflineActionType.deleteShoppingItem);
+
+    dataSource.online = true;
+    expect((await sync.drain()).synced, 1);
+    expect(dataSource.deleted, [_itemId]);
+  });
+
+  test('tarefa excluída sem conexão entra na fila e é reenviada', () async {
+    final dataSource = _FlakyCalendarDataSource();
+    final repository = CalendarRepositoryImpl(dataSource, sync);
+    sync.registerHandler(
+      OfflineActionType.deleteTask,
+      (p) => dataSource.deleteTask(p['id'] as String),
+    );
+
+    expect(await repository.deleteTask(_taskId), isFalse);
+    expect(sync.pendingForCurrentScope.single.type, OfflineActionType.deleteTask);
+
+    dataSource.online = true;
+    expect((await sync.drain()).synced, 1);
+    expect(dataSource.deleted, [_taskId]);
   });
 }

@@ -105,11 +105,12 @@ flutter_native_splash:
   android: true
   ios: true
   web: false
+  # Android 12+: 1152x1152 com o logo dentro do círculo central (o sistema recorta o resto)
   android_12:
     color: "#0F172A"
     color_dark: "#0F172A"
-    image: assets/images/logos/icon_dark.png
-    image_dark: assets/images/logos/icon_dark.png
+    image: assets/launcher/splash_android12.png
+    image_dark: assets/launcher/splash_android12.png
 
   # An image asset can refer to one or more resolution-specific "variants", see
   # https://flutter.dev/to/resolution-aware-images

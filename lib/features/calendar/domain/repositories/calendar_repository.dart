@@ -21,6 +21,9 @@ abstract class CalendarRepository {
   });
   Future<void> cancelEvent(String eventId);
 
+  /// Avisa quando um evento ou participante da casa muda (em qualquer aparelho).
+  Stream<void> watchEventChanges();
+
   Future<List<TaskItem>> getTasks({bool includeArchived = false});
   Stream<List<TaskItem>> watchTasks({bool includeArchived = false});
   Future<void> addTask(TaskItem task);
@@ -39,5 +42,6 @@ abstract class CalendarRepository {
     required bool completed,
     required String completedByMemberId,
   });
-  Future<void> deleteTask(String taskId);
+  /// Retorna false quando ficou na fila offline para ser reenviada.
+  Future<bool> deleteTask(String taskId);
 }

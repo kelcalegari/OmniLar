@@ -16,7 +16,8 @@ abstract class ShoppingRepository {
   /// Marca ou desmarca o item como comprado. Sem conexão a marcação entra na
   /// fila offline e devolve false (a tela atualiza o item por conta própria).
   Future<bool> setItemBought(String itemId, {required bool bought});
-  Future<void> deleteItem(String itemId);
+  /// Retorna false quando ficou na fila offline para ser reenviada.
+  Future<bool> deleteItem(String itemId);
   Future<ShoppingTrip> completeTrip({
     required String listId,
     required Money totalAmount,

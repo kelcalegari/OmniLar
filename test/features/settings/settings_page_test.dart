@@ -181,6 +181,39 @@ void main() {
     expect(find.text('Salvar'), findsOneWidget);
   });
 
+  testWidgets('Trocar o dia de início explica o ciclo de transição antes de salvar', (tester) async {
+    await sl<FinanceCubit>().loadCycleData();
+
+    await tester.pumpWidget(buildTestableWidget());
+    await tester.pumpAndSettle();
+
+    await openGroup(tester, 'Casa');
+    final tile = find.text('Ciclo Financeiro');
+    await tester.ensureVisible(tile);
+    await tester.tap(tile);
+    await tester.pumpAndSettle();
+
+    // Mesmo dia: só o período, e salvar fica desligado
+    expect(find.textContaining('Período do ciclo: dia 5'), findsOneWidget);
+    FilledButton save() => tester.widget<FilledButton>(find.widgetWithText(FilledButton, 'Salvar'));
+    expect(save().onPressed, isNull);
+
+    await tester.tap(find.text('Dia 5 de cada mês'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Dia 10 de cada mês').last);
+    await tester.pumpAndSettle();
+
+    expect(find.text('Todo dia 10'), findsOneWidget);
+    expect(find.textContaining('O ciclo atual não muda'), findsOneWidget);
+    expect(find.textContaining('os ciclos começam todo dia 10'), findsOneWidget);
+    expect(save().onPressed, isNotNull);
+
+    // Cancelar não grava
+    await tester.tap(find.text('Cancelar'));
+    await tester.pumpAndSettle();
+    expect(find.text('Dia de Início do Ciclo'), findsNothing);
+  });
+
   testWidgets('Can open Editar Perfil da Conta modal and update profile', (
     tester,
   ) async {

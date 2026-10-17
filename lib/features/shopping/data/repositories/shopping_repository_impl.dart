@@ -57,7 +57,19 @@ class ShoppingRepositoryImpl implements ShoppingRepository {
   }
 
   @override
-  Future<void> deleteItem(String itemId) => _dataSource.deleteItem(itemId);
+  Future<bool> deleteItem(String itemId) async {
+    final sync = _offlineSync;
+    // Só o que já tem id real pode ser reenviado depois; excluir de novo não muda nada
+    if (sync == null || !sync.isActive || !isUuid(itemId)) {
+      await _dataSource.deleteItem(itemId);
+      return true;
+    }
+    return sync.runOrQueue(
+      OfflineActionType.deleteShoppingItem,
+      () => {'id': itemId},
+      () => _dataSource.deleteItem(itemId),
+    );
+  }
 
   @override
   Future<void> updateItem(ShoppingItem item) async {

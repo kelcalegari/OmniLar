@@ -20,6 +20,9 @@ abstract class CalendarDataSource {
     required RsvpStatus status,
   });
   Future<void> cancelEvent(String eventId);
+
+  /// Avisa quando um evento ou participante da casa muda (em qualquer aparelho).
+  Stream<void> watchEventChanges();
   Future<List<TaskItem>> getTasks({bool includeArchived = false});
   Stream<List<TaskItem>> watchTasks({bool includeArchived = false});
   Future<void> addTask(TaskItem task);

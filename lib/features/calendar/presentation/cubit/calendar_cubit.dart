@@ -13,6 +13,8 @@ class CalendarCubit extends Cubit<CalendarState> {
   final CalendarRepository _repository;
   final AuthRepository? _authRepository;
   StreamSubscription<List<TaskItem>>? _tasksSubscription;
+  StreamSubscription<void>? _eventsSubscription;
+  Timer? _eventsDebounce;
 
   CalendarCubit(this._repository, [this._authRepository])
       : super(CalendarState(
@@ -24,6 +26,9 @@ class CalendarCubit extends Cubit<CalendarState> {
   void resetState() {
     _tasksSubscription?.cancel();
     _tasksSubscription = null;
+    _eventsSubscription?.cancel();
+    _eventsSubscription = null;
+    _eventsDebounce?.cancel();
     emit(CalendarState(
       activeMemberId: (_authRepository?.isDemoMode == true)
           ? (_authRepository?.currentUser?.id ?? 'member_carlos')
@@ -66,6 +71,30 @@ class CalendarCubit extends Cubit<CalendarState> {
     );
   }
 
+  /// Liga o aviso de mudanças da agenda, se ainda não estiver ligado. Enquanto a
+  /// casa não carregou a fonte recusa; a próxima carga tenta de novo.
+  void _listenToEvents() {
+    if (_eventsSubscription != null || isClosed) return;
+    try {
+      _eventsSubscription = _repository.watchEventChanges().listen(
+        (_) {
+          // Uma série gera vários avisos seguidos: relê uma vez só
+          _eventsDebounce?.cancel();
+          _eventsDebounce = Timer(const Duration(milliseconds: 600), () async {
+            if (isClosed) return;
+            try {
+              final events = await _repository.getEvents();
+              if (!isClosed) emit(state.copyWith(events: events));
+            } catch (_) {}
+          });
+        },
+        onError: (e) {
+          debugPrint('Aviso: Sincronização em tempo real da agenda indisponível: $e');
+        },
+      );
+    } catch (_) {}
+  }
+
   Future<void> loadCalendarData({bool? includeHistory}) async {
     emit(state.copyWith(status: CalendarCubitStatus.loading));
     try {
@@ -93,6 +122,7 @@ class CalendarCubit extends Cubit<CalendarState> {
       ));
 
       _listenToTasks(showHistory);
+      _listenToEvents();
     } catch (e) {
       emit(state.copyWith(
         status: CalendarCubitStatus.error,
@@ -253,7 +283,12 @@ class CalendarCubit extends Cubit<CalendarState> {
 
   Future<bool> deleteTask(String taskId) async {
     try {
-      await _repository.deleteTask(taskId);
+      final sent = await _repository.deleteTask(taskId);
+      if (!sent) {
+        // Sem conexão: a exclusão ficou na fila e a tarefa sai da tela agora
+        emit(state.copyWith(tasks: state.tasks.where((t) => t.id != taskId).toList()));
+        return true;
+      }
       final tasks = await _repository.getTasks(includeArchived: state.isShowingHistory);
       emit(state.copyWith(tasks: tasks));
       return true;
@@ -266,6 +301,8 @@ class CalendarCubit extends Cubit<CalendarState> {
   @override
   Future<void> close() {
     _tasksSubscription?.cancel();
+    _eventsSubscription?.cancel();
+    _eventsDebounce?.cancel();
     return super.close();
   }
 }

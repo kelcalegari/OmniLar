@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../../core/domain/enums/recurrence.dart';
 import '../../../../core/domain/value_objects/money.dart';
@@ -287,114 +288,98 @@ class SupabaseCalendarDataSource implements CalendarDataSource {
         return;
       }
 
-      var seriesQuery = client
+      // A série inteira, para calcular o plano; a gravação é uma transação só
+      final rows = await client
           .from('events')
-          .select('id, start_time, end_time')
+          .select('id, start_time, end_time, recurrence_frequency')
           .eq('recurring_series_id', seriesId);
-      if (scope == RecurrenceScope.thisAndFuture) {
-        seriesQuery = seriesQuery.gte('start_time', current!['start_time'] as String);
-      }
+      final fromStart = scope == RecurrenceScope.thisAndFuture;
+      final currentStart = DateTime.parse(current!['start_time'] as String).toLocal();
+      String? day(DateTime? d) => d?.toIso8601String().split('T')[0];
 
       // Cada ocorrência mantém o seu dia e a sua duração; muda só o horário
-      for (final row in await seriesQuery) {
-        final oldStart = DateTime.parse(row['start_time'] as String).toLocal();
-        final oldEnd = DateTime.parse(row['end_time'] as String).toLocal();
-        final newStart = DateTime(
-          oldStart.year,
-          oldStart.month,
-          oldStart.day,
-          event.startTime.hour,
-          event.startTime.minute,
+      final updates = [
+        for (final row in rows)
+          if (!fromStart || !DateTime.parse(row['start_time'] as String).toLocal().isBefore(currentStart))
+            () {
+              final oldStart = DateTime.parse(row['start_time'] as String).toLocal();
+              final oldEnd = DateTime.parse(row['end_time'] as String).toLocal();
+              final newStart = DateTime(
+                oldStart.year,
+                oldStart.month,
+                oldStart.day,
+                event.startTime.hour,
+                event.startTime.minute,
+              );
+              return {
+                'id': row['id'] as String,
+                'start_time': newStart.toUtc().toIso8601String(),
+                'end_time': newStart.add(oldEnd.difference(oldStart)).toUtc().toIso8601String(),
+              };
+            }(),
+      ];
+
+      // "Repetir até" trocado: sai o que passou da nova data e entra o que falta até ela
+      final currentEnd = current['recurrence_end_date'] != null
+          ? DateTime.tryParse(current['recurrence_end_date'] as String)
+          : null;
+      final endChanged = day(event.recurrenceEndDate) != day(currentEnd);
+      var change = const SeriesEndChange();
+      if (endChanged) {
+        final frequency = rows.isEmpty
+            ? event.recurrenceFrequency.name
+            : rows.first['recurrence_frequency'] as String;
+        change = seriesEndChange(
+          occurrences: [
+            for (final r in rows)
+              (id: r['id'] as String, start: DateTime.parse(r['start_time'] as String).toLocal()),
+          ],
+          from: currentStart,
+          edited: event.copyWith(
+            recurrenceFrequency: RecurrenceFrequency.values.firstWhere(
+              (f) => f.name == frequency,
+              orElse: () => event.recurrenceFrequency,
+            ),
+          ),
         );
-
-        await client.from('events').update({
-          ...sharedFields,
-          'start_time': newStart.toUtc().toIso8601String(),
-          'end_time': newStart.add(oldEnd.difference(oldStart)).toUtc().toIso8601String(),
-        }).eq('id', row['id'] as String);
-        await _upsertParticipants(row['id'] as String, event.participants);
       }
+      final duration = event.endTime.difference(event.startTime);
 
-      await _applySeriesEnd(
-        seriesId: seriesId,
-        currentStart: DateTime.parse(current!['start_time'] as String).toLocal(),
-        currentEnd: current['recurrence_end_date'] != null
-            ? DateTime.tryParse(current['recurrence_end_date'] as String)
-            : null,
-        edited: event,
-        fromStart: scope == RecurrenceScope.thisAndFuture,
-        sharedFields: sharedFields,
-      );
+      await client.rpc('update_event_series', params: {
+        'p_plan': {
+          'event_id': event.id,
+          'fields': sharedFields,
+          'updates': [
+            for (final u in updates)
+              if (!change.removeIds.contains(u['id'])) u,
+          ],
+          'remove_ids': change.removeIds,
+          'add': [
+            for (final start in change.addStarts)
+              {
+                'start_time': start.toUtc().toIso8601String(),
+                'end_time': start.add(duration).toUtc().toIso8601String(),
+              },
+          ],
+          'end_date_changed': endChanged,
+          'recurrence_end_date': day(event.recurrenceEndDate),
+          if (fromStart) 'from_start': currentStart.toUtc().toIso8601String(),
+          'participants': [
+            for (final p in event.participants)
+              if (_isUuid(p.memberId))
+                {
+                  'user_id': p.memberId,
+                  'is_essential': p.isEssential,
+                  'rsvp_status': p.rsvpStatus.name,
+                  'responded_at': p.respondedAt?.toUtc().toIso8601String(),
+                },
+          ],
+        },
+      });
     } catch (e) {
       if (e is Failure) rethrow;
       throw ServerFailure('Erro ao atualizar evento da agenda: $e');
     }
-  }
-
-  /// "Repetir até" trocado na edição da série: tira o que passou da nova data,
-  /// cria o que falta até ela (com os mesmos participantes) e grava a data.
-  Future<void> _applySeriesEnd({
-    required String seriesId,
-    required DateTime currentStart,
-    required DateTime? currentEnd,
-    required CalendarEvent edited,
-    required bool fromStart,
-    required Map<String, dynamic> sharedFields,
-  }) async {
-    String? day(DateTime? d) => d?.toIso8601String().split('T')[0];
-    if (day(edited.recurrenceEndDate) == day(currentEnd)) return;
-
-    final rows = await client
-        .from('events')
-        .select('id, start_time, recurrence_frequency')
-        .eq('recurring_series_id', seriesId);
-    final frequency = rows.isEmpty
-        ? edited.recurrenceFrequency.name
-        : rows.first['recurrence_frequency'] as String;
-    final change = seriesEndChange(
-      occurrences: [
-        for (final r in rows)
-          (id: r['id'] as String, start: DateTime.parse(r['start_time'] as String).toLocal()),
-      ],
-      from: currentStart,
-      edited: edited.copyWith(
-        recurrenceFrequency: RecurrenceFrequency.values.firstWhere(
-          (f) => f.name == frequency,
-          orElse: () => edited.recurrenceFrequency,
-        ),
-      ),
-    );
-
-    if (change.removeIds.isNotEmpty) {
-      await client.from('events').delete().inFilter('id', change.removeIds);
-    }
-    final duration = edited.endTime.difference(edited.startTime);
-    if (change.addStarts.isNotEmpty) {
-      final inserted = await client.from('events').insert([
-        for (final start in change.addStarts)
-          {
-            ...sharedFields,
-            'house_id': _houseId,
-            'start_time': start.toUtc().toIso8601String(),
-            'end_time': start.add(duration).toUtc().toIso8601String(),
-            'recurrence_frequency': frequency,
-            'recurring_series_id': seriesId,
-            'recurrence_end_date': day(edited.recurrenceEndDate),
-          },
-      ]).select('id');
-      for (final r in inserted) {
-        await _upsertParticipants(r['id'] as String, edited.participants);
-      }
-    }
-
-    var endUpdate = client
-        .from('events')
-        .update({'recurrence_end_date': day(edited.recurrenceEndDate)})
-        .eq('recurring_series_id', seriesId);
-    if (fromStart) {
-      endUpdate = endUpdate.gte('start_time', currentStart.toUtc().toIso8601String());
-    }
-    await endUpdate;
   }
 
   @override
@@ -448,6 +433,46 @@ class SupabaseCalendarDataSource implements CalendarDataSource {
     } catch (e) {
       throw ServerFailure('Erro ao responder RSVP: $e');
     }
+  }
+
+  @override
+  Stream<void> watchEventChanges() {
+    final houseId = _houseId;
+    if (!_isUuid(houseId)) {
+      throw const ServerFailure('Casa ainda não carregada.');
+    }
+
+    RealtimeChannel? channel;
+    late final StreamController<void> controller;
+    controller = StreamController<void>.broadcast(
+      onListen: () {
+        // Um canal por assinatura: o fechamento de um não derruba o do outro
+        var pending = client.channel('house-calendar-$houseId-${identityHashCode(controller)}');
+        // Eventos e participantes (0074)
+        for (final table in const ['events', 'event_participants']) {
+          pending = pending.onPostgresChanges(
+            event: PostgresChangeEvent.all,
+            schema: 'public',
+            table: table,
+            filter: PostgresChangeFilter(
+              type: PostgresChangeFilterType.eq,
+              column: 'house_id',
+              value: houseId,
+            ),
+            callback: (_) {
+              if (!controller.isClosed) controller.add(null);
+            },
+          );
+        }
+        channel = pending.subscribe();
+      },
+      onCancel: () {
+        final current = channel;
+        channel = null;
+        if (current != null) client.removeChannel(current);
+      },
+    );
+    return controller.stream;
   }
 
   @override

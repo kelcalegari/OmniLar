@@ -354,6 +354,10 @@ class MockCalendarDataSource implements CalendarDataSource {
     _events[eventIndex] = event.copyWith(participants: updatedParticipants);
   }
 
+  /// O modo demo roda num aparelho só: nada muda por fora.
+  @override
+  Stream<void> watchEventChanges() => const Stream<void>.empty();
+
   @override
   Future<void> cancelEvent(String eventId) async {
     final eventIndex = _events.indexWhere((e) => e.id == eventId);

@@ -400,6 +400,14 @@ Future<void> initServiceLocator() async {
       ),
     )
     ..registerHandler(
+      OfflineActionType.deleteShoppingItem,
+      (payload) => sl<ShoppingDataSource>().deleteItem(payload['id'] as String),
+    )
+    ..registerHandler(
+      OfflineActionType.deleteTask,
+      (payload) => sl<CalendarDataSource>().deleteTask(payload['id'] as String),
+    )
+    ..registerHandler(
       OfflineActionType.createLoan,
       (payload) => sl<P2PDataSource>().createLoan(p2pLoanFromJson(payload)),
     );
