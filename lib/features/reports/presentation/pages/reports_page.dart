@@ -342,8 +342,8 @@ class _ReportsPageContent extends StatelessWidget {
         children: [
           IconButton(
             icon: const Icon(Icons.chevron_left_rounded),
-            onPressed: cubit.previousCycle,
-            tooltip: 'Ciclo Anterior',
+            onPressed: cubit.canGoToPreviousCycle ? cubit.previousCycle : null,
+            tooltip: cubit.canGoToPreviousCycle ? 'Ciclo Anterior' : 'Primeiro ciclo da casa',
           ),
           Column(
             children: [

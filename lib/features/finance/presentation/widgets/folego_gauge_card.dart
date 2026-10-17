@@ -8,7 +8,8 @@ import '../../domain/entities/financial_cycle_summary.dart';
 class FolegoGaugeCard extends StatelessWidget {
   final FinancialCycleSummary summary;
   final FinancialCycle cycle;
-  final VoidCallback onPreviousCycle;
+  /// Null no primeiro ciclo da casa: a seta fica desabilitada.
+  final VoidCallback? onPreviousCycle;
   final VoidCallback onNextCycle;
 
   /// Volta ao ciclo em andamento; o atalho só aparece fora dele.
@@ -82,7 +83,7 @@ class FolegoGaugeCard extends StatelessWidget {
                 IconButton(
                   icon: const Icon(Icons.chevron_left_rounded),
                   onPressed: onPreviousCycle,
-                  tooltip: 'Ciclo anterior',
+                  tooltip: onPreviousCycle == null ? 'Primeiro ciclo da casa' : 'Ciclo anterior',
                   padding: EdgeInsets.zero,
                   constraints: const BoxConstraints(),
                 ),

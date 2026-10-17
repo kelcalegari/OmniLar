@@ -38,7 +38,11 @@ class SettlementHubPage extends StatelessWidget {
     if (initialCycle != null) return initialCycle!;
     try {
       final date = initialCycleDate;
-      if (date != null) return context.read<FinanceCubit>().cycleSchedule.cycleFor(date);
+      if (date != null) {
+        final finance = context.read<FinanceCubit>();
+        final cycle = finance.cycleSchedule.cycleFor(date);
+        return finance.isBeforeFirstCycle(cycle) ? finance.firstCycle! : cycle;
+      }
       final financeCycle = context.read<FinanceCubit>().state.currentCycle;
       return financeCycle;
     } catch (_) {
@@ -70,6 +74,15 @@ class _SettlementHubContent extends StatelessWidget {
       return context.read<FinanceCubit>().cycleSchedule;
     } catch (_) {
       return const CycleSchedule(FinanceCubit.defaultCycleStartDay);
+    }
+  }
+
+  /// Se o ciclo anterior a [cycle] ainda é da vida da casa.
+  bool _canGoBack(BuildContext context, FinancialCycle cycle) {
+    try {
+      return context.read<FinanceCubit>().canGoBackFrom(cycle);
+    } catch (_) {
+      return true;
     }
   }
 
@@ -624,10 +637,10 @@ class _SettlementHubContent extends StatelessWidget {
             children: [
               IconButton.filledTonal(
                 icon: const Icon(Icons.chevron_left_rounded),
-                tooltip: 'Ciclo anterior',
-                onPressed: () => context
-                    .read<SettlementCubit>()
-                    .previousCycle(_cycleSchedule(context)),
+                tooltip: _canGoBack(context, summary.cycle) ? 'Ciclo anterior' : 'Primeiro ciclo da casa',
+                onPressed: _canGoBack(context, summary.cycle)
+                    ? () => context.read<SettlementCubit>().previousCycle(_cycleSchedule(context))
+                    : null,
               ),
               const SizedBox(width: 8),
               Expanded(

@@ -411,6 +411,18 @@ class MockFinanceDataSource implements FinanceDataSource {
   Future<Money> getOpeningBalance(FinancialCycle cycle) => getVaultReturnsForCycle(cycle);
 
   @override
+  Future<DateTime?> getHouseStartDate() async {
+    // A casa demo existe há uns seis meses
+    final now = DateTime.now();
+    final dates = [
+      DateTime(now.year, now.month - 6, now.day),
+      for (final e in _expenses.where((e) => e.projectId == null)) ...[e.date, ?e.dueDate],
+      for (final c in _contributions) c.date,
+    ];
+    return dates.reduce((a, b) => a.isBefore(b) ? a : b);
+  }
+
+  @override
   Future<Money> getVaultReturnsForCycle(FinancialCycle cycle) async {
     final cents = _savingsTransactions
         .where((t) => t.cycleStartDate != null && cycle.contains(t.cycleStartDate!))

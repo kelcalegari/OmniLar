@@ -33,6 +33,9 @@ class FinanceState extends Equatable {
 
   /// Código do boleto de cada fatura, pela chave [CardInvoiceCode.keyOf].
   final Map<String, String> cardInvoiceCodes;
+
+  /// Início da casa (criação ou lançamento mais antigo); null enquanto não se sabe.
+  final DateTime? houseStartDate;
   final String? errorMessage;
 
   const FinanceState({
@@ -51,6 +54,7 @@ class FinanceState extends Equatable {
     this.recurringSeries = const [],
     this.splitModel = 'percentage',
     this.cardInvoiceCodes = const {},
+    this.houseStartDate,
     this.errorMessage,
   });
 
@@ -77,6 +81,7 @@ class FinanceState extends Equatable {
     List<HouseExpense>? recurringSeries,
     String? splitModel,
     Map<String, String>? cardInvoiceCodes,
+    DateTime? houseStartDate,
     String? errorMessage,
   }) {
     return FinanceState(
@@ -95,6 +100,7 @@ class FinanceState extends Equatable {
       recurringSeries: recurringSeries ?? this.recurringSeries,
       splitModel: splitModel ?? this.splitModel,
       cardInvoiceCodes: cardInvoiceCodes ?? this.cardInvoiceCodes,
+      houseStartDate: houseStartDate ?? this.houseStartDate,
       errorMessage: errorMessage ?? this.errorMessage,
     );
   }
@@ -116,6 +122,7 @@ class FinanceState extends Equatable {
         recurringSeries,
         splitModel,
         cardInvoiceCodes,
+        houseStartDate,
         errorMessage,
       ];
 }

@@ -121,7 +121,8 @@ class FinanceCubit extends Cubit<FinanceState> {
   int _loadSequence = 0;
 
   Future<void> loadCycleData({FinancialCycle? cycle}) async {
-    final targetCycle = _alignToHouse(cycle ?? state.currentCycle);
+    var targetCycle = _alignToHouse(cycle ?? state.currentCycle);
+    if (isBeforeFirstCycle(targetCycle)) targetCycle = firstCycle!;
     final sequence = ++_loadSequence;
     emit(state.copyWith(status: FinanceStatus.loading, currentCycle: targetCycle));
 
@@ -145,6 +146,9 @@ class FinanceCubit extends Cubit<FinanceState> {
       final invoiceCodesFuture = Future<List<CardInvoiceCode>?>.sync(
         () => _repository.getCardInvoiceCodes(),
       ).catchError((_) => null);
+      final startDateFuture = Future<DateTime?>.sync(
+        () => _repository.getHouseStartDate(),
+      ).catchError((_) => null);
       final historicalFuture = Future<List<HouseExpense>>.sync(
         () => _repository.getExpensesForCycle(cycleSchedule.previous(targetCycle)),
       ).catchError((_) => <HouseExpense>[]);
@@ -161,6 +165,7 @@ class FinanceCubit extends Cubit<FinanceState> {
         recurringFuture,
         invoiceCodesFuture,
         historicalFuture,
+        startDateFuture,
       ]);
       // Outro ciclo foi pedido enquanto este carregava: o dele é que vale
       if (sequence != _loadSequence || isClosed) return;
@@ -185,6 +190,7 @@ class FinanceCubit extends Cubit<FinanceState> {
       }
       final historicalExpenses = await historicalFuture;
       final invoiceCodes = await invoiceCodesFuture;
+      final houseStartDate = await startDateFuture;
 
       _historicalExpenses = historicalExpenses.isNotEmpty ? historicalExpenses : expenses;
 
@@ -214,6 +220,7 @@ class FinanceCubit extends Cubit<FinanceState> {
         splitModel: splitModel,
         recurringSeries: recurringSeries,
         cardInvoiceCodes: invoiceCodes == null ? null : {for (final c in invoiceCodes) c.key: c.barcode},
+        houseStartDate: houseStartDate,
       ));
       _watchHouseChanges();
     } catch (e) {
@@ -306,9 +313,27 @@ class FinanceCubit extends Cubit<FinanceState> {
   }
 
   void previousCycle() {
+    if (!canGoToPreviousCycle) return;
     final prev = cycleSchedule.previous(state.currentCycle);
     loadCycleData(cycle: prev);
   }
+
+  /// Primeiro ciclo da casa (null enquanto não se sabe): antes dele a casa não existia.
+  FinancialCycle? get firstCycle {
+    final start = state.houseStartDate;
+    return start == null ? null : cycleSchedule.cycleFor(start);
+  }
+
+  /// Se [cycle] é de antes do primeiro ciclo da casa.
+  bool isBeforeFirstCycle(FinancialCycle cycle) {
+    final first = firstCycle;
+    return first != null && cycle.startDate.isBefore(first.startDate);
+  }
+
+  /// Se dá para ir ao ciclo anterior a [cycle] sem sair da vida da casa.
+  bool canGoBackFrom(FinancialCycle cycle) => !isBeforeFirstCycle(cycleSchedule.previous(cycle));
+
+  bool get canGoToPreviousCycle => canGoBackFrom(state.currentCycle);
 
   /// Volta para o ciclo em andamento hoje.
   void goToCurrentCycle() {

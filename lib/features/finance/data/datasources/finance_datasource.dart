@@ -35,6 +35,10 @@ abstract class FinanceDataSource {
   Future<Money> getVaultReturnsForCycle(FinancialCycle cycle);
   Future<FinancialCycleSummary> getCycleSummary(FinancialCycle cycle);
 
+  /// Início da casa: o mais antigo entre a criação da casa e o lançamento mais
+  /// antigo (despesa ou aporte). Null quando não se sabe.
+  Future<DateTime?> getHouseStartDate();
+
   Future<void> addExpense(HouseExpense expense);
   Future<void> updateExpense(
     HouseExpense expense, {

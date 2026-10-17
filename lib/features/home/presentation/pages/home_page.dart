@@ -200,7 +200,7 @@ class _HomePageContentState extends State<_HomePageContent> {
       builder: (context, snapshot) => FolegoGaugeCard(
         summary: summary,
         cycle: state.currentCycle,
-        onPreviousCycle: cubit.previousCycle,
+        onPreviousCycle: cubit.canGoToPreviousCycle ? cubit.previousCycle : null,
         onNextCycle: cubit.nextCycle,
         onCurrentCycle: cubit.goToCurrentCycle,
         isLoading: _isSwitchingCycle(state),

@@ -98,6 +98,8 @@ class _FakeFinanceRepository implements FinanceRepository {
   @override
   Future<Money> getVaultReturnsForCycle(FinancialCycle cycle) async => const Money.zero();
   @override
+  Future<DateTime?> getHouseStartDate() async => null;
+  @override
   Future<void> withdrawFromVault({required String vaultId, required String memberId, required Money amount, required String description, DateTime? returnToCycleStart}) async {}
   @override
   Future<List<AuditEntry>> getAuditLog({String? entityId, int limit = 50}) async => [];

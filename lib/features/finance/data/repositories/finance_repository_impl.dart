@@ -153,6 +153,9 @@ class FinanceRepositoryImpl implements FinanceRepository {
       );
 
   @override
+  Future<DateTime?> getHouseStartDate() => _dataSource.getHouseStartDate();
+
+  @override
   Future<Money> getVaultReturnsForCycle(FinancialCycle cycle) =>
       _dataSource.getVaultReturnsForCycle(cycle);
 

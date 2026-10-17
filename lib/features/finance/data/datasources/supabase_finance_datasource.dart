@@ -378,6 +378,51 @@ class SupabaseFinanceDataSource implements FinanceDataSource {
   }
 
   @override
+  Future<DateTime?> getHouseStartDate() async {
+    try {
+      final houseId = _houseId;
+      final rows = await Future.wait<Map<String, dynamic>?>([
+        client.from('houses').select('created_at').eq('id', houseId).maybeSingle(),
+        client
+            .from('house_expenses')
+            .select('date')
+            .eq('house_id', houseId)
+            .isFilter('project_id', null)
+            .isFilter('deleted_at', null)
+            .order('date')
+            .limit(1)
+            .maybeSingle(),
+        client
+            .from('house_expenses')
+            .select('due_date')
+            .eq('house_id', houseId)
+            .isFilter('project_id', null)
+            .isFilter('deleted_at', null)
+            .not('due_date', 'is', null)
+            .order('due_date')
+            .limit(1)
+            .maybeSingle(),
+        client
+            .from('contributions')
+            .select('cycle_start_date')
+            .eq('house_id', houseId)
+            .order('cycle_start_date')
+            .limit(1)
+            .maybeSingle(),
+      ]);
+      DateTime? earliest;
+      for (final row in rows) {
+        final raw = row?.values.first;
+        final date = raw is String ? DateTime.tryParse(raw)?.toLocal() : null;
+        if (date != null && (earliest == null || date.isBefore(earliest))) earliest = date;
+      }
+      return earliest;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  @override
   Future<Money> getVaultReturnsForCycle(FinancialCycle cycle) async {
     try {
       String dateOnly(DateTime d) => d.toIso8601String().split('T')[0];

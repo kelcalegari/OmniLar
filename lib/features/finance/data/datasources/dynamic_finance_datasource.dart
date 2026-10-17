@@ -57,6 +57,9 @@ class DynamicFinanceDataSource implements FinanceDataSource {
       _active.getVaultReturnsForCycle(cycle);
 
   @override
+  Future<DateTime?> getHouseStartDate() => _active.getHouseStartDate();
+
+  @override
   Future<FinancialCycleSummary> getCycleSummary(FinancialCycle cycle) =>
       _active.getCycleSummary(cycle);
 
