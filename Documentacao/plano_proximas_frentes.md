@@ -131,6 +131,34 @@ O cálculo do fechamento no banco fica de fora (adiado por decisão do dono, em 
 
 **Recomendação:** ⭐ só atualizar a seção 10 do plano para dizer que está resolvida.
 
+## 11. Aviso de "Super Pix pendente" (17/10/2026, para decidir)
+
+**Como está:** no fechamento, quem fecha marca cada Super Pix como pago ou como pagamento parcial (o que falta vira acordo); o que não é marcado conta como pago (decisão do dono, "Super Pix não marcado como parcial: tratado como pago"). Por isso `confirm_cycle_settlement` grava cada transferência já como `confirmed`, e o lembrete `transfer_pending` do agendador (2, 5 e 8 dias depois do fechamento, para quem paga) nunca encontra transferência pendente. A conta do fechamento já está certa; o que falta é só lembrar quem ainda não mandou o Pix de verdade.
+
+| Nº | Decisão | Recomendação | Alternativas |
+|---|---|---|---|
+| 11.1 | O que fazer com o lembrete | **c)** ⭐ Marca "Pix enviado", sem mexer na conta: a transferência continua confirmada no fechamento, e ganha só a coluna `pix_sent_at`. Quem paga toca em "Já mandei o Pix" na lista do Super Pix (quem recebe também pode marcar "Recebi"). O lembrete sai em 2, 5 e 8 dias só para quem ainda não marcou | **a)** Apagar o lembrete e a regra (`transfer_pending` e `transfer_confirmed`), já que o fechamento registra o pagamento; **b)** a transferência nasce pendente e só conta como paga depois de confirmada (mexe na conta do fechamento e contradiz a decisão "não marcado = pago") |
+| 11.2 | Quem pode marcar | **a)** ⭐ Quem paga ("Já mandei") e quem recebe ("Recebi"); o primeiro que marcar encerra os lembretes | b) Só quem recebe |
+| 11.3 | Aviso para quem recebe | **a)** ⭐ Quando quem paga marca "Já mandei", quem recebe ganha um aviso informativo ("Cristiano mandou o Pix de R$ 420,00") | b) Sem aviso |
+
+**Como fazer (c):** migration com `settlement_transfers.pix_sent_at`, uma função `mark_settlement_transfer_sent` (só quem paga ou quem recebe), o agendador passando a filtrar `pix_sent_at is null` e o aviso da 11.3; no app, o botão na lista do Super Pix do ciclo fechado e o selo "Pix enviado".
+
+## 12. Cópia local para abrir sem internet (17/10/2026, para decidir)
+
+**Como está:** sem rede, o app não abre os dados: a sessão fica guardada, mas perfil, casa e listas vêm do Supabase a cada abertura (a abertura espera até 8 s e segue sem casa). A fila offline (`lib/core/network/`) já guarda no aparelho as gravações feitas sem conexão, em `flutter_secure_storage`, e as reenvia quando a rede volta. O caso de uso mais comum é a lista de compras no mercado, com sinal ruim.
+
+| Nº | Decisão | Recomendação | Alternativas |
+|---|---|---|---|
+| 12.1 | O que guardar | **a)** ⭐ Em duas etapas. **Etapa 1:** perfil, casa, moradores, lista de compras e tarefas (o que se usa no mercado e na rotina). **Etapa 2:** o ciclo em andamento (despesas, aportes, resumo, categorias e formas de pagamento) e os empréstimos | b) Tudo de uma vez; c) só a lista de compras |
+| 12.2 | Como guardar | **a)** ⭐ Cópia só de leitura, gravada a cada carga que dá certo (um JSON por assunto, no armazenamento local do aparelho e do navegador) e mostrada quando a rede falha. As gravações continuam passando pela fila offline | b) Banco local completo com sincronização nos dois sentidos (drift/SQLite): bem mais trabalho e conflito de edição para resolver |
+| 12.3 | Como o usuário percebe | **a)** ⭐ Faixa no topo: "Sem internet — mostrando os dados de 17/10 às 14:32"; ações que precisam do servidor (fechamento, importação, IA) ficam desabilitadas com o motivo | b) Sem aviso |
+| 12.4 | Onde guardar no navegador | **a)** ⭐ O mesmo armazenamento já usado pela fila (`flutter_secure_storage`, que no navegador usa o armazenamento local cifrado) | b) IndexedDB direto |
+| 12.5 | Sair da conta | **a)** ⭐ Apaga a cópia local (como a fila já é apagada) | — |
+
+**Riscos:** a cópia pode estar desatualizada (por isso a faixa com a hora); dados financeiros ficam no aparelho (cifrados, e apagados ao sair). A abertura sem rede precisa de cuidado: hoje o app espera a casa para decidir a primeira tela; com a cópia, ele abre direto nela e atualiza quando a rede voltar.
+
+**Tamanho:** etapa 1 é média (auth, compras e tarefas, faixa de aviso e testes); etapa 2 é parecida. Nenhuma das duas precisa de migration.
+
 ## 10. Ordem sugerida
 
 1. **Ciclos de antes da casa** (frente 1): pequena, só app, e mexe no que o dono vê todo dia.

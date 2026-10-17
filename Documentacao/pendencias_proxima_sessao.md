@@ -148,10 +148,15 @@ O dono seguiu todas as recomendações (⭐) da lista de 15/10. O que foi feito,
 - Ficaram como estão: 8 (cópia local), 11 (ciclo reaberto), 13 (revisão da importação só no aparelho) e 16 (leitura repetida na troca de ciclo).
 
 ### Pontas pequenas, nunca tratadas
-- **Troca de ciclo:** o resumo do ciclo ainda relê despesas e aportes por dentro; cortar isso é o próximo passo se a troca parecer lenta.
 - **Alertas do Supabase (17/10/2026):** revogar `execute` de `anon` nas funções de gatilho `security definer`; trocar `auth.uid()` por `(select auth.uid())` nas regras de acesso; criar índice nas chaves estrangeiras mais consultadas; ligar a proteção contra senha vazada (painel do Supabase). Nenhum é urgente com uma casa só; vale fazer antes de abrir o app para outras casas.
 
 ## Testes manuais pendentes
+
+### Ajustes de 17/10 (branch `feat/ajustes-alertas`, ainda sem merge)
+- **Busca nos lançamentos:** em "Gastos do Ciclo", buscar por nome, categoria, quem pagou, forma de pagamento ou valor ("312,40"); no computador, `Ctrl + F` leva ao campo.
+- **Tabela no computador:** o botão ao lado da contagem de lançamentos troca para a tabela; tocar no título da coluna ordena; tocar na linha abre o detalhe.
+- **Troca de ciclo:** deve ficar mais rápida (o resumo deixou de reler despesas e aportes).
+- **Alertas de gasto (0083, aplicada):** com ciclos anteriores lançados, uma categoria variável que passa de 90% e de 100% da média gera aviso; desligável em "Alertas de gasto".
 
 ### Próximas frentes (17/10/2026; migrations 0076 a 0082 aplicadas, `delete-account` publicada)
 - **Primeiro ciclo:** na Home, nos Relatórios e no Fechamento a seta para trás para no primeiro ciclo da casa (na casa real, fevereiro de 2026, pela despesa de 04/02).
