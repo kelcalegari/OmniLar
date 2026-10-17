@@ -8,6 +8,7 @@ import '../../../../core/domain/value_objects/money.dart';
 import '../../../../core/security/biometric_auth_service.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/utils/clipboard_helper.dart';
+import '../../../../core/utils/share_helper.dart';
 import '../../../../core/utils/responsive.dart';
 import '../../../../core/widgets/responsive_container.dart';
 import '../../../../core/widgets/privacy_toggle.dart';
@@ -1902,13 +1903,13 @@ class _SettlementHubContent extends StatelessWidget {
       'Todas as contas da casa e empréstimos pessoais foram compensados e quitados.',
     );
 
-    copyWithFeedback(
+    shareText(
  context,
  buffer.toString(),
  onCopied:
       const SnackBar(
         content: Text(
-          'Veredito do Super Pix copiado! Pronto para colar no WhatsApp.',
+          'Veredito do Super Pix copiado!',
         ),
       ),
     );
@@ -1920,7 +1921,7 @@ class _SettlementHubContent extends StatelessWidget {
         : '';
     final msg =
         'Oi ${transfer.fromMemberName}! Pelo fechamento do Omni Lar, ficou acertado você enviar ${transfer.amount.formatted} para ${transfer.toMemberName}$pixInfo para quitar o ciclo.';
-    copyWithFeedback(
+    shareText(
  context,
  msg,
  onCopied:
@@ -1936,7 +1937,7 @@ class _SettlementHubContent extends StatelessWidget {
             const SizedBox(width: 8),
             Expanded(
               child: Text(
-                'Cobrança para ${transfer.fromMemberName} copiada! Pronto para colar no WhatsApp. 💬',
+                'Cobrança para ${transfer.fromMemberName} copiada! 💬',
               ),
             ),
           ],

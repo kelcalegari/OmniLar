@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../../../../core/domain/value_objects/money.dart';
 import '../../../../core/theme/app_colors.dart';
-import '../../../../core/utils/clipboard_helper.dart';
+import '../../../../core/utils/share_helper.dart';
 import '../../../../core/widgets/privacy_toggle.dart';
 import '../../domain/entities/member_audit_trail.dart';
 import '../../domain/entities/settlement_summary.dart';
@@ -123,7 +123,7 @@ class _SettlementAuditSheetState extends State<SettlementAuditSheet> {
       buffer.writeln('');
     }
 
-    copyWithFeedback(
+    shareText(
  context,
  buffer.toString(),
  onCopied:
@@ -139,7 +139,7 @@ class _SettlementAuditSheetState extends State<SettlementAuditSheet> {
             const SizedBox(width: 8),
             Expanded(
               child: Text(
-                'Memória de cálculo de ${audit.memberName} copiada! Pronto para colar no WhatsApp.',
+                'Memória de cálculo de ${audit.memberName} copiada!',
               ),
             ),
           ],
