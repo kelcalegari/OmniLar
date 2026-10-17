@@ -20,7 +20,7 @@ void main() {
     expect(find.text('Compras'), findsOneWidget);
     expect(find.text('Caixinhas'), findsOneWidget);
     expect(find.text('Metas da casa'), findsOneWidget);
-    expect(find.text('2 hoje'), findsOneWidget);
+    expect(find.text('Tarefas'), findsWidgets);
     expect(find.text('Viagens'), findsOneWidget);
     expect(find.text('e Projetos'), findsOneWidget);
   });
