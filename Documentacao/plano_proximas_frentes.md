@@ -1,6 +1,27 @@
 # Plano: próximas frentes de código
 
-Escrito em 17/10/2026, a pedido do dono, a partir da lista do que ainda falta escrever no app ou no banco (seção 3 de [plano_diretor_unificado.md](plano_diretor_unificado.md) e "Em aberto" de [pendencias_proxima_sessao.md](pendencias_proxima_sessao.md)). Cada frente diz como está hoje, o que propõe e as decisões do dono, com a recomendação marcada com ⭐. Nada daqui foi implementado.
+Escrito em 17/10/2026, a pedido do dono, a partir da lista do que ainda falta escrever no app ou no banco (seção 3 de [plano_diretor_unificado.md](plano_diretor_unificado.md) e "Em aberto" de [pendencias_proxima_sessao.md](pendencias_proxima_sessao.md)). Cada frente diz como está hoje, o que propõe e as decisões do dono, com a recomendação marcada com ⭐.
+
+## Andamento (17/10/2026)
+
+O dono seguiu todas as recomendações ⭐. Feito na branch `feat/proximas-frentes` (ainda sem merge na `main`), com 622 testes passando:
+
+| Frente | Situação |
+|---|---|
+| 1. Ciclos de antes da casa | Feito (só app) |
+| 2. Alertas do Supabase | Migrations 0076 a 0078 escritas e ensaiadas; **não aplicadas** |
+| 3. Exclusão de conta | Migration 0081 e função `delete-account` escritas, ensaiadas no banco; **não aplicadas nem publicadas** |
+| 4.1 Preferências de notificação | Feito (tela nos Ajustes) |
+| 4.2 Resumo semanal | Migration 0079; **não aplicada**. Mudou do plano: o Fôlego ficou fora do texto (a conta dele é do app); semana sem gasto e sem conta não gera aviso |
+| 4.3 Gatilhos informativos | Migration 0080 (`expense_added`, `shopping_completed`, `import_confirmed`); **não aplicada** |
+| 4.4 Aceite de empréstimo | Migration 0082 e telas; **não aplicada** |
+| 4.5, 5, 6.3, 7, 8 | Ficaram para depois, como recomendado |
+| 6.1 e 6.2 | Feitos (arrastar arquivo na importação; `Ctrl + F` nos Ajustes e no painel do administrador; lançamentos não têm busca) |
+| 9 | Feito (seção 10 da importação atualizada) |
+
+Detalhes que o plano não previa:
+- **Exclusão de conta:** apagar o usuário do Auth apagaria por cascata o rateio (`split_rules`) e os aportes dele nas casas dos outros, e despesas, empréstimos e transferências impedem a exclusão. Por isso, quando ele divide ou dividiu casa, a conta fica sem e-mail, sem senha e bloqueada, e o perfil vira "Ex-morador"; só quem não mora nem morou com ninguém é apagado do Auth. Apagar uma casa esbarrava na auditoria e no bloqueio do livro-razão: as duas travas passaram a liberar só durante a exclusão (marca `omnilar.deleting_house`, válida dentro da transação). A conta ganhou a situação "Excluída" (`deleted`).
+- **Aceite de empréstimo:** recusar cancela o empréstimo (status `cancelled`, que o app deixa fora da lista); pagar uma parcela vale como aceite; empréstimos criados pelas funções do banco (fechamento, fatura paga pelo Caixa) nascem aceitos. O fechamento do banco não precisou mudar: quem monta o plano é o app, que deixa o não aceito de fora e avisa na tela.
 
 O cálculo do fechamento no banco fica de fora (adiado por decisão do dono, em [fechamento_no_banco.md](fechamento_no_banco.md)).
 

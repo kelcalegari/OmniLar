@@ -5,7 +5,7 @@ Reescrito em 13/10/2026, no fim de uma sessão longa de correções, e atualizad
 ## Estado atual
 
 - **Código:** `main` local e `origin/main` sincronizadas em 17/10/2026, com tudo das branches de decisões, notificações, login e `fix/push-registro`. Confira com `git log --oneline -5` e `git status`.
-- **Banco (Supabase `rygxmpwzofgieodvhpcy`, acessível pelo conector do Supabase):** migrations 0001 a 0071 aplicadas (as 0059, 0060 e 0061 em 15/10/2026; as 0062 e 0063 em 16/10/2026, antes do merge do código; as 0064 a 0066, das notificações, em 16/10/2026 a partir da branch `feat/notificacoes`, hoje já na `main`; a 0067, das caixinhas, a 0068, do painel administrativo (conta nova passa a esperar aprovação), e a 0069, dos planos Free e Premium, em 16/10/2026; a 0070, do agendador das notificações, em 16/10/2026 a partir da branch `feat/notificacoes-agendador`, com o job do `pg_cron` ligado; a 0071, que mantém `profiles.email` igual ao e-mail de acesso, em 16/10/2026 a partir da branch `feat/auth-conta-seguranca`). As 0072 a 0075 foram aplicadas em 17/10/2026, a partir da branch `feat/pendencias-recomendadas`. No histórico de migrations do Supabase constam só as 0022 a 0027 e as 0030 a 0075; as 0001 a 0021, a 0028 e a 0029 foram aplicadas à mão pelo SQL Editor. A próxima migration é a 0076.
+- **Banco (Supabase `rygxmpwzofgieodvhpcy`, acessível pelo conector do Supabase):** migrations 0001 a 0071 aplicadas (as 0059, 0060 e 0061 em 15/10/2026; as 0062 e 0063 em 16/10/2026, antes do merge do código; as 0064 a 0066, das notificações, em 16/10/2026 a partir da branch `feat/notificacoes`, hoje já na `main`; a 0067, das caixinhas, a 0068, do painel administrativo (conta nova passa a esperar aprovação), e a 0069, dos planos Free e Premium, em 16/10/2026; a 0070, do agendador das notificações, em 16/10/2026 a partir da branch `feat/notificacoes-agendador`, com o job do `pg_cron` ligado; a 0071, que mantém `profiles.email` igual ao e-mail de acesso, em 16/10/2026 a partir da branch `feat/auth-conta-seguranca`). As 0072 a 0075 foram aplicadas em 17/10/2026, a partir da branch `feat/pendencias-recomendadas`. As **0076 a 0082** estão escritas e ensaiadas com rollback na branch `feat/proximas-frentes`, mas **não foram aplicadas** (ver [plano_proximas_frentes.md](plano_proximas_frentes.md), "Andamento"). No histórico de migrations do Supabase constam só as 0022 a 0027 e as 0030 a 0075; as 0001 a 0021, a 0028 e a 0029 foram aplicadas à mão pelo SQL Editor. A próxima migration é a 0083.
 - **Edge Functions** (versões conferidas em 17/10/2026)**:** `capture-read` versão 12, `assistant` versão 9 e `import-read` versão 5, todas com `verify_jwt=true`, exigindo usuário logado que more na casa e conta liberada, e com a cota de IA do plano. `nfce-read` versão 3 (16/10/2026), também com `verify_jwt=true` e usuário da casa: consulta a NFC-e na Sefaz pelo link do QR (ver "Escâner" em "Como o sistema está montado hoje"); é publicada com `nfce-read/index.ts`, `nfce-read/page.ts` e os arquivos de `_shared` que ela importa. `notify` versão 3 (16/10/2026), com `verify_jwt=false`: chamada pelo banco, não recebe dados e envia os push pendentes pelo FCM; os secrets `FCM_SERVICE_ACCOUNT` e `FCM_PROJECT_ID` foram configurados pelo dono (feito, informado em 17/10/2026). Conferência de 17/10/2026: o job `omnilar-notifications-hourly` do `pg_cron` roda sem erro e há um aparelho Android registrado em `device_tokens` (17/10, 01:14 UTC), mas os 21 avisos do banco estão como `skipped` porque foram criados antes desse registro. Nenhum push saiu ainda, então o envio pelo FCM só fica comprovado quando um aviso novo chegar ao aparelho. A branch `fix/push-registro` entrou na `main` em 17/10/2026 (pede a permissão de notificação do navegador dentro do toque; o Android release declara acesso à internet e o nome "Omni Lar"). Também na `main` desde 17/10/2026: `android/app/proguard-rules.pro`, aplicado no build de release, impede o R8 de remover as classes do Firebase (sem ele, o Firebase não inicializa no APK de release).
 - **Site:** publicado em https://omnilar.web.app (Firebase Hosting, projeto `omnilar-ef002`; última publicação em 17/10/2026, com o compartilhar pelo menu do aparelho/WhatsApp, já testado no site). Para publicar: `bash scripts/publicar_web.sh` (análise, testes, build e deploy), com o Firebase CLI logado na conta dona do projeto.
 - **APK Android:** `flutter build apk --release` gera `build/app/outputs/flutter-apk/app-release.apk` (cerca de 87 MB, não chega ao celular pelo envio de arquivos do Claude, que aceita até 30 MB). O release ainda é assinado com a chave de debug (`android/app/build.gradle.kts`): instala direto no celular, mas a Play Store não aceita. O último APK gerado (16/10/2026) também ficou sem os commits `0dd5ae5` e `0f5c296` e sem o compartilhar pelo menu do aparelho (17/10/2026).
@@ -153,6 +153,16 @@ O dono seguiu todas as recomendações (⭐) da lista de 15/10. O que foi feito,
 
 ## Testes manuais pendentes
 
+### Próximas frentes (branch `feat/proximas-frentes`, depois de aplicar 0076 a 0082 e publicar `delete-account`)
+- **Primeiro ciclo:** na Home, nos Relatórios e no Fechamento a seta para trás para no primeiro ciclo da casa (na casa real, fevereiro de 2026, pela despesa de 04/02).
+- **Preferências de notificação:** desligar o sino de um grupo e conferir que o aviso informativo daquele grupo não chega; ligar o horário silencioso.
+- **Avisos novos:** um morador lança uma despesa, fecha uma compra e confirma uma importação; o outro recebe um aviso de cada (a despesa com a sua parte).
+- **Resumo semanal:** domingo depois das 18h chega "Resumo da semana".
+- **Aceite de empréstimo:** um lança que o outro deve; o devedor vê "Aguardando aceite", aceita (o credor recebe o aviso) ou recusa (o empréstimo some); o fechamento avisa e não cobra o não aceito.
+- **Arrastar arquivo:** soltar um OFX ou PDF na página de importação, no navegador do computador.
+- **`Ctrl + F`:** nos Ajustes, leva ao campo de busca.
+- **Excluir conta:** só com uma conta de teste criada para isso (nunca com as contas reais): a prévia mostra a casa e os empréstimos; depois de excluir, a conta não entra mais e, na casa, aparece "Ex-morador".
+
 Os roteiros anteriores foram executados pelo dono até 14/10/2026. Ficam aqui só os do que entrou depois.
 
 ### Decisões implementadas em 17/10 (migrations 0072 a 0075)
@@ -256,6 +266,13 @@ Uma linha por migration, para saber onde está cada regra.
 | 0073 | Edição de série de eventos numa transação (`update_event_series`), ocorrências novas no nome de quem criou a série |
 | 0074 | Tempo real para eventos e participantes da agenda |
 | 0075 | Cartão exige dias de fechamento e vencimento; pagamento de compra no cartão só pela fatura (`guard_card_purchase_payment`) |
+| 0076 | Funções `security definer` fora do alcance de `anon` (não aplicada) |
+| 0077 | Regras de acesso com `(select auth.uid())` (não aplicada) |
+| 0078 | Índices nas chaves estrangeiras mais consultadas (não aplicada) |
+| 0079 | Resumo semanal (não aplicada) |
+| 0080 | Avisos de despesa lançada, compra fechada e importação confirmada (não aplicada) |
+| 0081 | Exclusão de conta: prévia, exclusão dos dados e situação "Excluída" (não aplicada) |
+| 0082 | Aceite do empréstimo pelo devedor (não aplicada) |
 
 ## Documentos relacionados
 
