@@ -408,7 +408,10 @@ class _ChangePasswordSheetState extends State<ChangePasswordSheet> {
                 controller: _newController,
                 obscureText: _obscure,
                 autofillHints: const [AutofillHints.newPassword],
-                decoration: _decoration('Nova senha', Icons.lock_reset_rounded),
+                decoration: _decoration(
+                  'Nova senha',
+                  Icons.lock_reset_rounded,
+                ).copyWith(suffixIcon: toggle),
                 validator: (val) {
                   if (val == null || val.length < 6) {
                     return 'A senha deve ter no mínimo 6 caracteres';
@@ -426,7 +429,7 @@ class _ChangePasswordSheetState extends State<ChangePasswordSheet> {
                 decoration: _decoration(
                   'Confirme a nova senha',
                   Icons.lock_reset_rounded,
-                ),
+                ).copyWith(suffixIcon: toggle),
                 validator: (val) => val != _newController.text
                     ? 'As senhas não conferem'
                     : null,

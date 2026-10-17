@@ -102,6 +102,17 @@ class _ResetPasswordPageState extends State<ResetPasswordPage> {
     border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
   );
 
+  /// Olho de mostrar/ocultar; vale para os dois campos de senha.
+  Widget _visibilityToggle() => IconButton(
+    icon: Icon(
+      _obscurePassword
+          ? Icons.visibility_off_outlined
+          : Icons.visibility_outlined,
+    ),
+    tooltip: _obscurePassword ? 'Mostrar senha' : 'Ocultar senha',
+    onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
+  );
+
   Widget _primaryButton(String label, VoidCallback onPressed) {
     return ElevatedButton(
       onPressed: _isLoading ? null : onPressed,
@@ -203,18 +214,10 @@ class _ResetPasswordPageState extends State<ResetPasswordPage> {
             controller: _passwordController,
             obscureText: _obscurePassword,
             autofillHints: const [AutofillHints.newPassword],
-            decoration: _decoration('Nova senha', Icons.lock_outline_rounded)
-                .copyWith(
-                  suffixIcon: IconButton(
-                    icon: Icon(
-                      _obscurePassword
-                          ? Icons.visibility_off_outlined
-                          : Icons.visibility_outlined,
-                    ),
-                    onPressed: () =>
-                        setState(() => _obscurePassword = !_obscurePassword),
-                  ),
-                ),
+            decoration: _decoration(
+              'Nova senha',
+              Icons.lock_outline_rounded,
+            ).copyWith(suffixIcon: _visibilityToggle()),
             validator: (val) {
               if (val == null || val.length < 6) {
                 return 'A senha deve ter no mínimo 6 caracteres';
@@ -229,7 +232,7 @@ class _ResetPasswordPageState extends State<ResetPasswordPage> {
             decoration: _decoration(
               'Confirme a nova senha',
               Icons.lock_outline_rounded,
-            ),
+            ).copyWith(suffixIcon: _visibilityToggle()),
             validator: (val) {
               if (val != _passwordController.text) {
                 return 'As senhas não conferem';
