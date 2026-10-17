@@ -5,7 +5,10 @@ enum AccountStatus {
   pending('Em análise'),
   active('Liberada'),
   rejected('Recusada'),
-  suspended('Suspensa');
+  suspended('Suspensa'),
+
+  /// Excluída pelo próprio usuário (migration 0081): sem ações no painel.
+  deleted('Excluída');
 
   final String label;
   const AccountStatus(this.label);

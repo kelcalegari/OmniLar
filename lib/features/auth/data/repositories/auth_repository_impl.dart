@@ -1,4 +1,5 @@
 import '../../domain/entities/user_profile.dart';
+import '../../domain/entities/account_deletion_preview.dart';
 import '../../domain/entities/house.dart';
 import '../../domain/entities/house_member_info.dart';
 import '../../domain/repositories/auth_repository.dart';
@@ -92,6 +93,12 @@ class AuthRepositoryImpl implements AuthRepository {
       newPassword: newPassword,
     );
   }
+
+  @override
+  Future<AccountDeletionPreview> getAccountDeletionPreview() => _dataSource.getAccountDeletionPreview();
+
+  @override
+  Future<void> deleteAccount({required String password}) => _dataSource.deleteAccount(password: password);
 
   @override
   Future<void> requestEmailChange(String newEmail) {

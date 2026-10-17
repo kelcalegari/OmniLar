@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import '../../../../core/domain/value_objects/money.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/utils/responsive.dart';
+import '../../../auth/domain/entities/account_deletion_preview.dart';
 import '../../../auth/presentation/cubit/auth_cubit.dart';
 import '../../../auth/presentation/cubit/auth_state.dart';
 
@@ -116,9 +118,36 @@ class _AccountSecurityPanelState extends State<AccountSecurityPanel> {
                 ),
               ],
             ),
+            const SizedBox(height: 16),
+            _card(
+              context,
+              title: 'Excluir conta',
+              actionLabel: hasPassword ? 'Excluir' : null,
+              actionColor: AppColors.debtRed,
+              onAction: hasPassword ? _openDeletion : null,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+                  child: Text(
+                    hasPassword
+                        ? 'Apaga seu nome, e-mail, telefone e chave Pix. O que você lançou continua no histórico dos outros moradores, como "Ex-morador".'
+                        : 'Sua conta entra só pelo Google. Para excluí-la, fale com o suporte.',
+                    style: const TextStyle(color: Colors.grey, fontSize: 13),
+                  ),
+                ),
+              ],
+            ),
           ],
         );
       },
+    );
+  }
+
+  void _openDeletion() {
+    showAdaptiveModal(
+      context: context,
+      maxWidth: 520,
+      child: const DeleteAccountSheet(),
     );
   }
 
@@ -153,6 +182,7 @@ class _AccountSecurityPanelState extends State<AccountSecurityPanel> {
     BuildContext context, {
     required String title,
     String? actionLabel,
+    Color? actionColor,
     VoidCallback? onAction,
     required List<Widget> children,
   }) {
@@ -184,7 +214,11 @@ class _AccountSecurityPanelState extends State<AccountSecurityPanel> {
                       ),
                     ),
                     if (actionLabel != null)
-                      TextButton(onPressed: onAction, child: Text(actionLabel))
+                      TextButton(
+                        onPressed: onAction,
+                        style: actionColor == null ? null : TextButton.styleFrom(foregroundColor: actionColor),
+                        child: Text(actionLabel),
+                      )
                     else
                       const SizedBox(height: 40),
                   ],
@@ -625,6 +659,184 @@ class _ChangeEmailSheetState extends State<ChangeEmailSheet> {
           isSaving: _isSaving,
           label: 'Confirmar',
           onSave: _confirm,
+        ),
+      ],
+    );
+  }
+}
+
+/// Exclusão da conta: mostra o que acontece com cada casa e os empréstimos em
+/// aberto, e só exclui com a senha e a palavra EXCLUIR (decisão 3.2).
+class DeleteAccountSheet extends StatefulWidget {
+  const DeleteAccountSheet({super.key});
+
+  @override
+  State<DeleteAccountSheet> createState() => _DeleteAccountSheetState();
+}
+
+class _DeleteAccountSheetState extends State<DeleteAccountSheet> {
+  final _formKey = GlobalKey<FormState>();
+  final _passwordController = TextEditingController();
+  final _confirmController = TextEditingController();
+  late final Future<AccountDeletionPreview> _preview =
+      context.read<AuthCubit>().getAccountDeletionPreview();
+  bool _isDeleting = false;
+  bool _obscure = true;
+
+  @override
+  void dispose() {
+    _passwordController.dispose();
+    _confirmController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _delete() async {
+    if (!_formKey.currentState!.validate()) return;
+    setState(() => _isDeleting = true);
+    final navigator = Navigator.of(context);
+    try {
+      await context.read<AuthCubit>().deleteAccount(password: _passwordController.text);
+      if (navigator.canPop()) navigator.pop();
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _isDeleting = false);
+      _showError(context, e);
+    }
+  }
+
+  static String _houseLine(HouseDeletionImpact house) => switch (house.action) {
+        HouseDeletionAction.deleteHouse =>
+          '${house.houseName}: você é o único morador, então a casa e tudo o que há nela serão apagados.',
+        HouseDeletionAction.transfer =>
+          '${house.houseName}: a casa passa para ${house.newOwnerName ?? 'outro morador'} e você sai dela.',
+        HouseDeletionAction.leave => '${house.houseName}: você sai da casa.',
+      };
+
+  @override
+  Widget build(BuildContext context) {
+    return _SheetFrame(
+      icon: Icons.person_remove_alt_1_rounded,
+      title: 'Excluir conta',
+      description: 'A exclusão não pode ser desfeita. Confira o que muda antes de confirmar.',
+      children: [
+        FutureBuilder<AccountDeletionPreview>(
+          future: _preview,
+          builder: (context, snapshot) {
+            if (snapshot.connectionState != ConnectionState.done) {
+              return const Padding(
+                padding: EdgeInsets.all(12),
+                child: Center(child: CircularProgressIndicator()),
+              );
+            }
+            if (snapshot.hasError) {
+              return const Text(
+                'Não foi possível carregar o que muda com a exclusão.',
+                style: TextStyle(color: AppColors.debtRed),
+              );
+            }
+            final preview = snapshot.data!;
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                for (final house in preview.houses)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 8),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Icon(
+                          house.action == HouseDeletionAction.deleteHouse
+                              ? Icons.delete_forever_rounded
+                              : Icons.home_outlined,
+                          size: 18,
+                          color: house.action == HouseDeletionAction.deleteHouse ? AppColors.debtRed : Colors.grey,
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(child: Text(_houseLine(house), style: const TextStyle(fontSize: 13))),
+                      ],
+                    ),
+                  ),
+                if (preview.openLoans.isNotEmpty) ...[
+                  const SizedBox(height: 8),
+                  const Text(
+                    'Empréstimos em aberto (continuam no histórico e podem ser cobrados):',
+                    style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+                  ),
+                  const SizedBox(height: 4),
+                  for (final loan in preview.openLoans)
+                    Text(
+                      loan.isBorrower
+                          ? '• ${loan.title}: você deve ${Money(loan.openCents).formatted} a ${loan.otherName}'
+                          : '• ${loan.title}: ${loan.otherName} deve ${Money(loan.openCents).formatted} a você',
+                      style: const TextStyle(fontSize: 13),
+                    ),
+                ],
+              ],
+            );
+          },
+        ),
+        const SizedBox(height: 16),
+        Form(
+          key: _formKey,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              TextFormField(
+                controller: _passwordController,
+                obscureText: _obscure,
+                autofillHints: const [AutofillHints.password],
+                decoration: _decoration('Sua senha', Icons.lock_outline_rounded).copyWith(
+                  suffixIcon: IconButton(
+                    icon: Icon(_obscure ? Icons.visibility_off_outlined : Icons.visibility_outlined),
+                    onPressed: () => setState(() => _obscure = !_obscure),
+                  ),
+                ),
+                validator: (val) => (val == null || val.isEmpty) ? 'Informe sua senha' : null,
+              ),
+              const SizedBox(height: 16),
+              TextFormField(
+                controller: _confirmController,
+                textCapitalization: TextCapitalization.characters,
+                decoration: _decoration('Digite EXCLUIR para confirmar', Icons.warning_amber_rounded),
+                validator: (val) =>
+                    val?.trim().toUpperCase() == 'EXCLUIR' ? null : 'Digite EXCLUIR para confirmar',
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 24),
+        Row(
+          children: [
+            Expanded(
+              child: OutlinedButton(
+                onPressed: _isDeleting ? null : () => Navigator.pop(context),
+                style: OutlinedButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                ),
+                child: const Text('Cancelar'),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: FilledButton(
+                key: const Key('delete_account_confirm'),
+                onPressed: _isDeleting ? null : _delete,
+                style: FilledButton.styleFrom(
+                  backgroundColor: AppColors.debtRed,
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                ),
+                child: _isDeleting
+                    ? const SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                      )
+                    : const Text('Excluir conta', style: TextStyle(fontWeight: FontWeight.bold)),
+              ),
+            ),
+          ],
         ),
       ],
     );

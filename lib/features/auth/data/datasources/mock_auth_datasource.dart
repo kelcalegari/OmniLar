@@ -1,4 +1,5 @@
 import 'dart:async';
+import '../../domain/entities/account_deletion_preview.dart';
 import '../../domain/entities/user_profile.dart';
 import '../../domain/entities/house.dart';
 import '../../domain/entities/house_member_info.dart';
@@ -249,6 +250,16 @@ class MockAuthDataSource implements AuthDataSource {
 
   @override
   List<String> get signInProviders => const ['email'];
+
+  @override
+  Future<AccountDeletionPreview> getAccountDeletionPreview() async => const AccountDeletionPreview(houses: [
+        HouseDeletionImpact(houseName: 'Casa Demo', action: HouseDeletionAction.transfer, newOwnerName: 'Marina'),
+      ]);
+
+  @override
+  Future<void> deleteAccount({required String password}) async {
+    throw const AuthFailure('No modo demo a conta não é excluída.');
+  }
 
   @override
   Future<void> changePassword({

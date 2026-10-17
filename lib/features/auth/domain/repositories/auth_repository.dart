@@ -1,4 +1,5 @@
 import '../entities/user_profile.dart';
+import '../entities/account_deletion_preview.dart';
 import '../entities/house.dart';
 import '../entities/house_member_info.dart';
 
@@ -64,6 +65,12 @@ abstract class AuthRepository {
   /// se a pessoa desistiu.
   Future<UserProfile?> signInWithGoogle();
   Future<void> signInDemo({required String memberId});
+  /// O que a exclusão da conta faria com as casas e os empréstimos.
+  Future<AccountDeletionPreview> getAccountDeletionPreview();
+
+  /// Exclui a conta de quem está logado (confere a senha de novo).
+  Future<void> deleteAccount({required String password});
+
   Future<void> signOut();
   Future<UserProfile> updateProfile({
     required String fullName,

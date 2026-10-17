@@ -6,6 +6,7 @@ import 'package:google_sign_in/google_sign_in.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../../core/network/google_auth_config.dart';
 import '../../../../core/errors/failures.dart';
+import '../../domain/entities/account_deletion_preview.dart';
 import '../../domain/entities/user_profile.dart';
 import '../../domain/entities/house.dart';
 import '../../domain/entities/house_member_info.dart';
@@ -489,6 +490,37 @@ class SupabaseAuthDataSource implements AuthDataSource {
             createdBy: 'member_carlos',
           );
     _houseStateController.add(_currentHouse);
+  }
+
+  @override
+  Future<AccountDeletionPreview> getAccountDeletionPreview() async {
+    if (_isDemoMode) return _demoDeletionPreview(_currentHouse?.name);
+    try {
+      final result = await _client.rpc('account_deletion_preview');
+      return AccountDeletionPreview.fromJson(Map<String, dynamic>.from(result as Map));
+    } catch (e) {
+      throw ServerFailure('Não foi possível carregar o que muda com a exclusão: $e');
+    }
+  }
+
+  @override
+  Future<void> deleteAccount({required String password}) async {
+    if (_isDemoMode) {
+      throw const AuthFailure('No modo demo a conta não é excluída.');
+    }
+    try {
+      await _client.functions.invoke(
+        'delete-account',
+        body: {'password': password, 'confirm': 'EXCLUIR'},
+      );
+    } on FunctionException catch (e) {
+      final details = e.details;
+      final message = details is Map ? details['error'] as String? : null;
+      throw AuthFailure(message ?? 'Não foi possível excluir a conta agora. Tente de novo.');
+    } catch (e) {
+      if (e is Failure) rethrow;
+      throw const AuthFailure('Não foi possível excluir a conta agora. Tente de novo.');
+    }
   }
 
   @override
@@ -1084,3 +1116,12 @@ class SupabaseAuthDataSource implements AuthDataSource {
     return 'LAR${chars.join()}';
   }
 }
+
+/// Prévia de exemplo do modo demo (a conta demo não é excluída).
+AccountDeletionPreview _demoDeletionPreview(String? houseName) => AccountDeletionPreview(houses: [
+      HouseDeletionImpact(
+        houseName: houseName ?? 'Casa Demo',
+        action: HouseDeletionAction.transfer,
+        newOwnerName: 'Marina',
+      ),
+    ]);

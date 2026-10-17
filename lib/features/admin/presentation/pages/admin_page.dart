@@ -28,6 +28,7 @@ Color _statusColor(AccountStatus s) => switch (s) {
       AccountStatus.active => AppColors.creditGreen,
       AccountStatus.pending => Colors.orange,
       AccountStatus.rejected || AccountStatus.suspended => AppColors.debtRed,
+      AccountStatus.deleted => Colors.grey,
     };
 
 /// Painel administrativo do Omni Lar (fase A do plano_painel_admin.md). Só
@@ -542,7 +543,7 @@ Future<void> _changeStatus(BuildContext context, List<AdminAccount> accounts, Ac
     AccountStatus.active => accounts.any((a) => a.status == AccountStatus.pending) ? 'aprovada(s)' : 'reativada(s)',
     AccountStatus.rejected => 'recusada(s)',
     AccountStatus.suspended => 'suspensa(s)',
-    AccountStatus.pending => '',
+    AccountStatus.pending || AccountStatus.deleted => '',
   };
   showSaveFeedback(
     messenger,

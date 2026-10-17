@@ -1,4 +1,5 @@
 import 'dart:async';
+import '../../domain/entities/account_deletion_preview.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../../../core/errors/failures.dart';
@@ -232,6 +233,15 @@ class AuthCubit extends Cubit<AuthState> {
       currentPassword: currentPassword,
       newPassword: newPassword,
     );
+  }
+
+  /// O que a exclusão da conta faria. Lança a falha para a tela mostrar.
+  Future<AccountDeletionPreview> getAccountDeletionPreview() => _repository.getAccountDeletionPreview();
+
+  /// Exclui a conta e sai. Lança a falha para a tela mostrar.
+  Future<void> deleteAccount({required String password}) async {
+    await _repository.deleteAccount(password: password);
+    await signOut();
   }
 
   /// Pede a troca do e-mail. Lança a falha para a tela mostrar.

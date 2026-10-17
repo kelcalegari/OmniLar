@@ -91,4 +91,33 @@ void main() {
     expect(find.textContaining('carlos.novo@omnilar.com'), findsOneWidget);
     expect(find.text('Digitar código'), findsOneWidget);
   });
+
+  testWidgets('excluir conta mostra o que muda e pede senha e EXCLUIR', (tester) async {
+    tester.view.physicalSize = const Size(500, 1400);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.resetPhysicalSize);
+
+    await tester.pumpWidget(
+      BlocProvider.value(
+        value: cubit,
+        child: const MaterialApp(home: Scaffold(body: DeleteAccountSheet())),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('a casa passa para Marina'), findsOneWidget);
+
+    // Sem a palavra de confirmação, nada é enviado
+    await tester.enterText(find.byType(TextFormField).first, '123456');
+    await tester.tap(find.byKey(const Key('delete_account_confirm')));
+    await tester.pumpAndSettle();
+    expect(find.text('Digite EXCLUIR para confirmar'), findsWidgets);
+
+    // A conta de demonstração não é excluída: a tela mostra o motivo
+    await tester.enterText(find.byType(TextFormField).last, 'excluir');
+    await tester.tap(find.byKey(const Key('delete_account_confirm')));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('modo demo'), findsOneWidget);
+    expect(cubit.state.status, AuthStatus.authenticatedWithHouse);
+  });
 }
