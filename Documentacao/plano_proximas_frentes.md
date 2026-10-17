@@ -103,6 +103,10 @@ O cálculo do fechamento no banco fica de fora (adiado por decisão do dono, em 
 
 ## 7. Boleto de condomínio com os itens
 
+**Atualização de 17/10/2026:** a leitura (`capture-read`) já separava o demonstrativo em itens, mas o escâner gravava o boleto sem eles. Agora o boleto (conta nova ou conta já prevista, como a recorrente) é gravado com os itens da revisão como sub-itens, e todos entram como itens da casa, inclusive fundo de reserva (decisão do dono; quem quiser marca um item como pessoal na revisão). Falta testar com um boleto real.
+
+### Plano original
+
 **Como está:** o boleto vira uma despesa só; o código de barras não traz os itens. Despesa com sub-itens já existe.
 
 | Nº | Decisão | Recomendação | Alternativas |

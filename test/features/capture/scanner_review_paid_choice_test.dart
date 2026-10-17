@@ -74,4 +74,61 @@ void main() {
     expect(saved.status, ExpenseStatus.pending);
     expect(saved.dueDate, day);
   });
+
+  testWidgets('boleto de condomínio com demonstrativo grava os itens como da casa', (tester) async {
+    tester.view.physicalSize = const Size(800, 2200);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.resetPhysicalSize);
+
+    final cubit = sl<FinanceCubit>();
+    cubit.goToCurrentCycle();
+    await cubit.loadCycleData();
+    final now = DateTime.now();
+    final due = DateTime(now.year, now.month, now.day, 12).add(const Duration(days: 3));
+    final proposal = CaptureProposal(
+      id: 'prop_condominio_teste',
+      documentType: DocumentType.boleto,
+      title: 'Condomínio teste com itens',
+      totalAmount: const Money(123457),
+      date: due,
+      dueDate: due,
+      capturedAt: now,
+      items: const [
+        InvoiceItemDraft(id: 'i1', name: 'Taxa ordinária', unitPrice: Money(100000), totalPrice: Money(100000)),
+        InvoiceItemDraft(id: 'i2', name: 'Água', unitPrice: Money(13457), totalPrice: Money(13457)),
+        InvoiceItemDraft(id: 'i3', name: 'Fundo de reserva', unitPrice: Money(10000), totalPrice: Money(10000)),
+      ],
+    );
+
+    await tester.pumpWidget(BlocProvider<FinanceCubit>.value(
+      value: cubit,
+      child: MaterialApp(
+        home: Scaffold(
+          body: Builder(
+            builder: (context) => Center(
+              child: ElevatedButton(
+                onPressed: () => Navigator.of(context).push(MaterialPageRoute<void>(
+                  builder: (_) => Scaffold(
+                    body: SingleChildScrollView(child: SmartScannerPage(initialProposal: proposal)),
+                  ),
+                )),
+                child: const Text('abrir'),
+              ),
+            ),
+          ),
+        ),
+      ),
+    ));
+    await tester.tap(find.text('abrir'));
+    await tester.pumpAndSettle();
+
+    final confirm = find.text('Confirmar Lançamento');
+    await tester.ensureVisible(confirm);
+    await tester.tap(confirm);
+    await tester.pumpAndSettle();
+
+    final saved = cubit.state.expenses.where((e) => e.title == 'Condomínio teste com itens').single;
+    expect(saved.items.map((i) => i.title), ['Taxa ordinária', 'Água', 'Fundo de reserva']);
+    expect(saved.items.every((i) => i.responsibleMemberId == null), isTrue);
+  });
 }

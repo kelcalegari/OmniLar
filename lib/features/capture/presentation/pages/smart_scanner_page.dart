@@ -574,6 +574,32 @@ class _SmartScannerPageState extends State<SmartScannerPage> with WidgetsBinding
     await _lookForKnownBill(proposal);
   }
 
+  /// Itens da revisão viram sub-itens da despesa (boleto de condomínio com
+  /// demonstrativo): item pessoal fica com o morador escolhido (ou quem lançou).
+  List<HouseExpenseItem> _expenseItemsOf(
+    CaptureProposal proposal, {
+    required String expenseId,
+    required String? categoryId,
+    required String payerId,
+  }) {
+    final stamp = DateTime.now().millisecondsSinceEpoch;
+    return [
+      for (final item in proposal.items)
+        () {
+          final responsible = item.isPersonal ? (item.assignedMemberId ?? payerId) : null;
+          return HouseExpenseItem(
+            id: 'item_${stamp}_${item.id}',
+            expenseId: expenseId,
+            title: item.name,
+            amount: item.totalPrice,
+            categoryId: categoryId,
+            responsibleMemberId: responsible,
+            splitRule: responsible != null ? SplitRule.singleResponsible(responsible) : null,
+          );
+        }(),
+    ];
+  }
+
   Future<void> _pickPaidOn() async {
     final picked = await showDatePicker(
       context: context,
@@ -617,6 +643,10 @@ class _SmartScannerPageState extends State<SmartScannerPage> with WidgetsBinding
         date: dueAt,
         dueDate: dueAt,
         barcode: proposal.rawCode,
+        // Demonstrativo lido (condomínio): os itens deste mês substituem os anteriores
+        items: proposal.items.isEmpty
+            ? null
+            : _expenseItemsOf(proposal, expenseId: known.id, categoryId: known.categoryId, payerId: known.paidByMemberId),
       );
     } else {
       final categoryId = state.categories.any((c) => c.id == _selectedCategoryId)
@@ -626,8 +656,9 @@ class _SmartScannerPageState extends State<SmartScannerPage> with WidgetsBinding
       final payer = sl<AuthRepository>().currentUser?.id ??
           (state.members.isNotEmpty ? state.members.first.id : 'member_carlos');
       final house = ExpenseLaunchDefaults.houseAccount(state.paymentMethods);
+      final newId = generateUuidV4();
       pending = HouseExpense(
-        id: generateUuidV4(),
+        id: newId,
         title: typedTitle.isNotEmpty ? typedTitle : proposal.title,
         amount: proposal.totalAmount,
         date: dueAt,
@@ -644,6 +675,7 @@ class _SmartScannerPageState extends State<SmartScannerPage> with WidgetsBinding
         status: ExpenseStatus.pending,
         notes: proposal.merchantOrBeneficiary,
         barcode: proposal.rawCode,
+        items: _expenseItemsOf(proposal, expenseId: newId, categoryId: categoryId, payerId: payer),
       );
     }
 

@@ -197,7 +197,6 @@ class CaptureService {
             final itemMap = rawItems[i] as Map<String, dynamic>;
             final itemTitle = itemMap['title'] as String? ?? 'Item ${i + 1}';
             final itemAmountCents = (itemMap['amount_cents'] as num?)?.toInt() ?? 0;
-            final isCommon = itemMap['is_common_expense'] as bool? ?? true;
 
             items.add(
               InvoiceItemDraft(
@@ -206,7 +205,9 @@ class CaptureService {
                 quantity: 1,
                 unitPrice: Money(itemAmountCents),
                 totalPrice: Money(itemAmountCents),
-                isPersonal: !isCommon,
+                // Todo item entra como da casa (fundo de reserva inclusive);
+                // quem quiser marca um como pessoal na revisão
+                isPersonal: false,
               ),
             );
           }
