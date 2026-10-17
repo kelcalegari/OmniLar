@@ -90,6 +90,52 @@ void main() {
       expect(proposal.documentType, equals(DocumentType.boleto));
       expect(proposal.title, contains('conta_energia_outubro'));
     });
+
+    test('Nota consultada na Sefaz vira proposta com loja, data, total e itens', () {
+      const url = 'https://www.nfce.fazenda.sp.gov.br/qrcode?p=3526|2|1|1|ABC';
+      final proposal = CaptureService.nfceProposalFromAnalysis({
+        'total_cents': 2390,
+        'issue_date': '2026-10-15',
+        'merchant_name': 'MERCADO BOM PRECO',
+        'items': [
+          {'title': 'ARROZ 1KG', 'quantity': 2, 'unit_cents': 850, 'amount_cents': 1700},
+          {'title': 'BANANA KG', 'quantity': 0.532, 'unit_cents': 599, 'amount_cents': 319},
+          {'title': 'BRINDE', 'quantity': 1, 'unit_cents': 0, 'amount_cents': 0},
+          {'title': 'PAO', 'quantity': 1, 'amount_cents': 371},
+        ],
+      }, qrUrl: url);
+
+      expect(proposal.documentType, DocumentType.nfce);
+      expect(proposal.title, 'MERCADO BOM PRECO');
+      expect(proposal.merchantOrBeneficiary, 'MERCADO BOM PRECO');
+      expect(proposal.totalAmount.cents, 2390);
+      expect(proposal.date, DateTime(2026, 10, 15, 12));
+      expect(proposal.rawCode, url);
+      expect(proposal.items.map((i) => i.name), ['ARROZ 1KG', 'BANANA KG', 'PAO']);
+      expect(proposal.items[0].quantity, 2);
+      expect(proposal.items[0].unitPrice.cents, 850);
+      // Peso vira 1 unidade pelo valor do item
+      expect(proposal.items[1].quantity, 1);
+      expect(proposal.items[1].unitPrice.cents, 319);
+      expect(proposal.items.every((i) => !i.isPersonal), isTrue);
+    });
+
+    test('Nota da Sefaz sem total usa a soma dos itens', () {
+      final proposal = CaptureService.nfceProposalFromAnalysis({
+        'items': [
+          {'title': 'A', 'quantity': 1, 'unit_cents': 500, 'amount_cents': 500},
+          {'title': 'B', 'quantity': 1, 'unit_cents': 250, 'amount_cents': 250},
+        ],
+      }, qrUrl: 'https://x.gov.br');
+
+      expect(proposal.totalAmount.cents, 750);
+      expect(proposal.title, 'Nota Fiscal (NFC-e)');
+    });
+
+    test('Consulta da nota sem servidor avisa em vez de inventar dados', () async {
+      final service = CaptureService(aiConfigService: AiConfigService(null));
+      expect(() => service.lookupNfce('https://x.gov.br'), throwsA(isA<NfceLookupError>()));
+    });
   });
 
   group('Proportional Discount Distribution Tests', () {

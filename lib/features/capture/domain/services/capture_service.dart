@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:typed_data';
+import 'package:supabase_flutter/supabase_flutter.dart' show FunctionException;
 import '../../../../core/network/supabase_config.dart';
 import '../../../../core/domain/value_objects/money.dart';
 import '../../../../core/services/ai_config_service.dart';
@@ -12,6 +13,84 @@ class CaptureService {
   final String? Function()? getCurrentHouseId;
 
   CaptureService({required this.aiConfigService, this.getCurrentHouseId});
+
+  /// Consulta a NFC-e na Sefaz pelo link do QR (Edge Function nfce-read).
+  /// Lança [NfceLookupError] com a mensagem para o usuário quando não consegue.
+  Future<CaptureProposal> lookupNfce(String qrUrl) async {
+    final client = SupabaseConfig.client;
+    if (client == null) throw const NfceLookupError('Consulta da nota indisponível sem conexão com o servidor.');
+
+    final userApiKey = await aiConfigService.getUserApiKey();
+    final userModel = await aiConfigService.getSelectedModel();
+
+    Object? data;
+    try {
+      final response = await client.functions.invoke(
+        'nfce-read',
+        body: {
+          'url': qrUrl,
+          'houseId': ?getCurrentHouseId?.call(),
+          if (userApiKey != null && userApiKey.isNotEmpty) 'userApiKey': userApiKey,
+          'userModel': userModel,
+        },
+      );
+      data = response.data;
+    } on FunctionException catch (e) {
+      final details = e.details;
+      final message = details is Map ? details['error'] as String? : null;
+      throw NfceLookupError(message ?? 'Não foi possível consultar a nota na Sefaz.');
+    } catch (_) {
+      throw const NfceLookupError('Não foi possível consultar a nota na Sefaz.');
+    }
+
+    final analysis = data is Map<String, dynamic> ? data['analysis'] : null;
+    if (analysis is! Map<String, dynamic>) {
+      throw const NfceLookupError('A Sefaz não devolveu os dados da nota.');
+    }
+    return nfceProposalFromAnalysis(analysis, qrUrl: qrUrl);
+  }
+
+  /// Resposta do nfce-read vira proposta de nota já paga, com os itens.
+  static CaptureProposal nfceProposalFromAnalysis(Map<String, dynamic> analysis, {required String qrUrl}) {
+    final rawItems = analysis['items'] as List<dynamic>? ?? const [];
+    final items = <InvoiceItemDraft>[];
+    for (var i = 0; i < rawItems.length; i++) {
+      final item = rawItems[i];
+      if (item is! Map) continue;
+      final amount = (item['amount_cents'] as num?)?.toInt() ?? 0;
+      if (amount <= 0) continue;
+      final rawQuantity = (item['quantity'] as num?)?.toDouble() ?? 1;
+      // Peso (0,532 kg) não cabe em quantidade inteira: vira 1 pelo valor total
+      final wholeUnits = rawQuantity >= 1 && rawQuantity == rawQuantity.roundToDouble();
+      final quantity = wholeUnits ? rawQuantity.toInt() : 1;
+      final unit = (item['unit_cents'] as num?)?.toInt() ?? 0;
+      items.add(InvoiceItemDraft(
+        id: 'item_$i',
+        name: (item['title'] as String?)?.trim().isNotEmpty == true ? (item['title'] as String).trim() : 'Item ${i + 1}',
+        quantity: quantity,
+        unitPrice: Money(wholeUnits && unit > 0 ? unit : amount),
+        totalPrice: Money(amount),
+        isPersonal: false,
+      ));
+    }
+
+    final total = (analysis['total_cents'] as num?)?.toInt() ?? 0;
+    final itemsSum = items.fold<int>(0, (sum, i) => sum + i.totalPrice.cents);
+    final merchant = (analysis['merchant_name'] as String?)?.trim();
+    final issued = DateTime.tryParse(analysis['issue_date'] as String? ?? '');
+
+    return CaptureProposal(
+      id: 'prop_nfce_${DateTime.now().millisecondsSinceEpoch}',
+      documentType: DocumentType.nfce,
+      title: merchant != null && merchant.isNotEmpty ? merchant : 'Nota Fiscal (NFC-e)',
+      totalAmount: Money(total > 0 ? total : itemsSum),
+      date: issued != null ? DateTime(issued.year, issued.month, issued.day, 12) : DateTime.now(),
+      merchantOrBeneficiary: merchant,
+      rawCode: qrUrl,
+      items: items,
+      capturedAt: DateTime.now(),
+    );
+  }
 
   /// Processa arquivo de imagem ou documento PDF via Edge Function e Gemini Vision OCR.
   /// Aplica a regra "Código Primeiro": tenta identificar linha digitável de boleto antes da IA.
@@ -154,4 +233,13 @@ class CaptureService {
       capturedAt: DateTime.now(),
     );
   }
+}
+
+/// Falha ao consultar a NFC-e na Sefaz, com a mensagem para o usuário.
+class NfceLookupError implements Exception {
+  final String message;
+  const NfceLookupError(this.message);
+
+  @override
+  String toString() => message;
 }

@@ -225,17 +225,7 @@ class _SmartScannerPageState extends State<SmartScannerPage> with WidgetsBinding
       final raw = barcode.rawValue?.trim();
       if (raw != null && raw.isNotEmpty) {
         if (raw.startsWith('http')) {
-          final proposal = BoletoParser.parseNfceQrCodeUrl(raw);
-          setState(() {
-            _currentProposal = proposal;
-          });
-          if (proposal.totalAmount.cents == 0) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text('O QR da nota não traz valor nem itens. Digite o valor ou fotografe o cupom para a IA ler.'),
-              ),
-            );
-          }
+          _lookupNfce(raw);
           break;
         } else if (const {44, 47, 48}.contains(BoletoCodeReader.digitsOf(raw).length)) {
           final proposal = _proposalFromCode(raw, quiet: true);
@@ -247,6 +237,45 @@ class _SmartScannerPageState extends State<SmartScannerPage> with WidgetsBinding
           }
         }
       }
+    }
+  }
+
+  /// QR da NFC-e: busca loja, itens e total na Sefaz. Sem resposta, abre a
+  /// nota só com o que o QR traz e avisa o motivo.
+  Future<void> _lookupNfce(String url) async {
+    setState(() {
+      _isProcessing = true;
+      _processingMessage = 'Consultando a nota na Sefaz...';
+    });
+
+    CaptureProposal? proposal;
+    String? failure;
+    if (sl<AuthRepository>().isDemoMode) {
+      failure = 'No modo demonstração a nota não é consultada na Sefaz.';
+    } else {
+      try {
+        proposal = await sl<CaptureService>().lookupNfce(url);
+      } catch (e) {
+        failure = e is NfceLookupError ? e.message : 'Não foi possível consultar a nota na Sefaz.';
+      }
+    }
+    if (!mounted) return;
+
+    final fallback = proposal == null ? BoletoParser.parseNfceQrCodeUrl(url) : null;
+    setState(() {
+      _currentProposal = proposal ?? fallback;
+      _isProcessing = false;
+    });
+    if (fallback != null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            fallback.totalAmount.cents == 0
+                ? '$failure Digite o valor ou fotografe o cupom para a IA ler.'
+                : '$failure O QR trouxe só o valor; fotografe o cupom para ver os itens.',
+          ),
+        ),
+      );
     }
   }
 
