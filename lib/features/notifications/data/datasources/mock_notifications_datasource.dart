@@ -1,11 +1,33 @@
 import 'dart:async';
 
 import '../../domain/entities/app_notification.dart';
+import '../../domain/entities/notification_preferences.dart';
 import 'notifications_datasource.dart';
 
 /// Modo demo: notificações de exemplo só no sino, sem push.
 class MockNotificationsDataSource implements NotificationsDataSource {
   final StreamController<void> _changes = StreamController<void>.broadcast();
+  NotificationPreferences _preferences = const NotificationPreferences();
+
+  @override
+  Future<NotificationPreferences> getPreferences() async => _preferences;
+
+  @override
+  Future<void> saveGroupPreference(NotificationCategory group, GroupPreference preference) async {
+    _preferences = _preferences.withGroup(group, preference);
+  }
+
+  @override
+  Future<void> saveSettings(NotificationPreferences preferences) async {
+    _preferences = NotificationPreferences(
+      byGroup: _preferences.byGroup,
+      quietStart: preferences.quietStart,
+      quietEnd: preferences.quietEnd,
+      hideAmounts: preferences.hideAmounts,
+      weeklySummary: preferences.weeklySummary,
+    );
+  }
+
   late final List<AppNotification> _items = _seed(DateTime.now());
 
   static List<AppNotification> _seed(DateTime now) => [

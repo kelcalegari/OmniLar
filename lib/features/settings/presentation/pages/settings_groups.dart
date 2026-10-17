@@ -496,7 +496,7 @@ extension _SettingsGroupViews on _SettingsPageState {
       _panel(
         context,
         title: 'Notificações',
-        children: const [PushSettingsBlock()],
+        children: const [PushSettingsBlock(), Divider(height: 1), NotificationPreferencesBlock()],
       ),
       _panel(
         context,

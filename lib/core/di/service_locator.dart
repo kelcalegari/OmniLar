@@ -287,7 +287,10 @@ Future<void> initServiceLocator() async {
     final mock = MockNotificationsDataSource();
     if (client != null) {
       return DynamicNotificationsDataSource(
-        remote: SupabaseNotificationsDataSource(client: client),
+        remote: SupabaseNotificationsDataSource(
+          client: client,
+          getCurrentHouseId: () => sl<AuthRepository>().currentHouse?.id ?? '',
+        ),
         mock: mock,
         isDemoMode: isDemoModeActive,
       );

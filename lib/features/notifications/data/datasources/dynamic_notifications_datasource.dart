@@ -1,4 +1,5 @@
 import '../../domain/entities/app_notification.dart';
+import '../../domain/entities/notification_preferences.dart';
 import 'notifications_datasource.dart';
 
 class DynamicNotificationsDataSource implements NotificationsDataSource {
@@ -26,4 +27,14 @@ class DynamicNotificationsDataSource implements NotificationsDataSource {
 
   @override
   Stream<void> watchNotifications() => _active.watchNotifications();
+
+  @override
+  Future<NotificationPreferences> getPreferences() => _active.getPreferences();
+
+  @override
+  Future<void> saveGroupPreference(NotificationCategory group, GroupPreference preference) =>
+      _active.saveGroupPreference(group, preference);
+
+  @override
+  Future<void> saveSettings(NotificationPreferences preferences) => _active.saveSettings(preferences);
 }

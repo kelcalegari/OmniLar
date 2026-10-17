@@ -27,6 +27,7 @@ import '../../../finance/presentation/cubit/finance_state.dart';
 import '../../../finance/presentation/pages/add_expense_page.dart';
 import '../../../finance/presentation/widgets/audit_log_sheet.dart';
 import '../../../notifications/presentation/widgets/push_settings_block.dart';
+import '../../../notifications/presentation/widgets/notification_preferences_block.dart';
 import '../../../../core/domain/value_objects/money.dart';
 import '../../../../core/widgets/recurrence_scope_dialog.dart';
 import '../../../../core/theme/theme_cubit.dart';
