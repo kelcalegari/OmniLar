@@ -173,12 +173,14 @@ Sem IA (limite ou erro), OFX/CSV continuam funcionando e a classificação fica 
 
 Todas as etapas estão feitas. Pendente: testar com conta real e arquivos de banco de verdade.
 
-## 10. Decisões em aberto
+## 10. Decisões (resolvidas na implementação)
 
-- **Vínculo automático**: recomendação de que o "Já lançado" venha pré-marcado, visível e desfazível.
-- **Parcelas futuras**: criar as restantes nos próximos ciclos ou só a da fatura atual (recomendação: só a atual).
-- **Linhas pessoais do titular**: ficam só no histórico da importação, sem virar despesa (como na especificação)?
-- **Dividir a linha**: entra na primeira versão ou depois da conciliação?
+Conferido em 17/10/2026 ([plano_proximas_frentes.md](plano_proximas_frentes.md), frente 9):
+
+- **Vínculo automático**: o "Já lançado" vem aceito de saída e pode ser desfeito ("São diferentes").
+- **Parcelas futuras**: só a parcela da fatura importada vira despesa; as próximas entram nas próximas faturas.
+- **Linhas pessoais do titular**: ficam só no histórico da importação; se o Caixa paga a fatura, viram dívida do titular com o Caixa (migration 0055).
+- **Dividir a linha**: feito (seção 1, "Dividir linha").
 
 ## 11. Formatos de arquivo (fim do plano)
 
