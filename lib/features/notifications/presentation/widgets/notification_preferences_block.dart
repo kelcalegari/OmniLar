@@ -185,7 +185,7 @@ class _NotificationPreferencesBlockState extends State<NotificationPreferencesBl
         ),
         SwitchListTile(
           title: const Text('Resumo semanal'),
-          subtitle: const Text('Domingo às 18h: gastos da semana, contas da próxima e o Fôlego.'),
+          subtitle: const Text('Domingo às 18h: gastos da semana e contas que vencem na próxima.'),
           value: preferences.weeklySummary,
           onChanged: (on) => _setSettings(preferences.withSettings(weeklySummary: on)),
         ),
