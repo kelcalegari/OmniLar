@@ -4,6 +4,7 @@ import '../../../../core/widgets/privacy_toggle.dart';
 import '../../../../core/domain/value_objects/money.dart';
 import '../../../../core/domain/value_objects/financial_cycle.dart';
 import '../../domain/entities/financial_cycle_summary.dart';
+import '../../domain/entities/folego_params.dart';
 
 class FolegoGaugeCard extends StatelessWidget {
   final FinancialCycleSummary summary;
@@ -22,6 +23,9 @@ class FolegoGaugeCard extends StatelessWidget {
   /// ou "Em aberto") em vez da saúde do caixa; null = ainda não se sabe.
   final bool? isCycleSettled;
 
+  /// Limites da casa para o selo, a barra e o gasto diário (0098).
+  final FolegoParams params;
+
   const FolegoGaugeCard({
     super.key,
     required this.summary,
@@ -31,12 +35,13 @@ class FolegoGaugeCard extends StatelessWidget {
     this.onCurrentCycle,
     this.isLoading = false,
     this.isCycleSettled,
+    this.params = const FolegoParams(),
   });
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final status = summary.status;
+    final status = summary.statusWith(params);
 
     Color statusColor;
     String statusText;
@@ -197,9 +202,9 @@ class FolegoGaugeCard extends StatelessWidget {
                           ? Colors.white10
                           : Colors.black.withValues(alpha: 0.06),
                       valueColor: AlwaysStoppedAnimation<Color>(
-                        summary.commitmentPercentage > 0.85
+                        summary.commitmentPercentage * 100 > params.commitmentDangerPercent
                             ? AppColors.folegoDanger
-                            : (summary.commitmentPercentage > 0.65
+                            : (summary.commitmentPercentage * 100 > params.commitmentWarningPercent
                                 ? AppColors.folegoWarning
                                 : AppColors.primary),
                       ),
@@ -253,7 +258,7 @@ class FolegoGaugeCard extends StatelessWidget {
                           ? (summary.folego.cents / daysRemaining).round()
                           : 0;
 
-                      final isComfortable = dailySafeCents >= 5000; // >= R$ 50/dia
+                      final isComfortable = dailySafeCents >= params.comfortableDailyCents; // padrão: R$ 50/dia
 
                       return Container(
                         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),

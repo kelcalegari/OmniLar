@@ -43,9 +43,23 @@ class CycleSchedule extends Equatable {
   final int currentDay;
   final List<CycleDayChange> changes;
 
-  const CycleSchedule(this.currentDay, [this.changes = const []]);
+  /// Mínimo de dias do ciclo de transição (padrão: [defaultTransitionDays];
+  /// a casa pode mudar em `houses.folego_params`, 0098).
+  final int minTransitionDays;
 
-  static const int _minTransitionDays = 15;
+  /// Única definição do padrão da transição; o banco usa o mesmo 15 (0098).
+  static const int defaultTransitionDays = 15;
+
+  /// Mínimo da transição lido de `houses.folego_params`; ausente ou fora de
+  /// 15 a 30 vale o padrão.
+  static int transitionDaysFromParams(Object? params) {
+    final raw = params is Map ? params['transition_min_days'] : null;
+    if (raw is! num || raw != raw.truncate()) return defaultTransitionDays;
+    final days = raw.toInt();
+    return days >= 15 && days <= 30 ? days : defaultTransitionDays;
+  }
+
+  const CycleSchedule(this.currentDay, [this.changes = const [], this.minTransitionDays = defaultTransitionDays]);
 
   static DateTime _dateOnly(DateTime d) => DateTime(d.year, d.month, d.day);
 
@@ -62,8 +76,8 @@ class CycleSchedule extends Equatable {
   }
 
   /// Fim do ciclo de transição que começa em [change.from].
-  static DateTime _firstRegularStart(CycleDayChange change) => _firstStartOnOrAfter(
-        DateTime(change.from.year, change.from.month, change.from.day + _minTransitionDays),
+  DateTime _firstRegularStart(CycleDayChange change) => _firstStartOnOrAfter(
+        DateTime(change.from.year, change.from.month, change.from.day + minTransitionDays),
         change.day,
       );
 
@@ -116,10 +130,10 @@ class CycleSchedule extends Equatable {
   CycleSchedule withChange(CycleDayChange change) {
     final kept = changes.where((c) => c.from.isBefore(change.from)).toList();
     // Voltar ao dia que já valia antes da troca pendente é só cancelar a troca
-    if (change.day == change.previousDay) return CycleSchedule(change.day, kept);
-    return CycleSchedule(change.day, [...kept, change]);
+    if (change.day == change.previousDay) return CycleSchedule(change.day, kept, minTransitionDays);
+    return CycleSchedule(change.day, [...kept, change], minTransitionDays);
   }
 
   @override
-  List<Object?> get props => [currentDay, changes];
+  List<Object?> get props => [currentDay, changes, minTransitionDays];
 }

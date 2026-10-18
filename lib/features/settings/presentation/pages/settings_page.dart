@@ -4,6 +4,7 @@ import '../../../finance/domain/entities/category_default_split.dart';
 import '../../../finance/domain/entities/closing_defaults.dart';
 import '../../../finance/domain/entities/split_rule.dart';
 import '../../../finance/domain/entities/house_settings.dart';
+import '../../../finance/domain/entities/folego_params.dart';
 import '../../../finance/domain/entities/member_settings.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -441,7 +442,7 @@ class _SettingsPageState extends State<SettingsPage> {
     String? selectedOwnerId = members.any((m) => m.id == existing?.ownerMemberId)
         ? existing?.ownerMemberId
         : null;
-    // Sem escolha anterior, o interruptor abre no que o nome sugere
+    // Sem escolha anterior, o interruptor abre desligado
     bool? variableSpend = existing?.isVariableSpend;
     final messenger = ScaffoldMessenger.of(context);
 
@@ -628,9 +629,7 @@ class _SettingsPageState extends State<SettingsPage> {
                     'Muda de um ciclo para o outro (mercado, luz, água). O Planejamento de Aportes estima pela média.',
                     style: TextStyle(fontSize: 12),
                   ),
-                  value: variableSpend ??
-                      ExpenseCategory(id: existing?.id ?? '', name: nameController.text, icon: '', colorHex: '')
-                          .looksLikeVariableSpend,
+                  value: variableSpend ?? false,
                   onChanged: (value) => setDialogState(() => variableSpend = value),
                 ),
               ],
@@ -679,7 +678,7 @@ class _SettingsPageState extends State<SettingsPage> {
                     icon: 'category',
                     colorHex: '#0F766E',
                     ownerMemberId: selectedOwnerId,
-                    isVariableSpend: variableSpend,
+                    isVariableSpend: variableSpend ?? false,
                     defaultSplit: defaultSplit,
                   );
 

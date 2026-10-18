@@ -45,12 +45,14 @@ void main() {
         name: 'Supermercado e Feira',
         icon: 'shopping_cart',
         colorHex: '#50E3C2',
+        isVariableSpend: true,
       ),
       const ExpenseCategory(
         id: 'cat_energia',
         name: 'Luz e Energia',
         icon: 'bolt',
         colorHex: '#F5A623',
+        isVariableSpend: true,
       ),
     ];
 

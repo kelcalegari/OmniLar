@@ -360,6 +360,7 @@ extension _SettingsGroupViews on _SettingsPageState {
       ),
       _newMemberSplitPanel(context, financeState),
       _planningPanel(context, financeState),
+      _folegoParamsPanel(context, financeState),
       _closingDefaultsPanel(context, financeState),
       _initialBalancePanel(context, financeState),
       _panel(
@@ -467,6 +468,127 @@ extension _SettingsGroupViews on _SettingsPageState {
                       if (ok) navigator.pop();
                       setDialogState(() => isSaving = false);
                       showSaveFeedback(messenger, ok: ok, success: 'Divisão para quem entra atualizada.');
+                    },
+              style: FilledButton.styleFrom(backgroundColor: AppColors.primary),
+              child: const Text('Salvar'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// Limites do Fôlego, horizonte das recorrentes e transição do dia do ciclo
+  /// (0098). Só administradores mudam.
+  Widget _folegoParamsPanel(BuildContext context, FinanceState financeState) {
+    final params = financeState.houseSettings.folegoParams;
+    final currentUserId = sl<AuthRepository>().currentUser?.id;
+    final me = financeState.members.where((m) => m.id == currentUserId).firstOrNull;
+    final isAdmin = me?.role == 'owner' || me?.role == 'admin';
+    return _panel(
+      context,
+      title: 'Fôlego e Ciclo',
+      actionLabel: isAdmin ? 'Alterar' : null,
+      onAction: isAdmin ? () => _showFolegoParamsDialog(context, financeState) : null,
+      children: [
+        _line(title: 'Fôlego em atenção abaixo de', value: '${params.warningPercent}% dos aportes'),
+        _line(
+          title: 'Barra de comprometimento',
+          value: 'atenção acima de ${params.commitmentWarningPercent}%, crítica acima de ${params.commitmentDangerPercent}%',
+        ),
+        _line(
+          title: 'Gasto diário confortável a partir de',
+          value: Money(params.comfortableDailyCents).format(),
+        ),
+        _line(title: 'Contas recorrentes geradas até', value: '${params.recurringHorizonMonths} meses à frente'),
+        _line(title: 'Ciclo de transição (troca do dia)', value: 'mínimo de ${params.transitionMinDays} dias'),
+        if (!isAdmin) _emptyLine('Só administradores mudam estes limites.'),
+      ],
+    );
+  }
+
+  void _showFolegoParamsDialog(BuildContext context, FinanceState financeState) {
+    final saved = financeState.houseSettings.folegoParams;
+    final fields = <String, TextEditingController>{
+      'warning': TextEditingController(text: '${saved.warningPercent}'),
+      'commitment_warning': TextEditingController(text: '${saved.commitmentWarningPercent}'),
+      'commitment_danger': TextEditingController(text: '${saved.commitmentDangerPercent}'),
+      'daily': TextEditingController(text: '${saved.comfortableDailyCents ~/ 100}'),
+      'horizon': TextEditingController(text: '${saved.recurringHorizonMonths}'),
+      'transition': TextEditingController(text: '${saved.transitionMinDays}'),
+    };
+    const labels = {
+      'warning': 'Atenção abaixo de (% dos aportes)',
+      'commitment_warning': 'Barra em atenção acima de (%)',
+      'commitment_danger': 'Barra crítica acima de (%)',
+      'daily': 'Gasto diário confortável (R\$)',
+      'horizon': 'Recorrentes à frente (1 a 6 meses)',
+      'transition': 'Transição do ciclo (15 a 30 dias)',
+    };
+    String? error;
+    bool isSaving = false;
+    showDialog(
+      context: context,
+      builder: (dialogCtx) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: const Text('Fôlego e Ciclo', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                for (final entry in labels.entries)
+                  TextField(
+                    key: ValueKey('folego_param_${entry.key}'),
+                    controller: fields[entry.key],
+                    keyboardType: TextInputType.number,
+                    decoration: InputDecoration(labelText: entry.value),
+                  ),
+                if (error != null)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 8),
+                    child: Text(
+                      error!,
+                      key: const Key('folego_params_error'),
+                      style: const TextStyle(color: AppColors.debtRed, fontSize: 12),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(dialogCtx), child: const Text('Cancelar')),
+            FilledButton(
+              onPressed: isSaving
+                  ? null
+                  : () async {
+                      int? read(String key) => int.tryParse(fields[key]!.text.trim());
+                      final daily = read('daily');
+                      final next = FolegoParams(
+                        warningPercent: read('warning') ?? -1,
+                        commitmentWarningPercent: read('commitment_warning') ?? -1,
+                        commitmentDangerPercent: read('commitment_danger') ?? -1,
+                        comfortableDailyCents: daily == null ? -1 : daily * 100,
+                        recurringHorizonMonths: read('horizon') ?? -1,
+                        transitionMinDays: read('transition') ?? -1,
+                      );
+                      if (!next.isValid) {
+                        setDialogState(() => error =
+                            'Confira os valores: percentuais de 0 a 100 (atenção da barra abaixo da crítica), '
+                            'recorrentes de 1 a 6 meses e transição de 15 a 30 dias.');
+                        return;
+                      }
+                      setDialogState(() {
+                        error = null;
+                        isSaving = true;
+                      });
+                      final messenger = ScaffoldMessenger.of(context);
+                      final navigator = Navigator.of(dialogCtx);
+                      final ok = next == saved ||
+                          await context.read<FinanceCubit>().updateHouseSettings(folegoParams: next);
+                      if (ok) navigator.pop();
+                      setDialogState(() => isSaving = false);
+                      showSaveFeedback(messenger, ok: ok, success: 'Parâmetros do Fôlego atualizados.');
                     },
               style: FilledButton.styleFrom(backgroundColor: AppColors.primary),
               child: const Text('Salvar'),
