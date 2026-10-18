@@ -1,5 +1,6 @@
 import 'package:equatable/equatable.dart';
 import '../../../../core/domain/value_objects/financial_cycle.dart';
+import '../../../finance/domain/entities/closing_defaults.dart';
 import '../../../finance/domain/entities/savings_vault.dart';
 import '../../../finance/domain/entities/house_expense.dart';
 import '../../../finance/domain/services/cycle_expense_grouping.dart';
@@ -27,6 +28,10 @@ class SettlementState extends Equatable {
 
   /// Contas a pagar pendentes que pesam no ciclo.
   final List<HouseExpense> openBills;
+
+  /// Padrões do fechamento da casa (0094), já aplicados em [options] na
+  /// primeira carga. A diferença de quem pagou menos começa por eles.
+  final ClosingDefaults closingDefaults;
   final String? errorMessage;
 
   const SettlementState({
@@ -37,6 +42,7 @@ class SettlementState extends Equatable {
     this.vaults = const [],
     this.openInvoices = const [],
     this.openBills = const [],
+    this.closingDefaults = const ClosingDefaults(),
     this.errorMessage,
   });
 
@@ -48,6 +54,7 @@ class SettlementState extends Equatable {
     List<SavingsVault>? vaults,
     List<CardInvoiceEntry>? openInvoices,
     List<HouseExpense>? openBills,
+    ClosingDefaults? closingDefaults,
     String? errorMessage,
   }) {
     return SettlementState(
@@ -58,6 +65,7 @@ class SettlementState extends Equatable {
       vaults: vaults ?? this.vaults,
       openInvoices: openInvoices ?? this.openInvoices,
       openBills: openBills ?? this.openBills,
+      closingDefaults: closingDefaults ?? this.closingDefaults,
       errorMessage: errorMessage ?? this.errorMessage,
     );
   }
@@ -71,6 +79,7 @@ class SettlementState extends Equatable {
     vaults,
     openInvoices,
     openBills,
+    closingDefaults,
     errorMessage,
   ];
 }

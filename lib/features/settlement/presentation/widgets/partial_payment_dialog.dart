@@ -13,6 +13,9 @@ class PartialPaymentDialog extends StatefulWidget {
   final ValueChanged<TransferSettlementResolution> onSave;
   final VoidCallback? onRemove;
 
+  /// Padrão da casa para a diferença (0094). Sem ele, vira empréstimo.
+  final ShortfallAction? defaultShortfallAction;
+
   const PartialPaymentDialog({
     super.key,
     required this.transfer,
@@ -20,6 +23,7 @@ class PartialPaymentDialog extends StatefulWidget {
     this.initialResolution,
     required this.onSave,
     this.onRemove,
+    this.defaultShortfallAction,
   });
 
   static Future<void> show({
@@ -29,6 +33,7 @@ class PartialPaymentDialog extends StatefulWidget {
     TransferSettlementResolution? initialResolution,
     required ValueChanged<TransferSettlementResolution> onSave,
     VoidCallback? onRemove,
+    ShortfallAction? defaultShortfallAction,
   }) {
     return showModalBottomSheet<void>(
       context: context,
@@ -40,6 +45,7 @@ class PartialPaymentDialog extends StatefulWidget {
         initialResolution: initialResolution,
         onSave: onSave,
         onRemove: onRemove,
+        defaultShortfallAction: defaultShortfallAction,
       ),
     );
   }
@@ -76,7 +82,12 @@ class _PartialPaymentDialogState extends State<PartialPaymentDialog> {
       _amountController = TextEditingController(
         text: (halfCents / 100).toStringAsFixed(2),
       );
-      _selectedAction = ShortfallAction.createP2PLoan;
+      // Padrão da casa; cobrir com caixinha só se houver caixinha
+      final preferred = widget.defaultShortfallAction;
+      _selectedAction = preferred == null ||
+              (preferred == ShortfallAction.deductFromVault && widget.vaults.isEmpty)
+          ? ShortfallAction.createP2PLoan
+          : preferred;
       _installmentsCount = 1;
       _loanHasNoDueDate = false;
       _vaultRepaymentMode = VaultRepaymentMode.grant;

@@ -5,9 +5,12 @@ import 'package:omni_lar/core/di/service_locator.dart';
 import 'package:omni_lar/core/domain/value_objects/money.dart';
 import 'package:omni_lar/core/theme/theme_cubit.dart';
 import 'package:omni_lar/features/auth/presentation/cubit/auth_cubit.dart';
+import 'package:omni_lar/features/finance/domain/entities/closing_defaults.dart';
 import 'package:omni_lar/features/finance/domain/entities/cycle_funding_estimate.dart';
 import 'package:omni_lar/features/finance/presentation/cubit/finance_cubit.dart';
 import 'package:omni_lar/features/settings/presentation/pages/settings_page.dart';
+import 'package:omni_lar/features/settlement/domain/entities/settlement_options.dart';
+import 'package:omni_lar/features/settlement/domain/entities/transfer_settlement_resolution.dart';
 
 void main() {
   setUpAll(() async {
@@ -508,6 +511,45 @@ void main() {
     await tester.tap(menu);
     await tester.pumpAndSettle();
     expect(find.textContaining('Importar'), findsWidgets);
+  });
+
+  testWidgets('Padrões do fechamento: o administrador escolhe o que o fechamento já abre marcado', (tester) async {
+    await sl<FinanceCubit>().loadCycleData();
+
+    await tester.pumpWidget(buildTestableWidget());
+    await tester.pumpAndSettle();
+    await openGroup(tester, 'Divisão das despesas');
+
+    // Sem escolha, mostra o que o fechamento faz hoje
+    final panel = find.text('Padrões do fechamento');
+    await tester.ensureVisible(panel);
+    expect(find.text('Destino da sobra'), findsOneWidget);
+    expect(find.text('Guardar em uma caixinha'), findsOneWidget);
+    expect(find.text('Proporcional ao aporte'), findsOneWidget);
+    expect(find.text('Vira empréstimo'), findsOneWidget);
+    await tester.tap(panel);
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.widgetWithText(ChoiceChip, 'Partes iguais'));
+    await tester.pumpAndSettle();
+    final shortfall = find.widgetWithText(ChoiceChip, 'Fica para o próximo ciclo');
+    await tester.ensureVisible(shortfall);
+    await tester.tap(shortfall);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Salvar'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Padrões do fechamento atualizados.'), findsOneWidget);
+    final saved = sl<FinanceCubit>().state.houseSettings.closingDefaults;
+    expect(saved.deficitSplit, DeficitSplit.equal);
+    expect(saved.shortfallAction, ShortfallAction.rolloverPending);
+    // O que não mudou continua sem escolha própria
+    expect(saved.surplusAction, isNull);
+    expect(find.text('Partes iguais'), findsOneWidget);
+    expect(find.text('Fica para o próximo ciclo'), findsOneWidget);
+
+    // Volta ao de sempre para os outros testes do modo demo
+    await sl<FinanceCubit>().updateHouseSettings(closingDefaults: const ClosingDefaults());
   });
 
   // Fica por último: grava o saldo inicial no modo demo compartilhado

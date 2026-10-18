@@ -2,6 +2,7 @@ import '../../../../core/domain/value_objects/cycle_schedule.dart';
 import '../../domain/entities/super_pix_transfer.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../../../core/domain/value_objects/financial_cycle.dart';
+import '../../../finance/domain/entities/closing_defaults.dart';
 import '../../../finance/domain/repositories/finance_repository.dart';
 import '../../domain/entities/settlement_options.dart';
 import '../../domain/entities/settlement_summary.dart';
@@ -20,6 +21,10 @@ class SettlementCubit extends BlocBase<SettlementState> {
   SettlementCubit(this._repository, [this._financeRepository])
     : super(const SettlementState());
 
+  /// Os padrões da casa entram só na primeira carga: depois valem as escolhas
+  /// feitas na tela, mesmo trocando de ciclo.
+  bool _houseDefaultsApplied = false;
+
   Future<void> loadSettlement(FinancialCycle cycle) async {
     emit(
       state.copyWith(
@@ -28,11 +33,6 @@ class SettlementCubit extends BlocBase<SettlementState> {
       ),
     );
     try {
-      final summary = await _repository.getSettlementSummary(
-        cycle,
-        options: state.options,
-      );
-
       // Carrega as Caixinhas da Casa para permitir seleção no fechamento
       var vaults = state.vaults;
       if (_financeRepository != null && vaults.isEmpty) {
@@ -41,9 +41,25 @@ class SettlementCubit extends BlocBase<SettlementState> {
         } catch (_) {}
       }
 
+      // Padrões do fechamento da casa (0094) antes do cálculo: devolver a
+      // sobra e a caixinha do excedente mudam o Super Pix
+      var options = state.options;
+      var closingDefaults = state.closingDefaults;
+      if (!_houseDefaultsApplied && _financeRepository != null) {
+        try {
+          closingDefaults = (await _financeRepository.getHouseSettings()).closingDefaults;
+        } catch (_) {}
+        options = closingDefaults.applyTo(options, vaults);
+      }
+
+      final summary = await _repository.getSettlementSummary(
+        cycle,
+        options: options,
+      );
+
       final defaultVaultId =
-          state.options.targetVaultId ?? vaults.firstOrNull?.id;
-      final options = state.options.copyWith(targetVaultId: defaultVaultId);
+          options.targetVaultId ?? vaults.firstOrNull?.id;
+      options = options.copyWith(targetVaultId: defaultVaultId);
       final openInvoices = await _loadOpenInvoices(cycle);
       final openBills = await _loadOpenBills(cycle);
 
@@ -56,8 +72,10 @@ class SettlementCubit extends BlocBase<SettlementState> {
           options: options,
           openInvoices: openInvoices,
           openBills: openBills,
+          closingDefaults: closingDefaults,
         ),
       );
+      _houseDefaultsApplied = true;
     } catch (e) {
       emit(
         state.copyWith(
@@ -239,9 +257,12 @@ class SettlementCubit extends BlocBase<SettlementState> {
     );
   }
 
-  Future<void> confirmSettlement() async {
+  /// Com [rememberAsHouseDefaults], as escolhas deste fechamento viram os
+  /// padrões da casa depois de gravado (sem conseguir, o fechamento vale igual).
+  Future<void> confirmSettlement({bool rememberAsHouseDefaults = false}) async {
     final currentSummary = state.summary;
     if (currentSummary == null) return;
+    final newDefaults = rememberAsHouseDefaults ? closingDefaultsFromOptions() : null;
 
     emit(state.copyWith(status: SettlementCubitStatus.confirming));
     try {
@@ -280,6 +301,7 @@ class SettlementCubit extends BlocBase<SettlementState> {
         currentSummary.copyWith(dataVersion: freshSummary.dataVersion),
         options: state.options,
       );
+      if (newDefaults != null) await _saveClosingDefaults(newDefaults);
       final updatedSummary = await _repository.getSettlementSummary(
         currentSummary.cycle,
       );
@@ -299,6 +321,34 @@ class SettlementCubit extends BlocBase<SettlementState> {
         ),
       );
     }
+  }
+
+  /// As escolhas da tela como padrões da casa. A sobra só lembra a caixinha
+  /// quando vai para uma; a diferença de quem pagou menos vem do primeiro
+  /// pagamento parcial ajustado (sem nenhum, fica o padrão que já havia).
+  ClosingDefaults closingDefaultsFromOptions() {
+    final options = state.options;
+    final partial = options.transferResolutions.values
+        .where((r) => r.isPartialPayment)
+        .firstOrNull;
+    return ClosingDefaults(
+      surplusAction: options.surplusAction,
+      surplusVaultId: options.surplusAction == SurplusAction.toVault
+          ? options.targetVaultId
+          : state.closingDefaults.surplusVaultId,
+      deficitSplit: options.deficitSplit,
+      deficitVaultId: options.deficitVaultId,
+      shortfallAction: partial?.shortfallAction ?? state.closingDefaults.shortfallAction,
+    );
+  }
+
+  Future<void> _saveClosingDefaults(ClosingDefaults defaults) async {
+    final finance = _financeRepository;
+    if (finance == null) return;
+    try {
+      final saved = await finance.updateHouseSettings({'closing_defaults': defaults.toJson()});
+      emit(state.copyWith(closingDefaults: saved.closingDefaults));
+    } catch (_) {}
   }
 
   /// Resumo dos valores que o usuário revisou: totais e transferências do Super Pix.

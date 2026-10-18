@@ -1731,6 +1731,7 @@ class _SettlementHubContent extends StatelessWidget {
                           transfer: transfer,
                           vaults: state.vaults,
                           initialResolution: resolution,
+                          defaultShortfallAction: state.closingDefaults.shortfallAction,
                           onSave: (res) {
                             context
                                 .read<SettlementCubit>()
@@ -2079,6 +2080,11 @@ class _SettlementHubContent extends StatelessWidget {
           : 'Não será movimentada (nenhuma caixinha criada)',
     };
 
+    final cubit = context.read<SettlementCubit>();
+    // Só oferece lembrar quando as escolhas diferem dos padrões da casa
+    final canRemember = cubit.closingDefaultsFromOptions() != state.closingDefaults;
+    var rememberAsDefaults = false;
+
     showDialog(
       context: context,
       builder: (dialogCtx) => AlertDialog(
@@ -2090,6 +2096,8 @@ class _SettlementHubContent extends StatelessWidget {
             const Text(
               'Esta ação gravará a liquidação de forma atômica no ledger financeiro e carimbará as parcelas e faturas deste ciclo como pagas.',
             ),
+            if (canRemember)
+              _RememberDefaultsTile(onChanged: (v) => rememberAsDefaults = v),
             if (hasSurplus) ...[
               const SizedBox(height: 12),
               Container(
@@ -2139,7 +2147,7 @@ class _SettlementHubContent extends StatelessWidget {
               }
 
               if (context.mounted) {
-                context.read<SettlementCubit>().confirmSettlement();
+                cubit.confirmSettlement(rememberAsHouseDefaults: rememberAsDefaults);
               }
             },
             child: const Text('Confirmar e Liquidar'),
@@ -2171,6 +2179,43 @@ class _SettlementHubContent extends StatelessWidget {
             child: const Text('Entendi'),
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// "Lembrar como padrão da casa" no diálogo de confirmação.
+class _RememberDefaultsTile extends StatefulWidget {
+  final ValueChanged<bool> onChanged;
+
+  const _RememberDefaultsTile({required this.onChanged});
+
+  @override
+  State<_RememberDefaultsTile> createState() => _RememberDefaultsTileState();
+}
+
+class _RememberDefaultsTileState extends State<_RememberDefaultsTile> {
+  bool _value = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return CheckboxListTile(
+      key: const ValueKey('remember_closing_defaults'),
+      contentPadding: EdgeInsets.zero,
+      dense: true,
+      controlAffinity: ListTileControlAffinity.leading,
+      value: _value,
+      onChanged: (v) {
+        setState(() => _value = v ?? false);
+        widget.onChanged(_value);
+      },
+      title: const Text(
+        'Lembrar como padrão da casa',
+        style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+      ),
+      subtitle: const Text(
+        'Os próximos fechamentos já abrem com estas escolhas.',
+        style: TextStyle(fontSize: 11),
       ),
     );
   }
