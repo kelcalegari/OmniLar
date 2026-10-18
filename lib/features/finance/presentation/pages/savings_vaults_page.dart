@@ -12,6 +12,7 @@ import '../../domain/entities/savings_vault.dart';
 import '../cubit/finance_cubit.dart';
 import '../cubit/finance_state.dart';
 import '../../../../core/widgets/save_feedback.dart';
+import '../widgets/third_party_receipts_card.dart';
 import '../widgets/vault_history_dialog.dart';
 
 class SavingsVaultsPage extends StatefulWidget {
@@ -1056,6 +1057,10 @@ class _SavingsVaultsPageState extends State<SavingsVaultsPage> {
                     );
                   }),
                 ],
+
+                // Dinheiro de fora guardado para pagar faturas
+                const SizedBox(height: 8),
+                ThirdPartyReceiptsCard(state: state, cubit: cubit),
               ],
             ),
           );

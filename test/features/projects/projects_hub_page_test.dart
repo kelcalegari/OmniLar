@@ -16,9 +16,36 @@ import 'package:omni_lar/features/finance/domain/entities/category.dart';
 import 'package:omni_lar/features/finance/domain/entities/payment_method.dart';
 import 'package:omni_lar/features/finance/domain/entities/house_member.dart';
 import 'package:omni_lar/features/finance/domain/entities/savings_vault.dart';
+import 'package:omni_lar/features/finance/domain/entities/third_party_receipt.dart';
 import 'package:omni_lar/features/finance/domain/entities/audit_entry.dart';
 
 class _FakeFinanceRepository implements FinanceRepository {
+  @override
+  Future<List<ThirdPartyReceipt>> getThirdPartyReceipts() async => [];
+  @override
+  Future<void> registerThirdPartyReceipt({
+    required String payerName,
+    required Money amount,
+    required DateTime receivedOn,
+    required String vaultId,
+    String? paymentMethodId,
+    String? description,
+  }) async {}
+  @override
+  Future<void> useThirdPartyReceipts({
+    required List<String> receiptIds,
+    required ThirdPartyReceiptUse use,
+    String? paymentMethodId,
+    DateTime? invoiceDueDate,
+  }) async {}
+  @override
+  Future<void> reopenThirdPartyReceipts({
+    List<String>? receiptIds,
+    String? paymentMethodId,
+    DateTime? invoiceDueDate,
+  }) async {}
+  @override
+  Future<void> deleteThirdPartyReceipt(String receiptId) async {}
   @override
   Future<List<CardInvoice>> getOpenCardInvoices(String paymentMethodId) async => [];
   @override

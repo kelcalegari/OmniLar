@@ -5,6 +5,7 @@ enum LineDestination {
   splitP2P, // Vira Empréstimo P2P (outro membro deve para o dono do cartão)
   cardOwnerPersonal, // Gasto pessoal do dono (não afeta as contas da casa nem gera dívida)
   ignored, // Ignorado / duplicado
+  thirdParty, // Pago por quem não mora na casa (repasse guardado em caixinha): não vira lançamento
 }
 
 /// De onde veio o arquivo: muda a leitura do sinal dos valores.

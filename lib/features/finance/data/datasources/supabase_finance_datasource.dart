@@ -15,6 +15,7 @@ import '../../domain/entities/house_expense_item.dart';
 import '../../domain/entities/contribution.dart';
 import '../../domain/entities/financial_cycle_summary.dart';
 import '../../domain/entities/savings_vault.dart';
+import '../../domain/entities/third_party_receipt.dart';
 import '../../domain/entities/split_rule.dart';
 import '../../domain/entities/audit_entry.dart';
 import '../../domain/services/cycle_expense_filter.dart';
@@ -61,6 +62,8 @@ class SupabaseFinanceDataSource implements FinanceDataSource {
           'contributions',
           'p2p_loans',
           'savings_vaults',
+          // Entradas de terceiros (0090)
+          'third_party_receipts',
         ]) {
           pending = pending.onPostgresChanges(
             event: PostgresChangeEvent.all,
@@ -1588,6 +1591,118 @@ class SupabaseFinanceDataSource implements FinanceDataSource {
       }, onConflict: 'payment_method_id,due_date');
     } catch (e) {
       throw ServerFailure('Erro ao guardar o código da fatura: $e');
+    }
+  }
+
+  /// Quantos dias as entradas já usadas continuam na lista.
+  static const _usedReceiptsDays = 62;
+
+  @override
+  Future<List<ThirdPartyReceipt>> getThirdPartyReceipts() async {
+    try {
+      if (!_isUuid(_houseId)) return const [];
+      final usedSince = DateTime.now().subtract(const Duration(days: _usedReceiptsDays));
+      final rows = await client
+          .from('third_party_receipts')
+          .select(
+            'id, payer_name, description, amount_cents, received_on, vault_id, payment_method_id, '
+            'used_mode, used_payment_method_id, used_due_date, used_at',
+          )
+          .eq('house_id', _houseId)
+          .or('status.eq.held,used_at.gte.${usedSince.toUtc().toIso8601String()}')
+          .order('received_on', ascending: false)
+          .order('created_at', ascending: false);
+      return [
+        for (final r in rows)
+          ThirdPartyReceipt(
+            id: r['id'] as String,
+            payerName: r['payer_name'] as String,
+            description: r['description'] as String?,
+            amount: Money((r['amount_cents'] as num).toInt()),
+            receivedOn: DateTime.parse(r['received_on'] as String),
+            vaultId: r['vault_id'] as String,
+            paymentMethodId: r['payment_method_id'] as String?,
+            use: ThirdPartyReceiptUse.fromDb(r['used_mode'] as String?),
+            usedPaymentMethodId: r['used_payment_method_id'] as String?,
+            usedDueDate: r['used_due_date'] == null ? null : DateTime.parse(r['used_due_date'] as String),
+            usedAt: r['used_at'] == null ? null : DateTime.parse(r['used_at'] as String).toLocal(),
+          ),
+      ];
+    } catch (e) {
+      throw ServerFailure('Erro ao buscar os repasses de terceiros: $e');
+    }
+  }
+
+  @override
+  Future<void> registerThirdPartyReceipt({
+    required String payerName,
+    required Money amount,
+    required DateTime receivedOn,
+    required String vaultId,
+    String? paymentMethodId,
+    String? description,
+  }) async {
+    try {
+      // A entrada e o depósito na caixinha são gravados juntos no banco
+      await client.rpc('register_third_party_receipt', params: {
+        'p_house_id': _houseId,
+        'p_payer_name': payerName.trim(),
+        'p_amount_cents': amount.cents,
+        'p_received_on': _dateOnly(receivedOn),
+        'p_vault_id': vaultId,
+        'p_payment_method_id': _isUuid(paymentMethodId) ? paymentMethodId : null,
+        'p_description': description?.trim(),
+      });
+    } catch (e) {
+      throw ServerFailure('Erro ao registrar o repasse: $e');
+    }
+  }
+
+  @override
+  Future<void> useThirdPartyReceipts({
+    required List<String> receiptIds,
+    required ThirdPartyReceiptUse use,
+    String? paymentMethodId,
+    DateTime? invoiceDueDate,
+  }) async {
+    if (receiptIds.isEmpty) return;
+    try {
+      await client.rpc('use_third_party_receipts', params: {
+        'p_receipt_ids': receiptIds,
+        'p_mode': use.dbValue,
+        'p_payment_method_id': _isUuid(paymentMethodId) ? paymentMethodId : null,
+        'p_due_date': invoiceDueDate == null ? null : _dateOnly(invoiceDueDate),
+      });
+    } catch (e) {
+      throw ServerFailure('Erro ao usar o repasse: $e');
+    }
+  }
+
+  @override
+  Future<void> reopenThirdPartyReceipts({
+    List<String>? receiptIds,
+    String? paymentMethodId,
+    DateTime? invoiceDueDate,
+  }) async {
+    if (receiptIds != null && receiptIds.isEmpty) return;
+    if (receiptIds == null && (!_isUuid(paymentMethodId) || invoiceDueDate == null)) return;
+    try {
+      await client.rpc('reopen_third_party_receipts', params: {
+        'p_receipt_ids': receiptIds,
+        'p_payment_method_id': receiptIds == null ? paymentMethodId : null,
+        'p_due_date': receiptIds == null ? _dateOnly(invoiceDueDate!) : null,
+      });
+    } catch (e) {
+      throw ServerFailure('Erro ao devolver o repasse para a caixinha: $e');
+    }
+  }
+
+  @override
+  Future<void> deleteThirdPartyReceipt(String receiptId) async {
+    try {
+      await client.rpc('delete_third_party_receipt', params: {'p_receipt_id': receiptId});
+    } catch (e) {
+      throw ServerFailure('Erro ao excluir o repasse: $e');
     }
   }
 }

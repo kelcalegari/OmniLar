@@ -4,9 +4,11 @@ import '../../../../core/domain/value_objects/cycle_schedule.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../../../../core/domain/value_objects/financial_cycle.dart';
+import '../../../../core/domain/value_objects/money.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../domain/entities/card_invoice.dart';
 import '../../domain/entities/payment_method.dart';
+import '../../domain/entities/third_party_receipt.dart';
 import '../../domain/repositories/finance_repository.dart';
 import '../cubit/finance_cubit.dart';
 
@@ -60,6 +62,18 @@ class _CardInvoicePaymentSheetState extends State<CardInvoicePaymentSheet> {
 
   /// Meio escolhido para pagar a fatura.
   late String _optionKey = _options.first.key;
+
+  /// Repasses de terceiros guardados que podem ir para esta fatura: os do
+  /// cartão e os sem cartão definido.
+  late final List<ThirdPartyReceipt> _receipts = widget.financeCubit.state.heldThirdPartyReceipts
+      .where((r) => r.fitsCard(widget.card.id))
+      .toList();
+
+  /// Repasses marcados para usar no pagamento: de saída, os deste cartão.
+  late final Set<String> _receiptIds = {
+    for (final r in _receipts)
+      if (r.paymentMethodId == widget.card.id) r.id,
+  };
 
   bool get _paidByHouse =>
       _options.where((o) => o.key == _optionKey).firstOrNull?.byHouse ?? widget.card.ownerMemberId == null;
@@ -150,12 +164,68 @@ class _CardInvoicePaymentSheetState extends State<CardInvoicePaymentSheet> {
       invoiceDueDate: invoice.dueDate,
       paidAt: _paidOn,
       paidByHouse: _paidByHouse,
+      thirdPartyReceiptIds: _receiptIds.toList(),
     ),
     successMessage:
         'Pagamento da fatura registrado em ${_dayFormat.format(_paidOn)}. '
-        'As compras contam no ciclo ${_cycleOf(_paidOn).label}.',
+        'As compras contam no ciclo ${_cycleOf(_paidOn).label}.'
+        '${_receiptIds.isEmpty ? '' : ' ${_receiptsOutcome()}'}',
     closeOnSuccess: true,
   );
+
+  Money get _chosenReceiptsTotal =>
+      ThirdPartyReceipt.total(_receipts.where((r) => _receiptIds.contains(r.id)));
+
+  /// O que acontece com os repasses marcados, conforme quem paga a fatura.
+  String _receiptsOutcome() {
+    final total = _chosenReceiptsTotal.formatted;
+    if (_paidByHouse) return 'Os $total de repasse saem da caixinha para pagar a fatura.';
+    final owner = widget.memberNames[widget.card.ownerMemberId] ?? 'titular';
+    return 'Repasse $total a $owner: o valor sai da caixinha.';
+  }
+
+  String _vaultName(String vaultId) =>
+      widget.financeCubit.state.savingsVaults.where((v) => v.id == vaultId).firstOrNull?.name ?? 'caixinha';
+
+  List<Widget> _receiptsSection() => [
+        const SizedBox(height: 12),
+        const Text(
+          'Repasses de terceiros',
+          style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
+        ),
+        const Text(
+          'Dinheiro de fora guardado em caixinha para esta fatura. O marcado sai da caixinha junto com o pagamento.',
+          style: TextStyle(fontSize: 12, color: Colors.grey),
+        ),
+        for (final receipt in _receipts)
+          CheckboxListTile(
+            key: ValueKey('invoice_receipt_${receipt.id}'),
+            contentPadding: EdgeInsets.zero,
+            dense: true,
+            controlAffinity: ListTileControlAffinity.leading,
+            value: _receiptIds.contains(receipt.id),
+            onChanged: _busy
+                ? null
+                : (checked) => setState(() {
+                      if (checked == true) {
+                        _receiptIds.add(receipt.id);
+                      } else {
+                        _receiptIds.remove(receipt.id);
+                      }
+                    }),
+            title: Text('${receipt.payerName} • ${receipt.amount.formatted}'),
+            subtitle: Text(
+              '${_dayFormat.format(receipt.receivedOn)} • ${_vaultName(receipt.vaultId)}'
+              '${receipt.paymentMethodId == null ? ' • sem cartão definido' : ''}',
+              style: const TextStyle(fontSize: 12),
+            ),
+          ),
+        if (_receiptIds.isNotEmpty)
+          Text(
+            _receiptsOutcome(),
+            style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+          ),
+      ];
 
   Future<void> _undo(CardInvoice invoice) => _run(
     affectedDates: [invoice.dueDate, invoice.paidAt!],
@@ -165,7 +235,7 @@ class _CardInvoicePaymentSheetState extends State<CardInvoicePaymentSheet> {
     ),
     successMessage:
         'Pagamento desfeito. As compras voltam a contar no ciclo '
-        '${_cycleOf(invoice.dueDate).label}.',
+        '${_cycleOf(invoice.dueDate).label}. Repasses usados nesta fatura voltam para a caixinha.',
     closeOnSuccess: false,
   );
 
@@ -283,6 +353,7 @@ class _CardInvoicePaymentSheetState extends State<CardInvoicePaymentSheet> {
                             : 'Paga por $owner, que é reembolsado no fechamento do ciclo.',
                         style: const TextStyle(fontSize: 12),
                       ),
+                      if (_receipts.isNotEmpty) ..._receiptsSection(),
                       const SizedBox(height: 8),
                       Text(
                         'Com essa data, a fatura conta no ciclo ${_cycleOf(_paidOn).label}.',
