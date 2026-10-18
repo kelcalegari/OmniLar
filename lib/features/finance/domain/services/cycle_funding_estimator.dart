@@ -5,6 +5,7 @@ import '../entities/contribution.dart';
 import '../entities/cycle_funding_estimate.dart';
 import '../entities/house_expense.dart';
 import '../entities/house_member.dart';
+import '../entities/house_settings.dart';
 import '../entities/split_rule.dart';
 import 'exclusive_charges.dart';
 
@@ -24,6 +25,9 @@ class CycleFundingEstimator {
     FundingEstimateMode mode = FundingEstimateMode.historicalAverage,
     Map<String, Money>? customCategoryOverrides,
     int? historicalCyclesCount,
+    List<List<HouseExpense>>? historicalExpensesByCycle,
+    int adjustPercent = HouseSettings.defaultAdjustPercent,
+    OpeningBalanceRule? openingBalanceRule,
   }) {
     // A conta é a do ciclo inteiro, como no fechamento: tudo o que o ciclo custa
     // (o que já foi pago e o que ainda vence), menos a sobra que veio do ciclo
@@ -40,6 +44,8 @@ class CycleFundingEstimator {
       mode: mode,
       customOverrides: customCategoryOverrides,
       cyclesCount: historicalCyclesCount,
+      byCycle: historicalExpensesByCycle,
+      adjustPercent: adjustPercent,
     );
     final variableCategoryIds = historicalEstimates.map((v) => v.categoryId).toSet();
     final launchedByCategory = <String, int>{};
@@ -83,8 +89,13 @@ class CycleFundingEstimator {
         fixedCommittedExpenses.cents + totalVariablesCents;
     final totalProjectedExpenses = Money(totalProjectedCents);
 
-    // 4. Necessidade de aportes no ciclo (abatendo a sobra do ciclo anterior)
-    final netFundingCents = (totalProjectedCents - currentHouseBalance.cents)
+    // 4. Necessidade de aportes no ciclo (abatendo a sobra do ciclo anterior,
+    // a menos que a casa a guarde como folga)
+    final hasFixedAmount = members.any((m) => (m.defaultFixedAmountCents ?? 0) > 0);
+    final balanceUsed = _balanceCountsAsFunding(openingBalanceRule, hasFixedAmount)
+        ? currentHouseBalance.cents
+        : 0;
+    final netFundingCents = (totalProjectedCents - balanceUsed)
         .clamp(0, totalProjectedCents);
     final netFundingRequired = Money(netFundingCents);
 
@@ -95,6 +106,7 @@ class CycleFundingEstimator {
       variableRemainder: Money(variableRemainderCents),
       openingBalance: currentHouseBalance,
       contributions: currentCycleContributions,
+      openingBalanceRule: openingBalanceRule,
     );
 
     return CycleFundingEstimate(
@@ -113,6 +125,16 @@ class CycleFundingEstimator {
   /// quando a categoria dela é de consumo variável.
   bool _isFixedBill(HouseExpense e) => e.isRecurring && !e.isVariable;
 
+  /// A sobra entra na conta do que falta aportar: abatendo as cotas ou, com
+  /// valor fixo, cobrindo o excedente. Guardada como folga, não entra.
+  bool _balanceCountsAsFunding(OpeningBalanceRule? rule, bool hasFixedAmount) =>
+      switch (rule) {
+        null => true,
+        OpeningBalanceRule.reduceQuotas => true,
+        OpeningBalanceRule.coverExcess => hasFixedAmount,
+        OpeningBalanceRule.keep => false,
+      };
+
   /// Calcula estimativas históricas para categorias variáveis (como Mercado e Contas de Consumo)
   List<CategoryFundingEstimate> _computeVariableCategoryEstimates({
     required List<ExpenseCategory> categories,
@@ -120,6 +142,8 @@ class CycleFundingEstimator {
     required FundingEstimateMode mode,
     Map<String, Money>? customOverrides,
     int? cyclesCount,
+    List<List<HouseExpense>>? byCycle,
+    int adjustPercent = HouseSettings.defaultAdjustPercent,
   }) {
     final List<CategoryFundingEstimate> estimates = [];
 
@@ -134,9 +158,9 @@ class CycleFundingEstimator {
         : categories.take(3).toList();
 
     final multiplier = switch (mode) {
-      FundingEstimateMode.economical => 0.90, // -10% de economia
+      FundingEstimateMode.economical => 1 - adjustPercent / 100, // economia
       FundingEstimateMode.historicalAverage => 1.00, // 100% da média
-      FundingEstimateMode.comfortable => 1.10, // +10% de folga
+      FundingEstimateMode.comfortable => 1 + adjustPercent / 100, // folga
     };
 
     for (final cat in targetCategories) {
@@ -147,7 +171,24 @@ class CycleFundingEstimator {
       int averageCents = 0;
       int sampleCycles = 1;
 
-      if (catExpenses.isNotEmpty) {
+      if (byCycle != null) {
+        // Como o alerta de categoria: média dos ciclos em que houve gasto
+        int totalCents = 0;
+        int cyclesWithSpend = 0;
+        for (final cycleExpenses in byCycle) {
+          final spent = cycleExpenses
+              .where((e) => e.categoryId == cat.id && !_isFixedBill(e))
+              .fold<int>(0, (acc, e) => acc + e.amount.cents);
+          if (spent > 0) {
+            totalCents += spent;
+            cyclesWithSpend++;
+          }
+        }
+        if (cyclesWithSpend > 0) {
+          sampleCycles = cyclesWithSpend;
+          averageCents = (totalCents / cyclesWithSpend).round();
+        }
+      } else if (catExpenses.isNotEmpty) {
         // Quem chama sabe quantos ciclos o histórico cobre. Sem essa
         // informação, conta os meses: um ciclo que cruza dois meses contaria
         // como dois e a média sairia pela metade.
@@ -200,6 +241,7 @@ class CycleFundingEstimator {
     required Money variableRemainder,
     required Money openingBalance,
     required List<Contribution> contributions,
+    OpeningBalanceRule? openingBalanceRule,
   }) {
     if (members.isEmpty) return const [];
 
@@ -226,6 +268,19 @@ class CycleFundingEstimator {
         ruleDescMap[m.id] = exclusiveCents > 0
             ? 'Valor fixo + ${Money(exclusiveCents).format()} de despesas só suas'
             : 'Valor fixo definido no perfil';
+      }
+      // Sobra que abate os aportes: na proporção do valor fixo de cada um
+      if (openingBalanceRule == OpeningBalanceRule.reduceQuotas && openingBalance.isPositive) {
+        final totalFixed = members.fold<int>(0, (acc, m) => acc + (m.defaultFixedAmountCents ?? 0));
+        if (totalFixed > 0) {
+          final shares = SplitRule.percentage({
+            for (final m in members) m.id: (m.defaultFixedAmountCents ?? 0) * 100 / totalFixed,
+          }).calculateAllocations(totalAmount: openingBalance, memberIds: memberIds);
+          for (final m in members) {
+            final cents = recommendedMap[m.id]!.cents - (shares[m.id]?.cents ?? 0);
+            recommendedMap[m.id] = Money(cents > 0 ? cents : 0);
+          }
+        }
       }
     } else {
       // Cada despesa lançada entra pelo rateio dela (como no fechamento); o que
@@ -267,8 +322,10 @@ class CycleFundingEstimator {
         totalAmount: variableRemainder,
         memberIds: memberIds,
       ));
+      // A sobra abate as cotas, a menos que a casa a guarde no Caixa
+      final abates = openingBalanceRule == null || openingBalanceRule == OpeningBalanceRule.reduceQuotas;
       final openingShares = defaultRule.calculateAllocations(
-        totalAmount: openingBalance.isPositive ? openingBalance : const Money.zero(),
+        totalAmount: abates && openingBalance.isPositive ? openingBalance : const Money.zero(),
         memberIds: memberIds,
       );
 

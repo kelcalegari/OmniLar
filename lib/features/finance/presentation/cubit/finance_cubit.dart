@@ -17,6 +17,7 @@ import '../../domain/entities/audit_entry.dart';
 import '../../domain/entities/cycle_funding_estimate.dart';
 import '../../domain/services/cycle_funding_estimator.dart';
 import '../../domain/entities/house_member.dart';
+import '../../domain/entities/house_settings.dart';
 import '../../../settlement/domain/services/open_invoice_choices.dart';
 import '../../../../core/domain/enums/recurrence.dart';
 import '../../../../core/domain/value_objects/money.dart';
@@ -163,9 +164,15 @@ class FinanceCubit extends Cubit<FinanceState> {
       final startDateFuture = refreshStartDate
           ? Future<DateTime?>.sync(() => _repository.getHouseStartDate()).catchError((_) => null)
           : Future<DateTime?>.value(state.houseStartDate);
-      final historicalFuture = Future<List<HouseExpense>>.sync(
-        () => _repository.getExpensesForCycle(cycleSchedule.previous(targetCycle)),
-      ).catchError((_) => <HouseExpense>[]);
+      // Configurações da casa (ciclos da média, modo do planejador, regra da
+      // sobra). Se falharem, vale o que já se tinha
+      final settingsFuture = Future<HouseSettings?>.sync(
+        () => _repository.getHouseSettings(),
+      ).catchError((_) => null);
+      // Histórico dos ciclos anteriores para as médias de variáveis (ex: Mercado),
+      // com os ciclos da média da última carga (acertados abaixo se mudaram)
+      final previousCycles = _previousCycles(targetCycle, state.houseSettings.historyCycles);
+      final historicalFuture = _expensesOf(previousCycles);
 
       await Future.wait<void>([
         membersFuture,
@@ -181,6 +188,7 @@ class FinanceCubit extends Cubit<FinanceState> {
         invoiceCodesFuture,
         historicalFuture,
         startDateFuture,
+        settingsFuture,
       ]);
       // Outro ciclo foi pedido enquanto este carregava: o dele é que vale
       if (sequence != _loadSequence || isClosed) return;
@@ -204,11 +212,23 @@ class FinanceCubit extends Cubit<FinanceState> {
           activeSeriesIds: {for (final e in recurringRows) e.recurringSeriesId ?? e.id},
         );
       }
-      final historicalExpenses = await historicalFuture;
+      final settings = await settingsFuture ?? state.houseSettings;
+      var historicalByCycle = await historicalFuture;
+      if (settings.historyCycles != previousCycles.length) {
+        final wanted = _previousCycles(targetCycle, settings.historyCycles);
+        historicalByCycle = wanted.length <= historicalByCycle.length
+            ? historicalByCycle.take(wanted.length).toList()
+            : [...historicalByCycle, ...await _expensesOf(wanted.skip(historicalByCycle.length))];
+        if (sequence != _loadSequence || isClosed) return;
+      }
       final invoiceCodes = await invoiceCodesFuture;
       final houseStartDate = await startDateFuture;
 
-      _historicalExpenses = historicalExpenses.isNotEmpty ? historicalExpenses : expenses;
+      // Sem histórico (primeiro ciclo da casa), a média sai do próprio ciclo
+      _historicalByCycle = historicalByCycle.any((c) => c.isNotEmpty) ? historicalByCycle : [expenses];
+      final keepSessionChoices = state.houseSettings == settings;
+      final mode = keepSessionChoices ? state.fundingEstimateMode : settings.plannerMode;
+      final overrides = keepSessionChoices ? state.customCategoryOverrides : settings.categoryOverrides;
 
       final fundingEstimate = _estimate(
         cycle: targetCycle,
@@ -218,12 +238,16 @@ class FinanceCubit extends Cubit<FinanceState> {
         paymentMethods: paymentMethods,
         contributions: contributions,
         summary: summary,
-        mode: state.fundingEstimateMode,
-        overrides: state.customCategoryOverrides,
+        mode: mode,
+        overrides: overrides,
+        settings: settings,
       );
 
       emit(state.copyWith(
         status: FinanceStatus.success,
+        houseSettings: settings,
+        fundingEstimateMode: mode,
+        customCategoryOverrides: overrides,
         currentCycle: targetCycle,
         summary: summary,
         fundingEstimate: fundingEstimate,
@@ -249,12 +273,30 @@ class FinanceCubit extends Cubit<FinanceState> {
     }
   }
 
-  /// Histórico usado nas médias do planejador (ciclo anterior, quando existe).
-  List<HouseExpense> _historicalExpenses = const [];
+  /// Histórico usado nas médias do planejador: as despesas de cada ciclo
+  /// anterior (quantos a casa escolheu), do mais recente para o mais antigo.
+  List<List<HouseExpense>> _historicalByCycle = const [];
+
+  Future<List<List<HouseExpense>>> _expensesOf(Iterable<FinancialCycle> cycles) =>
+      Future.wait<List<HouseExpense>>([
+        for (final c in cycles)
+          Future<List<HouseExpense>>.sync(() => _repository.getExpensesForCycle(c))
+              .catchError((_) => <HouseExpense>[]),
+      ]);
+
+  List<FinancialCycle> _previousCycles(FinancialCycle cycle, int count) {
+    final cycles = <FinancialCycle>[];
+    var current = cycle;
+    for (var i = 0; i < count; i++) {
+      current = cycleSchedule.previous(current);
+      if (isBeforeFirstCycle(current)) break;
+      cycles.add(current);
+    }
+    return cycles;
+  }
 
   /// Planejador de aportes com a mesma visão do fechamento: faturas e contas
   /// pendentes entram como pagas por quem o fechamento escolheria por padrão.
-  /// O histórico é sempre um ciclo só (o anterior, ou o próprio ciclo).
   CycleFundingEstimate _estimate({
     required FinancialCycle cycle,
     required List<HouseMember> members,
@@ -265,18 +307,21 @@ class FinanceCubit extends Cubit<FinanceState> {
     required FinancialCycleSummary? summary,
     required FundingEstimateMode mode,
     required Map<String, Money> overrides,
+    HouseSettings? settings,
   }) =>
       _fundingEstimator.calculateEstimate(
         cycle: cycle,
         members: members,
         categories: categories,
         currentCycleExpenses: applyOpenInvoiceChoices(expenses, paymentMethods, const {}),
-        historicalExpenses: _historicalExpenses,
+        historicalExpenses: const [],
+        historicalExpensesByCycle: _historicalByCycle,
         currentCycleContributions: contributions,
         currentHouseBalance: _openingBalanceOf(summary),
         mode: mode,
         customCategoryOverrides: overrides,
-        historicalCyclesCount: 1,
+        adjustPercent: (settings ?? state.houseSettings).adjustPercent,
+        openingBalanceRule: (settings ?? state.houseSettings).openingBalanceRule,
       );
 
   /// Sobra que o ciclo anterior deixou no Caixa. O fôlego já desconta as
@@ -302,11 +347,17 @@ class FinanceCubit extends Cubit<FinanceState> {
       fundingEstimateMode: mode,
       fundingEstimate: updated,
     ));
+    _saveSettings({'planner_mode': HouseSettings.plannerModeToDb(mode)});
   }
 
-  void updateCustomCategoryFunding(String categoryId, Money amount) {
+  /// Valor previsto de uma categoria ajustado à mão. Sem [amount], volta à média.
+  void updateCustomCategoryFunding(String categoryId, Money? amount) {
     final newOverrides = Map<String, Money>.from(state.customCategoryOverrides);
-    newOverrides[categoryId] = amount;
+    if (amount == null) {
+      newOverrides.remove(categoryId);
+    } else {
+      newOverrides[categoryId] = amount;
+    }
     final updated = _estimate(
       cycle: state.currentCycle,
       members: state.members,
@@ -322,6 +373,46 @@ class FinanceCubit extends Cubit<FinanceState> {
       customCategoryOverrides: newOverrides,
       fundingEstimate: updated,
     ));
+    _saveSettings({'planner_category_overrides': HouseSettings.overridesToJson(newOverrides)});
+  }
+
+  /// Escolha do planejador gravada na casa, sem travar a tela. Sem conexão,
+  /// fica valendo neste aparelho até a próxima carga.
+  Future<void> _saveSettings(Map<String, dynamic> changes) async {
+    try {
+      final saved = await _repository.updateHouseSettings(changes);
+      if (!isClosed) emit(state.copyWith(houseSettings: saved));
+    } catch (_) {}
+  }
+
+  /// Configurações da casa mudadas nos Ajustes: grava e refaz o ciclo (a média
+  /// pode precisar de outros ciclos). Devolve false se não deu para gravar.
+  Future<bool> updateHouseSettings({
+    OpeningBalanceRule? openingBalanceRule,
+    int? historyCycles,
+    int? adjustPercent,
+  }) async {
+    final changes = <String, dynamic>{
+      'opening_balance_rule': ?openingBalanceRule?.dbValue,
+      'planner_history_cycles': ?historyCycles,
+      'planner_adjust_percent': ?adjustPercent,
+    };
+    if (changes.isEmpty) return true;
+    try {
+      final saved = await _repository.updateHouseSettings(changes);
+      if (isClosed) return true;
+      // Guarda o modo e os ajustes desta sessão para a carga não trocá-los
+      emit(state.copyWith(
+        houseSettings: saved.copyWith(
+          plannerMode: state.fundingEstimateMode,
+          categoryOverrides: state.customCategoryOverrides,
+        ),
+      ));
+      await loadCycleData(cycle: state.currentCycle);
+      return true;
+    } catch (_) {
+      return false;
+    }
   }
 
   void nextCycle() {

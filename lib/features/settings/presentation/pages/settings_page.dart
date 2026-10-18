@@ -1,5 +1,6 @@
 import '../../../../core/domain/value_objects/cycle_schedule.dart';
 import 'package:flutter/material.dart';
+import '../../../finance/domain/entities/house_settings.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';

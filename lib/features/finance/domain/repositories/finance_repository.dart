@@ -1,5 +1,6 @@
 import '../entities/card_invoice.dart';
 import '../../../../core/domain/enums/recurrence.dart';
+import '../entities/house_settings.dart';
 import '../entities/house_member.dart';
 import '../entities/category.dart';
 import '../entities/payment_method.dart';
@@ -65,6 +66,12 @@ abstract class FinanceRepository {
     required Map<String, double> percentages,
     required Map<String, int> fixedAmountsCents,
   });
+
+  /// Configurações de planejamento e fechamento da casa (0091).
+  Future<HouseSettings> getHouseSettings();
+
+  /// Grava só as chaves de [changes] (colunas de `houses`) e devolve o resultado.
+  Future<HouseSettings> updateHouseSettings(Map<String, dynamic> changes);
 
   // Caixinhas & Metas da Casa (Dinheiro Blindado)
   Future<List<SavingsVault>> getSavingsVaults();

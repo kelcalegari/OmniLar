@@ -209,6 +209,7 @@ extension _SettingsGroupViews on _SettingsPageState {
           ),
         ],
       ),
+      _planningPanel(context, financeState),
       _panel(
         context,
         title: 'Categorias de Gastos',
@@ -230,6 +231,173 @@ extension _SettingsGroupViews on _SettingsPageState {
         ],
       ),
     ];
+  }
+
+  Widget _planningPanel(BuildContext context, FinanceState financeState) {
+    final settings = financeState.houseSettings;
+    final rule = settings.openingBalanceRule;
+    return _panel(
+      context,
+      title: 'Planejamento e Fechamento',
+      actionLabel: 'Alterar',
+      onAction: () => _showPlanningSettingsDialog(context, financeState),
+      children: [
+        _line(
+          title: 'Sobra no Caixa no início do ciclo',
+          value: rule?.label ?? 'Padrão',
+        ),
+        _line(
+          title: 'Média dos gastos variáveis',
+          value: settings.historyCycles == 1 ? 'Último ciclo' : 'Últimos ${settings.historyCycles} ciclos',
+        ),
+        _line(
+          title: 'Modos Econômico e Com folga',
+          value: '${settings.adjustPercent}%',
+        ),
+      ],
+    );
+  }
+
+  void _showPlanningSettingsDialog(BuildContext context, FinanceState financeState) {
+    final settings = financeState.houseSettings;
+    final currentUserId = sl<AuthRepository>().currentUser?.id;
+    final me = financeState.members.where((m) => m.id == currentUserId).firstOrNull;
+    final isAdmin = me?.role == 'owner' || me?.role == 'admin';
+    final usesFixed = financeState.members.any((m) => (m.defaultFixedAmountCents ?? 0) > 0);
+    OpeningBalanceRule? rule = settings.openingBalanceRule;
+    int historyCycles = settings.historyCycles;
+    int adjustPercent = settings.adjustPercent;
+    bool isSaving = false;
+
+    showDialog(
+      context: context,
+      builder: (dialogCtx) => StatefulBuilder(
+        builder: (context, setDialogState) {
+          Widget ruleOption(OpeningBalanceRule option) => ListTile(
+                contentPadding: EdgeInsets.zero,
+                dense: true,
+                enabled: isAdmin,
+                leading: Icon(
+                  rule == option ? Icons.radio_button_checked_rounded : Icons.radio_button_off_rounded,
+                  color: rule == option ? AppColors.primary : Colors.grey,
+                ),
+                title: Text(option.label, style: const TextStyle(fontWeight: FontWeight.w600)),
+                subtitle: Text(option.description, style: const TextStyle(fontSize: 12)),
+                onTap: () => setDialogState(() => rule = option),
+              );
+
+          return AlertDialog(
+            title: const Text(
+              'Planejamento e Fechamento',
+              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+            ),
+            content: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  const Text(
+                    'Sobra no Caixa no início do ciclo',
+                    style: TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    'O que a sobra do ciclo anterior (e o que voltou ao Caixa de empréstimos) faz no aporte de cada morador. Vale no planejador e no fechamento.',
+                    style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+                  ),
+                  if (!isAdmin)
+                    const Padding(
+                      padding: EdgeInsets.only(top: 4),
+                      child: Text(
+                        'Só administradores mudam esta regra.',
+                        style: TextStyle(fontSize: 12, color: AppColors.accent),
+                      ),
+                    ),
+                  ruleOption(OpeningBalanceRule.reduceQuotas),
+                  if (usesFixed) ruleOption(OpeningBalanceRule.coverExcess),
+                  ruleOption(OpeningBalanceRule.keep),
+                  if (rule == null)
+                    Text(
+                      usesFixed
+                          ? 'Hoje (padrão): a sobra cobre só o que passar do valor fixo.'
+                          : 'Hoje (padrão): o planejador abate a sobra, mas o fechamento cobra a parte inteira e deixa a sobra no Caixa.',
+                      style: const TextStyle(fontSize: 12, color: Colors.teal),
+                    ),
+                  const Divider(height: 24),
+                  const Text('Média dos gastos variáveis', style: TextStyle(fontWeight: FontWeight.bold)),
+                  const SizedBox(height: 4),
+                  Text(
+                    'Quantos ciclos anteriores entram na média de Mercado, Luz e outras categorias variáveis. Os alertas de categoria usam a mesma média.',
+                    style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+                  ),
+                  const SizedBox(height: 8),
+                  Wrap(
+                    spacing: 6,
+                    children: [
+                      for (final n in HouseSettings.historyCyclesOptions)
+                        ChoiceChip(
+                          label: Text(n == 1 ? 'Último ciclo' : '$n ciclos'),
+                          selected: historyCycles == n,
+                          onSelected: (_) => setDialogState(() => historyCycles = n),
+                        ),
+                    ],
+                  ),
+                  const Divider(height: 24),
+                  const Text('Modos Econômico e Com folga', style: TextStyle(fontWeight: FontWeight.bold)),
+                  const SizedBox(height: 4),
+                  Text(
+                    'Quanto o planejador tira ou soma da média das categorias variáveis.',
+                    style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+                  ),
+                  const SizedBox(height: 8),
+                  Wrap(
+                    spacing: 6,
+                    children: [
+                      for (final p in HouseSettings.adjustPercentOptions)
+                        ChoiceChip(
+                          label: Text('$p%'),
+                          selected: adjustPercent == p,
+                          onSelected: (_) => setDialogState(() => adjustPercent = p),
+                        ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(dialogCtx),
+                child: const Text('Cancelar'),
+              ),
+              FilledButton(
+                onPressed: isSaving
+                    ? null
+                    : () async {
+                        setDialogState(() => isSaving = true);
+                        final messenger = ScaffoldMessenger.of(context);
+                        final navigator = Navigator.of(dialogCtx);
+                        final ok = await context.read<FinanceCubit>().updateHouseSettings(
+                              openingBalanceRule:
+                                  isAdmin && rule != settings.openingBalanceRule ? rule : null,
+                              historyCycles: historyCycles != settings.historyCycles ? historyCycles : null,
+                              adjustPercent: adjustPercent != settings.adjustPercent ? adjustPercent : null,
+                            );
+                        if (ok) navigator.pop();
+                        setDialogState(() => isSaving = false);
+                        showSaveFeedback(
+                          messenger,
+                          ok: ok,
+                          success: 'Planejamento e fechamento atualizados.',
+                        );
+                      },
+                style: FilledButton.styleFrom(backgroundColor: AppColors.primary),
+                child: const Text('Salvar'),
+              ),
+            ],
+          );
+        },
+      ),
+    );
   }
 
   Widget _categoryLine(

@@ -232,6 +232,7 @@ class SupabaseSettlementDataSource implements SettlementDataSource {
       housePixKey: house?.pixKey,
       housePixKeyHolderName: house?.pixKeyHolderName,
       deficitSplit: options?.deficitSplit ?? DeficitSplit.proportional,
+      openingBalanceRule: (await financeDataSource.getHouseSettings()).openingBalanceRule,
       deficitVaultBalance: deficitVaultBalance,
       surplusAlreadyVaulted: surplusAlreadyVaulted,
       deficitAlreadyCovered: deficitAlreadyCovered,
