@@ -1,4 +1,5 @@
 import '../../../../core/domain/value_objects/cycle_schedule.dart';
+import '../../../finance/domain/entities/folego_params.dart';
 import '../../../finance/domain/services/expense_launch_defaults.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../../core/domain/value_objects/money.dart';
@@ -598,11 +599,16 @@ class AssistantInterpreterService {
     final summary = await financeRepository.getCycleSummary(cycle);
     final freeMoney = summary.folego;
     final spentMoney = summary.totalExpensesPaid;
+    var params = const FolegoParams();
+    try {
+      params = (await financeRepository.getHouseSettings()).folegoParams;
+    } catch (_) {}
+    final status = summary.statusWith(params);
 
     String statusText = 'confortável e saudável';
-    if (summary.status == FolegoStatus.warning) {
-      statusText = 'em alerta (menos de 15% de margem)';
-    } else if (summary.status == FolegoStatus.danger) {
+    if (status == FolegoStatus.warning) {
+      statusText = 'em alerta (menos de ${params.warningPercent}% de margem)';
+    } else if (status == FolegoStatus.danger) {
       statusText = 'no limite / negativo';
     }
 

@@ -235,6 +235,7 @@ class _HomePageContentState extends State<_HomePageContent> {
         onCurrentCycle: cubit.goToCurrentCycle,
         isLoading: _isSwitchingCycle(state),
         isCycleSettled: snapshot.data,
+        params: state.houseSettings.folegoParams,
       ),
     );
   }

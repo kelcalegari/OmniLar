@@ -1,6 +1,7 @@
 import 'package:equatable/equatable.dart';
 import '../../../../core/domain/value_objects/money.dart';
 import '../../../../core/domain/value_objects/financial_cycle.dart';
+import 'folego_params.dart';
 import 'opening_inflows.dart';
 
 enum FolegoStatus {
@@ -67,9 +68,14 @@ class FinancialCycleSummary extends Equatable {
   }
 
   /// Status de saúde do fôlego
-  FolegoStatus get status {
+  FolegoStatus get status => statusWith(const FolegoParams());
+
+  /// Status com os limites da casa (padrão: atenção abaixo de 15% dos aportes).
+  FolegoStatus statusWith(FolegoParams params) {
     if (folego.isNegative) return FolegoStatus.danger;
-    if (folego.cents < (totalContributions.cents * 0.15)) return FolegoStatus.warning;
+    if (folego.cents * 100 < totalContributions.cents * params.warningPercent) {
+      return FolegoStatus.warning;
+    }
     return FolegoStatus.positive;
   }
 

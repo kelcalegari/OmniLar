@@ -176,10 +176,10 @@ class CycleFundingEstimator {
   }) {
     final List<CategoryFundingEstimate> estimates = [];
 
-    // Gasto variável: o interruptor do cadastro da categoria ou, sem ele, o nome
+    // Gasto variável: só o interruptor do cadastro da categoria
     final variableCategories = categories.where((c) => c.countsAsVariableSpend).toList();
 
-    // Ninguém escolheu e nenhum nome parece variável: analisa as primeiras categorias.
+    // Ninguém marcou nenhuma categoria: analisa as primeiras.
     // Se a casa já marcou as suas, vale a escolha, mesmo que seja nenhuma.
     final anyChosen = categories.any((c) => c.isVariableSpend != null);
     final targetCategories = variableCategories.isNotEmpty || anyChosen

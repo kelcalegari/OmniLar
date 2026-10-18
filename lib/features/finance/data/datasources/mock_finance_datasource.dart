@@ -58,6 +58,7 @@ class MockFinanceDataSource implements FinanceDataSource {
       name: 'Supermercado',
       icon: 'shopping_cart_outlined',
       colorHex: '#10B981',
+      isVariableSpend: true,
     ),
     const ExpenseCategory(
       id: 'cat_moradia',
@@ -70,6 +71,7 @@ class MockFinanceDataSource implements FinanceDataSource {
       name: 'Contas (Luz, Água, Net)',
       icon: 'bolt_outlined',
       colorHex: '#F59E0B',
+      isVariableSpend: true,
     ),
     const ExpenseCategory(
       id: 'cat_carro',

@@ -8,8 +8,8 @@ void main() {
   const mercado = ExpenseCategory(id: 'c1', name: 'Supermercado', icon: '', colorHex: '');
   const pet = ExpenseCategory(id: 'c2', name: 'Pet Shop', icon: '', colorHex: '');
 
-  test('sem escolha no cadastro vale o nome; com escolha, vale o interruptor', () {
-    expect(mercado.countsAsVariableSpend, isTrue);
+  test('só o interruptor do cadastro decide; o nome não conta mais', () {
+    expect(mercado.countsAsVariableSpend, isFalse);
     expect(pet.countsAsVariableSpend, isFalse);
 
     const mercadoFixo = ExpenseCategory(

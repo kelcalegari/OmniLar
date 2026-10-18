@@ -3,6 +3,7 @@ import 'package:equatable/equatable.dart';
 import '../../../../core/domain/value_objects/money.dart';
 import 'closing_defaults.dart';
 import 'cycle_funding_estimate.dart';
+import 'folego_params.dart';
 
 /// O que o dinheiro que já está no Caixa no início do ciclo (sobra do ciclo
 /// anterior e pagamentos de empréstimo do Caixa que voltaram a ele) faz no
@@ -193,6 +194,9 @@ class HouseSettings extends Equatable {
   /// Rateio padrão de quem entra na casa (0097).
   final NewMemberSplitPolicy newMemberSplitPolicy;
 
+  /// Limites do Fôlego, horizonte das recorrentes e transição do ciclo (0098).
+  final FolegoParams folegoParams;
+
   const HouseSettings({
     this.openingBalanceRule,
     this.historyCycles = defaultHistoryCycles,
@@ -202,6 +206,7 @@ class HouseSettings extends Equatable {
     this.inflowRules = const OpeningInflowRules(),
     this.closingDefaults = const ClosingDefaults(),
     this.newMemberSplitPolicy = NewMemberSplitPolicy.equal,
+    this.folegoParams = const FolegoParams(),
   });
 
   static String plannerModeToDb(FundingEstimateMode mode) => switch (mode) {
@@ -237,11 +242,15 @@ class HouseSettings extends Equatable {
       inflowRules: OpeningInflowRules.fromJson(json['opening_inflow_rules']),
       closingDefaults: ClosingDefaults.fromJson(json['closing_defaults']),
       newMemberSplitPolicy: NewMemberSplitPolicy.fromDb(json['new_member_split_policy']),
+      folegoParams: FolegoParams.fromJson(json['folego_params']),
     );
   }
 
   /// Colunas lidas de `houses`.
-  static const String columns = '$columnsBefore0097, new_member_split_policy';
+  static const String columns = '$columnsBefore0098, folego_params';
+
+  /// Colunas até a 0097, para o banco que ainda não tem a 0098.
+  static const String columnsBefore0098 = '$columnsBefore0097, new_member_split_policy';
 
   /// Colunas até a 0094, para o banco que ainda não tem a 0097.
   static const String columnsBefore0097 = '$columnsBefore0094, closing_defaults';
@@ -267,6 +276,7 @@ class HouseSettings extends Equatable {
     OpeningInflowRules? inflowRules,
     ClosingDefaults? closingDefaults,
     NewMemberSplitPolicy? newMemberSplitPolicy,
+    FolegoParams? folegoParams,
   }) =>
       HouseSettings(
         openingBalanceRule:
@@ -278,9 +288,10 @@ class HouseSettings extends Equatable {
         inflowRules: inflowRules ?? this.inflowRules,
         closingDefaults: closingDefaults ?? this.closingDefaults,
         newMemberSplitPolicy: newMemberSplitPolicy ?? this.newMemberSplitPolicy,
+        folegoParams: folegoParams ?? this.folegoParams,
       );
 
   @override
   List<Object?> get props =>
-      [openingBalanceRule, historyCycles, plannerMode, adjustPercent, categoryOverrides, inflowRules, closingDefaults, newMemberSplitPolicy];
+      [openingBalanceRule, historyCycles, plannerMode, adjustPercent, categoryOverrides, inflowRules, closingDefaults, newMemberSplitPolicy, folegoParams];
 }

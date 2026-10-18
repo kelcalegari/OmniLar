@@ -8,6 +8,9 @@ class House extends Equatable {
 
   /// Trocas do dia de início do ciclo (da mais antiga para a mais recente).
   final List<CycleDayChange> cycleDayChanges;
+
+  /// Mínimo de dias do ciclo de transição na troca do dia (houses.folego_params, 0098).
+  final int transitionMinDays;
   final String timezone;
   final String? createdBy;
   final String? pixKey;
@@ -20,6 +23,7 @@ class House extends Equatable {
     required this.name,
     this.cycleStartDay = 5,
     this.cycleDayChanges = const [],
+    this.transitionMinDays = CycleSchedule.defaultTransitionDays,
     this.timezone = 'America/Sao_Paulo',
     this.createdBy,
     this.pixKey,
@@ -29,13 +33,14 @@ class House extends Equatable {
   });
 
   /// Calendário de ciclos da casa, já com as trocas de dia.
-  CycleSchedule get cycleSchedule => CycleSchedule(cycleStartDay, cycleDayChanges);
+  CycleSchedule get cycleSchedule => CycleSchedule(cycleStartDay, cycleDayChanges, transitionMinDays);
 
   House copyWith({
     String? id,
     String? name,
     int? cycleStartDay,
     List<CycleDayChange>? cycleDayChanges,
+    int? transitionMinDays,
     String? timezone,
     String? createdBy,
     String? pixKey,
@@ -49,6 +54,7 @@ class House extends Equatable {
       name: name ?? this.name,
       cycleStartDay: cycleStartDay ?? this.cycleStartDay,
       cycleDayChanges: cycleDayChanges ?? this.cycleDayChanges,
+      transitionMinDays: transitionMinDays ?? this.transitionMinDays,
       timezone: timezone ?? this.timezone,
       createdBy: createdBy ?? this.createdBy,
       pixKey: clearPixKey ? null : (pixKey ?? this.pixKey),
@@ -64,6 +70,7 @@ class House extends Equatable {
         name,
         cycleStartDay,
         cycleDayChanges,
+        transitionMinDays,
         timezone,
         createdBy,
         pixKey,

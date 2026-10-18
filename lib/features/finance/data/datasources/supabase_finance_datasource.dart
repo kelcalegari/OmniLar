@@ -1408,10 +1408,11 @@ class SupabaseFinanceDataSource implements FinanceDataSource {
       final row = await OfflineSnapshot.instance.row(
         'house_settings_$_houseId',
         () async {
-          // Da mais nova para a mais antiga: banco sem a 0097, a 0094 ou a 0092
+          // Da mais nova para a mais antiga: banco sem a 0098, a 0097, a 0094 ou a 0092
           // ainda lê as colunas que já tem
           const attempts = [
             HouseSettings.columns,
+            HouseSettings.columnsBefore0098,
             HouseSettings.columnsBefore0097,
             HouseSettings.columnsBefore0094,
           ];
