@@ -77,4 +77,50 @@ void main() {
       expect(find.text('Contas Fixas / Provisionadas'), findsOneWidget);
     },
   );
+
+  testWidgets(
+    'linha do membro com regra longa cabe numa tela de celular sem estourar',
+    (tester) async {
+      tester.view.physicalSize = const Size(360, 800);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+
+      final estimate = CycleFundingEstimate(
+        cycle: testCycle,
+        mode: FundingEstimateMode.historicalAverage,
+        fixedCommittedExpenses: const Money(120000),
+        variableCategoryEstimates: const [],
+        currentHouseBalance: Money.zero(),
+        totalProjectedExpenses: const Money(120000),
+        netFundingRequired: const Money(120000),
+        memberQuotes: const [
+          MemberFundingQuote(
+            memberId: 'u1',
+            memberName: 'Cristiano',
+            recommendedAmount: Money(116000),
+            alreadyContributed: Money(110000),
+            pendingAmount: Money(6000),
+            ruleDescription: 'Valor fixo + R\$ 160,00 de despesas só suas',
+          ),
+        ],
+      );
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: SingleChildScrollView(
+              child: CycleFundingPlannerCard(estimate: estimate),
+            ),
+          ),
+        ),
+      );
+
+      // Um RenderFlex estourado falha o teste; aqui também confere que o
+      // botão inteiro está dentro da tela.
+      expect(tester.takeException(), isNull);
+      final button = tester.getRect(find.text('Aportar'));
+      expect(button.right, lessThanOrEqualTo(360));
+      expect(find.textContaining('Falta:'), findsOneWidget);
+    },
+  );
 }

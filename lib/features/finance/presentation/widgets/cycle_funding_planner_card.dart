@@ -220,44 +220,58 @@ class CycleFundingPlannerCard extends StatelessWidget {
         border: Border.all(color: Colors.grey.withValues(alpha: 0.15)),
       ),
       child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Row(
-            children: [
-              CircleAvatar(
-                radius: 14,
-                backgroundColor: AppColors.primary.withValues(alpha: 0.15),
-                child: Text(
-                  quote.memberName.isNotEmpty ? quote.memberName[0] : '?',
-                  style: const TextStyle(
-                    fontSize: 11,
-                    fontWeight: FontWeight.bold,
-                    color: AppColors.primary,
-                  ),
-                ),
-              ),
-              const SizedBox(width: 8),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    quote.memberName,
+          // Nome e regra ocupam o espaço que sobra e quebram linha, para o
+          // valor e o botão "Aportar" nunca serem empurrados para fora do card.
+          Expanded(
+            child: Row(
+              children: [
+                CircleAvatar(
+                  radius: 14,
+                  backgroundColor: AppColors.primary.withValues(alpha: 0.15),
+                  child: Text(
+                    quote.memberName.isNotEmpty ? quote.memberName[0] : '?',
                     style: const TextStyle(
+                      fontSize: 11,
                       fontWeight: FontWeight.bold,
-                      fontSize: 13,
+                      color: AppColors.primary,
                     ),
                   ),
-                  Text(
-                    quote.ruleDescription,
-                    style: const TextStyle(fontSize: 10, color: Colors.grey),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        quote.memberName,
+                        style: const TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 13,
+                        ),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      Text(
+                        quote.ruleDescription,
+                        style: const TextStyle(
+                          fontSize: 10,
+                          color: Colors.grey,
+                        ),
+                      ),
+                    ],
                   ),
-                ],
-              ),
-            ],
+                ),
+              ],
+            ),
           ),
-          Row(
-            children: [
-              Column(
+          const SizedBox(width: 12),
+          // Em tela estreita ou com fonte grande, os valores encolhem em vez
+          // de estourar a linha.
+          Flexible(
+            child: FittedBox(
+              fit: BoxFit.scaleDown,
+              alignment: Alignment.centerRight,
+              child: Column(
                 crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
                   PrivacySensitiveText(
@@ -276,7 +290,8 @@ class CycleFundingPlannerCard extends StatelessWidget {
                         fontWeight: FontWeight.bold,
                       ),
                     )
-                  else if (quote.alreadyContributed.cents > 0 || quote.paidOutOfPocket.cents > 0)
+                  else if (quote.alreadyContributed.cents > 0 ||
+                      quote.paidOutOfPocket.cents > 0)
                     Text(
                       'Falta: ${quote.pendingAmount.formatted}',
                       style: const TextStyle(
@@ -292,33 +307,33 @@ class CycleFundingPlannerCard extends StatelessWidget {
                     ),
                 ],
               ),
-              const SizedBox(width: 8),
-              if (!quote.isFulfilled)
-                FilledButton.tonal(
-                  onPressed: () {
-                    showAdaptiveModal(
-                      context: context,
-                      maxWidth: 540,
-                      child: AddContributionPage(
-                        initialMemberId: quote.memberId,
-                        initialAmount: quote.pendingAmount,
-                      ),
-                    );
-                  },
-                  style: FilledButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 10,
-                      vertical: 4,
-                    ),
-                    visualDensity: VisualDensity.compact,
-                  ),
-                  child: const Text(
-                    'Aportar',
-                    style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold),
-                  ),
-                ),
-            ],
+            ),
           ),
+          const SizedBox(width: 8),
+          if (!quote.isFulfilled)
+            FilledButton.tonal(
+              onPressed: () {
+                showAdaptiveModal(
+                  context: context,
+                  maxWidth: 540,
+                  child: AddContributionPage(
+                    initialMemberId: quote.memberId,
+                    initialAmount: quote.pendingAmount,
+                  ),
+                );
+              },
+              style: FilledButton.styleFrom(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 4,
+                ),
+                visualDensity: VisualDensity.compact,
+              ),
+              child: const Text(
+                'Aportar',
+                style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold),
+              ),
+            ),
         ],
       ),
     );
