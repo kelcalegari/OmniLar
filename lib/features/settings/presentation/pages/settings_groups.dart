@@ -124,6 +124,7 @@ extension _SettingsGroupViews on _SettingsPageState {
       _SettingsGroup.app => _appBlocks(context),
       _SettingsGroup.account => <Widget>[
           _launchDefaultsPanel(context, financeState),
+          _reminderPrefsPanel(context, financeState),
           const AccountSecurityPanel(),
         ],
     };
@@ -361,6 +362,7 @@ extension _SettingsGroupViews on _SettingsPageState {
       _newMemberSplitPanel(context, financeState),
       _planningPanel(context, financeState),
       _folegoParamsPanel(context, financeState),
+      _budgetAlertPanel(context, financeState),
       _closingDefaultsPanel(context, financeState),
       _initialBalancePanel(context, financeState),
       _panel(
@@ -595,6 +597,227 @@ extension _SettingsGroupViews on _SettingsPageState {
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  /// Estágios do alerta de orçamento das categorias (0099). Só administradores
+  /// mudam; cada categoria pode ter os seus ao ser editada.
+  Widget _budgetAlertPanel(BuildContext context, FinanceState financeState) {
+    final stages = financeState.houseSettings.budgetAlertStages;
+    final currentUserId = sl<AuthRepository>().currentUser?.id;
+    final me = financeState.members.where((m) => m.id == currentUserId).firstOrNull;
+    final isAdmin = me?.role == 'owner' || me?.role == 'admin';
+    final custom = financeState.categories.where((c) => c.budgetAlertStages != null).length;
+    return _panel(
+      context,
+      title: 'Alertas de orçamento',
+      actionLabel: isAdmin ? 'Alterar' : null,
+      onAction: isAdmin ? () => _showBudgetAlertDialog(context, financeState) : null,
+      children: [
+        _line(title: 'Avisar ao chegar em', value: '${stages.label} da média'),
+        if (custom > 0) _line(title: 'Categorias com estágios próprios', value: '$custom'),
+        _emptyLine(isAdmin
+            ? 'Cada categoria pode ter os seus ao ser editada.'
+            : 'Só administradores mudam os estágios.'),
+      ],
+    );
+  }
+
+  void _showBudgetAlertDialog(BuildContext context, FinanceState financeState) {
+    final saved = financeState.houseSettings.budgetAlertStages;
+    final controller = TextEditingController(text: saved.editText);
+    String? error;
+    bool isSaving = false;
+    showDialog(
+      context: context,
+      builder: (dialogCtx) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: const Text('Alertas de orçamento', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              TextField(
+                key: const ValueKey('budget_alert_stages'),
+                controller: controller,
+                decoration: const InputDecoration(
+                  labelText: 'Percentuais da média (ex.: 80, 100)',
+                  helperText: 'Abaixo de 100 avisa ao chegar; de 100 em diante, ao passar.',
+                  helperMaxLines: 2,
+                ),
+              ),
+              if (error != null)
+                Padding(
+                  padding: const EdgeInsets.only(top: 8),
+                  child: Text(
+                    error!,
+                    key: const Key('budget_alert_error'),
+                    style: const TextStyle(color: AppColors.debtRed, fontSize: 12),
+                  ),
+                ),
+            ],
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(dialogCtx), child: const Text('Cancelar')),
+            FilledButton(
+              onPressed: isSaving
+                  ? null
+                  : () async {
+                      final next = BudgetAlertStages.parse(controller.text);
+                      if (next == null) {
+                        setDialogState(() => error =
+                            'Use de 1 a 4 percentuais crescentes, de 1 a 300 (ex.: 80, 100).');
+                        return;
+                      }
+                      setDialogState(() {
+                        error = null;
+                        isSaving = true;
+                      });
+                      final messenger = ScaffoldMessenger.of(context);
+                      final navigator = Navigator.of(dialogCtx);
+                      final ok = next == saved ||
+                          await context.read<FinanceCubit>().updateHouseSettings(budgetAlertStages: next);
+                      if (ok) navigator.pop();
+                      setDialogState(() => isSaving = false);
+                      showSaveFeedback(messenger, ok: ok, success: 'Alertas de orçamento atualizados.');
+                    },
+              style: FilledButton.styleFrom(backgroundColor: AppColors.primary),
+              child: const Text('Salvar'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  static const _reminderGroupLabels = {
+    'bills': 'Contas a vencer e atrasadas',
+    'invoices': 'Faturas do cartão',
+    'cycle': 'Ciclo e aportes',
+    'loans': 'Parcelas de empréstimo',
+    'tasks': 'Tarefas',
+    'budget': 'Alertas de orçamento',
+  };
+  static const _weekdayNames = ['Domingo', 'Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado'];
+
+  static String _hourLabel(int hour) => '${hour.toString().padLeft(2, '0')}h';
+
+  /// Horário dos lembretes do dia, grupos silenciados e dia do resumo semanal
+  /// de cada morador (0099). Cada um vê e muda só os seus.
+  Widget _reminderPrefsPanel(BuildContext context, FinanceState financeState) {
+    final settings = financeState.memberSettings;
+    final muted = settings.mutedReminders;
+    return _panel(
+      context,
+      title: 'Meus lembretes',
+      actionLabel: 'Alterar',
+      onAction: () => _showReminderPrefsDialog(context, financeState),
+      children: [
+        _line(title: 'Lembretes do dia a partir das', value: _hourLabel(settings.alertHour)),
+        _line(
+          title: 'Silenciados',
+          value: muted.isEmpty
+              ? 'Nenhum'
+              : [for (final g in MemberSettings.reminderGroups) if (muted.contains(g)) _reminderGroupLabels[g]!]
+                  .join(', '),
+        ),
+        _line(
+          title: 'Resumo semanal',
+          value: '${_weekdayNames[settings.weeklyDay]}, ${_hourLabel(settings.weeklyHour)}',
+        ),
+        _emptyLine('Valem só para você, no fuso da casa. Avisos essenciais chegam sempre.'),
+      ],
+    );
+  }
+
+  void _showReminderPrefsDialog(BuildContext context, FinanceState financeState) {
+    final saved = financeState.memberSettings;
+    var alertHour = saved.alertHour;
+    var weeklyDay = saved.weeklyDay;
+    var weeklyHour = saved.weeklyHour;
+    final muted = Set<String>.of(saved.mutedReminders);
+    bool isSaving = false;
+
+    showDialog(
+      context: context,
+      builder: (dialogCtx) => StatefulBuilder(
+        builder: (context, setDialogState) {
+          Widget title(String text) => Padding(
+                padding: const EdgeInsets.only(top: 12, bottom: 4),
+                child: Text(text, style: const TextStyle(fontWeight: FontWeight.bold)),
+              );
+          Widget hourPicker(Key key, int value, ValueChanged<int> onChanged) => DropdownButton<int>(
+                key: key,
+                value: value,
+                isExpanded: true,
+                style: Theme.of(context).textTheme.bodyMedium,
+                onChanged: (v) => setDialogState(() => onChanged(v ?? value)),
+                items: [
+                  for (var h = 0; h < 24; h++) DropdownMenuItem(value: h, child: Text(_hourLabel(h))),
+                ],
+              );
+
+          return AlertDialog(
+            title: const Text('Meus lembretes', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+            content: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  title('Lembretes do dia a partir das'),
+                  hourPicker(const ValueKey('alert_hour'), alertHour, (v) => alertHour = v),
+                  title('Receber lembretes de'),
+                  for (final group in MemberSettings.reminderGroups)
+                    SwitchListTile(
+                      key: ValueKey('reminder_$group'),
+                      contentPadding: EdgeInsets.zero,
+                      title: Text(_reminderGroupLabels[group]!, style: const TextStyle(fontSize: 14)),
+                      value: !muted.contains(group),
+                      onChanged: (on) => setDialogState(() => on ? muted.remove(group) : muted.add(group)),
+                    ),
+                  title('Resumo semanal'),
+                  DropdownButton<int>(
+                    key: const ValueKey('weekly_day'),
+                    value: weeklyDay,
+                    isExpanded: true,
+                    style: Theme.of(context).textTheme.bodyMedium,
+                    onChanged: (v) => setDialogState(() => weeklyDay = v ?? weeklyDay),
+                    items: [
+                      for (var d = 0; d < 7; d++) DropdownMenuItem(value: d, child: Text(_weekdayNames[d])),
+                    ],
+                  ),
+                  hourPicker(const ValueKey('weekly_hour'), weeklyHour, (v) => weeklyHour = v),
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(onPressed: () => Navigator.pop(dialogCtx), child: const Text('Cancelar')),
+              FilledButton(
+                onPressed: isSaving
+                    ? null
+                    : () async {
+                        setDialogState(() => isSaving = true);
+                        final messenger = ScaffoldMessenger.of(context);
+                        final navigator = Navigator.of(dialogCtx);
+                        final next = saved.withAlertPrefs(
+                          alertHour: alertHour,
+                          muted: muted,
+                          weeklyDay: weeklyDay,
+                          weeklyHour: weeklyHour,
+                        );
+                        final ok = next == saved ||
+                            await context.read<FinanceCubit>().updateMemberSettings(next);
+                        if (ok) navigator.pop();
+                        setDialogState(() => isSaving = false);
+                        showSaveFeedback(messenger, ok: ok, success: 'Seus lembretes foram atualizados.');
+                      },
+                style: FilledButton.styleFrom(backgroundColor: AppColors.primary),
+                child: const Text('Salvar'),
+              ),
+            ],
+          );
+        },
       ),
     );
   }

@@ -1,6 +1,7 @@
 import '../../../../core/domain/value_objects/cycle_schedule.dart';
 import 'package:flutter/material.dart';
 import '../../../finance/domain/entities/category_default_split.dart';
+import '../../../finance/domain/entities/budget_alert_stages.dart';
 import '../../../finance/domain/entities/closing_defaults.dart';
 import '../../../finance/domain/entities/split_rule.dart';
 import '../../../finance/domain/entities/house_settings.dart';
@@ -461,6 +462,8 @@ class _SettingsPageState extends State<SettingsPage> {
         ),
     };
     String? splitError;
+    final stagesController = TextEditingController(text: existing?.budgetAlertStages?.editText ?? '');
+    String? stagesError;
     // Devolve o padrão digitado (null = sem padrão) ou marca o erro no diálogo
     CategoryDefaultSplit? readSplit(void Function(void Function()) setDialogState) {
       if (selectedOwnerId != null || splitMode == 'none') return null;
@@ -494,7 +497,7 @@ class _SettingsPageState extends State<SettingsPage> {
               existing == null ? 'Nova Categoria de Gastos' : 'Editar Categoria',
               style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
             ),
-            content: Column(
+            content: SingleChildScrollView(child: Column(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
@@ -632,8 +635,18 @@ class _SettingsPageState extends State<SettingsPage> {
                   value: variableSpend ?? false,
                   onChanged: (value) => setDialogState(() => variableSpend = value),
                 ),
+                if (variableSpend ?? false)
+                  TextField(
+                    key: const Key('category_budget_stages'),
+                    controller: stagesController,
+                    decoration: InputDecoration(
+                      labelText: 'Alertas de orçamento (ex.: 80, 100)',
+                      helperText: 'Vazio segue os da casa.',
+                      errorText: stagesError,
+                    ),
+                  ),
               ],
-            ),
+            )),
             actions: [
               TextButton(
                 onPressed: () => Navigator.pop(dialogCtx),
@@ -650,6 +663,15 @@ class _SettingsPageState extends State<SettingsPage> {
                     return;
                   }
 
+                  BudgetAlertStages? budgetStages;
+                  if (stagesController.text.trim().isNotEmpty) {
+                    budgetStages = BudgetAlertStages.parse(stagesController.text);
+                    if (budgetStages == null) {
+                      setDialogState(() => stagesError = 'Use de 1 a 4 percentuais crescentes, de 1 a 300.');
+                      return;
+                    }
+                  }
+
                   if (existing != null) {
                     Navigator.pop(dialogCtx);
                     final error = await financeCubit.updateCategory(
@@ -661,6 +683,7 @@ class _SettingsPageState extends State<SettingsPage> {
                         ownerMemberId: selectedOwnerId,
                         isVariableSpend: variableSpend ?? existing.isVariableSpend,
                         defaultSplit: defaultSplit,
+                        budgetAlertStages: budgetStages,
                       ),
                     );
                     messenger.showSnackBar(
@@ -680,6 +703,7 @@ class _SettingsPageState extends State<SettingsPage> {
                     ownerMemberId: selectedOwnerId,
                     isVariableSpend: variableSpend ?? false,
                     defaultSplit: defaultSplit,
+                    budgetAlertStages: budgetStages,
                   );
 
                   Navigator.pop(dialogCtx);

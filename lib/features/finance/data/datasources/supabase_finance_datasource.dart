@@ -20,6 +20,7 @@ import '../../domain/entities/opening_inflows.dart';
 import '../../domain/entities/savings_vault.dart';
 import '../../domain/entities/third_party_receipt.dart';
 import '../../domain/entities/house_inflow.dart';
+import '../../domain/entities/budget_alert_stages.dart';
 import '../../domain/entities/category_default_split.dart';
 import '../../domain/entities/split_rule.dart';
 import '../../domain/entities/audit_entry.dart';
@@ -219,6 +220,9 @@ class SupabaseFinanceDataSource implements FinanceDataSource {
             ownerMemberId: r['owner_member_id'] as String?,
             isVariableSpend: r['is_variable_spend'] as bool?,
             defaultSplit: CategoryDefaultSplit.fromJson(r['default_split']),
+            budgetAlertStages: r['budget_alert_stages'] == null
+                ? null
+                : BudgetAlertStages.fromJson(r['budget_alert_stages']),
           );
         }).toList();
       }
@@ -1007,6 +1011,7 @@ class SupabaseFinanceDataSource implements FinanceDataSource {
         'owner_member_id': category.ownerMemberId,
         if (category.isVariableSpend != null) 'is_variable_spend': category.isVariableSpend,
         if (category.defaultSplit != null) 'default_split': category.defaultSplit!.toJson(),
+        if (category.budgetAlertStages != null) 'budget_alert_stages': category.budgetAlertStages!.toJson(),
       });
     } catch (e) {
       throw ServerFailure('Erro ao criar categoria: $e');
@@ -1026,6 +1031,8 @@ class SupabaseFinanceDataSource implements FinanceDataSource {
             if (category.isVariableSpend != null) 'is_variable_spend': category.isVariableSpend,
             // Null limpa o padrão (volta à divisão da casa)
             'default_split': category.defaultSplit?.toJson(),
+            // Null volta aos estágios da casa (0099)
+            'budget_alert_stages': category.budgetAlertStages?.toJson(),
           })
           .eq('id', category.id)
           .eq('house_id', _houseId)
@@ -1408,10 +1415,11 @@ class SupabaseFinanceDataSource implements FinanceDataSource {
       final row = await OfflineSnapshot.instance.row(
         'house_settings_$_houseId',
         () async {
-          // Da mais nova para a mais antiga: banco sem a 0098, a 0097, a 0094 ou a 0092
+          // Da mais nova para a mais antiga: banco sem a 0099, a 0098, a 0097, a 0094 ou a 0092
           // ainda lê as colunas que já tem
           const attempts = [
             HouseSettings.columns,
+            HouseSettings.columnsBefore0099,
             HouseSettings.columnsBefore0098,
             HouseSettings.columnsBefore0097,
             HouseSettings.columnsBefore0094,
