@@ -322,15 +322,21 @@ class AuthCubit extends Cubit<AuthState> {
     }
   }
 
+  /// Cria a casa. [initialReserveCents] e [initialCashCents]: o dinheiro que
+  /// ela já tinha (reserva guardada e saldo na conta da casa), opcionais.
   Future<void> createHouse({
     required String name,
     int cycleStartDay = 5,
+    int initialReserveCents = 0,
+    int initialCashCents = 0,
   }) async {
     emit(state.copyWith(status: AuthStatus.loading, errorMessage: null));
     try {
       final house = await _repository.createHouse(
         name: name,
         cycleStartDay: cycleStartDay,
+        initialReserveCents: initialReserveCents,
+        initialCashCents: initialCashCents,
       );
       emit(
         AuthState(

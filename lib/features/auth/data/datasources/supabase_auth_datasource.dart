@@ -810,6 +810,8 @@ class SupabaseAuthDataSource implements AuthDataSource {
   Future<House> createHouse({
     required String name,
     int cycleStartDay = 5,
+    int initialReserveCents = 0,
+    int initialCashCents = 0,
   }) async {
     final userId = _currentUser?.id ?? _client.auth.currentUser?.id;
     if (userId == null) {
@@ -842,6 +844,8 @@ class SupabaseAuthDataSource implements AuthDataSource {
             pixKeyBank: houseMap['pix_key_bank'] as String?,
           );
 
+          // O saldo inicial é gravado antes de a casa aparecer no app
+          await _saveInitialBalance(house, initialReserveCents, initialCashCents);
           _currentHouse = house;
           _houseStateController.add(_currentHouse);
           return house;
@@ -1020,11 +1024,30 @@ class SupabaseAuthDataSource implements AuthDataSource {
         pixKeyBank: houseRow['pix_key_bank'] as String?,
       );
 
+      await _saveInitialBalance(house, initialReserveCents, initialCashCents);
       _currentHouse = house;
       _houseStateController.add(_currentHouse);
       return house;
     } catch (e) {
       throw ServerFailure('Erro ao criar casa: $e');
+    }
+  }
+
+  /// Dinheiro que a casa já tinha ao nascer (0093): a reserva entra na Reserva
+  /// da Casa e o saldo da conta vira a sobra do ciclo em andamento. Falha não
+  /// impede a criação: dá para informar depois em Ajustes.
+  Future<void> _saveInitialBalance(House house, int reserveCents, int cashCents) async {
+    if (reserveCents <= 0 && cashCents <= 0) return;
+    try {
+      final cycleStart = house.cycleSchedule.cycleFor(DateTime.now()).startDate;
+      await _client.rpc('set_house_initial_balance', params: {
+        'p_house_id': house.id,
+        'p_reserve_cents': reserveCents > 0 ? reserveCents : 0,
+        'p_cash_cents': cashCents > 0 ? cashCents : 0,
+        'p_cycle_start': cycleStart.toIso8601String().split('T')[0],
+      });
+    } catch (err) {
+      debugPrint('[createHouse] Falha não impeditiva ao gravar o saldo inicial: $err');
     }
   }
 

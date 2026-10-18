@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'house_expense_payload.dart';
+import '../../domain/entities/house_initial_balance.dart';
 import '../../domain/entities/house_settings.dart';
 import '../../domain/entities/card_invoice.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -419,7 +420,9 @@ class SupabaseFinanceDataSource implements FinanceDataSource {
     }
   }
 
-  /// Sobra que o fechamento do ciclo anterior deixou no Caixa.
+  /// Sobra que o fechamento do ciclo anterior deixou no Caixa. Sem fechamento
+  /// anterior, o primeiro ciclo da casa começa com o saldo que ela já tinha na
+  /// conta (0093).
   Future<Money> _rolledSurplus(FinancialCycle cycle) async {
     var rolledCents = 0;
     try {
@@ -438,7 +441,11 @@ class SupabaseFinanceDataSource implements FinanceDataSource {
             .limit(1)
             .maybeSingle(),
       );
-      rolledCents = (row?['surplus_rolled_cents'] as num?)?.toInt() ?? 0;
+      if (row == null) {
+        final initial = await getHouseInitialBalance();
+        return initial.rolledSurplusFor(cycle, hasPreviousSettlement: false);
+      }
+      rolledCents = (row['surplus_rolled_cents'] as num?)?.toInt() ?? 0;
     } catch (_) {}
     return Money(rolledCents);
   }
@@ -1393,6 +1400,46 @@ class SupabaseFinanceDataSource implements FinanceDataSource {
       // Colunas da 0091 ainda não aplicadas no banco: valem os padrões
       return const HouseSettings();
     }
+  }
+
+  @override
+  Future<HouseInitialBalance> getHouseInitialBalance() async {
+    try {
+      final row = await OfflineSnapshot.instance.row(
+        'house_initial_balance_$_houseId',
+        () async =>
+            await client.from('houses').select(HouseInitialBalance.columns).eq('id', _houseId).maybeSingle(),
+      );
+      return HouseInitialBalance.fromJson(row);
+    } catch (_) {
+      // Colunas da 0093 ainda não aplicadas no banco: a casa começou do zero
+      return const HouseInitialBalance();
+    }
+  }
+
+  @override
+  Future<HouseInitialBalance> setHouseInitialBalance({
+    required Money reserve,
+    required Money cash,
+    required DateTime cycleStart,
+  }) async {
+    try {
+      final result = await client.rpc('set_house_initial_balance', params: {
+        'p_house_id': _houseId,
+        'p_reserve_cents': reserve.cents,
+        'p_cash_cents': cash.cents,
+        'p_cycle_start': cycleStart.toIso8601String().split('T')[0],
+      });
+      return HouseInitialBalance.fromJson(Map<String, dynamic>.from(result as Map));
+    } catch (e) {
+      throw ServerFailure(_initialBalanceError(e));
+    }
+  }
+
+  /// Mensagem do banco (ex.: ciclo já fechado) sem o embrulho do PostgREST.
+  static String _initialBalanceError(Object e) {
+    final message = e is PostgrestException ? e.message : e.toString();
+    return 'Não foi possível salvar o saldo inicial: $message';
   }
 
   @override

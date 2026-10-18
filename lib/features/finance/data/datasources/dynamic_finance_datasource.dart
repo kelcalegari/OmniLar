@@ -1,5 +1,6 @@
 import '../../domain/entities/card_invoice.dart';
 import '../../../../core/domain/enums/recurrence.dart';
+import '../../domain/entities/house_initial_balance.dart';
 import '../../domain/entities/house_settings.dart';
 import '../../../../core/domain/value_objects/financial_cycle.dart';
 import '../../../../core/domain/value_objects/money.dart';
@@ -142,6 +143,17 @@ class DynamicFinanceDataSource implements FinanceDataSource {
   @override
   Future<HouseSettings> updateHouseSettings(Map<String, dynamic> changes) =>
       _active.updateHouseSettings(changes);
+
+  @override
+  Future<HouseInitialBalance> getHouseInitialBalance() => _active.getHouseInitialBalance();
+
+  @override
+  Future<HouseInitialBalance> setHouseInitialBalance({
+    required Money reserve,
+    required Money cash,
+    required DateTime cycleStart,
+  }) =>
+      _active.setHouseInitialBalance(reserve: reserve, cash: cash, cycleStart: cycleStart);
 
   @override
   Future<List<SavingsVault>> getSavingsVaults() => _active.getSavingsVaults();

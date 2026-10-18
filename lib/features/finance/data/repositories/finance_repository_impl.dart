@@ -1,5 +1,6 @@
 import '../../domain/entities/card_invoice.dart';
 import '../../../../core/network/offline_queue.dart';
+import '../../domain/entities/house_initial_balance.dart';
 import '../../domain/entities/house_settings.dart';
 import '../../../../core/network/offline_sync_service.dart';
 import '../../../../core/utils/uuid.dart';
@@ -138,6 +139,17 @@ class FinanceRepositoryImpl implements FinanceRepository {
   @override
   Future<HouseSettings> updateHouseSettings(Map<String, dynamic> changes) =>
       _dataSource.updateHouseSettings(changes);
+
+  @override
+  Future<HouseInitialBalance> getHouseInitialBalance() => _dataSource.getHouseInitialBalance();
+
+  @override
+  Future<HouseInitialBalance> setHouseInitialBalance({
+    required Money reserve,
+    required Money cash,
+    required DateTime cycleStart,
+  }) =>
+      _dataSource.setHouseInitialBalance(reserve: reserve, cash: cash, cycleStart: cycleStart);
 
   @override
   Future<List<SavingsVault>> getSavingsVaults() => _dataSource.getSavingsVaults();

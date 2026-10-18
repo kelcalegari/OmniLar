@@ -1,5 +1,6 @@
 import '../../../../core/errors/failures.dart';
 import '../../domain/entities/card_invoice.dart';
+import '../../domain/entities/house_initial_balance.dart';
 import '../../domain/entities/house_settings.dart';
 import '../../domain/entities/house_member.dart';
 import '../../domain/entities/category.dart';
@@ -23,6 +24,10 @@ import 'finance_datasource.dart';
 class MockFinanceDataSource implements FinanceDataSource {
   /// Empréstimos que o Caixa liberou no ciclo (vêm do P2P de demonstração).
   Future<Money> Function(FinancialCycle cycle)? houseLoansFundedIn;
+
+  /// Há fechamento antes de [cycle]? No modo demo os fechamentos ficam com o
+  /// fechamento de demonstração; sem resposta, conta como primeiro ciclo.
+  Future<bool> Function(FinancialCycle cycle)? hasSettlementBefore;
 
   final List<AuditEntry> _auditLogs = [];
   final List<HouseMember> _members = [
@@ -414,7 +419,15 @@ class MockFinanceDataSource implements FinanceDataSource {
   }
 
   @override
-  Future<Money> getOpeningBalance(FinancialCycle cycle) => getVaultReturnsForCycle(cycle);
+  Future<Money> getOpeningBalance(FinancialCycle cycle) async =>
+      await _rolledSurplus(cycle) + await getVaultReturnsForCycle(cycle);
+
+  /// Como no banco: sem fechamento anterior, o primeiro ciclo da casa começa
+  /// com o saldo que ela já tinha na conta (0093).
+  Future<Money> _rolledSurplus(FinancialCycle cycle) async {
+    final hasPrevious = await hasSettlementBefore?.call(cycle) ?? false;
+    return _initialBalance.rolledSurplusFor(cycle, hasPreviousSettlement: hasPrevious);
+  }
 
   @override
   Future<DateTime?> getHouseStartDate() async {
@@ -436,8 +449,8 @@ class MockFinanceDataSource implements FinanceDataSource {
     return Money(cents);
   }
 
-  /// No modo demo só há os resgates: a sobra do ciclo anterior fica com o
-  /// fechamento de demonstração.
+  /// No modo demo há os resgates e o saldo inicial da conta: a sobra dos
+  /// outros ciclos fica com o fechamento de demonstração.
   @override
   Future<OpeningInflows> getOpeningInflows(FinancialCycle cycle) async {
     final cents = <String, int>{};
@@ -446,6 +459,7 @@ class MockFinanceDataSource implements FinanceDataSource {
       cents[t.vaultId] = (cents[t.vaultId] ?? 0) + (t.isWithdraw ? t.amount.cents : -t.amount.cents);
     }
     return OpeningInflows(
+      rolledSurplus: await _rolledSurplus(cycle),
       vaultWithdrawalsByVault: {for (final e in cents.entries) e.key: Money(e.value)},
       vaultNames: {for (final v in _savingsVaults) v.id: v.name},
     );
@@ -855,6 +869,62 @@ class MockFinanceDataSource implements FinanceDataSource {
   Future<HouseSettings> updateHouseSettings(Map<String, dynamic> changes) async {
     _houseSettingsRow = {..._houseSettingsRow, ...changes};
     return HouseSettings.fromJson(_houseSettingsRow);
+  }
+
+  HouseInitialBalance _initialBalance = const HouseInitialBalance();
+
+  /// Lançamento do saldo inicial na Reserva: gravar de novo corrige este.
+  String? _initialReserveTransactionId;
+
+  @override
+  Future<HouseInitialBalance> getHouseInitialBalance() async => _initialBalance;
+
+  @override
+  Future<HouseInitialBalance> setHouseInitialBalance({
+    required Money reserve,
+    required Money cash,
+    required DateTime cycleStart,
+  }) async {
+    if (reserve.isNegative || cash.isNegative) {
+      throw const ServerFailure('O saldo inicial não pode ser negativo.');
+    }
+    final txIndex = _savingsTransactions.indexWhere((t) => t.id == _initialReserveTransactionId);
+    final old = txIndex == -1 ? null : _savingsTransactions[txIndex];
+    if (reserve.cents != (old?.amount.cents ?? 0)) {
+      // A mesma caixinha do lançamento anterior; sem ele, a Reserva da Casa
+      var vaultIndex = old == null
+          ? _savingsVaults.indexWhere((v) => v.name == 'Reserva da Casa')
+          : _savingsVaults.indexWhere((v) => v.id == old.vaultId);
+      if (vaultIndex == -1 && old == null) vaultIndex = _savingsVaults.isEmpty ? -1 : 0;
+      if (vaultIndex == -1) throw const ServerFailure('Caixinha não encontrada nesta casa.');
+      final vault = _savingsVaults[vaultIndex];
+      final balance = vault.currentBalance.cents + reserve.cents - (old?.amount.cents ?? 0);
+      if (balance < 0) {
+        throw ServerFailure('A caixinha "${vault.name}" já usou parte do saldo inicial e ficaria negativa.');
+      }
+      _savingsVaults[vaultIndex] = vault.copyWith(currentBalance: Money(balance));
+      if (old != null) _savingsTransactions.removeAt(txIndex);
+      _initialReserveTransactionId = null;
+      if (!reserve.isZero) {
+        final tx = SavingsTransaction(
+          id: old?.id ?? 'tx_initial_${DateTime.now().microsecondsSinceEpoch}',
+          vaultId: vault.id,
+          memberId: old?.memberId ?? 'member_carlos',
+          amount: reserve,
+          type: 'deposit',
+          description: 'Saldo inicial da casa',
+          date: old?.date ?? DateTime.now(),
+        );
+        _savingsTransactions.add(tx);
+        _initialReserveTransactionId = tx.id;
+      }
+    }
+    _initialBalance = HouseInitialBalance(
+      reserve: reserve,
+      cash: cash,
+      cashCycleStart: cash.isZero ? null : DateTime(cycleStart.year, cycleStart.month, cycleStart.day),
+    );
+    return _initialBalance;
   }
 
   // --- Caixinhas & Metas da Casa (Dinheiro Blindado) ---

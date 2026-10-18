@@ -17,10 +17,12 @@ import '../../domain/entities/audit_entry.dart';
 import '../../domain/entities/cycle_funding_estimate.dart';
 import '../../domain/services/cycle_funding_estimator.dart';
 import '../../domain/entities/house_member.dart';
+import '../../domain/entities/house_initial_balance.dart';
 import '../../domain/entities/house_settings.dart';
 import '../../../settlement/domain/services/open_invoice_choices.dart';
 import '../../../../core/domain/enums/recurrence.dart';
 import '../../../../core/domain/value_objects/money.dart';
+import '../../../../core/errors/failures.dart';
 import '../../../../core/domain/value_objects/financial_cycle.dart';
 import 'finance_state.dart';
 
@@ -169,6 +171,10 @@ class FinanceCubit extends Cubit<FinanceState> {
       final settingsFuture = Future<HouseSettings?>.sync(
         () => _repository.getHouseSettings(),
       ).catchError((_) => null);
+      // Saldo inicial da casa (0093). Se falhar, vale o que já se tinha
+      final initialBalanceFuture = Future<HouseInitialBalance?>.sync(
+        () => _repository.getHouseInitialBalance(),
+      ).catchError((_) => null);
       // Histórico dos ciclos anteriores para as médias de variáveis (ex: Mercado),
       // com os ciclos da média da última carga (acertados abaixo se mudaram)
       final previousCycles = _previousCycles(targetCycle, state.houseSettings.historyCycles);
@@ -189,6 +195,7 @@ class FinanceCubit extends Cubit<FinanceState> {
         historicalFuture,
         startDateFuture,
         settingsFuture,
+        initialBalanceFuture,
       ]);
       // Outro ciclo foi pedido enquanto este carregava: o dele é que vale
       if (sequence != _loadSequence || isClosed) return;
@@ -246,6 +253,7 @@ class FinanceCubit extends Cubit<FinanceState> {
       emit(state.copyWith(
         status: FinanceStatus.success,
         houseSettings: settings,
+        initialBalance: await initialBalanceFuture,
         fundingEstimateMode: mode,
         customCategoryOverrides: overrides,
         currentCycle: targetCycle,
@@ -418,6 +426,32 @@ class FinanceCubit extends Cubit<FinanceState> {
       return true;
     } catch (_) {
       return false;
+    }
+  }
+
+  /// Ciclo em que o saldo na conta da casa entra: o já gravado, senão o
+  /// primeiro ciclo da casa (ou o em andamento, enquanto não se sabe).
+  DateTime get initialCashCycleStart =>
+      state.initialBalance.cashCycleStart ??
+      firstCycle?.startDate ??
+      cycleSchedule.cycleFor(DateTime.now()).startDate;
+
+  /// Saldo inicial mudado nos Ajustes: grava e refaz o ciclo (a sobra do
+  /// primeiro ciclo e a Reserva mudam). Devolve a mensagem de erro, ou null
+  /// quando deu certo.
+  Future<String?> setHouseInitialBalance({required Money reserve, required Money cash}) async {
+    try {
+      final saved = await _repository.setHouseInitialBalance(
+        reserve: reserve,
+        cash: cash,
+        cycleStart: initialCashCycleStart,
+      );
+      if (isClosed) return null;
+      emit(state.copyWith(initialBalance: saved));
+      await loadCycleData(cycle: state.currentCycle);
+      return null;
+    } catch (e) {
+      return e is Failure ? e.message : 'Não foi possível salvar o saldo inicial.';
     }
   }
 

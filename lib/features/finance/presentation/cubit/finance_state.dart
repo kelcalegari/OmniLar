@@ -1,5 +1,6 @@
 import 'package:equatable/equatable.dart';
 import '../../domain/entities/card_invoice.dart';
+import '../../domain/entities/house_initial_balance.dart';
 import '../../domain/entities/house_settings.dart';
 import '../../domain/entities/house_member.dart';
 import '../../domain/entities/category.dart';
@@ -44,6 +45,9 @@ class FinanceState extends Equatable {
 
   /// Configurações de planejamento e fechamento da casa.
   final HouseSettings houseSettings;
+
+  /// Dinheiro que a casa já tinha ao começar (reserva e saldo na conta).
+  final HouseInitialBalance initialBalance;
   final String? errorMessage;
 
   const FinanceState({
@@ -65,6 +69,7 @@ class FinanceState extends Equatable {
     this.cardInvoiceCodes = const {},
     this.houseStartDate,
     this.houseSettings = const HouseSettings(),
+    this.initialBalance = const HouseInitialBalance(),
     this.errorMessage,
   });
 
@@ -98,6 +103,7 @@ class FinanceState extends Equatable {
     Map<String, String>? cardInvoiceCodes,
     DateTime? houseStartDate,
     HouseSettings? houseSettings,
+    HouseInitialBalance? initialBalance,
     String? errorMessage,
   }) {
     return FinanceState(
@@ -119,6 +125,7 @@ class FinanceState extends Equatable {
       cardInvoiceCodes: cardInvoiceCodes ?? this.cardInvoiceCodes,
       houseStartDate: houseStartDate ?? this.houseStartDate,
       houseSettings: houseSettings ?? this.houseSettings,
+      initialBalance: initialBalance ?? this.initialBalance,
       errorMessage: errorMessage ?? this.errorMessage,
     );
   }
@@ -143,6 +150,7 @@ class FinanceState extends Equatable {
         cardInvoiceCodes,
         houseStartDate,
         houseSettings,
+        initialBalance,
         errorMessage,
       ];
 }
