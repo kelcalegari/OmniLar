@@ -1,6 +1,7 @@
 import 'package:equatable/equatable.dart';
 
 import '../../../../core/domain/value_objects/money.dart';
+import 'closing_defaults.dart';
 import 'cycle_funding_estimate.dart';
 
 /// O que o dinheiro que já está no Caixa no início do ciclo (sobra do ciclo
@@ -147,6 +148,9 @@ class HouseSettings extends Equatable {
   /// Regra de cada tipo de entrada no Caixa (0092).
   final OpeningInflowRules inflowRules;
 
+  /// Escolhas que o fechamento já abre marcadas (0094).
+  final ClosingDefaults closingDefaults;
+
   const HouseSettings({
     this.openingBalanceRule,
     this.historyCycles = defaultHistoryCycles,
@@ -154,6 +158,7 @@ class HouseSettings extends Equatable {
     this.adjustPercent = defaultAdjustPercent,
     this.categoryOverrides = const {},
     this.inflowRules = const OpeningInflowRules(),
+    this.closingDefaults = const ClosingDefaults(),
   });
 
   static String plannerModeToDb(FundingEstimateMode mode) => switch (mode) {
@@ -187,11 +192,15 @@ class HouseSettings extends Equatable {
       adjustPercent: adjust != null && adjust >= 0 && adjust <= 50 ? adjust : defaultAdjustPercent,
       categoryOverrides: overrides,
       inflowRules: OpeningInflowRules.fromJson(json['opening_inflow_rules']),
+      closingDefaults: ClosingDefaults.fromJson(json['closing_defaults']),
     );
   }
 
   /// Colunas lidas de `houses`.
-  static const String columns = '$columnsBefore0092, opening_inflow_rules';
+  static const String columns = '$columnsBefore0094, closing_defaults';
+
+  /// Colunas até a 0092, para o banco que ainda não tem a 0094.
+  static const String columnsBefore0094 = '$columnsBefore0092, opening_inflow_rules';
 
   /// Colunas da 0091, para o banco que ainda não tem a 0092.
   static const String columnsBefore0092 =
@@ -209,6 +218,7 @@ class HouseSettings extends Equatable {
     int? adjustPercent,
     Map<String, Money>? categoryOverrides,
     OpeningInflowRules? inflowRules,
+    ClosingDefaults? closingDefaults,
   }) =>
       HouseSettings(
         openingBalanceRule:
@@ -218,9 +228,10 @@ class HouseSettings extends Equatable {
         adjustPercent: adjustPercent ?? this.adjustPercent,
         categoryOverrides: categoryOverrides ?? this.categoryOverrides,
         inflowRules: inflowRules ?? this.inflowRules,
+        closingDefaults: closingDefaults ?? this.closingDefaults,
       );
 
   @override
   List<Object?> get props =>
-      [openingBalanceRule, historyCycles, plannerMode, adjustPercent, categoryOverrides, inflowRules];
+      [openingBalanceRule, historyCycles, plannerMode, adjustPercent, categoryOverrides, inflowRules, closingDefaults];
 }

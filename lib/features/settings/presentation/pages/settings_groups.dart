@@ -210,6 +210,7 @@ extension _SettingsGroupViews on _SettingsPageState {
         ],
       ),
       _planningPanel(context, financeState),
+      _closingDefaultsPanel(context, financeState),
       _initialBalancePanel(context, financeState),
       _panel(
         context,
@@ -270,6 +271,214 @@ extension _SettingsGroupViews on _SettingsPageState {
           value: '${settings.adjustPercent}%',
         ),
       ],
+    );
+  }
+
+  static String _surplusActionLabel(SurplusAction action) => switch (action) {
+        SurplusAction.toVault => 'Guardar em uma caixinha',
+        SurplusAction.rollover => 'Deixar no Caixa',
+        SurplusAction.refund => 'Devolver aos moradores',
+      };
+
+  static String _deficitSplitLabel(DeficitSplit split) => switch (split) {
+        DeficitSplit.proportional => 'Proporcional ao aporte',
+        DeficitSplit.equal => 'Partes iguais',
+      };
+
+  static String _shortfallActionLabel(ShortfallAction action) => switch (action) {
+        ShortfallAction.createP2PLoan => 'Vira empréstimo',
+        ShortfallAction.deductFromVault => 'Cobrir com caixinha',
+        ShortfallAction.rolloverPending => 'Fica para o próximo ciclo',
+        ShortfallAction.forgiveRemainder => 'Perdoar a diferença',
+      };
+
+  /// Escolhas que o fechamento já abre marcadas (0094). Caixinha apagada
+  /// depois de escolhida vale como sem escolha.
+  Widget _closingDefaultsPanel(BuildContext context, FinanceState financeState) {
+    final defaults = financeState.houseSettings.closingDefaults;
+    final vaults = financeState.savingsVaults;
+    final currentUserId = sl<AuthRepository>().currentUser?.id;
+    final me = financeState.members.where((m) => m.id == currentUserId).firstOrNull;
+    final isAdmin = me?.role == 'owner' || me?.role == 'admin';
+    String? vaultName(String? id) => vaults.where((v) => v.id == id).firstOrNull?.name;
+    final surplusAction = defaults.surplusAction ?? SurplusAction.toVault;
+    final surplusVault = vaultName(defaults.surplusVaultId);
+    return _panel(
+      context,
+      title: 'Padrões do fechamento',
+      actionLabel: isAdmin ? 'Alterar' : null,
+      onAction: isAdmin ? () => _showClosingDefaultsDialog(context, financeState) : null,
+      children: [
+        _line(
+          title: 'Destino da sobra',
+          value: surplusAction == SurplusAction.toVault && surplusVault != null
+              ? 'Caixinha $surplusVault'
+              : _surplusActionLabel(surplusAction),
+        ),
+        _line(
+          title: 'Gastos acima do balde',
+          subtitle: vaultName(defaults.deficitVaultId) == null
+              ? null
+              : 'Antes, usa a caixinha ${vaultName(defaults.deficitVaultId)}',
+          value: _deficitSplitLabel(defaults.deficitSplit ?? DeficitSplit.proportional),
+        ),
+        _line(
+          title: 'Quem pagou menos',
+          value: _shortfallActionLabel(defaults.shortfallAction ?? ShortfallAction.createP2PLoan),
+        ),
+        if (!isAdmin)
+          _emptyLine('O fechamento abre com estas escolhas. Só administradores mudam os padrões.'),
+      ],
+    );
+  }
+
+  void _showClosingDefaultsDialog(BuildContext context, FinanceState financeState) {
+    final saved = financeState.houseSettings.closingDefaults;
+    final vaults = financeState.savingsVaults;
+    // Começa pelo que vale hoje: o padrão guardado ou, sem ele, o de sempre
+    final surplusBefore = saved.surplusAction ?? SurplusAction.toVault;
+    final splitBefore = saved.deficitSplit ?? DeficitSplit.proportional;
+    final shortfallBefore = saved.shortfallAction ?? ShortfallAction.createP2PLoan;
+    var surplusAction = surplusBefore;
+    String? surplusVaultId = saved.surplusVaultIn(vaults);
+    var deficitSplit = splitBefore;
+    String? deficitVaultId = saved.deficitVaultIn(vaults);
+    var shortfallAction = shortfallBefore;
+    bool isSaving = false;
+
+    showDialog(
+      context: context,
+      builder: (dialogCtx) => StatefulBuilder(
+        builder: (context, setDialogState) {
+          Widget title(String text) => Padding(
+                padding: const EdgeInsets.only(top: 12, bottom: 4),
+                child: Text(text, style: const TextStyle(fontWeight: FontWeight.bold)),
+              );
+          Widget hint(String text) => Text(text, style: TextStyle(fontSize: 12, color: Colors.grey.shade600));
+          Widget vaultDropdown({
+            required Key key,
+            required String? value,
+            required String emptyLabel,
+            required ValueChanged<String?> onChanged,
+          }) =>
+              DropdownButton<String?>(
+                key: key,
+                value: value,
+                isExpanded: true,
+                style: Theme.of(context).textTheme.bodyMedium,
+                onChanged: (v) => setDialogState(() => onChanged(v)),
+                items: [
+                  DropdownMenuItem(value: null, child: Text(emptyLabel)),
+                  for (final vault in vaults)
+                    DropdownMenuItem(value: vault.id, child: Text(vault.name, overflow: TextOverflow.ellipsis)),
+                ],
+              );
+
+          return AlertDialog(
+            title: const Text(
+              'Padrões do fechamento',
+              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+            ),
+            content: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  hint('O fechamento já abre com estas escolhas. Quem fecha ainda pode mudar cada uma naquele ciclo.'),
+                  title('Destino da sobra'),
+                  Wrap(
+                    spacing: 6,
+                    children: [
+                      for (final action in SurplusAction.values)
+                        ChoiceChip(
+                          label: Text(_surplusActionLabel(action)),
+                          selected: surplusAction == action,
+                          onSelected: (_) => setDialogState(() => surplusAction = action),
+                        ),
+                    ],
+                  ),
+                  if (surplusAction == SurplusAction.toVault && vaults.isNotEmpty)
+                    vaultDropdown(
+                      key: const ValueKey('closing_surplus_vault'),
+                      value: surplusVaultId,
+                      emptyLabel: 'A primeira caixinha da lista',
+                      onChanged: (v) => surplusVaultId = v,
+                    ),
+                  title('Gastos acima do balde'),
+                  Wrap(
+                    spacing: 6,
+                    children: [
+                      for (final split in DeficitSplit.values)
+                        ChoiceChip(
+                          label: Text(_deficitSplitLabel(split)),
+                          selected: deficitSplit == split,
+                          onSelected: (_) => setDialogState(() => deficitSplit = split),
+                        ),
+                    ],
+                  ),
+                  if (vaults.isNotEmpty) ...[
+                    const SizedBox(height: 4),
+                    hint('Caixinha que cobre o excedente antes do rateio:'),
+                    vaultDropdown(
+                      key: const ValueKey('closing_deficit_vault'),
+                      value: deficitVaultId,
+                      emptyLabel: 'Não usar caixinha',
+                      onChanged: (v) => deficitVaultId = v,
+                    ),
+                  ],
+                  title('Quem pagou menos no Super Pix'),
+                  Wrap(
+                    spacing: 6,
+                    children: [
+                      for (final action in ShortfallAction.values)
+                        ChoiceChip(
+                          label: Text(_shortfallActionLabel(action)),
+                          selected: shortfallAction == action,
+                          onSelected: (_) => setDialogState(() => shortfallAction = action),
+                        ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(dialogCtx),
+                child: const Text('Cancelar'),
+              ),
+              FilledButton(
+                onPressed: isSaving
+                    ? null
+                    : () async {
+                        setDialogState(() => isSaving = true);
+                        final messenger = ScaffoldMessenger.of(context);
+                        final navigator = Navigator.of(dialogCtx);
+                        // Só o que mudou ganha escolha própria; o resto segue como estava
+                        final defaults = ClosingDefaults(
+                          surplusAction: surplusAction != surplusBefore ? surplusAction : saved.surplusAction,
+                          surplusVaultId: surplusAction == SurplusAction.toVault ? surplusVaultId : null,
+                          deficitSplit: deficitSplit != splitBefore ? deficitSplit : saved.deficitSplit,
+                          deficitVaultId: deficitVaultId,
+                          shortfallAction:
+                              shortfallAction != shortfallBefore ? shortfallAction : saved.shortfallAction,
+                        );
+                        final ok = defaults == saved ||
+                            await context.read<FinanceCubit>().updateHouseSettings(closingDefaults: defaults);
+                        if (ok) navigator.pop();
+                        setDialogState(() => isSaving = false);
+                        showSaveFeedback(
+                          messenger,
+                          ok: ok,
+                          success: 'Padrões do fechamento atualizados.',
+                        );
+                      },
+                style: FilledButton.styleFrom(backgroundColor: AppColors.primary),
+                child: const Text('Salvar'),
+              ),
+            ],
+          );
+        },
+      ),
     );
   }
 
@@ -1420,6 +1629,9 @@ extension _SettingsSearch on _SettingsPageState {
       ]),
       option(_SettingsGroup.split, 'Modelos de Rateio', Icons.tune_rounded, const [
         'divisao', 'porcentagem', 'percentual', 'aportes fixos', 'balde', 'por categoria', 'dividir',
+      ]),
+      option(_SettingsGroup.split, 'Padrões do fechamento', Icons.fact_check_outlined, const [
+        'sobra', 'destino da sobra', 'excedente', 'balde', 'pagou menos', 'emprestimo', 'caixinha', 'fechamento',
       ]),
       option(_SettingsGroup.split, 'Saldo inicial da casa', Icons.savings_outlined, const [
         'reserva guardada', 'saldo na conta', 'dinheiro guardado', 'comecar', 'caixa',

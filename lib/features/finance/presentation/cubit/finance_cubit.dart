@@ -18,6 +18,7 @@ import '../../domain/entities/cycle_funding_estimate.dart';
 import '../../domain/services/cycle_funding_estimator.dart';
 import '../../domain/entities/house_member.dart';
 import '../../domain/entities/house_initial_balance.dart';
+import '../../domain/entities/closing_defaults.dart';
 import '../../domain/entities/house_settings.dart';
 import '../../../settlement/domain/services/open_invoice_choices.dart';
 import '../../../../core/domain/enums/recurrence.dart';
@@ -401,6 +402,7 @@ class FinanceCubit extends Cubit<FinanceState> {
   Future<bool> updateHouseSettings({
     OpeningBalanceRule? openingBalanceRule,
     OpeningInflowRules? inflowRules,
+    ClosingDefaults? closingDefaults,
     int? historyCycles,
     int? adjustPercent,
   }) async {
@@ -408,6 +410,8 @@ class FinanceCubit extends Cubit<FinanceState> {
       'opening_balance_rule': ?openingBalanceRule?.dbValue,
       // Vai inteiro: o banco troca o objeto todo
       'opening_inflow_rules': ?inflowRules?.toJson(),
+      // Padrões do fechamento (0094), também inteiros
+      'closing_defaults': ?closingDefaults?.toJson(),
       'planner_history_cycles': ?historyCycles,
       'planner_adjust_percent': ?adjustPercent,
     };

@@ -1386,12 +1386,21 @@ class SupabaseFinanceDataSource implements FinanceDataSource {
           try {
             return await client.from('houses').select(HouseSettings.columns).eq('id', _houseId).maybeSingle();
           } catch (_) {
-            // Coluna da 0092 ainda não aplicada: lê só as da 0091
-            return await client
-                .from('houses')
-                .select(HouseSettings.columnsBefore0092)
-                .eq('id', _houseId)
-                .maybeSingle();
+            try {
+              // Coluna da 0094 ainda não aplicada: lê só as até a 0092
+              return await client
+                  .from('houses')
+                  .select(HouseSettings.columnsBefore0094)
+                  .eq('id', _houseId)
+                  .maybeSingle();
+            } catch (_) {
+              // Coluna da 0092 ainda não aplicada: lê só as da 0091
+              return await client
+                  .from('houses')
+                  .select(HouseSettings.columnsBefore0092)
+                  .eq('id', _houseId)
+                  .maybeSingle();
+            }
           }
         },
       );
