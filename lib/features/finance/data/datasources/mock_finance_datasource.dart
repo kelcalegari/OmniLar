@@ -13,6 +13,7 @@ import '../../domain/entities/financial_cycle_summary.dart';
 import '../../domain/entities/opening_inflows.dart';
 import '../../domain/entities/savings_vault.dart';
 import '../../domain/entities/third_party_receipt.dart';
+import '../../domain/entities/house_inflow.dart';
 import '../../domain/entities/audit_entry.dart';
 import '../../../../core/domain/enums/recurrence.dart';
 import '../../../../core/domain/value_objects/money.dart';
@@ -28,6 +29,10 @@ class MockFinanceDataSource implements FinanceDataSource {
   /// Há fechamento antes de [cycle]? No modo demo os fechamentos ficam com o
   /// fechamento de demonstração; sem resposta, conta como primeiro ciclo.
   Future<bool> Function(FinancialCycle cycle)? hasSettlementBefore;
+
+  /// O dia cai num ciclo fechado? Como no banco (0096), entrada de fora nesse
+  /// dia é recusada. Sem resposta, todo ciclo está aberto.
+  Future<bool> Function(DateTime day)? isDateInClosedCycle;
 
   final List<AuditEntry> _auditLogs = [];
   final List<HouseMember> _members = [
@@ -420,7 +425,9 @@ class MockFinanceDataSource implements FinanceDataSource {
 
   @override
   Future<Money> getOpeningBalance(FinancialCycle cycle) async =>
-      await _rolledSurplus(cycle) + await getVaultReturnsForCycle(cycle);
+      await _rolledSurplus(cycle) +
+      await getVaultReturnsForCycle(cycle) +
+      HouseInflow.total(_houseInflows, cycle: cycle);
 
   /// Como no banco: sem fechamento anterior, o primeiro ciclo da casa começa
   /// com o saldo que ela já tinha na conta (0093).
@@ -462,6 +469,7 @@ class MockFinanceDataSource implements FinanceDataSource {
       rolledSurplus: await _rolledSurplus(cycle),
       vaultWithdrawalsByVault: {for (final e in cents.entries) e.key: Money(e.value)},
       vaultNames: {for (final v in _savingsVaults) v.id: v.name},
+      thirdParty: HouseInflow.total(_houseInflows, cycle: cycle),
     );
   }
 
@@ -1292,5 +1300,63 @@ class MockFinanceDataSource implements FinanceDataSource {
       description: 'Repasse de ${receipt.payerName} excluído',
     );
     _thirdPartyReceipts.remove(receipt);
+  }
+
+  // --- Entradas de fora (0096) ---
+  final List<HouseInflow> _houseInflows = [];
+  int _inflowSequence = 0;
+
+  Future<void> _checkHouseInflow(HouseInflow inflow) async {
+    if (inflow.amount.cents <= 0) throw const ServerFailure('O valor deve ser maior que zero.');
+    if (inflow.description.trim().isEmpty) throw const ServerFailure('Diga do que é a entrada.');
+    if (await isDateInClosedCycle?.call(inflow.receivedOn) ?? false) {
+      throw const ServerFailure(
+        'O ciclo desse dia já foi fechado. Reabra o ciclo no Fechamento para mexer nas entradas dele.',
+      );
+    }
+  }
+
+  @override
+  Future<List<HouseInflow>> getHouseInflowsForCycle(FinancialCycle cycle) async =>
+      _houseInflows.where((i) => cycle.contains(i.receivedOn)).toList()
+        ..sort((a, b) => b.receivedOn.compareTo(a.receivedOn));
+
+  @override
+  Future<void> addHouseInflow(HouseInflow inflow) async {
+    await _checkHouseInflow(inflow);
+    _houseInflows.add(HouseInflow(
+      id: 'inflow_${++_inflowSequence}',
+      amount: inflow.amount,
+      receivedOn: inflow.receivedOn,
+      description: inflow.description.trim(),
+      source: inflow.source,
+      expenseId: inflow.expenseId,
+      createdBy: inflow.createdBy ?? _members.first.id,
+    ));
+  }
+
+  @override
+  Future<void> updateHouseInflow(HouseInflow inflow) async {
+    final index = _houseInflows.indexWhere((i) => i.id == inflow.id);
+    if (index < 0) throw const ServerFailure('Entrada de fora não encontrada nesta casa.');
+    // O dia antigo e o novo precisam estar em ciclo aberto
+    await _checkHouseInflow(_houseInflows[index]);
+    await _checkHouseInflow(inflow);
+    _houseInflows[index] = _houseInflows[index].copyWith(
+      amount: inflow.amount,
+      receivedOn: inflow.receivedOn,
+      description: inflow.description.trim(),
+      source: inflow.source,
+      expenseId: inflow.expenseId,
+      clearExpense: inflow.expenseId == null,
+    );
+  }
+
+  @override
+  Future<void> deleteHouseInflow(String inflowId) async {
+    final inflow = _houseInflows.where((i) => i.id == inflowId).firstOrNull;
+    if (inflow == null) throw const ServerFailure('Entrada de fora não encontrada nesta casa.');
+    await _checkHouseInflow(inflow);
+    _houseInflows.remove(inflow);
   }
 }

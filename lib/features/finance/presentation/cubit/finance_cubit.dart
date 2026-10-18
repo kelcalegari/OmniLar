@@ -12,6 +12,7 @@ import '../../domain/entities/category.dart';
 import '../../domain/entities/payment_method.dart';
 import '../../domain/entities/savings_vault.dart';
 import '../../domain/entities/third_party_receipt.dart';
+import '../../domain/entities/house_inflow.dart';
 import '../../domain/entities/financial_cycle_summary.dart';
 import '../../domain/entities/audit_entry.dart';
 import '../../domain/entities/cycle_funding_estimate.dart';
@@ -159,6 +160,10 @@ class FinanceCubit extends Cubit<FinanceState> {
       final receiptsFuture = Future<List<ThirdPartyReceipt>?>.sync(
         () => _repository.getThirdPartyReceipts(),
       ).catchError((_) => null);
+      // Entradas de fora do ciclo (0096). Se falharem, o ciclo fica sem elas
+      final inflowsFuture = Future<List<HouseInflow>>.sync(
+        () => _repository.getHouseInflowsForCycle(targetCycle),
+      ).catchError((_) => const <HouseInflow>[]);
       // As três abaixo são opcionais: se falharem, vale o que já se tinha
       final splitModelFuture = Future<String?>.sync(
         () => _repository.getHouseSplitModel(),
@@ -200,6 +205,7 @@ class FinanceCubit extends Cubit<FinanceState> {
         contributionsFuture,
         vaultsFuture,
         receiptsFuture,
+        inflowsFuture,
         splitModelFuture,
         recurringFuture,
         invoiceCodesFuture,
@@ -279,6 +285,7 @@ class FinanceCubit extends Cubit<FinanceState> {
         paymentMethods: paymentMethods,
         savingsVaults: vaults,
         thirdPartyReceipts: receipts,
+        houseInflows: await inflowsFuture,
         splitModel: splitModel,
         recurringSeries: recurringSeries,
         cardInvoiceCodes: invoiceCodes == null ? null : {for (final c in invoiceCodes) c.key: c.barcode},
@@ -1035,6 +1042,22 @@ class FinanceCubit extends Cubit<FinanceState> {
   Future<bool> deleteThirdPartyReceipt(String receiptId) => _runVaultAction(
         () => _repository.deleteThirdPartyReceipt(receiptId),
         'Erro ao excluir o repasse',
+      );
+
+  // --- Entradas de fora (dinheiro no Caixa que não é aporte, 0096) ---
+  Future<bool> addHouseInflow(HouseInflow inflow) => _runVaultAction(
+        () => _repository.addHouseInflow(inflow),
+        'Erro ao lançar a entrada de fora',
+      );
+
+  Future<bool> updateHouseInflow(HouseInflow inflow) => _runVaultAction(
+        () => _repository.updateHouseInflow(inflow),
+        'Erro ao corrigir a entrada de fora',
+      );
+
+  Future<bool> deleteHouseInflow(String inflowId) => _runVaultAction(
+        () => _repository.deleteHouseInflow(inflowId),
+        'Erro ao excluir a entrada de fora',
       );
 
   Future<List<AuditEntry>> getAuditLog({String? entityId, int limit = 50}) async {

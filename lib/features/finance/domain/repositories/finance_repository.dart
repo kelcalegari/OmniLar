@@ -11,6 +11,7 @@ import '../entities/financial_cycle_summary.dart';
 import '../entities/opening_inflows.dart';
 import '../entities/savings_vault.dart';
 import '../entities/third_party_receipt.dart';
+import '../entities/house_inflow.dart';
 import '../entities/audit_entry.dart';
 import '../../../../core/domain/value_objects/money.dart';
 import '../../../../core/domain/value_objects/financial_cycle.dart';
@@ -175,4 +176,16 @@ abstract class FinanceRepository {
 
   /// Exclui uma entrada ainda guardada: o valor sai da caixinha.
   Future<void> deleteThirdPartyReceipt(String receiptId);
+
+  // Entradas de fora (dinheiro que entra no Caixa sem ser aporte, 0096)
+  /// Entradas de fora que caem em [cycle], da mais nova para a mais antiga.
+  Future<List<HouseInflow>> getHouseInflowsForCycle(FinancialCycle cycle);
+
+  /// Lança uma entrada de fora no Caixa do ciclo do dia em que ela caiu.
+  Future<void> addHouseInflow(HouseInflow inflow);
+
+  /// Corrige valor, dia, descrição, origem ou despesa reembolsada.
+  Future<void> updateHouseInflow(HouseInflow inflow);
+
+  Future<void> deleteHouseInflow(String inflowId);
 }

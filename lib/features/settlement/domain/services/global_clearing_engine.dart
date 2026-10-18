@@ -119,18 +119,29 @@ class GlobalClearingEngine {
     // O dinheiro do início do ciclo em partes, cada uma com a sua regra. Sem a
     // separação por origem, ou sem regra por tipo escolhida, vale a regra
     // única: a sobra, sem o que voltou das caixinhas, segue [openingBalanceRule].
+    // A entrada de fora (0096) segue a mesma regra única, mas fica em parte
+    // própria para a memória de cálculo mostrar de onde veio o abatimento.
     final byKind = openingInflows != null && !openingInflowRules.isEmpty;
+    final legacyCents = math.max(0, openingBalance.cents - vaultReturns.cents);
+    final legacyThirdPartyCents =
+        (openingInflows?.thirdParty.cents ?? 0).clamp(0, legacyCents).toInt();
     final openingParts = byKind
         ? OpeningInflowPart.split(openingInflows, openingInflowRules, openingBalanceRule)
         : [
             OpeningInflowPart(
               kind: OpeningInflowKind.rolledSurplus,
-              amount: Money(math.max(0, openingBalance.cents - vaultReturns.cents)),
+              amount: Money(legacyCents - legacyThirdPartyCents),
               rule: openingBalanceRule,
             ),
+            if (legacyThirdPartyCents > 0)
+              OpeningInflowPart(
+                kind: OpeningInflowKind.thirdParty,
+                amount: Money(legacyThirdPartyCents),
+                rule: openingBalanceRule,
+              ),
           ];
     String abatementTitle(OpeningInflowPart part) =>
-        byKind ? part.abatementTitle : 'Sobra do Caixa abatida';
+        byKind || part.kind == OpeningInflowKind.thirdParty ? part.abatementTitle : 'Sobra do Caixa abatida';
 
     if (customContributionTargets != null) {
       contributionTargets.addAll(customContributionTargets);
@@ -674,6 +685,7 @@ class GlobalClearingEngine {
       deficitCoveredByVault: Money(deficitCoveredCents),
       openingBalance: openingBalance,
       vaultReturns: vaultReturns,
+      thirdPartyInflows: Money(math.max(0, openingInflows?.thirdParty.cents ?? 0)),
       surplusRefunded: Money(surplusRefundedCents),
       houseLoanReceipts: Money(houseLoanReceiptsCents),
     );

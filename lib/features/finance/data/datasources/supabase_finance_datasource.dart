@@ -19,6 +19,7 @@ import '../../domain/entities/financial_cycle_summary.dart';
 import '../../domain/entities/opening_inflows.dart';
 import '../../domain/entities/savings_vault.dart';
 import '../../domain/entities/third_party_receipt.dart';
+import '../../domain/entities/house_inflow.dart';
 import '../../domain/entities/split_rule.dart';
 import '../../domain/entities/audit_entry.dart';
 import '../../domain/services/cycle_expense_filter.dart';
@@ -67,6 +68,8 @@ class SupabaseFinanceDataSource implements FinanceDataSource {
           'savings_vaults',
           // Entradas de terceiros (0090)
           'third_party_receipts',
+          // Entradas de fora (0096)
+          'house_inflows',
         ]) {
           pending = pending.onPostgresChanges(
             event: PostgresChangeEvent.all,
@@ -379,8 +382,19 @@ class SupabaseFinanceDataSource implements FinanceDataSource {
       _rolledSurplus(cycle),
       getVaultReturnsForCycle(cycle),
       _houseLoansRepaidToCycle(cycle),
+      _houseInflowsTotal(cycle),
     ]);
-    return parts[0] + parts[1] + parts[2];
+    return parts[0] + parts[1] + parts[2] + parts[3];
+  }
+
+  /// Entradas de fora do ciclo (0096). Sem a tabela (migration ainda não
+  /// aplicada) ou sem conexão, nada entra.
+  Future<Money> _houseInflowsTotal(FinancialCycle cycle) async {
+    try {
+      return HouseInflow.total(await getHouseInflowsForCycle(cycle));
+    } catch (_) {
+      return const Money.zero();
+    }
   }
 
   /// Empréstimos do Caixa do ciclo pagos fora do fechamento (0088): o dinheiro
@@ -533,12 +547,14 @@ class SupabaseFinanceDataSource implements FinanceDataSource {
     final loansRepaidFuture = _houseLoansRepaidToCycle(cycle);
     final byVaultFuture = _vaultReturnsByVault(cycle);
     final vaultsFuture = getSavingsVaults().catchError((_) => <SavingsVault>[]);
-    await Future.wait<void>([rolledFuture, loansRepaidFuture, byVaultFuture, vaultsFuture]);
+    final thirdPartyFuture = _houseInflowsTotal(cycle);
+    await Future.wait<void>([rolledFuture, loansRepaidFuture, byVaultFuture, vaultsFuture, thirdPartyFuture]);
     return OpeningInflows(
       rolledSurplus: await rolledFuture,
       houseLoansRepaid: await loansRepaidFuture,
       vaultWithdrawalsByVault: await byVaultFuture,
       vaultNames: {for (final v in await vaultsFuture) v.id: v.name},
+      thirdParty: await thirdPartyFuture,
     );
   }
 
@@ -597,6 +613,7 @@ class SupabaseFinanceDataSource implements FinanceDataSource {
       final vaultReturnsFuture = _vaultReturnsByVault(cycle);
       final loansFundedFuture = _houseLoansFunded(cycle);
       final loansRepaidFuture = _houseLoansRepaidToCycle(cycle);
+      final thirdPartyFuture = _houseInflowsTotal(cycle);
       await Future.wait<void>([
         expensesFuture,
         contributionsFuture,
@@ -604,6 +621,7 @@ class SupabaseFinanceDataSource implements FinanceDataSource {
         vaultReturnsFuture,
         loansFundedFuture,
         loansRepaidFuture,
+        thirdPartyFuture,
       ]);
       final loansFunded = await loansFundedFuture;
       final cycleExpenses = await expensesFuture;
@@ -612,6 +630,7 @@ class SupabaseFinanceDataSource implements FinanceDataSource {
         rolledSurplus: await rolledFuture,
         houseLoansRepaid: await loansRepaidFuture,
         vaultWithdrawalsByVault: await vaultReturnsFuture,
+        thirdParty: await thirdPartyFuture,
       );
       final vaultReturns = inflows.vaultWithdrawalsTotal;
 
@@ -637,9 +656,10 @@ class SupabaseFinanceDataSource implements FinanceDataSource {
         }
       }
 
-      // A sobra deixada pelo ciclo anterior, as devoluções das caixinhas e os
-      // empréstimos do ciclo já pagos entram como folga do Caixa
-      final openingBalance = inflows.rolledSurplus + vaultReturns + inflows.houseLoansRepaid;
+      // A sobra deixada pelo ciclo anterior, as devoluções das caixinhas, os
+      // empréstimos do ciclo já pagos e as entradas de fora entram como folga do Caixa
+      final openingBalance =
+          inflows.rolledSurplus + vaultReturns + inflows.houseLoansRepaid + inflows.thirdParty;
       // Empréstimos que o Caixa liberou no ciclo também saíram dele
       final folegoCents = openingBalance.cents +
           totalContributionsCents -
@@ -1901,6 +1921,110 @@ class SupabaseFinanceDataSource implements FinanceDataSource {
       await client.rpc('delete_third_party_receipt', params: {'p_receipt_id': receiptId});
     } catch (e) {
       throw ServerFailure('Erro ao excluir o repasse: $e');
+    }
+  }
+
+  // --- Entradas de fora (0096) ---
+  HouseInflow _mapHouseInflow(Map<String, dynamic> r) => HouseInflow(
+        id: r['id'] as String,
+        amount: Money((r['amount_cents'] as num).toInt()),
+        receivedOn: DateTime.parse(r['received_on'] as String),
+        description: (r['description'] as String?) ?? '',
+        source: HouseInflowSource.fromDb(r['source'] as String?),
+        expenseId: r['expense_id'] as String?,
+        createdBy: r['created_by'] as String?,
+      );
+
+  Map<String, dynamic> _houseInflowRow(HouseInflow inflow) => {
+        'amount_cents': inflow.amount.cents,
+        'received_on': _dateOnly(inflow.receivedOn),
+        'description': inflow.description.trim(),
+        'source': inflow.source.dbValue,
+        'expense_id': _isUuid(inflow.expenseId) ? inflow.expenseId : null,
+      };
+
+  /// O banco recusa (RLS) entrada em ciclo fechado; a mensagem diz o porquê.
+  static String _houseInflowError(Object e, String fallback) {
+    final text = e.toString();
+    if (text.contains('row-level security') || text.contains('42501')) {
+      return 'O ciclo desse dia já foi fechado. Reabra o ciclo no Fechamento para mexer nas entradas dele.';
+    }
+    return '$fallback: $e';
+  }
+
+  @override
+  Future<List<HouseInflow>> getHouseInflowsForCycle(FinancialCycle cycle) async {
+    try {
+      if (!_isUuid(_houseId)) return const [];
+      final start = _dateOnly(cycle.startDate);
+      final rows = await OfflineSnapshot.instance.rows(
+        'house_inflows_${_houseId}_$start',
+        () async => await client
+            .from('house_inflows')
+            .select('id, amount_cents, received_on, description, source, expense_id, created_by')
+            .eq('house_id', _houseId)
+            .gte('received_on', start)
+            .lte('received_on', _dateOnly(cycle.endDate))
+            .order('received_on', ascending: false)
+            .order('created_at', ascending: false),
+      );
+      return rows.map(_mapHouseInflow).toList();
+    } catch (e) {
+      throw ServerFailure('Erro ao buscar as entradas de fora: $e');
+    }
+  }
+
+  @override
+  Future<void> addHouseInflow(HouseInflow inflow) async {
+    try {
+      await client.from('house_inflows').insert({
+        ..._houseInflowRow(inflow),
+        'house_id': _houseId,
+        'created_by': client.auth.currentUser?.id,
+      });
+    } catch (e) {
+      throw ServerFailure(_houseInflowError(e, 'Erro ao lançar a entrada de fora'));
+    }
+  }
+
+  @override
+  Future<void> updateHouseInflow(HouseInflow inflow) async {
+    List<dynamic> rows;
+    try {
+      rows = await client
+          .from('house_inflows')
+          .update(_houseInflowRow(inflow))
+          .eq('id', inflow.id)
+          .eq('house_id', _houseId)
+          .select('id');
+    } catch (e) {
+      throw ServerFailure(_houseInflowError(e, 'Erro ao corrigir a entrada de fora'));
+    }
+    // Sem linha alterada: o RLS barrou (outro morador ou ciclo fechado)
+    if (rows.isEmpty) {
+      throw const ServerFailure(
+        'Só quem lançou ou um administrador corrige esta entrada, e só com o ciclo aberto.',
+      );
+    }
+  }
+
+  @override
+  Future<void> deleteHouseInflow(String inflowId) async {
+    List<dynamic> rows;
+    try {
+      rows = await client
+          .from('house_inflows')
+          .delete()
+          .eq('id', inflowId)
+          .eq('house_id', _houseId)
+          .select('id');
+    } catch (e) {
+      throw ServerFailure(_houseInflowError(e, 'Erro ao excluir a entrada de fora'));
+    }
+    if (rows.isEmpty) {
+      throw const ServerFailure(
+        'Só quem lançou ou um administrador exclui esta entrada, e só com o ciclo aberto.',
+      );
     }
   }
 }

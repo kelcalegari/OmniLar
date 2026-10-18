@@ -20,9 +20,18 @@ import 'package:omni_lar/features/finance/domain/entities/payment_method.dart';
 import 'package:omni_lar/features/finance/domain/entities/house_member.dart';
 import 'package:omni_lar/features/finance/domain/entities/savings_vault.dart';
 import 'package:omni_lar/features/finance/domain/entities/third_party_receipt.dart';
+import 'package:omni_lar/features/finance/domain/entities/house_inflow.dart';
 import 'package:omni_lar/features/finance/domain/entities/audit_entry.dart';
 
 class _FakeFinanceRepository implements FinanceRepository {
+  @override
+  Future<List<HouseInflow>> getHouseInflowsForCycle(FinancialCycle cycle) async => [];
+  @override
+  Future<void> addHouseInflow(HouseInflow inflow) async {}
+  @override
+  Future<void> updateHouseInflow(HouseInflow inflow) async {}
+  @override
+  Future<void> deleteHouseInflow(String inflowId) async {}
   @override
   Future<List<ThirdPartyReceipt>> getThirdPartyReceipts() async => [];
   @override

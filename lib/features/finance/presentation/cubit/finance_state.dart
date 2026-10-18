@@ -11,6 +11,7 @@ import '../../domain/entities/contribution.dart';
 import '../../domain/entities/financial_cycle_summary.dart';
 import '../../domain/entities/savings_vault.dart';
 import '../../domain/entities/third_party_receipt.dart';
+import '../../domain/entities/house_inflow.dart';
 import '../../domain/entities/cycle_funding_estimate.dart';
 import '../../../../core/domain/value_objects/money.dart';
 import '../../../../core/domain/value_objects/financial_cycle.dart';
@@ -33,6 +34,9 @@ class FinanceState extends Equatable {
 
   /// Entradas de terceiros guardadas em caixinha e as usadas recentemente.
   final List<ThirdPartyReceipt> thirdPartyReceipts;
+
+  /// Entradas de fora do ciclo (dinheiro no Caixa que não é aporte, 0096).
+  final List<HouseInflow> houseInflows;
 
   /// Séries recorrentes ativas da casa (a ocorrência mais recente de cada uma).
   final List<HouseExpense> recurringSeries;
@@ -68,6 +72,7 @@ class FinanceState extends Equatable {
     this.paymentMethods = const [],
     this.savingsVaults = const [],
     this.thirdPartyReceipts = const [],
+    this.houseInflows = const [],
     this.recurringSeries = const [],
     this.splitModel = 'percentage',
     this.cardInvoiceCodes = const {},
@@ -86,6 +91,9 @@ class FinanceState extends Equatable {
   List<ThirdPartyReceipt> get heldThirdPartyReceipts =>
       thirdPartyReceipts.where((r) => r.isHeld).toList();
 
+  /// Soma das entradas de fora do ciclo.
+  Money get houseInflowsTotal => HouseInflow.total(houseInflows);
+
   Money get totalSavings =>
       savingsVaults.fold(const Money.zero(), (total, v) => total + v.currentBalance);
 
@@ -103,6 +111,7 @@ class FinanceState extends Equatable {
     List<PaymentMethod>? paymentMethods,
     List<SavingsVault>? savingsVaults,
     List<ThirdPartyReceipt>? thirdPartyReceipts,
+    List<HouseInflow>? houseInflows,
     List<HouseExpense>? recurringSeries,
     String? splitModel,
     Map<String, String>? cardInvoiceCodes,
@@ -126,6 +135,7 @@ class FinanceState extends Equatable {
       paymentMethods: paymentMethods ?? this.paymentMethods,
       savingsVaults: savingsVaults ?? this.savingsVaults,
       thirdPartyReceipts: thirdPartyReceipts ?? this.thirdPartyReceipts,
+      houseInflows: houseInflows ?? this.houseInflows,
       recurringSeries: recurringSeries ?? this.recurringSeries,
       splitModel: splitModel ?? this.splitModel,
       cardInvoiceCodes: cardInvoiceCodes ?? this.cardInvoiceCodes,
@@ -152,6 +162,7 @@ class FinanceState extends Equatable {
         paymentMethods,
         savingsVaults,
         thirdPartyReceipts,
+        houseInflows,
         recurringSeries,
         splitModel,
         cardInvoiceCodes,

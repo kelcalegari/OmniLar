@@ -25,6 +25,7 @@ import '../../domain/services/cycle_report_csv.dart';
 import '../../domain/services/cycle_report_pdf.dart';
 import '../../../auth/domain/repositories/auth_repository.dart';
 import '../../domain/entities/cycle_insights.dart';
+import '../../../finance/presentation/widgets/house_inflows_card.dart';
 
 class ReportsPage extends StatefulWidget {
   const ReportsPage({super.key});
@@ -259,6 +260,10 @@ class _ReportsPageContent extends StatelessWidget {
 
                     // Seção: Aportes por Membro
                     _buildMembersSection(context, state),
+                    const SizedBox(height: 20),
+
+                    // Seção: Entradas de fora (dinheiro no Caixa que não é aporte)
+                    HouseInflowsCard(state: state, cubit: cubit),
                     const SizedBox(height: 20),
 
                     // Quem paga, empréstimos e evolução dos ciclos
