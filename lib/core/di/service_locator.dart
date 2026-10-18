@@ -25,6 +25,8 @@ import '../../features/finance/data/datasources/finance_datasource.dart';
 import '../../features/finance/data/datasources/mock_finance_datasource.dart';
 import '../../features/finance/data/datasources/supabase_finance_datasource.dart';
 import '../../features/finance/data/repositories/finance_repository_impl.dart';
+import '../../features/finance/data/repositories/member_settings_repositories.dart';
+import '../../features/finance/domain/repositories/member_settings_repository.dart';
 import '../../features/finance/domain/repositories/finance_repository.dart';
 import '../../features/finance/domain/services/cycle_funding_estimator.dart';
 import '../../features/finance/presentation/cubit/finance_cubit.dart';
@@ -178,11 +180,28 @@ Future<void> initServiceLocator() async {
     return mock;
   });
   sl.registerLazySingleton<FinanceRepository>(() => FinanceRepositoryImpl(sl(), sl<OfflineSyncService>()));
+  // Ajustes de cada morador na casa (0095)
+  sl.registerLazySingleton<MemberSettingsRepository>(() {
+    final client = SupabaseConfig.client;
+    final mock = InMemoryMemberSettingsRepository();
+    if (client != null) {
+      return DynamicMemberSettingsRepository(
+        remote: SupabaseMemberSettingsRepository(
+          client: client,
+          getCurrentHouseId: () => sl<AuthRepository>().currentHouse?.id ?? '',
+        ),
+        mock: mock,
+        isDemoMode: isDemoModeActive,
+      );
+    }
+    return mock;
+  });
   sl.registerLazySingleton<FinanceCubit>(() => FinanceCubit(
         sl(),
         const CycleFundingEstimator(),
         () => sl<AuthRepository>().currentHouse?.cycleStartDay,
         () => sl<AuthRepository>().currentHouse?.cycleSchedule,
+        sl<MemberSettingsRepository>(),
       ));
 
   // P2P Feature

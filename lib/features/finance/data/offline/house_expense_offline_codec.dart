@@ -55,6 +55,7 @@ Map<String, dynamic> houseExpenseToJson(HouseExpense expense) => {
   'paidAt': expense.paidAt?.toIso8601String(),
   'settledAt': expense.settledAt?.toIso8601String(),
   'barcode': expense.barcode,
+  if (expense.createdBy != null) 'createdBy': expense.createdBy,
   'items': [
     for (final item in expense.items)
       {
@@ -93,6 +94,7 @@ HouseExpense houseExpenseFromJson(Map<String, dynamic> json) => HouseExpense(
   paidAt: json['paidAt'] != null ? DateTime.parse(json['paidAt'] as String) : null,
   settledAt: json['settledAt'] != null ? DateTime.parse(json['settledAt'] as String) : null,
   barcode: json['barcode'] as String?,
+  createdBy: json['createdBy'] as String?,
   items: [
     for (final raw in (json['items'] as List? ?? const []))
       HouseExpenseItem(

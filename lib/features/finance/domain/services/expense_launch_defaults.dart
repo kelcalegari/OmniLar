@@ -1,6 +1,7 @@
 import '../entities/category.dart';
 import '../entities/house_expense.dart';
 import '../entities/house_member.dart';
+import '../entities/member_settings.dart';
 import '../entities/payment_method.dart';
 import '../entities/split_rule.dart';
 
@@ -93,5 +94,61 @@ class ExpenseLaunchDefaults {
       for (final m in members)
         m.id: m.defaultSplitPercent > 0 ? m.defaultSplitPercent : (100.0 / members.length),
     });
+  }
+
+  /// O que o formulário de despesa nova já abre marcado para quem lança:
+  /// - quem pagou: o próprio morador (com "Caixa da casa" nos padrões, ele
+  ///   mesmo pela conta da casa); forma de outro morador passa a ser dele;
+  /// - forma de pagamento: a fixa dos padrões, senão a da última despesa que
+  ///   ele lançou entre as [expenses] já carregadas;
+  /// - categoria: a fixa dos padrões, senão a que ele mais usa nelas (empate:
+  ///   a mais recente).
+  /// Null em um campo = o formulário fica com o primeiro da lista, como antes.
+  static ({String? payerId, String? paymentMethodId, String? categoryId}) formDefaults({
+    required String? currentUserId,
+    required List<HouseMember> members,
+    required List<PaymentMethod> paymentMethods,
+    required List<ExpenseCategory> categories,
+    required List<HouseExpense> expenses,
+    MemberSettings settings = const MemberSettings(),
+  }) {
+    final me = members.where((m) => m.id == currentUserId).firstOrNull;
+    String? method(String? id) => paymentMethods.where((p) => p.id == id).firstOrNull?.id;
+    String? category(String? id) => categories.where((c) => c.id == id).firstOrNull?.id;
+
+    // Despesas lançadas por ele (sem repetir), da mais recente para a mais antiga
+    final seen = <String>{};
+    final mine = currentUserId == null
+        ? <HouseExpense>[]
+        : (expenses.where((e) => e.createdBy == currentUserId && seen.add(e.id)).toList()
+          ..sort((a, b) => b.date.compareTo(a.date)));
+
+    final String? paymentMethodId;
+    if (settings.launchPayer == LaunchPayer.house && houseAccount(paymentMethods) != null) {
+      paymentMethodId = houseAccount(paymentMethods)!.id;
+    } else {
+      paymentMethodId = method(settings.launchPaymentMethodId) ??
+          mine.map((e) => method(e.paymentMethodId)).nonNulls.firstOrNull;
+    }
+
+    String? mostUsedCategory() {
+      final counts = <String, int>{};
+      for (final e in mine) {
+        if (category(e.categoryId) != null) counts[e.categoryId] = (counts[e.categoryId] ?? 0) + 1;
+      }
+      String? best;
+      // A lista já vem da mais recente: no empate fica a que apareceu primeiro
+      for (final id in counts.keys) {
+        if (best == null || counts[id]! > counts[best]!) best = id;
+      }
+      return best;
+    }
+
+    final categoryId = category(settings.launchCategoryId) ?? mostUsedCategory();
+
+    final owner = paymentMethods.where((p) => p.id == paymentMethodId).firstOrNull?.ownerMemberId;
+    final payerId = owner != null && members.any((m) => m.id == owner) ? owner : me?.id;
+
+    return (payerId: payerId, paymentMethodId: paymentMethodId, categoryId: categoryId);
   }
 }
