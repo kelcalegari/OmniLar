@@ -6,6 +6,7 @@ import '../../../finance/domain/entities/contribution.dart';
 import '../../../finance/domain/entities/house_expense.dart';
 import '../../../finance/domain/entities/house_member.dart';
 import '../../../finance/domain/entities/house_settings.dart';
+import '../../../finance/domain/entities/opening_inflows.dart';
 import '../../../finance/domain/entities/split_rule.dart';
 import '../../../p2p/domain/entities/p2p_loan.dart';
 import '../entities/member_audit_trail.dart';
@@ -46,6 +47,8 @@ class GlobalClearingEngine {
     Money houseShortfallAlreadySettled = const Money.zero(),
     Money houseLoansAlreadyReceived = const Money.zero(),
     OpeningBalanceRule? openingBalanceRule,
+    OpeningInflows? openingInflows,
+    OpeningInflowRules openingInflowRules = const OpeningInflowRules(),
   }) {
     // 0. Despesas de projetos compartilhados são liquidadas apenas no próprio projeto
     // (ProjectSettlementService). Filtramos aqui por defesa em profundidade para
@@ -80,7 +83,12 @@ class GlobalClearingEngine {
 
     // Sobra do Caixa abatida dos aportes devidos (regra "abater os aportes"):
     // reparte [cents] pelos [weights], sem passar do que cada um deve.
-    void applyOpeningBalanceToTargets(int cents, Map<String, int> weights, String ruleDescription) {
+    void applyOpeningBalanceToTargets(
+      int cents,
+      Map<String, int> weights,
+      String ruleDescription, {
+      String title = 'Sobra do Caixa abatida',
+    }) {
       if (cents <= 0 || members.isEmpty) return;
       final totalWeight = weights.values.fold<int>(0, (acc, w) => acc + w);
       if (totalWeight <= 0) return;
@@ -98,7 +106,7 @@ class GlobalClearingEngine {
         memberExpenseShares[entry.key]?.add(
           ExpenseShareAudit(
             expenseId: 'opening_balance',
-            expenseTitle: 'Sobra do Caixa abatida',
+            expenseTitle: title,
             totalExpenseAmount: Money(-cents),
             allocatedAmount: Money(-applied),
             ruleDescription: ruleDescription,
@@ -107,6 +115,22 @@ class GlobalClearingEngine {
         );
       }
     }
+
+    // O dinheiro do início do ciclo em partes, cada uma com a sua regra. Sem a
+    // separação por origem, ou sem regra por tipo escolhida, vale a regra
+    // única: a sobra, sem o que voltou das caixinhas, segue [openingBalanceRule].
+    final byKind = openingInflows != null && !openingInflowRules.isEmpty;
+    final openingParts = byKind
+        ? OpeningInflowPart.split(openingInflows, openingInflowRules, openingBalanceRule)
+        : [
+            OpeningInflowPart(
+              kind: OpeningInflowKind.rolledSurplus,
+              amount: Money(math.max(0, openingBalance.cents - vaultReturns.cents)),
+              rule: openingBalanceRule,
+            ),
+          ];
+    String abatementTitle(OpeningInflowPart part) =>
+        byKind ? part.abatementTitle : 'Sobra do Caixa abatida';
 
     if (customContributionTargets != null) {
       contributionTargets.addAll(customContributionTargets);
@@ -204,22 +228,29 @@ class GlobalClearingEngine {
       bucketDeficitCents -= deficitAlreadyCoveredCents;
       // A sobra deixada no Caixa pelo ciclo anterior é folga: cobre o excedente
       // antes da Caixinha e do rateio entre os moradores. O que voltou das
-      // caixinhas não entra: só cobriu falta de caixa, e o excedente continua
-      // sendo dos moradores (no fim, sobra no Caixa).
-      // Guardada como folga (regra da casa), a sobra não cobre o excedente.
-      final rolledOverCents = openingBalanceRule == OpeningBalanceRule.keep
-          ? 0
-          : math.max(0, openingBalance.cents - vaultReturns.cents);
-      final rolledOnExcessCents = rolledOverCents.clamp(0, bucketDeficitCents).toInt();
-      bucketDeficitCents -= rolledOnExcessCents;
-      // Abater os aportes: o que a sobra não usou no excedente reduz o valor
-      // fixo de cada um, na proporção dele
-      if (openingBalanceRule == OpeningBalanceRule.reduceQuotas) {
-        applyOpeningBalanceToTargets(
-          rolledOverCents - rolledOnExcessCents,
-          {for (final m in members) m.id: customContributionTargets[m.id]?.cents ?? 0},
-          'Rateio proporcional ao aporte fixo',
-        );
+      // caixinhas só entra se a casa escolheu (por caixinha): sem escolha, só
+      // cobriu falta de caixa, e o excedente continua sendo dos moradores.
+      // Guardada como folga (regra da casa), a parte não cobre o excedente.
+      // Primeiro o que só cobre o excedente, depois o que também abate os aportes.
+      final covering = [
+        ...openingParts.where(
+          (p) => p.rule != OpeningBalanceRule.keep && p.rule != OpeningBalanceRule.reduceQuotas,
+        ),
+        ...openingParts.where((p) => p.rule == OpeningBalanceRule.reduceQuotas),
+      ];
+      for (final part in covering) {
+        final onExcessCents = part.amount.cents.clamp(0, bucketDeficitCents).toInt();
+        bucketDeficitCents -= onExcessCents;
+        // Abater os aportes: o que a parte não usou no excedente reduz o valor
+        // fixo de cada um, na proporção dele
+        if (part.rule == OpeningBalanceRule.reduceQuotas) {
+          applyOpeningBalanceToTargets(
+            part.amount.cents - onExcessCents,
+            {for (final m in members) m.id: customContributionTargets[m.id]?.cents ?? 0},
+            'Rateio proporcional ao aporte fixo',
+            title: abatementTitle(part),
+          );
+        }
       }
 
       final vaultCents = deficitVaultBalance.cents > 0 ? deficitVaultBalance.cents : 0;
@@ -359,13 +390,15 @@ class GlobalClearingEngine {
         contributionTargets[entry.key] = Money(entry.value);
       }
 
-      // Abater os aportes: a sobra reduz a parte de cada um pelo percentual
+      // Abater os aportes: a parte reduz o que cada um deve pelo percentual
       // padrão. Nas outras regras ela fica no Caixa.
-      if (openingBalanceRule == OpeningBalanceRule.reduceQuotas) {
+      for (final part in openingParts) {
+        if (part.rule != OpeningBalanceRule.reduceQuotas) continue;
         applyOpeningBalanceToTargets(
-          openingBalance.cents - vaultReturns.cents,
+          part.amount.cents,
           {for (final m in members) m.id: (m.defaultSplitPercent * 100).round()},
           'Rateio pelo percentual padrão',
+          title: abatementTitle(part),
         );
       }
     }

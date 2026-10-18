@@ -15,6 +15,7 @@ import '../../domain/entities/house_expense.dart';
 import '../../domain/entities/house_expense_item.dart';
 import '../../domain/entities/contribution.dart';
 import '../../domain/entities/financial_cycle_summary.dart';
+import '../../domain/entities/opening_inflows.dart';
 import '../../domain/entities/savings_vault.dart';
 import '../../domain/entities/third_party_receipt.dart';
 import '../../domain/entities/split_rule.dart';
@@ -489,25 +490,49 @@ class SupabaseFinanceDataSource implements FinanceDataSource {
 
   @override
   Future<Money> getVaultReturnsForCycle(FinancialCycle cycle) async {
+    final byVault = await _vaultReturnsByVault(cycle);
+    return Money(byVault.values.fold<int>(0, (acc, m) => acc + m.cents));
+  }
+
+  /// Resgates devolvidos ao Caixa do ciclo, por caixinha.
+  Future<Map<String, Money>> _vaultReturnsByVault(FinancialCycle cycle) async {
     try {
       String dateOnly(DateTime d) => d.toIso8601String().split('T')[0];
       final rows = await OfflineSnapshot.instance.rows(
-        'vault_returns_${_houseId}_${dateOnly(cycle.startDate)}',
+        'vault_returns_by_vault_${_houseId}_${dateOnly(cycle.startDate)}',
         () async => await client
             .from('savings_transactions')
-            .select('amount_cents, type')
+            .select('vault_id, amount_cents, type')
             .eq('house_id', _houseId)
             .gte('cycle_start_date', dateOnly(cycle.startDate))
             .lte('cycle_start_date', dateOnly(cycle.endDate)),
       );
       // Depósito tirado do Caixa do ciclo desfaz parte do que as caixinhas devolveram
-      return Money(rows.fold<int>(0, (acc, r) {
-        final cents = (r['amount_cents'] as num).toInt();
-        return acc + (r['type'] == 'withdraw' ? cents : -cents);
-      }));
+      final cents = <String, int>{};
+      for (final r in rows) {
+        final amount = (r['amount_cents'] as num).toInt();
+        final vaultId = r['vault_id']?.toString() ?? '';
+        cents[vaultId] = (cents[vaultId] ?? 0) + (r['type'] == 'withdraw' ? amount : -amount);
+      }
+      return {for (final e in cents.entries) e.key: Money(e.value)};
     } catch (_) {
-      return const Money.zero();
+      return const {};
     }
+  }
+
+  @override
+  Future<OpeningInflows> getOpeningInflows(FinancialCycle cycle) async {
+    final rolledFuture = _rolledSurplus(cycle);
+    final loansRepaidFuture = _houseLoansRepaidToCycle(cycle);
+    final byVaultFuture = _vaultReturnsByVault(cycle);
+    final vaultsFuture = getSavingsVaults().catchError((_) => <SavingsVault>[]);
+    await Future.wait<void>([rolledFuture, loansRepaidFuture, byVaultFuture, vaultsFuture]);
+    return OpeningInflows(
+      rolledSurplus: await rolledFuture,
+      houseLoansRepaid: await loansRepaidFuture,
+      vaultWithdrawalsByVault: await byVaultFuture,
+      vaultNames: {for (final v in await vaultsFuture) v.id: v.name},
+    );
   }
 
   @override
@@ -562,7 +587,7 @@ class SupabaseFinanceDataSource implements FinanceDataSource {
       final contributionsFuture =
           contributions != null ? Future.value(contributions) : getContributionsForCycle(cycle);
       final rolledFuture = _rolledSurplus(cycle);
-      final vaultReturnsFuture = getVaultReturnsForCycle(cycle);
+      final vaultReturnsFuture = _vaultReturnsByVault(cycle);
       final loansFundedFuture = _houseLoansFunded(cycle);
       final loansRepaidFuture = _houseLoansRepaidToCycle(cycle);
       await Future.wait<void>([
@@ -576,7 +601,12 @@ class SupabaseFinanceDataSource implements FinanceDataSource {
       final loansFunded = await loansFundedFuture;
       final cycleExpenses = await expensesFuture;
       final cycleContributions = await contributionsFuture;
-      final vaultReturns = await vaultReturnsFuture;
+      final inflows = OpeningInflows(
+        rolledSurplus: await rolledFuture,
+        houseLoansRepaid: await loansRepaidFuture,
+        vaultWithdrawalsByVault: await vaultReturnsFuture,
+      );
+      final vaultReturns = inflows.vaultWithdrawalsTotal;
 
       final memberContributions = <String, Money>{};
       int totalContributionsCents = 0;
@@ -602,7 +632,7 @@ class SupabaseFinanceDataSource implements FinanceDataSource {
 
       // A sobra deixada pelo ciclo anterior, as devoluções das caixinhas e os
       // empréstimos do ciclo já pagos entram como folga do Caixa
-      final openingBalance = await rolledFuture + vaultReturns + await loansRepaidFuture;
+      final openingBalance = inflows.rolledSurplus + vaultReturns + inflows.houseLoansRepaid;
       // Empréstimos que o Caixa liberou no ciclo também saíram dele
       final folegoCents = openingBalance.cents +
           totalContributionsCents -
@@ -619,6 +649,7 @@ class SupabaseFinanceDataSource implements FinanceDataSource {
         memberExpensesPaid: memberExpensesPaid,
         vaultReturns: vaultReturns,
         houseLoansFunded: loansFunded,
+        openingInflows: inflows,
       );
     } catch (e) {
       throw ServerFailure('Erro ao calcular resumo do ciclo: $e');
@@ -1344,7 +1375,18 @@ class SupabaseFinanceDataSource implements FinanceDataSource {
     try {
       final row = await OfflineSnapshot.instance.row(
         'house_settings_$_houseId',
-        () async => await client.from('houses').select(HouseSettings.columns).eq('id', _houseId).maybeSingle(),
+        () async {
+          try {
+            return await client.from('houses').select(HouseSettings.columns).eq('id', _houseId).maybeSingle();
+          } catch (_) {
+            // Coluna da 0092 ainda não aplicada: lê só as da 0091
+            return await client
+                .from('houses')
+                .select(HouseSettings.columnsBefore0092)
+                .eq('id', _houseId)
+                .maybeSingle();
+          }
+        },
       );
       return HouseSettings.fromJson(row);
     } catch (_) {

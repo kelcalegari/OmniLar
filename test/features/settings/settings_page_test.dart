@@ -164,6 +164,30 @@ void main() {
     },
   );
 
+  testWidgets('Planejamento mostra uma regra por tipo de entrada e as caixinhas da casa', (tester) async {
+    await sl<FinanceCubit>().loadCycleData();
+
+    await tester.pumpWidget(buildTestableWidget());
+    await tester.pumpAndSettle();
+
+    await openGroup(tester, 'Divisão das despesas');
+    expect(find.text('Resgate de caixinha'), findsOneWidget);
+    // O título do painel abre o diálogo, como o Alterar
+    final panel = find.text('Planejamento e Fechamento');
+    await tester.ensureVisible(panel);
+    await tester.tap(panel);
+    await tester.pumpAndSettle();
+
+    expect(find.text('Dinheiro que já está no Caixa'), findsOneWidget);
+    expect(find.text('Sobra do ciclo anterior'), findsWidgets);
+    expect(find.text('Empréstimo do Caixa pago de volta'), findsWidgets);
+    expect(find.text('Reserva de Emergência da Casa'), findsOneWidget);
+    // Sem escolha, o resgate fica no Caixa e não há aviso
+    expect(find.text('A caixinha diminui e ninguém repõe o que saiu dela.'), findsNothing);
+    await tester.tap(find.text('Cancelar'));
+    await tester.pumpAndSettle();
+  });
+
   testWidgets('Can open Ciclo Financeiro dialog', (tester) async {
     await sl<FinanceCubit>().loadCycleData();
 

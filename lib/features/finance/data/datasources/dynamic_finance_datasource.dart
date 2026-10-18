@@ -6,6 +6,7 @@ import '../../../../core/domain/value_objects/money.dart';
 import '../../domain/entities/category.dart';
 import '../../domain/entities/contribution.dart';
 import '../../domain/entities/financial_cycle_summary.dart';
+import '../../domain/entities/opening_inflows.dart';
 import '../../domain/entities/house_expense.dart';
 import '../../domain/entities/house_member.dart';
 import '../../domain/entities/payment_method.dart';
@@ -57,6 +58,9 @@ class DynamicFinanceDataSource implements FinanceDataSource {
   @override
   Future<Money> getVaultReturnsForCycle(FinancialCycle cycle) =>
       _active.getVaultReturnsForCycle(cycle);
+
+  @override
+  Future<OpeningInflows> getOpeningInflows(FinancialCycle cycle) => _active.getOpeningInflows(cycle);
 
   @override
   Future<DateTime?> getHouseStartDate() => _active.getHouseStartDate();

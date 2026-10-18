@@ -322,6 +322,9 @@ class FinanceCubit extends Cubit<FinanceState> {
         customCategoryOverrides: overrides,
         adjustPercent: (settings ?? state.houseSettings).adjustPercent,
         openingBalanceRule: (settings ?? state.houseSettings).openingBalanceRule,
+        // Cada tipo de entrada no Caixa com a sua regra, como no fechamento
+        openingInflows: summary?.openingInflows,
+        openingInflowRules: (settings ?? state.houseSettings).inflowRules,
       );
 
   /// Sobra que o ciclo anterior deixou no Caixa. O fôlego já desconta as
@@ -389,11 +392,14 @@ class FinanceCubit extends Cubit<FinanceState> {
   /// pode precisar de outros ciclos). Devolve false se não deu para gravar.
   Future<bool> updateHouseSettings({
     OpeningBalanceRule? openingBalanceRule,
+    OpeningInflowRules? inflowRules,
     int? historyCycles,
     int? adjustPercent,
   }) async {
     final changes = <String, dynamic>{
       'opening_balance_rule': ?openingBalanceRule?.dbValue,
+      // Vai inteiro: o banco troca o objeto todo
+      'opening_inflow_rules': ?inflowRules?.toJson(),
       'planner_history_cycles': ?historyCycles,
       'planner_adjust_percent': ?adjustPercent,
     };

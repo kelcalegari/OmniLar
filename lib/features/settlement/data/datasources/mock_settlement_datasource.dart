@@ -102,6 +102,9 @@ class MockSettlementDataSource implements SettlementDataSource {
     }
 
     final vaultReturns = await financeDataSource.getVaultReturnsForCycle(cycle);
+    final settings = await financeDataSource.getHouseSettings();
+    // A sobra do ciclo anterior do modo demo fica neste fechamento de demonstração
+    final inflows = await financeDataSource.getOpeningInflows(cycle);
     final summary = engine.computeSettlement(
       cycle: cycle,
       members: members,
@@ -112,7 +115,9 @@ class MockSettlementDataSource implements SettlementDataSource {
       housePixKey: house?.pixKey,
       housePixKeyHolderName: house?.pixKeyHolderName,
       deficitSplit: options?.deficitSplit ?? DeficitSplit.proportional,
-      openingBalanceRule: (await financeDataSource.getHouseSettings()).openingBalanceRule,
+      openingBalanceRule: settings.openingBalanceRule,
+      openingInflows: inflows.copyWith(rolledSurplus: inflows.rolledSurplus + _openingBalance(cycle)),
+      openingInflowRules: settings.inflowRules,
       deficitVaultBalance: deficitVaultBalance,
       surplusAlreadyVaulted: Money(_surplusVaulted[cycle] ?? 0),
       deficitAlreadyCovered: Money(_deficitCovered[cycle] ?? 0),

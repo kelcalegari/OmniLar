@@ -8,6 +8,7 @@ import 'package:omni_lar/features/projects/presentation/cubit/projects_cubit.dar
 import 'package:omni_lar/features/projects/presentation/pages/projects_hub_page.dart';
 import 'package:omni_lar/features/finance/domain/repositories/finance_repository.dart';
 import 'package:omni_lar/features/finance/domain/entities/financial_cycle_summary.dart';
+import 'package:omni_lar/features/finance/domain/entities/opening_inflows.dart';
 import 'package:omni_lar/features/finance/domain/entities/house_expense.dart';
 import 'package:omni_lar/core/domain/enums/recurrence.dart';
 import 'package:omni_lar/core/domain/value_objects/financial_cycle.dart';
@@ -135,6 +136,8 @@ class _FakeFinanceRepository implements FinanceRepository {
   Future<void> depositToVault({required String vaultId, required String memberId, required Money amount, required String description, DateTime? fromCycleStart}) async {}
   @override
   Future<Money> getVaultReturnsForCycle(FinancialCycle cycle) async => const Money.zero();
+  @override
+  Future<OpeningInflows> getOpeningInflows(FinancialCycle cycle) async => const OpeningInflows();
   @override
   Future<DateTime?> getHouseStartDate() async => null;
   @override

@@ -1,6 +1,7 @@
 import 'package:equatable/equatable.dart';
 import '../../../../core/domain/value_objects/money.dart';
 import '../../../../core/domain/value_objects/financial_cycle.dart';
+import 'opening_inflows.dart';
 
 enum FolegoStatus {
   positive, // Saudável (Verde)
@@ -24,6 +25,10 @@ class FinancialCycleSummary extends Equatable {
   /// Empréstimos que o Caixa liberou neste ciclo (já descontados do fôlego).
   final Money houseLoansFunded;
 
+  /// O dinheiro do início do ciclo separado por origem (sobra, empréstimos
+  /// pagos de volta, resgates por caixinha). Nulo quando não se sabe.
+  final OpeningInflows? openingInflows;
+
   const FinancialCycleSummary({
     required this.cycle,
     required this.totalContributions,
@@ -34,6 +39,7 @@ class FinancialCycleSummary extends Equatable {
     required this.memberExpensesPaid,
     this.vaultReturns = const Money.zero(),
     this.houseLoansFunded = const Money.zero(),
+    this.openingInflows,
   });
 
   /// Alias para despesas pagas no ciclo
@@ -85,5 +91,6 @@ class FinancialCycleSummary extends Equatable {
         memberExpensesPaid,
         vaultReturns,
         houseLoansFunded,
+        openingInflows,
       ];
 }
