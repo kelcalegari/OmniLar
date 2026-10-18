@@ -64,7 +64,13 @@ class _AddExpensePageState extends State<AddExpensePage> {
   // Gravação em andamento: evita lançar a mesma despesa duas vezes
   bool _isSaving = false;
   List<SharedProject> _availableProjects = [];
-  final SplitType _selectedSplitType = SplitType.percentage;
+  // Divisão escolhida no formulário (despesa nova): a da casa, valores fixos
+  // por morador ou um morador só
+  SplitType _selectedSplitType = SplitType.percentage;
+  final Map<String, int> _fixedCents = {};
+  String? _singleResponsibleId;
+  // Os padrões de quem lança entram uma vez só, quando as listas chegam
+  bool _launchDefaultsApplied = false;
   DateTime _selectedDate = DateTime.now();
 
   late bool _isRecurring;
@@ -288,6 +294,22 @@ class _AddExpensePageState extends State<AddExpensePage> {
     final catId = _selectedCategoryId ?? state.categories.firstOrNull?.id ?? '';
     final paidById = _selectedPaidByMemberId ?? state.members.firstOrNull?.id ?? sl<AuthRepository>().currentUser?.id ?? '';
     final pmId = _selectedPaymentMethodId ?? state.paymentMethods.firstOrNull?.id ?? '';
+    final splitChoice = _splitChoiceApplies(state) ? _selectedSplitType : SplitType.percentage;
+
+    if (splitChoice == SplitType.fixed) {
+      final fixedSum = state.members.fold<int>(0, (acc, m) => acc + (_fixedCents[m.id] ?? 0));
+      if (fixedSum != _cents) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            backgroundColor: Colors.red.shade700,
+            content: Text(
+              'A soma dos valores fixos (${Money(fixedSum).format()}) deve ser igual ao valor da despesa (${Money(_cents).format()}).',
+            ),
+          ),
+        );
+        return;
+      }
+    }
 
     // Determina a regra de rateio de forma resiliente
     final category = state.categories.where((c) => c.id == catId).firstOrNull;
@@ -307,8 +329,16 @@ class _AddExpensePageState extends State<AddExpensePage> {
     if (isProjectExpense) {
       // Sem percentuais gravados: o acerto do projeto usa os dos participantes
       rule = const SplitRule.percentage(null);
-    } else if (category != null && (category.hasOwner || _selectedSplitType == SplitType.categoryOwner)) {
+    } else if (category != null && category.hasOwner) {
       rule = SplitRule.singleResponsible(category.ownerMemberId ?? paidById);
+    } else if (splitChoice == SplitType.categoryOwner) {
+      // Um morador só responde pela despesa inteira
+      rule = SplitRule.singleResponsible(_singleResponsibleId ?? paidById);
+    } else if (splitChoice == SplitType.fixed) {
+      rule = SplitRule.fixed({
+        for (final m in state.members)
+          if ((_fixedCents[m.id] ?? 0) > 0) m.id: Money(_fixedCents[m.id]!),
+      });
     } else {
       if (state.members.isNotEmpty) {
         final percentMap = <String, double>{};
@@ -496,6 +526,8 @@ class _AddExpensePageState extends State<AddExpensePage> {
       dueDay: _isRecurring ? _dueDay : null,
       items: items,
       projectId: _selectedProjectId,
+      // Quem lançou: é daqui que saem a última forma e a categoria mais usada dele
+      createdBy: sl<AuthRepository>().currentUser?.id,
     );
 
     if (_isSaving) return;
@@ -580,12 +612,190 @@ class _AddExpensePageState extends State<AddExpensePage> {
     }
   }
 
+  /// Despesa nova abre com os padrões de quem lança (quem pagou, forma de
+  /// pagamento e categoria). O que não tiver padrão fica com o primeiro da
+  /// lista, como antes. Edição mantém o que a despesa já tem.
+  void _applyLaunchDefaults(BuildContext context, FinanceState state) {
+    if (_launchDefaultsApplied || widget.expenseToEdit != null) return;
+    if (state.members.isEmpty && state.paymentMethods.isEmpty && state.categories.isEmpty) return;
+    _launchDefaultsApplied = true;
+    List<HouseExpense> history;
+    try {
+      history = context.read<FinanceCubit>().launchHistory;
+    } catch (_) {
+      history = state.expenses;
+    }
+    String? currentUserId;
+    try {
+      currentUserId = sl<AuthRepository>().currentUser?.id;
+    } catch (_) {}
+    final defaults = ExpenseLaunchDefaults.formDefaults(
+      currentUserId: currentUserId,
+      members: state.members,
+      paymentMethods: state.paymentMethods,
+      categories: state.categories,
+      expenses: history,
+      settings: state.memberSettings,
+    );
+    _selectedPaidByMemberId ??= defaults.payerId;
+    _selectedPaymentMethodId ??= defaults.paymentMethodId;
+    _selectedCategoryId ??= defaults.categoryId;
+  }
+
+  /// A divisão escolhida só vale em despesa nova da casa (projeto divide entre
+  /// os participantes; categoria com dono é do dono) e com mais de um morador.
+  bool _splitChoiceApplies(FinanceState state) {
+    if (widget.expenseToEdit != null || _selectedProjectId != null) return false;
+    if (state.members.length < 2) return false;
+    final category = state.categories.where((c) => c.id == _selectedCategoryId).firstOrNull;
+    return category == null || !category.hasOwner;
+  }
+
+  /// Valores fixos começam pela divisão da casa aplicada ao valor digitado.
+  void _prefillFixedAmounts(FinanceState state) {
+    final rule = ExpenseLaunchDefaults.splitRule(
+      category: null,
+      members: state.members,
+      paidByMemberId: _selectedPaidByMemberId ?? '',
+    );
+    final allocations = rule.calculateAllocations(
+      totalAmount: Money(_cents),
+      memberIds: [for (final m in state.members) m.id],
+    );
+    _fixedCents
+      ..clear()
+      ..addAll({for (final m in state.members) m.id: allocations[m.id]?.cents ?? 0});
+  }
+
+  static String _splitTypeLabel(SplitType type) => switch (type) {
+        SplitType.percentage => 'Divisão da casa',
+        SplitType.fixed => 'Valores fixos',
+        SplitType.categoryOwner => 'Um responsável',
+      };
+
+  /// Escolha da divisão, ao lado do título "Quem pagou" (compacta, sem
+  /// empurrar o resto do formulário).
+  Widget _buildSplitMenu(ThemeData theme, FinanceState state) {
+    return PopupMenuButton<SplitType>(
+      key: const Key('expense_split_menu'),
+      tooltip: 'Como dividir',
+      initialValue: _selectedSplitType,
+      onSelected: (type) => setState(() {
+        _selectedSplitType = type;
+        if (type == SplitType.fixed && _fixedCents.values.every((c) => c == 0)) {
+          _prefillFixedAmounts(state);
+        }
+        if (type == SplitType.categoryOwner) {
+          _singleResponsibleId ??= _selectedPaidByMemberId;
+        }
+      }),
+      itemBuilder: (_) => [
+        for (final type in SplitType.values)
+          // Valor fixo é da despesa inteira: não combina com sub-itens
+          if (type != SplitType.fixed || !_isItemized)
+            PopupMenuItem(value: type, child: Text(_splitTypeLabel(type))),
+      ],
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+        decoration: BoxDecoration(
+          color: AppColors.primary.withValues(alpha: 0.1),
+          borderRadius: BorderRadius.circular(10),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Icons.call_split_rounded, size: 16, color: AppColors.primary),
+            const SizedBox(width: 4),
+            Text(
+              _splitTypeLabel(_selectedSplitType),
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: AppColors.primary,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            const Icon(Icons.arrow_drop_down_rounded, size: 18, color: AppColors.primary),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// Valores de cada morador (valores fixos) ou quem responde pela despesa.
+  Widget _buildSplitDetails(ThemeData theme, FinanceState state) {
+    final fixedSum = state.members.fold<int>(0, (acc, m) => acc + (_fixedCents[m.id] ?? 0));
+    final fixedDiff = _cents - fixedSum;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        const SizedBox(height: 12),
+        if (_selectedSplitType == SplitType.fixed) ...[
+          Text('Quanto cada um paga', style: theme.textTheme.titleSmall),
+          const SizedBox(height: 8),
+          for (final m in state.members)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: MoneyTextFormField(
+                key: ValueKey('expense_split_fixed_${m.id}'),
+                labelText: m.name,
+                prefixIcon: const Icon(Icons.person_outline_rounded),
+                initialValue: Money(_fixedCents[m.id] ?? 0),
+                onChanged: (money) => setState(() => _fixedCents[m.id] = money.cents),
+              ),
+            ),
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  fixedDiff == 0
+                      ? 'Os valores fecham o total ✅'
+                      : (fixedDiff > 0
+                          ? 'Faltam ${Money(fixedDiff).format()} para fechar o total'
+                          : 'Passou ${Money(-fixedDiff).format()} do total'),
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: fixedDiff == 0 ? AppColors.creditGreen : AppColors.folegoWarning,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+              TextButton(
+                onPressed: () => setState(() => _prefillFixedAmounts(state)),
+                child: const Text('Pela divisão da casa'),
+              ),
+            ],
+          ),
+        ],
+        if (_selectedSplitType == SplitType.categoryOwner) ...[
+          Text('Quem responde pela despesa inteira', style: theme.textTheme.titleSmall),
+          const SizedBox(height: 8),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              for (final m in state.members)
+                ChoiceChip(
+                  key: ValueKey('expense_split_single_${m.id}'),
+                  avatar: const Icon(Icons.person_rounded, size: 16),
+                  label: Text(m.name),
+                  selected: (_singleResponsibleId ?? _selectedPaidByMemberId) == m.id,
+                  selectedColor: AppColors.primary.withValues(alpha: 0.15),
+                  onSelected: (selected) {
+                    if (selected) setState(() => _singleResponsibleId = m.id);
+                  },
+                ),
+            ],
+          ),
+        ],
+      ],
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
 
     return BlocBuilder<FinanceCubit, FinanceState>(
       builder: (context, state) {
+        _applyLaunchDefaults(context, state);
         if (state.members.isNotEmpty &&
             (_selectedPaidByMemberId == null ||
                 !state.members.any((m) => m.id == _selectedPaidByMemberId))) {
@@ -887,6 +1097,10 @@ class _AddExpensePageState extends State<AddExpensePage> {
                       onChanged: (val) {
                         setState(() {
                           _isItemized = val;
+                          // Valor fixo não combina com sub-itens: volta à divisão da casa
+                          if (_isItemized && _selectedSplitType == SplitType.fixed) {
+                            _selectedSplitType = SplitType.percentage;
+                          }
                           if (_isItemized && _draftItems.isEmpty) {
                             _applyCondoPreset(state);
                           }
@@ -1034,8 +1248,13 @@ class _AddExpensePageState extends State<AddExpensePage> {
               ],
               const SizedBox(height: 20),
 
-              // Quem Pagou
-              Text('Quem Pagou / É Responsável?', style: theme.textTheme.titleSmall),
+              // Quem Pagou (e, ao lado, como dividir a despesa nova da casa)
+              Row(
+                children: [
+                  Expanded(child: Text('Quem Pagou / É Responsável?', style: theme.textTheme.titleSmall)),
+                  if (_splitChoiceApplies(state)) _buildSplitMenu(theme, state),
+                ],
+              ),
               const SizedBox(height: 8),
               if (state.members.isEmpty)
                 Container(
@@ -1090,6 +1309,8 @@ class _AddExpensePageState extends State<AddExpensePage> {
                     );
                   }).toList(),
                 ),
+              if (_splitChoiceApplies(state) && _selectedSplitType != SplitType.percentage)
+                _buildSplitDetails(theme, state),
               const SizedBox(height: 20),
 
               // Vincular a Projeto / Viagem (Opcional)

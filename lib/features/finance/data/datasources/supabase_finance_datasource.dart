@@ -1533,6 +1533,7 @@ class SupabaseFinanceDataSource implements FinanceDataSource {
       paidOutOfPocket: r['paid_out_of_pocket'] as bool? ?? false,
       notes: r['notes'] as String?,
       barcode: r['barcode'] as String?,
+      createdBy: r['created_by'] as String?,
       items: items,
       recurringSeriesId: r['recurring_series_id'] as String?,
       projectId: r['project_id'] as String?,

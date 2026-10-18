@@ -20,6 +20,8 @@ import '../../domain/entities/house_member.dart';
 import '../../domain/entities/house_initial_balance.dart';
 import '../../domain/entities/closing_defaults.dart';
 import '../../domain/entities/house_settings.dart';
+import '../../domain/entities/member_settings.dart';
+import '../../domain/repositories/member_settings_repository.dart';
 import '../../../settlement/domain/services/open_invoice_choices.dart';
 import '../../../../core/domain/enums/recurrence.dart';
 import '../../../../core/domain/value_objects/money.dart';
@@ -38,11 +40,15 @@ class FinanceCubit extends Cubit<FinanceState> {
   /// Calendário de ciclos da casa, com as trocas de dia (null = usa só o dia).
   final CycleSchedule? Function()? _cycleScheduleOf;
 
+  /// Ajustes do morador logado (0095); sem ele, valem os padrões automáticos.
+  final MemberSettingsRepository? _memberSettings;
+
   FinanceCubit(
     this._repository, [
     this._fundingEstimator = const CycleFundingEstimator(),
     this._cycleStartDayOf,
     this._cycleScheduleOf,
+    this._memberSettings,
   ]) : super(
           FinanceState(
             currentCycle: (_cycleScheduleOf?.call() ??
@@ -176,6 +182,10 @@ class FinanceCubit extends Cubit<FinanceState> {
       final initialBalanceFuture = Future<HouseInitialBalance?>.sync(
         () => _repository.getHouseInitialBalance(),
       ).catchError((_) => null);
+      // Ajustes do morador (0095). Se falharem, vale o que já se tinha
+      final memberSettingsFuture = Future<MemberSettings?>.sync(
+        () => _memberSettings?.load(),
+      ).catchError((_) => null);
       // Histórico dos ciclos anteriores para as médias de variáveis (ex: Mercado),
       // com os ciclos da média da última carga (acertados abaixo se mudaram)
       final previousCycles = _previousCycles(targetCycle, state.houseSettings.historyCycles);
@@ -197,6 +207,7 @@ class FinanceCubit extends Cubit<FinanceState> {
         startDateFuture,
         settingsFuture,
         initialBalanceFuture,
+        memberSettingsFuture,
       ]);
       // Outro ciclo foi pedido enquanto este carregava: o dele é que vale
       if (sequence != _loadSequence || isClosed) return;
@@ -255,6 +266,7 @@ class FinanceCubit extends Cubit<FinanceState> {
         status: FinanceStatus.success,
         houseSettings: settings,
         initialBalance: await initialBalanceFuture,
+        memberSettings: await memberSettingsFuture,
         fundingEstimateMode: mode,
         customCategoryOverrides: overrides,
         currentCycle: targetCycle,
@@ -427,6 +439,30 @@ class FinanceCubit extends Cubit<FinanceState> {
         ),
       ));
       await loadCycleData(cycle: state.currentCycle);
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  /// Despesas já carregadas que dizem o que o morador costuma lançar: as do
+  /// ciclo aberto e as dos ciclos da média (sem nova leitura ao abrir o formulário).
+  List<HouseExpense> get launchHistory => [
+        ...state.expenses,
+        for (final cycle in _historicalByCycle) ...cycle,
+      ];
+
+  /// Padrões de lançamento do morador mudados nos Ajustes. Devolve false se
+  /// não deu para gravar.
+  Future<bool> updateMemberSettings(MemberSettings settings) async {
+    final repository = _memberSettings;
+    if (repository == null) {
+      emit(state.copyWith(memberSettings: settings));
+      return true;
+    }
+    try {
+      final saved = await repository.save(settings);
+      if (!isClosed) emit(state.copyWith(memberSettings: saved));
       return true;
     } catch (_) {
       return false;

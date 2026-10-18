@@ -29,7 +29,7 @@ enum _SettingsGroup {
   ),
   account(
     'Conta e segurança',
-    'E-mail de acesso e senha',
+    'E-mail, senha e meus padrões de lançamento',
     Icons.lock_outline_rounded,
     Colors.teal,
   );
@@ -122,7 +122,10 @@ extension _SettingsGroupViews on _SettingsPageState {
       _SettingsGroup.split => _splitBlocks(context, financeState),
       _SettingsGroup.payments => _paymentBlocks(context, financeState),
       _SettingsGroup.app => _appBlocks(context),
-      _SettingsGroup.account => const <Widget>[AccountSecurityPanel()],
+      _SettingsGroup.account => <Widget>[
+          _launchDefaultsPanel(context, financeState),
+          const AccountSecurityPanel(),
+        ],
     };
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -182,6 +185,152 @@ extension _SettingsGroupViews on _SettingsPageState {
         ],
       ),
     ];
+  }
+
+  // --- Conta: meus padrões de lançamento ---
+
+  static String _launchPayerLabel(LaunchPayer? payer) =>
+      payer == LaunchPayer.house ? 'Caixa da casa' : 'Eu';
+
+  /// O que a despesa nova já abre marcada para este morador (0095). Cada um
+  /// vê e muda só os próprios.
+  Widget _launchDefaultsPanel(BuildContext context, FinanceState financeState) {
+    final settings = financeState.memberSettings;
+    final method = financeState.paymentMethods
+        .where((p) => p.id == settings.launchPaymentMethodId)
+        .firstOrNull;
+    final category = financeState.categories.where((c) => c.id == settings.launchCategoryId).firstOrNull;
+    return _panel(
+      context,
+      title: 'Meus padrões de lançamento',
+      actionLabel: 'Alterar',
+      onAction: () => _showLaunchDefaultsDialog(context, financeState),
+      children: [
+        _line(title: 'Quem paga', value: _launchPayerLabel(settings.launchPayer)),
+        _line(
+          title: 'Forma de pagamento',
+          value: settings.launchPayer == LaunchPayer.house
+              ? 'Conta da casa'
+              : (method?.name ?? 'A última que usei'),
+        ),
+        _line(title: 'Categoria', value: category?.name ?? 'A que mais uso'),
+        _emptyLine('Valem só para você, ao lançar um gasto. Na hora dá para mudar tudo.'),
+      ],
+    );
+  }
+
+  void _showLaunchDefaultsDialog(BuildContext context, FinanceState financeState) {
+    final saved = financeState.memberSettings;
+    final methods = financeState.paymentMethods;
+    final categories = financeState.categories;
+    var payer = saved.launchPayer ?? LaunchPayer.me;
+    // Forma ou categoria apagada depois de escolhida volta ao automático
+    String? methodId = methods.any((p) => p.id == saved.launchPaymentMethodId) ? saved.launchPaymentMethodId : null;
+    String? categoryId = categories.any((c) => c.id == saved.launchCategoryId) ? saved.launchCategoryId : null;
+    bool isSaving = false;
+
+    showDialog(
+      context: context,
+      builder: (dialogCtx) => StatefulBuilder(
+        builder: (context, setDialogState) {
+          Widget title(String text) => Padding(
+                padding: const EdgeInsets.only(top: 12, bottom: 4),
+                child: Text(text, style: const TextStyle(fontWeight: FontWeight.bold)),
+              );
+          Widget hint(String text) => Text(text, style: TextStyle(fontSize: 12, color: Colors.grey.shade600));
+
+          return AlertDialog(
+            title: const Text(
+              'Meus padrões de lançamento',
+              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+            ),
+            content: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  hint('O gasto novo já abre com estas escolhas. Só para você; os outros moradores têm os deles.'),
+                  title('Quem paga'),
+                  Wrap(
+                    spacing: 6,
+                    children: [
+                      for (final option in LaunchPayer.values)
+                        ChoiceChip(
+                          key: ValueKey('launch_payer_${option.name}'),
+                          label: Text(_launchPayerLabel(option)),
+                          selected: payer == option,
+                          onSelected: (_) => setDialogState(() => payer = option),
+                        ),
+                    ],
+                  ),
+                  title('Forma de pagamento'),
+                  if (payer == LaunchPayer.house)
+                    hint('Pelo Caixa da casa, a forma é a conta da casa.')
+                  else
+                    DropdownButton<String?>(
+                      key: const ValueKey('launch_payment_method'),
+                      value: methodId,
+                      isExpanded: true,
+                      style: Theme.of(context).textTheme.bodyMedium,
+                      onChanged: (v) => setDialogState(() => methodId = v),
+                      items: [
+                        const DropdownMenuItem(value: null, child: Text('A última que usei')),
+                        for (final pm in methods)
+                          DropdownMenuItem(value: pm.id, child: Text(pm.name, overflow: TextOverflow.ellipsis)),
+                      ],
+                    ),
+                  title('Categoria'),
+                  DropdownButton<String?>(
+                    key: const ValueKey('launch_category'),
+                    value: categoryId,
+                    isExpanded: true,
+                    style: Theme.of(context).textTheme.bodyMedium,
+                    onChanged: (v) => setDialogState(() => categoryId = v),
+                    items: [
+                      const DropdownMenuItem(value: null, child: Text('A que mais uso')),
+                      for (final cat in categories)
+                        DropdownMenuItem(value: cat.id, child: Text(cat.name, overflow: TextOverflow.ellipsis)),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(dialogCtx),
+                child: const Text('Cancelar'),
+              ),
+              FilledButton(
+                onPressed: isSaving
+                    ? null
+                    : () async {
+                        setDialogState(() => isSaving = true);
+                        final messenger = ScaffoldMessenger.of(context);
+                        final navigator = Navigator.of(dialogCtx);
+                        // "Eu" é o automático: não precisa ficar gravado
+                        final next = saved.withLaunchDefaults(
+                          payer: payer == LaunchPayer.house ? LaunchPayer.house : null,
+                          paymentMethodId: payer == LaunchPayer.house ? null : methodId,
+                          categoryId: categoryId,
+                        );
+                        final ok = next == saved ||
+                            await context.read<FinanceCubit>().updateMemberSettings(next);
+                        if (ok) navigator.pop();
+                        setDialogState(() => isSaving = false);
+                        showSaveFeedback(
+                          messenger,
+                          ok: ok,
+                          success: 'Seus padrões de lançamento foram atualizados.',
+                        );
+                      },
+                style: FilledButton.styleFrom(backgroundColor: AppColors.primary),
+                child: const Text('Salvar'),
+              ),
+            ],
+          );
+        },
+      ),
+    );
   }
 
   // --- Divisão das despesas ---
@@ -1617,6 +1766,9 @@ extension _SettingsSearch on _SettingsPageState {
       ]),
       option(_SettingsGroup.account, 'Senha', Icons.password_rounded, const [
         'trocar senha', 'alterar senha', 'seguranca', 'conta',
+      ]),
+      option(_SettingsGroup.account, 'Meus padrões de lançamento', Icons.bolt_rounded, const [
+        'padrao', 'quem paga', 'forma de pagamento', 'categoria', 'lancamento', 'gasto novo',
       ]),
       option(_SettingsGroup.house, 'Membros da Casa e Convites', Icons.people_outline_rounded, const [
         'moradores', 'pessoas', 'convidar', 'codigo', 'convite', 'administrador', 'dono',

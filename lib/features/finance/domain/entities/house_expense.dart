@@ -31,6 +31,7 @@ class HouseExpense extends Equatable {
   final DateTime? paidAt; // Quando uma conta que estava pendente recebeu baixa (define o ciclo em que ela conta)
   final DateTime? settledAt; // Quando entrou em um fechamento de ciclo (o reembolso de quem pagou do bolso já foi acertado)
   final String? barcode; // Linha digitável do boleto, para copiar e pagar depois
+  final String? createdBy; // Quem lançou (usuário logado na hora); base dos padrões de lançamento de cada morador
 
   const HouseExpense({
     required this.id,
@@ -55,6 +56,7 @@ class HouseExpense extends Equatable {
     this.paidAt,
     this.settledAt,
     this.barcode,
+    this.createdBy,
   });
 
   bool get isPaid => status == ExpenseStatus.paid;
@@ -121,6 +123,7 @@ class HouseExpense extends Equatable {
     DateTime? settledAt,
     String? barcode,
     bool clearBarcode = false,
+    String? createdBy,
   }) {
     return HouseExpense(
       id: id ?? this.id,
@@ -145,6 +148,7 @@ class HouseExpense extends Equatable {
       paidAt: clearPaidAt ? null : (paidAt ?? this.paidAt),
       settledAt: settledAt ?? this.settledAt,
       barcode: clearBarcode ? null : (barcode ?? this.barcode),
+      createdBy: createdBy ?? this.createdBy,
     );
   }
 
@@ -172,5 +176,6 @@ class HouseExpense extends Equatable {
         paidAt,
         settledAt,
         barcode,
+        createdBy,
       ];
 }
