@@ -1,5 +1,6 @@
 import 'package:equatable/equatable.dart';
 import '../../domain/entities/card_invoice.dart';
+import '../../domain/entities/house_settings.dart';
 import '../../domain/entities/house_member.dart';
 import '../../domain/entities/category.dart';
 import '../../domain/entities/payment_method.dart';
@@ -40,6 +41,9 @@ class FinanceState extends Equatable {
 
   /// Início da casa (criação ou lançamento mais antigo); null enquanto não se sabe.
   final DateTime? houseStartDate;
+
+  /// Configurações de planejamento e fechamento da casa.
+  final HouseSettings houseSettings;
   final String? errorMessage;
 
   const FinanceState({
@@ -60,6 +64,7 @@ class FinanceState extends Equatable {
     this.splitModel = 'percentage',
     this.cardInvoiceCodes = const {},
     this.houseStartDate,
+    this.houseSettings = const HouseSettings(),
     this.errorMessage,
   });
 
@@ -92,6 +97,7 @@ class FinanceState extends Equatable {
     String? splitModel,
     Map<String, String>? cardInvoiceCodes,
     DateTime? houseStartDate,
+    HouseSettings? houseSettings,
     String? errorMessage,
   }) {
     return FinanceState(
@@ -112,6 +118,7 @@ class FinanceState extends Equatable {
       splitModel: splitModel ?? this.splitModel,
       cardInvoiceCodes: cardInvoiceCodes ?? this.cardInvoiceCodes,
       houseStartDate: houseStartDate ?? this.houseStartDate,
+      houseSettings: houseSettings ?? this.houseSettings,
       errorMessage: errorMessage ?? this.errorMessage,
     );
   }
@@ -135,6 +142,7 @@ class FinanceState extends Equatable {
         splitModel,
         cardInvoiceCodes,
         houseStartDate,
+        houseSettings,
         errorMessage,
       ];
 }

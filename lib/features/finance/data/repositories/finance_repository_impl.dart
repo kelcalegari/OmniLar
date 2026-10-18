@@ -1,5 +1,6 @@
 import '../../domain/entities/card_invoice.dart';
 import '../../../../core/network/offline_queue.dart';
+import '../../domain/entities/house_settings.dart';
 import '../../../../core/network/offline_sync_service.dart';
 import '../../../../core/utils/uuid.dart';
 import '../offline/house_expense_offline_codec.dart';
@@ -129,6 +130,13 @@ class FinanceRepositoryImpl implements FinanceRepository {
         percentages: percentages,
         fixedAmountsCents: fixedAmountsCents,
       );
+
+  @override
+  Future<HouseSettings> getHouseSettings() => _dataSource.getHouseSettings();
+
+  @override
+  Future<HouseSettings> updateHouseSettings(Map<String, dynamic> changes) =>
+      _dataSource.updateHouseSettings(changes);
 
   @override
   Future<List<SavingsVault>> getSavingsVaults() => _dataSource.getSavingsVaults();

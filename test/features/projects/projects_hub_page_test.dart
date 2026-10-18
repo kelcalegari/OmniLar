@@ -1,5 +1,6 @@
 import 'package:omni_lar/features/finance/domain/entities/card_invoice.dart';
 import 'package:flutter/material.dart';
+import 'package:omni_lar/features/finance/domain/entities/house_settings.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:omni_lar/features/projects/data/repositories/mock_projects_repository.dart';
@@ -107,6 +108,11 @@ class _FakeFinanceRepository implements FinanceRepository {
   Future<void> deletePaymentMethod(String paymentMethodId) async {}
   @override
   Future<String> getHouseSplitModel() async => 'percentage';
+  @override
+  Future<HouseSettings> getHouseSettings() async => const HouseSettings();
+  @override
+  Future<HouseSettings> updateHouseSettings(Map<String, dynamic> changes) async =>
+      HouseSettings.fromJson(changes);
   @override
   Future<void> updateHouseSplitModel({
     required String splitModel,

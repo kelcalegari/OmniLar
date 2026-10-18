@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'house_expense_payload.dart';
+import '../../domain/entities/house_settings.dart';
 import '../../domain/entities/card_invoice.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../../core/domain/enums/recurrence.dart';
@@ -1335,6 +1336,33 @@ class SupabaseFinanceDataSource implements FinanceDataSource {
       }
     } catch (e) {
       throw ServerFailure('Erro ao atualizar modelo de rateio da casa: $e');
+    }
+  }
+
+  @override
+  Future<HouseSettings> getHouseSettings() async {
+    try {
+      final row = await OfflineSnapshot.instance.row(
+        'house_settings_$_houseId',
+        () async => await client.from('houses').select(HouseSettings.columns).eq('id', _houseId).maybeSingle(),
+      );
+      return HouseSettings.fromJson(row);
+    } catch (_) {
+      // Colunas da 0091 ainda não aplicadas no banco: valem os padrões
+      return const HouseSettings();
+    }
+  }
+
+  @override
+  Future<HouseSettings> updateHouseSettings(Map<String, dynamic> changes) async {
+    try {
+      final result = await client.rpc('update_house_settings', params: {
+        'p_house_id': _houseId,
+        'p_settings': changes,
+      });
+      return HouseSettings.fromJson(Map<String, dynamic>.from(result as Map));
+    } catch (e) {
+      throw ServerFailure('Não foi possível salvar as configurações da casa: $e');
     }
   }
 

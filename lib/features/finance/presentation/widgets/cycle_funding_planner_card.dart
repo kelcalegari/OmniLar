@@ -3,6 +3,9 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/utils/responsive.dart';
 import '../../../../core/widgets/privacy_toggle.dart';
+import '../../../../core/widgets/money_input_field.dart';
+import '../../domain/entities/house_settings.dart';
+import '../cubit/finance_state.dart';
 import '../../domain/entities/cycle_funding_estimate.dart';
 import '../cubit/finance_cubit.dart';
 import '../pages/add_contribution_page.dart';
@@ -13,12 +16,21 @@ class CycleFundingPlannerCard extends StatelessWidget {
 
   const CycleFundingPlannerCard({super.key, required this.estimate});
 
-  void _showDetailSheet(BuildContext context) {
+  void _showDetailSheet(BuildContext context, FinanceCubit? cubit) {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (ctx) => _FundingDetailsSheet(estimate: estimate),
+      builder: (ctx) => cubit == null
+          ? _FundingDetailsSheet(estimate: estimate)
+          // Ajuste de categoria refaz a estimativa: a folha acompanha o cubit
+          : BlocBuilder<FinanceCubit, FinanceState>(
+              bloc: cubit,
+              builder: (_, state) => _FundingDetailsSheet(
+                estimate: state.fundingEstimate ?? estimate,
+                cubit: cubit,
+              ),
+            ),
     );
   }
 
@@ -31,6 +43,8 @@ class CycleFundingPlannerCard extends StatelessWidget {
     } catch (_) {
       cubit = null;
     }
+    final adjustPercent =
+        cubit?.state.houseSettings.adjustPercent ?? HouseSettings.defaultAdjustPercent;
 
     return Card(
       elevation: 0,
@@ -84,7 +98,7 @@ class CycleFundingPlannerCard extends StatelessWidget {
                   ),
                 ),
                 TextButton.icon(
-                  onPressed: () => _showDetailSheet(context),
+                  onPressed: () => _showDetailSheet(context, cubit),
                   icon: const Icon(Icons.tune_rounded, size: 14),
                   label: const Text(
                     'Detalhes',
@@ -117,8 +131,8 @@ class CycleFundingPlannerCard extends StatelessWidget {
                   ),
                   const SizedBox(width: 6),
                   ChoiceChip(
-                    label: const Text(
-                      'Econômico (-10%)',
+                    label: Text(
+                      'Econômico (-$adjustPercent%)',
                       style: TextStyle(fontSize: 11),
                     ),
                     selected: estimate.mode == FundingEstimateMode.economical,
@@ -128,8 +142,8 @@ class CycleFundingPlannerCard extends StatelessWidget {
                   ),
                   const SizedBox(width: 6),
                   ChoiceChip(
-                    label: const Text(
-                      'Com Folga (+10%)',
+                    label: Text(
+                      'Com Folga (+$adjustPercent%)',
                       style: TextStyle(fontSize: 11),
                     ),
                     selected: estimate.mode == FundingEstimateMode.comfortable,
@@ -342,8 +356,58 @@ class CycleFundingPlannerCard extends StatelessWidget {
 
 class _FundingDetailsSheet extends StatelessWidget {
   final CycleFundingEstimate estimate;
+  final FinanceCubit? cubit;
 
-  const _FundingDetailsSheet({required this.estimate});
+  const _FundingDetailsSheet({required this.estimate, this.cubit});
+
+  /// Valor previsto da categoria ajustado à mão (fica guardado na casa).
+  void _editCategory(BuildContext context, CategoryFundingEstimate cat) {
+    var amount = cat.adjustedAmount;
+    showDialog(
+      context: context,
+      builder: (dialogCtx) => AlertDialog(
+        title: Text('Previsto para ${cat.categoryName}'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(
+              'Média calculada: ${cat.averageMonthlyAmount.formatted}. O valor que você puser vale para a casa até voltar à média.',
+              style: const TextStyle(fontSize: 12, color: Colors.grey),
+            ),
+            const SizedBox(height: 12),
+            MoneyInputField(
+              initialValue: cat.adjustedAmount,
+              label: 'Valor previsto',
+              autoFocus: true,
+              onChanged: (value) => amount = value,
+            ),
+          ],
+        ),
+        actions: [
+          if (cat.isOverridden)
+            TextButton(
+              onPressed: () {
+                cubit?.updateCustomCategoryFunding(cat.categoryId, null);
+                Navigator.pop(dialogCtx);
+              },
+              child: const Text('Voltar à média'),
+            ),
+          TextButton(
+            onPressed: () => Navigator.pop(dialogCtx),
+            child: const Text('Cancelar'),
+          ),
+          FilledButton(
+            onPressed: () {
+              cubit?.updateCustomCategoryFunding(cat.categoryId, amount);
+              Navigator.pop(dialogCtx);
+            },
+            child: const Text('Salvar'),
+          ),
+        ],
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -491,6 +555,7 @@ class _FundingDetailsSheet extends StatelessWidget {
                             return ListTile(
                               dense: true,
                               contentPadding: EdgeInsets.zero,
+                              onTap: cubit == null ? null : () => _editCategory(context, cat),
                               title: Text(
                                 cat.categoryName,
                                 style: const TextStyle(
@@ -499,7 +564,7 @@ class _FundingDetailsSheet extends StatelessWidget {
                                 ),
                               ),
                               subtitle: Text(
-                                'Média calculada: ${cat.averageMonthlyAmount.formatted}'
+                                'Média de ${cat.sampleCyclesCount} ${cat.sampleCyclesCount == 1 ? 'ciclo' : 'ciclos'}: ${cat.averageMonthlyAmount.formatted}'
                                 '${cat.isOverridden ? " (Ajuste manual)" : ""}',
                                 style: const TextStyle(fontSize: 11),
                               ),

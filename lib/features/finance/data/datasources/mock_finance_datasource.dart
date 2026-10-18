@@ -1,5 +1,6 @@
 import '../../../../core/errors/failures.dart';
 import '../../domain/entities/card_invoice.dart';
+import '../../domain/entities/house_settings.dart';
 import '../../domain/entities/house_member.dart';
 import '../../domain/entities/category.dart';
 import '../../domain/entities/payment_method.dart';
@@ -826,6 +827,17 @@ class MockFinanceDataSource implements FinanceDataSource {
         defaultFixedAmountCents: newFixed,
       );
     }
+  }
+
+  Map<String, dynamic> _houseSettingsRow = {};
+
+  @override
+  Future<HouseSettings> getHouseSettings() async => HouseSettings.fromJson(_houseSettingsRow);
+
+  @override
+  Future<HouseSettings> updateHouseSettings(Map<String, dynamic> changes) async {
+    _houseSettingsRow = {..._houseSettingsRow, ...changes};
+    return HouseSettings.fromJson(_houseSettingsRow);
   }
 
   // --- Caixinhas & Metas da Casa (Dinheiro Blindado) ---

@@ -112,6 +112,7 @@ class MockSettlementDataSource implements SettlementDataSource {
       housePixKey: house?.pixKey,
       housePixKeyHolderName: house?.pixKeyHolderName,
       deficitSplit: options?.deficitSplit ?? DeficitSplit.proportional,
+      openingBalanceRule: (await financeDataSource.getHouseSettings()).openingBalanceRule,
       deficitVaultBalance: deficitVaultBalance,
       surplusAlreadyVaulted: Money(_surplusVaulted[cycle] ?? 0),
       deficitAlreadyCovered: Money(_deficitCovered[cycle] ?? 0),

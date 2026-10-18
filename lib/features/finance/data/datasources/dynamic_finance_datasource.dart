@@ -1,5 +1,6 @@
 import '../../domain/entities/card_invoice.dart';
 import '../../../../core/domain/enums/recurrence.dart';
+import '../../domain/entities/house_settings.dart';
 import '../../../../core/domain/value_objects/financial_cycle.dart';
 import '../../../../core/domain/value_objects/money.dart';
 import '../../domain/entities/category.dart';
@@ -130,6 +131,13 @@ class DynamicFinanceDataSource implements FinanceDataSource {
         percentages: percentages,
         fixedAmountsCents: fixedAmountsCents,
       );
+
+  @override
+  Future<HouseSettings> getHouseSettings() => _active.getHouseSettings();
+
+  @override
+  Future<HouseSettings> updateHouseSettings(Map<String, dynamic> changes) =>
+      _active.updateHouseSettings(changes);
 
   @override
   Future<List<SavingsVault>> getSavingsVaults() => _active.getSavingsVaults();
