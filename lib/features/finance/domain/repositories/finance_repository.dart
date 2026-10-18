@@ -7,6 +7,7 @@ import '../entities/payment_method.dart';
 import '../entities/house_expense.dart';
 import '../entities/contribution.dart';
 import '../entities/financial_cycle_summary.dart';
+import '../entities/opening_inflows.dart';
 import '../entities/savings_vault.dart';
 import '../entities/third_party_receipt.dart';
 import '../entities/audit_entry.dart';
@@ -87,6 +88,9 @@ abstract class FinanceRepository {
 
   /// Saldo do que as caixinhas devolveram ao Caixa do ciclo (devoluções menos depósitos tirados dele).
   Future<Money> getVaultReturnsForCycle(FinancialCycle cycle);
+
+  /// Dinheiro do início do ciclo por origem (sobra, empréstimos pagos de volta, resgates por caixinha).
+  Future<OpeningInflows> getOpeningInflows(FinancialCycle cycle);
   /// Com [returnToCycleStart], o valor resgatado volta para o Caixa daquele ciclo.
   Future<void> withdrawFromVault({required String vaultId, required String memberId, required Money amount, required String description, DateTime? returnToCycleStart});
 

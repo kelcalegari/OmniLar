@@ -9,6 +9,7 @@ import '../../domain/entities/payment_method.dart';
 import '../../domain/entities/house_expense.dart';
 import '../../domain/entities/contribution.dart';
 import '../../domain/entities/financial_cycle_summary.dart';
+import '../../domain/entities/opening_inflows.dart';
 import '../../domain/entities/savings_vault.dart';
 import '../../domain/entities/third_party_receipt.dart';
 import '../../domain/entities/audit_entry.dart';
@@ -35,6 +36,10 @@ abstract class FinanceDataSource {
   /// Resgates de caixinha devolvidos ao Caixa deste ciclo, menos os depósitos
   /// em caixinha tirados dele.
   Future<Money> getVaultReturnsForCycle(FinancialCycle cycle);
+
+  /// O mesmo dinheiro de [getOpeningBalance], separado por origem: cada tipo
+  /// segue a regra que a casa escolheu para ele no rateio (0092).
+  Future<OpeningInflows> getOpeningInflows(FinancialCycle cycle);
   /// Resumo do ciclo. Com [expenses] e [contributions] já lidos do mesmo
   /// ciclo, reaproveita as listas em vez de buscá-las de novo.
   Future<FinancialCycleSummary> getCycleSummary(

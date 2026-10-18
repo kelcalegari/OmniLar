@@ -43,6 +43,83 @@ enum OpeningBalanceRule {
       };
 }
 
+/// Regra de cada tipo de dinheiro que já está no Caixa ou entra nele no ciclo
+/// sem ser aporte (coluna `houses.opening_inflow_rules`, 0092). O que não
+/// tiver escolha própria segue [HouseSettings.openingBalanceRule]; resgate de
+/// caixinha sem escolha fica no Caixa como folga.
+class OpeningInflowRules extends Equatable {
+  /// Sobra do ciclo anterior.
+  final OpeningBalanceRule? rolledSurplus;
+
+  /// Empréstimo do Caixa pago de volta.
+  final OpeningBalanceRule? houseLoansRepaid;
+
+  /// Resgate de caixinha: padrão da casa, para caixinhas sem escolha própria.
+  final OpeningBalanceRule? vaultWithdrawals;
+
+  /// Resgate de caixinha por caixinha (id da caixinha -> regra).
+  final Map<String, OpeningBalanceRule> vaultOverrides;
+
+  /// Entrada de fora (reservado). Sem escolha, segue a sobra do ciclo anterior.
+  final OpeningBalanceRule? thirdParty;
+
+  const OpeningInflowRules({
+    this.rolledSurplus,
+    this.houseLoansRepaid,
+    this.vaultWithdrawals,
+    this.vaultOverrides = const {},
+    this.thirdParty,
+  });
+
+  factory OpeningInflowRules.fromJson(Object? json) {
+    if (json is! Map) return const OpeningInflowRules();
+    final overrides = <String, OpeningBalanceRule>{};
+    final rawOverrides = json['vault_overrides'];
+    if (rawOverrides is Map) {
+      for (final entry in rawOverrides.entries) {
+        final rule = OpeningBalanceRule.fromDb(entry.value);
+        if (rule != null) overrides[entry.key.toString()] = rule;
+      }
+    }
+    return OpeningInflowRules(
+      rolledSurplus: OpeningBalanceRule.fromDb(json['rolled_surplus']),
+      houseLoansRepaid: OpeningBalanceRule.fromDb(json['house_loans_repaid']),
+      vaultWithdrawals: OpeningBalanceRule.fromDb(json['vault_withdrawals']),
+      vaultOverrides: overrides,
+      thirdParty: OpeningBalanceRule.fromDb(json['third_party']),
+    );
+  }
+
+  Map<String, dynamic> toJson() => {
+        'rolled_surplus': ?rolledSurplus?.dbValue,
+        'house_loans_repaid': ?houseLoansRepaid?.dbValue,
+        'vault_withdrawals': ?vaultWithdrawals?.dbValue,
+        if (vaultOverrides.isNotEmpty)
+          'vault_overrides': {for (final e in vaultOverrides.entries) e.key: e.value.dbValue},
+        'third_party': ?thirdParty?.dbValue,
+      };
+
+  bool get isEmpty =>
+      rolledSurplus == null &&
+      houseLoansRepaid == null &&
+      vaultWithdrawals == null &&
+      vaultOverrides.isEmpty &&
+      thirdParty == null;
+
+  OpeningBalanceRule? rolledSurplusRule(OpeningBalanceRule? fallback) => rolledSurplus ?? fallback;
+
+  OpeningBalanceRule? houseLoansRepaidRule(OpeningBalanceRule? fallback) => houseLoansRepaid ?? fallback;
+
+  /// Resgate nunca abate nada sem que a casa escolha.
+  OpeningBalanceRule vaultRule(String vaultId) =>
+      vaultOverrides[vaultId] ?? vaultWithdrawals ?? OpeningBalanceRule.keep;
+
+  OpeningBalanceRule? thirdPartyRule(OpeningBalanceRule? fallback) => thirdParty ?? rolledSurplusRule(fallback);
+
+  @override
+  List<Object?> get props => [rolledSurplus, houseLoansRepaid, vaultWithdrawals, vaultOverrides, thirdParty];
+}
+
 /// Configurações de planejamento e fechamento da casa (colunas de `houses`, 0091).
 class HouseSettings extends Equatable {
   static const int defaultHistoryCycles = 3;
@@ -67,12 +144,16 @@ class HouseSettings extends Equatable {
   /// Valor previsto ajustado à mão por categoria.
   final Map<String, Money> categoryOverrides;
 
+  /// Regra de cada tipo de entrada no Caixa (0092).
+  final OpeningInflowRules inflowRules;
+
   const HouseSettings({
     this.openingBalanceRule,
     this.historyCycles = defaultHistoryCycles,
     this.plannerMode = FundingEstimateMode.historicalAverage,
     this.adjustPercent = defaultAdjustPercent,
     this.categoryOverrides = const {},
+    this.inflowRules = const OpeningInflowRules(),
   });
 
   static String plannerModeToDb(FundingEstimateMode mode) => switch (mode) {
@@ -105,11 +186,15 @@ class HouseSettings extends Equatable {
       plannerMode: plannerModeFromDb(json['planner_mode']),
       adjustPercent: adjust != null && adjust >= 0 && adjust <= 50 ? adjust : defaultAdjustPercent,
       categoryOverrides: overrides,
+      inflowRules: OpeningInflowRules.fromJson(json['opening_inflow_rules']),
     );
   }
 
   /// Colunas lidas de `houses`.
-  static const String columns =
+  static const String columns = '$columnsBefore0092, opening_inflow_rules';
+
+  /// Colunas da 0091, para o banco que ainda não tem a 0092.
+  static const String columnsBefore0092 =
       'opening_balance_rule, planner_history_cycles, planner_mode, planner_adjust_percent, planner_category_overrides';
 
   static Map<String, dynamic> overridesToJson(Map<String, Money> overrides) => {
@@ -123,6 +208,7 @@ class HouseSettings extends Equatable {
     FundingEstimateMode? plannerMode,
     int? adjustPercent,
     Map<String, Money>? categoryOverrides,
+    OpeningInflowRules? inflowRules,
   }) =>
       HouseSettings(
         openingBalanceRule:
@@ -131,8 +217,10 @@ class HouseSettings extends Equatable {
         plannerMode: plannerMode ?? this.plannerMode,
         adjustPercent: adjustPercent ?? this.adjustPercent,
         categoryOverrides: categoryOverrides ?? this.categoryOverrides,
+        inflowRules: inflowRules ?? this.inflowRules,
       );
 
   @override
-  List<Object?> get props => [openingBalanceRule, historyCycles, plannerMode, adjustPercent, categoryOverrides];
+  List<Object?> get props =>
+      [openingBalanceRule, historyCycles, plannerMode, adjustPercent, categoryOverrides, inflowRules];
 }

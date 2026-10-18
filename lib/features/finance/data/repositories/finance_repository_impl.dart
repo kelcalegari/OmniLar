@@ -10,6 +10,7 @@ import '../../domain/entities/payment_method.dart';
 import '../../domain/entities/house_expense.dart';
 import '../../domain/entities/contribution.dart';
 import '../../domain/entities/financial_cycle_summary.dart';
+import '../../domain/entities/opening_inflows.dart';
 import '../../domain/repositories/finance_repository.dart';
 import '../datasources/finance_datasource.dart';
 import '../../domain/entities/savings_vault.dart';
@@ -171,6 +172,9 @@ class FinanceRepositoryImpl implements FinanceRepository {
   @override
   Future<Money> getVaultReturnsForCycle(FinancialCycle cycle) =>
       _dataSource.getVaultReturnsForCycle(cycle);
+
+  @override
+  Future<OpeningInflows> getOpeningInflows(FinancialCycle cycle) => _dataSource.getOpeningInflows(cycle);
 
   @override
   Future<void> createSavingsVault(SavingsVault vault) => _dataSource.createSavingsVault(vault);

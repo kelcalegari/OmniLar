@@ -222,6 +222,7 @@ class SupabaseSettlementDataSource implements SettlementDataSource {
     }
 
     final vaultReturns = await financeDataSource.getVaultReturnsForCycle(cycle);
+    final settings = await financeDataSource.getHouseSettings();
     final summary = engine.computeSettlement(
       cycle: cycle,
       members: members,
@@ -232,7 +233,10 @@ class SupabaseSettlementDataSource implements SettlementDataSource {
       housePixKey: house?.pixKey,
       housePixKeyHolderName: house?.pixKeyHolderName,
       deficitSplit: options?.deficitSplit ?? DeficitSplit.proportional,
-      openingBalanceRule: (await financeDataSource.getHouseSettings()).openingBalanceRule,
+      openingBalanceRule: settings.openingBalanceRule,
+      // Cada tipo de entrada no Caixa segue a sua regra (0092)
+      openingInflows: await financeDataSource.getOpeningInflows(cycle),
+      openingInflowRules: settings.inflowRules,
       deficitVaultBalance: deficitVaultBalance,
       surplusAlreadyVaulted: surplusAlreadyVaulted,
       deficitAlreadyCovered: deficitAlreadyCovered,

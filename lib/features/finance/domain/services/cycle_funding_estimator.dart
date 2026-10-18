@@ -6,6 +6,7 @@ import '../entities/cycle_funding_estimate.dart';
 import '../entities/house_expense.dart';
 import '../entities/house_member.dart';
 import '../entities/house_settings.dart';
+import '../entities/opening_inflows.dart';
 import '../entities/split_rule.dart';
 import 'exclusive_charges.dart';
 
@@ -28,6 +29,8 @@ class CycleFundingEstimator {
     List<List<HouseExpense>>? historicalExpensesByCycle,
     int adjustPercent = HouseSettings.defaultAdjustPercent,
     OpeningBalanceRule? openingBalanceRule,
+    OpeningInflows? openingInflows,
+    OpeningInflowRules openingInflowRules = const OpeningInflowRules(),
   }) {
     // A conta é a do ciclo inteiro, como no fechamento: tudo o que o ciclo custa
     // (o que já foi pago e o que ainda vence), menos a sobra que veio do ciclo
@@ -90,11 +93,32 @@ class CycleFundingEstimator {
     final totalProjectedExpenses = Money(totalProjectedCents);
 
     // 4. Necessidade de aportes no ciclo (abatendo a sobra do ciclo anterior,
-    // a menos que a casa a guarde como folga)
+    // a menos que a casa a guarde como folga). Com regra por tipo de entrada
+    // (0092), cada parte do dinheiro do Caixa segue a sua, como no fechamento.
     final hasFixedAmount = members.any((m) => (m.defaultFixedAmountCents ?? 0) > 0);
-    final balanceUsed = _balanceCountsAsFunding(openingBalanceRule, hasFixedAmount)
-        ? currentHouseBalance.cents
-        : 0;
+    final byKind = openingInflows != null && !openingInflowRules.isEmpty;
+    final balanceParts = byKind
+        ? OpeningInflowPart.split(openingInflows, openingInflowRules, openingBalanceRule)
+        : [
+            OpeningInflowPart(
+              kind: OpeningInflowKind.rolledSurplus,
+              amount: currentHouseBalance,
+              rule: openingBalanceRule,
+            ),
+          ];
+    int sumWhere(bool Function(OpeningBalanceRule? rule) test) => balanceParts
+        .where((p) => p.amount.isPositive && test(p.rule))
+        .fold<int>(0, (acc, p) => acc + p.amount.cents);
+    final balanceUsed = sumWhere((rule) => _balanceCountsAsFunding(rule, hasFixedAmount));
+    // Resgate de caixinha que entra na conta aparece junto da sobra do Caixa
+    final shownBalance = byKind
+        ? currentHouseBalance +
+            Money(balanceParts
+                .where((p) =>
+                    (p.kind == OpeningInflowKind.vaultWithdrawal || p.kind == OpeningInflowKind.thirdParty) &&
+                    _balanceCountsAsFunding(p.rule, hasFixedAmount))
+                .fold<int>(0, (acc, p) => acc + p.amount.cents))
+        : currentHouseBalance;
     final netFundingCents = (totalProjectedCents - balanceUsed)
         .clamp(0, totalProjectedCents);
     final netFundingRequired = Money(netFundingCents);
@@ -104,9 +128,13 @@ class CycleFundingEstimator {
       members: members,
       houseExpenses: houseExpenses,
       variableRemainder: Money(variableRemainderCents),
-      openingBalance: currentHouseBalance,
+      // Com valor fixo só "abater os aportes" reduz a cota; na divisão por
+      // despesa, também a sobra de quem ainda não escolheu a regra
+      fixedAbatement: Money(sumWhere((rule) => rule == OpeningBalanceRule.reduceQuotas)),
+      percentAbatement: Money(
+        sumWhere((rule) => rule == null || rule == OpeningBalanceRule.reduceQuotas),
+      ),
       contributions: currentCycleContributions,
-      openingBalanceRule: openingBalanceRule,
     );
 
     return CycleFundingEstimate(
@@ -114,7 +142,7 @@ class CycleFundingEstimator {
       mode: mode,
       fixedCommittedExpenses: fixedCommittedExpenses,
       variableCategoryEstimates: variableCategoryEstimates,
-      currentHouseBalance: currentHouseBalance,
+      currentHouseBalance: shownBalance,
       totalProjectedExpenses: totalProjectedExpenses,
       netFundingRequired: netFundingRequired,
       memberQuotes: memberQuotes,
@@ -239,9 +267,9 @@ class CycleFundingEstimator {
     required List<HouseMember> members,
     required List<HouseExpense> houseExpenses,
     required Money variableRemainder,
-    required Money openingBalance,
+    required Money fixedAbatement,
+    required Money percentAbatement,
     required List<Contribution> contributions,
-    OpeningBalanceRule? openingBalanceRule,
   }) {
     if (members.isEmpty) return const [];
 
@@ -270,12 +298,12 @@ class CycleFundingEstimator {
             : 'Valor fixo definido no perfil';
       }
       // Sobra que abate os aportes: na proporção do valor fixo de cada um
-      if (openingBalanceRule == OpeningBalanceRule.reduceQuotas && openingBalance.isPositive) {
+      if (fixedAbatement.isPositive) {
         final totalFixed = members.fold<int>(0, (acc, m) => acc + (m.defaultFixedAmountCents ?? 0));
         if (totalFixed > 0) {
           final shares = SplitRule.percentage({
             for (final m in members) m.id: (m.defaultFixedAmountCents ?? 0) * 100 / totalFixed,
-          }).calculateAllocations(totalAmount: openingBalance, memberIds: memberIds);
+          }).calculateAllocations(totalAmount: fixedAbatement, memberIds: memberIds);
           for (final m in members) {
             final cents = recommendedMap[m.id]!.cents - (shares[m.id]?.cents ?? 0);
             recommendedMap[m.id] = Money(cents > 0 ? cents : 0);
@@ -323,9 +351,8 @@ class CycleFundingEstimator {
         memberIds: memberIds,
       ));
       // A sobra abate as cotas, a menos que a casa a guarde no Caixa
-      final abates = openingBalanceRule == null || openingBalanceRule == OpeningBalanceRule.reduceQuotas;
       final openingShares = defaultRule.calculateAllocations(
-        totalAmount: abates && openingBalance.isPositive ? openingBalance : const Money.zero(),
+        totalAmount: percentAbatement,
         memberIds: memberIds,
       );
 

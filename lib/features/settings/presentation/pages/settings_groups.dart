@@ -235,7 +235,11 @@ extension _SettingsGroupViews on _SettingsPageState {
 
   Widget _planningPanel(BuildContext context, FinanceState financeState) {
     final settings = financeState.houseSettings;
-    final rule = settings.openingBalanceRule;
+    final inflowRules = settings.inflowRules;
+    final vaultOverrides = inflowRules.vaultOverrides.keys
+        .where((id) => financeState.savingsVaults.any((v) => v.id == id))
+        .length;
+    final vaultDefault = inflowRules.vaultWithdrawals ?? OpeningBalanceRule.keep;
     return _panel(
       context,
       title: 'Planejamento e Fechamento',
@@ -243,8 +247,18 @@ extension _SettingsGroupViews on _SettingsPageState {
       onAction: () => _showPlanningSettingsDialog(context, financeState),
       children: [
         _line(
-          title: 'Sobra no Caixa no início do ciclo',
-          value: rule?.label ?? 'Padrão',
+          title: 'Sobra do ciclo anterior',
+          value: inflowRules.rolledSurplusRule(settings.openingBalanceRule)?.label ?? 'Padrão',
+        ),
+        _line(
+          title: 'Empréstimo do Caixa pago de volta',
+          value: inflowRules.houseLoansRepaidRule(settings.openingBalanceRule)?.label ?? 'Padrão',
+        ),
+        _line(
+          title: 'Resgate de caixinha',
+          value: vaultOverrides == 0
+              ? vaultDefault.label
+              : '${vaultDefault.label} (+$vaultOverrides com regra própria)',
         ),
         _line(
           title: 'Média dos gastos variáveis',
@@ -264,7 +278,16 @@ extension _SettingsGroupViews on _SettingsPageState {
     final me = financeState.members.where((m) => m.id == currentUserId).firstOrNull;
     final isAdmin = me?.role == 'owner' || me?.role == 'admin';
     final usesFixed = financeState.members.any((m) => (m.defaultFixedAmountCents ?? 0) > 0);
-    OpeningBalanceRule? rule = settings.openingBalanceRule;
+    // Cada tipo de entrada no Caixa com a sua regra (0092). Sem escolha
+    // própria, sobra e empréstimo seguem a regra única de antes.
+    final savedRules = settings.inflowRules;
+    final rolledBefore = savedRules.rolledSurplusRule(settings.openingBalanceRule);
+    final loansBefore = savedRules.houseLoansRepaidRule(settings.openingBalanceRule);
+    OpeningBalanceRule? rolledRule = rolledBefore;
+    OpeningBalanceRule? loansRule = loansBefore;
+    OpeningBalanceRule vaultDefault = savedRules.vaultWithdrawals ?? OpeningBalanceRule.keep;
+    final vaults = financeState.savingsVaults;
+    final vaultOverrides = Map<String, OpeningBalanceRule>.of(savedRules.vaultOverrides);
     int historyCycles = settings.historyCycles;
     int adjustPercent = settings.adjustPercent;
     bool isSaving = false;
@@ -273,17 +296,50 @@ extension _SettingsGroupViews on _SettingsPageState {
       context: context,
       builder: (dialogCtx) => StatefulBuilder(
         builder: (context, setDialogState) {
-          Widget ruleOption(OpeningBalanceRule option) => ListTile(
-                contentPadding: EdgeInsets.zero,
-                dense: true,
-                enabled: isAdmin,
-                leading: Icon(
-                  rule == option ? Icons.radio_button_checked_rounded : Icons.radio_button_off_rounded,
-                  color: rule == option ? AppColors.primary : Colors.grey,
-                ),
-                title: Text(option.label, style: const TextStyle(fontWeight: FontWeight.w600)),
-                subtitle: Text(option.description, style: const TextStyle(fontSize: 12)),
-                onTap: () => setDialogState(() => rule = option),
+          final options = [
+            OpeningBalanceRule.reduceQuotas,
+            if (usesFixed) OpeningBalanceRule.coverExcess,
+            OpeningBalanceRule.keep,
+          ];
+          // Escolha de uma regra: chips e, embaixo, o que a escolhida faz
+          Widget ruleChoice(
+            OpeningBalanceRule? selected,
+            ValueChanged<OpeningBalanceRule> onSelected, {
+            String? defaultHint,
+          }) =>
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Wrap(
+                    spacing: 6,
+                    children: [
+                      for (final option in options)
+                        ChoiceChip(
+                          label: Text(option.label),
+                          selected: selected == option,
+                          onSelected: isAdmin ? (_) => setDialogState(() => onSelected(option)) : null,
+                        ),
+                    ],
+                  ),
+                  if (selected != null && options.contains(selected))
+                    Text(selected.description, style: TextStyle(fontSize: 12, color: Colors.grey.shade600))
+                  else if (defaultHint != null)
+                    Text(defaultHint, style: const TextStyle(fontSize: 12, color: Colors.teal)),
+                ],
+              );
+
+          final defaultHint = usesFixed
+              ? 'Hoje (padrão): cobre só o que passar do valor fixo.'
+              : 'Hoje (padrão): o planejador abate, mas o fechamento cobra a parte inteira e deixa o dinheiro no Caixa.';
+          const vaultWarning = Text(
+            'A caixinha diminui e ninguém repõe o que saiu dela.',
+            style: TextStyle(fontSize: 12, color: AppColors.accent),
+          );
+          bool lowersVault(OpeningBalanceRule? r) =>
+              r == OpeningBalanceRule.reduceQuotas || r == OpeningBalanceRule.coverExcess;
+          Widget kindTitle(String text) => Padding(
+                padding: const EdgeInsets.only(top: 12, bottom: 4),
+                child: Text(text, style: const TextStyle(fontWeight: FontWeight.w600)),
               );
 
           return AlertDialog(
@@ -297,32 +353,61 @@ extension _SettingsGroupViews on _SettingsPageState {
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   const Text(
-                    'Sobra no Caixa no início do ciclo',
+                    'Dinheiro que já está no Caixa',
                     style: TextStyle(fontWeight: FontWeight.bold),
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    'O que a sobra do ciclo anterior (e o que voltou ao Caixa de empréstimos) faz no aporte de cada morador. Vale no planejador e no fechamento.',
+                    'O que cada tipo de dinheiro que entrou no Caixa sem ser aporte faz no aporte de cada morador. Vale no planejador e no fechamento.',
                     style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
                   ),
                   if (!isAdmin)
                     const Padding(
                       padding: EdgeInsets.only(top: 4),
                       child: Text(
-                        'Só administradores mudam esta regra.',
+                        'Só administradores mudam estas regras.',
                         style: TextStyle(fontSize: 12, color: AppColors.accent),
                       ),
                     ),
-                  ruleOption(OpeningBalanceRule.reduceQuotas),
-                  if (usesFixed) ruleOption(OpeningBalanceRule.coverExcess),
-                  ruleOption(OpeningBalanceRule.keep),
-                  if (rule == null)
-                    Text(
-                      usesFixed
-                          ? 'Hoje (padrão): a sobra cobre só o que passar do valor fixo.'
-                          : 'Hoje (padrão): o planejador abate a sobra, mas o fechamento cobra a parte inteira e deixa a sobra no Caixa.',
-                      style: const TextStyle(fontSize: 12, color: Colors.teal),
+                  kindTitle('Sobra do ciclo anterior'),
+                  ruleChoice(rolledRule, (r) => rolledRule = r, defaultHint: defaultHint),
+                  kindTitle('Empréstimo do Caixa pago de volta'),
+                  ruleChoice(loansRule, (r) => loansRule = r, defaultHint: defaultHint),
+                  kindTitle('Resgate de caixinha'),
+                  ruleChoice(vaultDefault, (r) => vaultDefault = r),
+                  if (lowersVault(vaultDefault)) vaultWarning,
+                  for (final vault in vaults) ...[
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(vault.name, style: const TextStyle(fontSize: 13), overflow: TextOverflow.ellipsis),
+                        ),
+                        DropdownButton<OpeningBalanceRule?>(
+                          value: options.contains(vaultOverrides[vault.id]) ? vaultOverrides[vault.id] : null,
+                          isDense: true,
+                          // Sem regra própria o botão mostra a dica
+                          hint: const Text('Igual ao padrão'),
+                          disabledHint: Text(vaultOverrides[vault.id]?.label ?? 'Igual ao padrão'),
+                          style: Theme.of(context).textTheme.bodyMedium,
+                          onChanged: isAdmin
+                              ? (r) => setDialogState(() {
+                                    if (r == null) {
+                                      vaultOverrides.remove(vault.id);
+                                    } else {
+                                      vaultOverrides[vault.id] = r;
+                                    }
+                                  })
+                              : null,
+                          items: [
+                            const DropdownMenuItem(value: null, child: Text('Igual ao padrão')),
+                            for (final option in options)
+                              DropdownMenuItem(value: option, child: Text(option.label)),
+                          ],
+                        ),
+                      ],
                     ),
+                    if (lowersVault(vaultOverrides[vault.id]) && !lowersVault(vaultDefault)) vaultWarning,
+                  ],
                   const Divider(height: 24),
                   const Text('Média dos gastos variáveis', style: TextStyle(fontWeight: FontWeight.bold)),
                   const SizedBox(height: 4),
@@ -376,9 +461,18 @@ extension _SettingsGroupViews on _SettingsPageState {
                         setDialogState(() => isSaving = true);
                         final messenger = ScaffoldMessenger.of(context);
                         final navigator = Navigator.of(dialogCtx);
+                        // Só o que mudou ganha escolha própria; o resto segue como estava
+                        final rules = OpeningInflowRules(
+                          rolledSurplus: rolledRule != rolledBefore ? rolledRule : savedRules.rolledSurplus,
+                          houseLoansRepaid: loansRule != loansBefore ? loansRule : savedRules.houseLoansRepaid,
+                          vaultWithdrawals: vaultDefault != (savedRules.vaultWithdrawals ?? OpeningBalanceRule.keep)
+                              ? vaultDefault
+                              : savedRules.vaultWithdrawals,
+                          vaultOverrides: vaultOverrides,
+                          thirdParty: savedRules.thirdParty,
+                        );
                         final ok = await context.read<FinanceCubit>().updateHouseSettings(
-                              openingBalanceRule:
-                                  isAdmin && rule != settings.openingBalanceRule ? rule : null,
+                              inflowRules: isAdmin && rules != savedRules ? rules : null,
                               historyCycles: historyCycles != settings.historyCycles ? historyCycles : null,
                               adjustPercent: adjustPercent != settings.adjustPercent ? adjustPercent : null,
                             );

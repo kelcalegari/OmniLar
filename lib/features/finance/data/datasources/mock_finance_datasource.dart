@@ -9,6 +9,7 @@ import '../../domain/entities/house_expense_item.dart';
 import '../../domain/entities/contribution.dart';
 import '../../domain/entities/split_rule.dart';
 import '../../domain/entities/financial_cycle_summary.dart';
+import '../../domain/entities/opening_inflows.dart';
 import '../../domain/entities/savings_vault.dart';
 import '../../domain/entities/third_party_receipt.dart';
 import '../../domain/entities/audit_entry.dart';
@@ -435,6 +436,21 @@ class MockFinanceDataSource implements FinanceDataSource {
     return Money(cents);
   }
 
+  /// No modo demo só há os resgates: a sobra do ciclo anterior fica com o
+  /// fechamento de demonstração.
+  @override
+  Future<OpeningInflows> getOpeningInflows(FinancialCycle cycle) async {
+    final cents = <String, int>{};
+    for (final t in _savingsTransactions) {
+      if (t.cycleStartDate == null || !cycle.contains(t.cycleStartDate!)) continue;
+      cents[t.vaultId] = (cents[t.vaultId] ?? 0) + (t.isWithdraw ? t.amount.cents : -t.amount.cents);
+    }
+    return OpeningInflows(
+      vaultWithdrawalsByVault: {for (final e in cents.entries) e.key: Money(e.value)},
+      vaultNames: {for (final v in _savingsVaults) v.id: v.name},
+    );
+  }
+
   @override
   Future<List<Contribution>> getContributionsForCycle(FinancialCycle cycle) async {
     return _contributions.where((c) => cycle.contains(c.date)).toList()
@@ -487,6 +503,7 @@ class MockFinanceDataSource implements FinanceDataSource {
       memberExpensesPaid: memberPaid,
       vaultReturns: await getVaultReturnsForCycle(cycle),
       houseLoansFunded: loansFunded,
+      openingInflows: await getOpeningInflows(cycle),
     );
   }
 
