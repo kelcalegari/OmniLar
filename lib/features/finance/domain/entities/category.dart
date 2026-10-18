@@ -1,5 +1,6 @@
 import 'package:equatable/equatable.dart';
 
+import 'budget_alert_stages.dart';
 import 'category_default_split.dart';
 
 class ExpenseCategory extends Equatable {
@@ -17,6 +18,9 @@ class ExpenseCategory extends Equatable {
   /// padrão, vale a divisão da casa.
   final CategoryDefaultSplit? defaultSplit;
 
+  /// Estágios do alerta de orçamento só desta categoria (0099). Null: vale o da casa.
+  final BudgetAlertStages? budgetAlertStages;
+
   const ExpenseCategory({
     required this.id,
     required this.name,
@@ -25,6 +29,7 @@ class ExpenseCategory extends Equatable {
     this.ownerMemberId,
     this.isVariableSpend,
     this.defaultSplit,
+    this.budgetAlertStages,
   });
 
   bool get hasOwner => ownerMemberId != null;
@@ -34,5 +39,5 @@ class ExpenseCategory extends Equatable {
   bool get countsAsVariableSpend => isVariableSpend ?? false;
 
   @override
-  List<Object?> get props => [id, name, icon, colorHex, ownerMemberId, isVariableSpend, defaultSplit];
+  List<Object?> get props => [id, name, icon, colorHex, ownerMemberId, isVariableSpend, defaultSplit, budgetAlertStages];
 }

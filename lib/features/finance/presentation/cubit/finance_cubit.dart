@@ -20,6 +20,7 @@ import '../../domain/services/cycle_funding_estimator.dart';
 import '../../domain/entities/house_member.dart';
 import '../../domain/entities/house_initial_balance.dart';
 import '../../domain/entities/closing_defaults.dart';
+import '../../domain/entities/budget_alert_stages.dart';
 import '../../domain/entities/folego_params.dart';
 import '../../domain/entities/house_settings.dart';
 import '../../domain/entities/member_settings.dart';
@@ -425,6 +426,7 @@ class FinanceCubit extends Cubit<FinanceState> {
     ClosingDefaults? closingDefaults,
     NewMemberSplitPolicy? newMemberSplitPolicy,
     FolegoParams? folegoParams,
+    BudgetAlertStages? budgetAlertStages,
     int? historyCycles,
     int? adjustPercent,
   }) async {
@@ -438,6 +440,8 @@ class FinanceCubit extends Cubit<FinanceState> {
       'new_member_split_policy': ?newMemberSplitPolicy?.dbValue,
       // Parâmetros do Fôlego (0098), objeto inteiro
       'folego_params': ?folegoParams?.toJson(),
+      // Estágios do alerta de orçamento (0099), lista inteira
+      'budget_alert_stages': ?budgetAlertStages?.toJson(),
       'planner_history_cycles': ?historyCycles,
       'planner_adjust_percent': ?adjustPercent,
     };
