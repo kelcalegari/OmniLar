@@ -27,8 +27,12 @@
         "headers": [{ "key": "Cache-Control", "value": "no-cache" }]
       },
       {
-        "source": "/{assets,canvaskit,icons}/**",
+        "source": "/{assets,canvaskit}/**",
         "headers": [{ "key": "Cache-Control", "value": "public, max-age=3600" }]
+      },
+      {
+        "source": "/{icons/**,favicon.png,apple-touch-icon*.png}",
+        "headers": [{ "key": "Cache-Control", "value": "no-cache" }]
       }
     ]
   }
