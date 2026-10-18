@@ -4,6 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:omni_lar/core/domain/value_objects/money.dart';
 import 'package:omni_lar/features/finance/data/datasources/mock_finance_datasource.dart';
 import 'package:omni_lar/features/finance/data/repositories/finance_repository_impl.dart';
+import 'package:omni_lar/features/finance/domain/entities/card_invoice.dart';
 import 'package:omni_lar/features/finance/domain/entities/house_expense.dart';
 import 'package:omni_lar/features/finance/domain/entities/split_rule.dart';
 import 'package:omni_lar/features/finance/domain/entities/third_party_receipt.dart';
@@ -214,6 +215,41 @@ void main() {
       );
       expect(await vaultBalance('vault_reserva'), held);
       expect(cubit.state.heldThirdPartyReceipts.single.id, receipt.id);
+    });
+  });
+
+  group('Fatura importada sem compra da casa', () {
+    CardInvoice invoice(DateTime due, {bool importOnly = false, DateTime? paidAt}) => CardInvoice(
+          paymentMethodId: 'pm_card_carlos',
+          dueDate: due,
+          total: Money(importOnly ? 19200 : 3200),
+          purchasesCount: importOnly ? 0 : 1,
+          paidAt: paidAt,
+          importOnly: importOnly,
+        );
+
+    test('Aparece para pagar quando o vencimento não tem compra da casa', () {
+      final open = CardInvoice.withImported(
+        [invoice(DateTime(2026, 12, 5))],
+        [invoice(DateTime(2026, 11, 5), importOnly: true), invoice(DateTime(2026, 12, 5), importOnly: true)],
+        paid: false,
+      );
+
+      // O vencimento com compra da casa continua sendo o das compras
+      expect(open.map((i) => (i.dueDate, i.importOnly)), [
+        (DateTime(2026, 11, 5), true),
+        (DateTime(2026, 12, 5), false),
+      ]);
+    });
+
+    test('Paga, entra na lista de pagamentos registrados da mais recente para a mais antiga', () {
+      final paid = CardInvoice.withImported(
+        [invoice(DateTime(2026, 10, 5), paidAt: DateTime(2026, 10, 4))],
+        [invoice(DateTime(2026, 11, 5), importOnly: true, paidAt: DateTime(2026, 11, 4))],
+        paid: true,
+      );
+
+      expect(paid.map((i) => i.dueDate), [DateTime(2026, 11, 5), DateTime(2026, 10, 5)]);
     });
   });
 

@@ -309,8 +309,10 @@ class _CardInvoicePaymentSheetState extends State<CardInvoicePaymentSheet> {
                             style: const TextStyle(fontWeight: FontWeight.w600),
                           ),
                           subtitle: Text(
-                            '${invoice.purchasesCount} ${invoice.purchasesCount == 1 ? 'compra' : 'compras'} • '
-                            'hoje conta no ciclo ${_cycleOf(invoice.dueDate).label}',
+                            invoice.importOnly
+                                ? 'Fatura importada sem compra da casa: registre quem pagou'
+                                : '${invoice.purchasesCount} ${invoice.purchasesCount == 1 ? 'compra' : 'compras'} • '
+                                    'hoje conta no ciclo ${_cycleOf(invoice.dueDate).label}',
                             style: const TextStyle(fontSize: 12),
                           ),
                           onTap: _busy ? null : () => setState(() => _selected = invoice),
@@ -380,7 +382,7 @@ class _CardInvoicePaymentSheetState extends State<CardInvoicePaymentSheet> {
                           ),
                           subtitle: Text(
                             'Paga em ${_dayFormat.format(invoice.paidAt!)} • '
-                            'conta no ciclo ${_cycleOf(invoice.paidAt!).label}',
+                            '${invoice.importOnly ? 'fatura importada sem compra da casa' : 'conta no ciclo ${_cycleOf(invoice.paidAt!).label}'}',
                             style: const TextStyle(fontSize: 12),
                           ),
                           trailing: TextButton(

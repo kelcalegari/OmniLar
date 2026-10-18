@@ -12,12 +12,17 @@ class CardInvoice extends Equatable {
   /// Dia em que o pagamento da fatura foi registrado (null = em aberto).
   final DateTime? paidAt;
 
+  /// Fatura importada sem nenhuma compra da casa (tudo pessoal, de outro
+  /// morador ou de terceiros): [total] é o do arquivo.
+  final bool importOnly;
+
   const CardInvoice({
     required this.paymentMethodId,
     required this.dueDate,
     required this.total,
     required this.purchasesCount,
     this.paidAt,
+    this.importOnly = false,
   });
 
   bool get isPaid => paidAt != null;
@@ -61,6 +66,24 @@ class CardInvoice extends Equatable {
       _group(paymentMethodId, expenses, paid: false)
         ..sort((a, b) => a.dueDate.compareTo(b.dueDate));
 
+  /// Junta a [invoices] as faturas importadas sem compra da casa ([imported]),
+  /// as de um vencimento que ainda não está na lista. Ordena como [paid] pede:
+  /// em aberto, a mais próxima de vencer primeiro; pagas, a mais recente.
+  static List<CardInvoice> withImported(
+    List<CardInvoice> invoices,
+    Iterable<CardInvoice> imported, {
+    required bool paid,
+  }) {
+    final known = {for (final i in invoices) _day(i.dueDate)};
+    final merged = [
+      ...invoices,
+      for (final i in imported)
+        if (known.add(_day(i.dueDate))) i,
+    ];
+    return merged
+      ..sort((a, b) => paid ? b.dueDate.compareTo(a.dueDate) : a.dueDate.compareTo(b.dueDate));
+  }
+
   /// Faturas de [paymentMethodId] com pagamento registrado, da mais recente para a mais antiga.
   static List<CardInvoice> groupPaidInvoices(
     String paymentMethodId,
@@ -70,7 +93,7 @@ class CardInvoice extends Equatable {
         ..sort((a, b) => b.dueDate.compareTo(a.dueDate));
 
   @override
-  List<Object?> get props => [paymentMethodId, dueDate, total, purchasesCount, paidAt];
+  List<Object?> get props => [paymentMethodId, dueDate, total, purchasesCount, paidAt, importOnly];
 }
 
 /// Código do boleto da fatura de um cartão (cartão + vencimento), guardado

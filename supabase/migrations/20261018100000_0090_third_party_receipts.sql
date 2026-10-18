@@ -21,6 +21,13 @@
 --   - import_lines.split_destination ganha 'third_party' ("Pago por
 --     terceiros"): a parte da fatura que outros pagaram fica no histórico da
 --     importação sem virar despesa.
+--   - Fatura importada sem nenhuma compra da casa (tudo pessoal, de outro
+--     morador ou de terceiros) não aparecia para pagar: a fatura do app é o
+--     grupo das compras da casa. Agora import_batches guarda o pagamento
+--     (invoice_paid_at, invoice_paid_by_house), que pay_card_invoice grava e
+--     undo_card_invoice_payment limpa, e o app lista a fatura importada ainda
+--     sem pagamento. Pela Casa, os gastos pessoais e as dívidas de outros
+--     moradores continuam virando dívida com o Caixa (0055).
 -- ==============================================================================
 
 create table if not exists public.third_party_receipts (
@@ -347,3 +354,179 @@ alter table public.import_lines drop constraint if exists import_lines_split_des
 alter table public.import_lines
   add constraint import_lines_split_destination_check
   check (split_destination in ('house', 'p2p_loan', 'personal', 'ignored', 'personal_ignored', 'third_party'));
+
+-- 6. Pagamento guardado na fatura importada
+alter table public.import_batches
+  add column if not exists invoice_paid_at timestamptz,
+  add column if not exists invoice_paid_by_house boolean;
+
+-- Faturas importadas já pagas antes desta migration: o dia vem das compras
+-- pagas ou, sem compra da casa, do pagamento pelo Caixa
+update public.import_batches b
+set invoice_paid_at = coalesce(
+      (select max(e.paid_at) from public.house_expenses e
+       where e.house_id = b.house_id
+         and e.payment_method_id = b.payment_method_id
+         and e.due_date = b.invoice_due_date
+         and e.deleted_at is null
+         and e.paid_at is not null),
+      b.house_paid_at),
+    invoice_paid_by_house = b.house_paid_at is not null
+where b.invoice_due_date is not null
+  and b.status = 'confirmed'
+  and b.invoice_paid_at is null
+  and (b.house_paid_at is not null or exists (
+    select 1 from public.house_expenses e
+    where e.house_id = b.house_id
+      and e.payment_method_id = b.payment_method_id
+      and e.due_date = b.invoice_due_date
+      and e.deleted_at is null
+      and e.paid_at is not null));
+
+create or replace function public.pay_card_invoice(
+  p_payment_method_id uuid,
+  p_due_date date,
+  p_paid_at timestamptz,
+  p_paid_by_house boolean default false
+)
+returns integer
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_house_id uuid;
+  v_timezone text;
+  v_owner_id uuid;
+  v_paid_on date;
+  v_count integer;
+  v_by_house boolean;
+begin
+  if auth.uid() is null then
+    raise exception 'Usuário precisa estar autenticado.';
+  end if;
+  if p_due_date is null or p_paid_at is null then
+    raise exception 'Informe o vencimento da fatura e o dia do pagamento.';
+  end if;
+
+  select pm.house_id, h.timezone, pm.owner_member_id into v_house_id, v_timezone, v_owner_id
+  from public.payment_methods pm
+  join public.houses h on h.id = pm.house_id
+  where pm.id = p_payment_method_id;
+  if not found or not public.is_house_member(v_house_id) then
+    raise exception 'Forma de pagamento não encontrada nesta casa.';
+  end if;
+
+  -- Nem o ciclo de onde as compras saem nem o de destino podem estar fechados
+  v_paid_on := (p_paid_at at time zone v_timezone)::date;
+  if public.is_date_in_closed_cycle(v_house_id, p_due_date)
+     or public.is_date_in_closed_cycle(v_house_id, v_paid_on) then
+    raise exception 'O ciclo já foi fechado. Reabra esse ciclo no Fechamento para alterar o pagamento desta fatura.';
+  end if;
+
+  -- Cartão sem dono só pode ter sido pago pelo Caixa
+  v_by_house := coalesce(p_paid_by_house, false) or v_owner_id is null;
+
+  update public.house_expenses
+  set status = 'paid',
+      paid_at = p_paid_at,
+      paid_out_of_pocket = not v_by_house
+  where house_id = v_house_id
+    and payment_method_id = p_payment_method_id
+    and due_date = p_due_date
+    and deleted_at is null
+    and settled_at is null
+    and paid_at is null
+    and project_id is null
+    and not is_recurring;
+  get diagnostics v_count = row_count;
+
+  if v_by_house then
+    perform public.apply_invoice_paid_by_house(v_house_id, p_payment_method_id, p_due_date, p_paid_at);
+  end if;
+
+  -- A fatura importada guarda o pagamento, mesmo sem compra da casa (0090)
+  update public.import_batches
+  set invoice_paid_at = p_paid_at,
+      invoice_paid_by_house = v_by_house
+  where house_id = v_house_id
+    and payment_method_id = p_payment_method_id
+    and invoice_due_date = p_due_date
+    and status = 'confirmed';
+
+  return v_count;
+end;
+$$;
+
+create or replace function public.undo_card_invoice_payment(
+  p_payment_method_id uuid,
+  p_due_date date
+)
+returns integer
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_house_id uuid;
+  v_timezone text;
+  v_count integer;
+begin
+  if auth.uid() is null then
+    raise exception 'Usuário precisa estar autenticado.';
+  end if;
+  if p_due_date is null then
+    raise exception 'Informe o vencimento da fatura.';
+  end if;
+
+  select pm.house_id, h.timezone into v_house_id, v_timezone
+  from public.payment_methods pm
+  join public.houses h on h.id = pm.house_id
+  where pm.id = p_payment_method_id;
+  if not found or not public.is_house_member(v_house_id) then
+    raise exception 'Forma de pagamento não encontrada nesta casa.';
+  end if;
+
+  if public.is_date_in_closed_cycle(v_house_id, p_due_date)
+     or exists (
+       select 1 from public.house_expenses e
+       where e.house_id = v_house_id
+         and e.payment_method_id = p_payment_method_id
+         and e.due_date = p_due_date
+         and e.deleted_at is null
+         and e.project_id is null
+         and not e.is_recurring
+         and e.paid_at is not null
+         and (e.settled_at is not null
+              or public.is_date_in_closed_cycle(v_house_id, (e.paid_at at time zone v_timezone)::date))
+     ) then
+    raise exception 'O ciclo já foi fechado. Reabra esse ciclo no Fechamento para alterar o pagamento desta fatura.';
+  end if;
+
+  perform public.revert_invoice_paid_by_house(v_house_id, p_payment_method_id, p_due_date);
+
+  update public.house_expenses
+  set status = 'pending',
+      paid_at = null,
+      paid_out_of_pocket = false
+  where house_id = v_house_id
+    and payment_method_id = p_payment_method_id
+    and due_date = p_due_date
+    and deleted_at is null
+    and settled_at is null
+    and paid_at is not null
+    and project_id is null
+    and not is_recurring;
+  get diagnostics v_count = row_count;
+
+  -- A fatura importada volta a ficar em aberto (0090)
+  update public.import_batches
+  set invoice_paid_at = null,
+      invoice_paid_by_house = null
+  where house_id = v_house_id
+    and payment_method_id = p_payment_method_id
+    and invoice_due_date = p_due_date;
+
+  return v_count;
+end;
+$$;

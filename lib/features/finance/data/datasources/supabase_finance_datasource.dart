@@ -1475,12 +1475,52 @@ class SupabaseFinanceDataSource implements FinanceDataSource {
           .isFilter('paid_at', null)
           .not('due_date', 'is', null);
 
-      return CardInvoice.groupOpenInvoices(
-        paymentMethodId,
-        rows.map((r) => _mapRowToHouseExpense(r)),
+      return CardInvoice.withImported(
+        CardInvoice.groupOpenInvoices(
+          paymentMethodId,
+          rows.map((r) => _mapRowToHouseExpense(r)),
+        ),
+        await _importedInvoices(paymentMethodId, paid: false),
+        paid: false,
       );
     } catch (e) {
       throw ServerFailure('Erro ao buscar faturas do cartão: $e');
+    }
+  }
+
+  /// Faturas importadas do cartão (0090), para as que não têm compra da casa
+  /// também aparecerem para pagar. Sem a coluna no banco, nenhuma.
+  Future<List<CardInvoice>> _importedInvoices(
+    String paymentMethodId, {
+    required bool paid,
+    DateTime? since,
+  }) async {
+    try {
+      var query = client
+          .from('import_batches')
+          .select('invoice_due_date, total_cents, invoice_paid_at')
+          .eq('house_id', _houseId)
+          .eq('payment_method_id', paymentMethodId)
+          .eq('status', 'confirmed')
+          .not('invoice_due_date', 'is', null);
+      query = paid ? query.not('invoice_paid_at', 'is', null) : query.isFilter('invoice_paid_at', null);
+      if (since != null) query = query.gte('invoice_due_date', _dateOnly(since));
+      final rows = await query;
+      return [
+        for (final r in rows)
+          CardInvoice(
+            paymentMethodId: paymentMethodId,
+            dueDate: DateTime.parse(r['invoice_due_date'] as String),
+            total: Money((r['total_cents'] as num?)?.toInt() ?? 0),
+            purchasesCount: 0,
+            paidAt: r['invoice_paid_at'] == null
+                ? null
+                : DateTime.parse(r['invoice_paid_at'] as String).toLocal(),
+            importOnly: true,
+          ),
+      ];
+    } catch (_) {
+      return const [];
     }
   }
 
@@ -1520,9 +1560,13 @@ class SupabaseFinanceDataSource implements FinanceDataSource {
           .not('paid_at', 'is', null)
           .gte('due_date', since.toIso8601String().split('T')[0]);
 
-      return CardInvoice.groupPaidInvoices(
-        paymentMethodId,
-        rows.map((r) => _mapRowToHouseExpense(r)),
+      return CardInvoice.withImported(
+        CardInvoice.groupPaidInvoices(
+          paymentMethodId,
+          rows.map((r) => _mapRowToHouseExpense(r)),
+        ),
+        await _importedInvoices(paymentMethodId, paid: true, since: since),
+        paid: true,
       );
     } catch (e) {
       throw ServerFailure('Erro ao buscar faturas pagas do cartão: $e');

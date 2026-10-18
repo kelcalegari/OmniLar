@@ -158,7 +158,8 @@ O dono seguiu todas as recomendações (⭐) da lista de 15/10. O que foi feito,
 - **Pelo extrato da conta da Casa:** a entrada (Pix recebido) oferece "Repasse de terceiros (guardar em <caixinha>)".
 - **Pela fatura:** dividir a linha (32 + 160) e marcar a parte dos outros como "Pago por terceiros": não vira despesa nem regra e aparece no total "Pago por terceiros".
 - **Pagar a fatura:** o pagamento lista os repasses guardados do cartão (marcados) e os sem cartão (desmarcados). Pela Casa, o valor sai da caixinha pelo banco; pelo titular, a tela avisa "Repasse R$ X a <titular>". Desfazer o pagamento devolve o repasse à caixinha.
-- **Sem compra da casa na fatura** (tudo pessoal ou de terceiros), não há fatura para pagar no app: usar o menu do repasse › "Usar na fatura".
+- **Fatura importada sem compra da casa** (tudo pessoal, de outro morador ou de terceiros): aparece em Ajustes › Formas de pagamento › cartão › Pagamento da fatura como "Fatura importada sem compra da casa". Pagando pela Casa, os gastos pessoais viram dívida com o Caixa (0055) e os repasses marcados saem da caixinha; desfazer limpa o pagamento.
+- **Repasse sem fatura no app:** o menu do repasse › "Usar na fatura" tira o valor da caixinha.
 
 ### Ajustes de 17/10 (na `main`, no site e no APK desde 17/10/2026)
 - **Busca nos lançamentos:** em "Gastos do Ciclo", buscar por nome, categoria, quem pagou, forma de pagamento ou valor ("312,40"); no computador, `Ctrl + F` leva ao campo.
