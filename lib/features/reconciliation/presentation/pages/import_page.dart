@@ -194,6 +194,8 @@ class _ImportPageState extends State<ImportPage> {
   PaymentMethod? _sourceOf(FinanceState state) {
     final sources = state.paymentMethods.where(_canImport).toList();
     return sources.where((p) => p.id == _sourceId).firstOrNull ??
+        // Cartão ou conta que a casa escolheu abrir (0100)
+        sources.where((p) => p.id == state.houseSettings.importDefaults.paymentMethodId).firstOrNull ??
         (sources.length == 1 ? sources.first : null);
   }
 
@@ -390,6 +392,7 @@ class _ImportPageState extends State<ImportPage> {
       session.source,
       _finance.state.paymentMethods,
       memberNames: {for (final m in _finance.state.members) m.id: m.name.split(' ').first},
+      usualPayerId: session.source.usualInvoicePayerId,
     );
     var byHouse = options.first.byHouse;
     if (options.length > 1) {
@@ -493,7 +496,12 @@ class _ImportPageState extends State<ImportPage> {
   }) async {
     final currentUserId = sl<AuthRepository>().currentUser?.id;
     final members = _finance.state.members;
-    final payer = source.ownerMemberId ??
+    // Quem costuma pagar a fatura (0100) abre como pagador; trocar na tela vale mais
+    final usualPayer = members.any((m) => m.id == source.usualInvoicePayerId)
+        ? source.usualInvoicePayerId
+        : null;
+    final payer = usualPayer ??
+        source.ownerMemberId ??
         currentUserId ??
         (members.isNotEmpty ? members.first.id : '');
 
@@ -509,6 +517,8 @@ class _ImportPageState extends State<ImportPage> {
         fileName: fileName,
         lines: lines,
         payerMemberId: payer,
+        matching: state.houseSettings.importMatching,
+        defaults: state.houseSettings.importDefaults,
       ).withRules(
         rules,
         memberIds: {for (final m in state.members) m.id},
@@ -584,7 +594,9 @@ class _ImportPageState extends State<ImportPage> {
     if (!mounted) return;
     // A revisão pode ter mudado enquanto a busca corria: parte da atual
     final current = _session ?? session;
+    final houseSettings = _finance.state.houseSettings;
     var updated = current
+        .withParams(matching: houseSettings.importMatching, defaults: houseSettings.importDefaults)
         .withImportedSignatures(imported)
         .withExpenses(byId.values.toList())
         .withExtraOptions(
@@ -598,6 +610,7 @@ class _ImportPageState extends State<ImportPage> {
             history: _history,
             loans: p2pCubit.state.allLoans,
             vaults: _finance.state.savingsVaults,
+            matching: houseSettings.importMatching,
           ),
         );
     if (suggestCategories) {

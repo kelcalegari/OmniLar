@@ -6,6 +6,7 @@ import '../../../finance/domain/entities/closing_defaults.dart';
 import '../../../finance/domain/entities/split_rule.dart';
 import '../../../finance/domain/entities/house_settings.dart';
 import '../../../finance/domain/entities/folego_params.dart';
+import '../../../finance/domain/entities/import_params.dart';
 import '../../../finance/domain/entities/member_settings.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -1622,6 +1623,10 @@ class _SettingsPageState extends State<SettingsPage> {
     final nameController = TextEditingController(text: existingPm?.name ?? '');
     PaymentMethodType selectedType = existingPm?.type ?? PaymentMethodType.card;
     String? selectedOwnerId = existingPm?.ownerMemberId;
+    // Quem costuma pagar a fatura (0100); só vale se ainda é morador
+    String? usualPayerId = members.any((m) => m.id == existingPm?.usualInvoicePayerId)
+        ? existingPm?.usualInvoicePayerId
+        : null;
     int closingDay = existingPm?.closingDay ?? 25;
     int dueDay = existingPm?.dueDay ?? 5;
     final isEditing = existingPm != null;
@@ -1831,6 +1836,43 @@ class _SettingsPageState extends State<SettingsPage> {
                         ),
                       ],
                     ),
+                    const SizedBox(height: 14),
+                    const Text(
+                      'Quem costuma pagar a fatura:',
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.grey,
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    DropdownButtonFormField<String?>(
+                      key: const ValueKey('usual_invoice_payer'),
+                      initialValue: usualPayerId,
+                      decoration: InputDecoration(
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 10,
+                        ),
+                        helperText: 'Só uma sugestão: ao pagar a fatura, você escolhe.',
+                      ),
+                      items: [
+                        const DropdownMenuItem<String?>(
+                          value: null,
+                          child: Text('Sem preferência'),
+                        ),
+                        ...members.map(
+                          (m) => DropdownMenuItem<String?>(
+                            value: m.id as String,
+                            child: Text(m.name as String),
+                          ),
+                        ),
+                      ],
+                      onChanged: (val) => setDialogState(() => usualPayerId = val),
+                    ),
                   ],
                 ],
               ),
@@ -1859,6 +1901,10 @@ class _SettingsPageState extends State<SettingsPage> {
                           ? dueDay
                           : null,
                       clearDueDay: selectedType != PaymentMethodType.card,
+                      usualInvoicePayerId:
+                          selectedType == PaymentMethodType.card ? usualPayerId : null,
+                      clearUsualInvoicePayer:
+                          selectedType != PaymentMethodType.card || usualPayerId == null,
                     );
 
                     final messenger = ScaffoldMessenger.of(context);
@@ -1882,6 +1928,8 @@ class _SettingsPageState extends State<SettingsPage> {
                       dueDay: selectedType == PaymentMethodType.card
                           ? dueDay
                           : null,
+                      usualInvoicePayerId:
+                          selectedType == PaymentMethodType.card ? usualPayerId : null,
                     );
 
                     final messenger = ScaffoldMessenger.of(context);

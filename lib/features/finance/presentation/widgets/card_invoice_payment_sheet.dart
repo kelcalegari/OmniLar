@@ -58,6 +58,7 @@ class _CardInvoicePaymentSheetState extends State<CardInvoicePaymentSheet> {
     widget.card,
     widget.financeCubit.state.paymentMethods,
     memberNames: widget.memberNames,
+    usualPayerId: widget.card.usualInvoicePayerId,
   );
 
   /// Meio escolhido para pagar a fatura.

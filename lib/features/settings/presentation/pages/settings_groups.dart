@@ -1501,7 +1501,9 @@ extension _SettingsGroupViews on _SettingsPageState {
         members.where((m) => m.id == pm.ownerMemberId).firstOrNull?.name.split(' ').first ?? 'Casa';
     String detail(PaymentMethod pm) {
       if (pm.isCreditCard && pm.closingDay != null && pm.dueDay != null) {
-        return 'Fecha dia ${pm.closingDay} • Vence dia ${pm.dueDay}';
+        final payer = members.where((m) => m.id == pm.usualInvoicePayerId).firstOrNull;
+        final payerText = payer == null ? '' : ' • Fatura: ${payer.name.split(' ').first}';
+        return 'Fecha dia ${pm.closingDay} • Vence dia ${pm.dueDay}$payerText';
       }
       return switch (pm.type) {
         PaymentMethodType.card => 'Cartão de crédito',
@@ -1545,12 +1547,188 @@ extension _SettingsGroupViews on _SettingsPageState {
               ),
         ],
       ),
+      _importParamsPanel(context, financeState),
       _panel(
         context,
         title: 'Assinaturas & Contas Fixas',
         children: [_recurringExpensesEditor(context)],
       ),
     ];
+  }
+
+  /// Janelas do casamento de linhas e destino padrão das linhas novas da
+  /// importação de extrato (0100). Só administradores mudam.
+  Widget _importParamsPanel(BuildContext context, FinanceState financeState) {
+    final settings = financeState.houseSettings;
+    final matching = settings.importMatching;
+    final defaults = settings.importDefaults;
+    final currentUserId = sl<AuthRepository>().currentUser?.id;
+    final me = financeState.members.where((m) => m.id == currentUserId).firstOrNull;
+    final isAdmin = me?.role == 'owner' || me?.role == 'admin';
+    final category = financeState.categories.where((c) => c.id == defaults.categoryId).firstOrNull;
+    final source = financeState.paymentMethods.where((p) => p.id == defaults.paymentMethodId).firstOrNull;
+    return _panel(
+      context,
+      title: 'Importação de extrato',
+      actionLabel: isAdmin ? 'Alterar' : null,
+      onAction: isAdmin ? () => _showImportParamsDialog(context, financeState) : null,
+      children: [
+        _line(
+          title: 'Mesma compra se a data difere até',
+          value: '${matching.dateWindowDays} dias (${matching.otherMethodWindowDays} em outra forma de pagamento)',
+        ),
+        _line(
+          title: 'Valor diferente (gorjeta, taxa)',
+          value: 'até ${matching.amountDriftPercent}% em ${matching.amountDiffersDays} dia(s), nome ${matching.minSimilarityPercent}% parecido',
+        ),
+        _line(title: 'Pagamento de fatura no extrato', value: 'até ${matching.invoiceWindowDays} dias do vencimento'),
+        _line(title: 'Categoria das linhas novas', value: category?.name ?? 'A primeira da casa'),
+        _line(title: 'Divisão das linhas novas', value: defaults.splitMode.label),
+        _line(title: 'Abre a importação em', value: source?.name ?? 'Sem preferência'),
+        if (!isAdmin) _emptyLine('Só administradores mudam estes padrões.'),
+      ],
+    );
+  }
+
+  void _showImportParamsDialog(BuildContext context, FinanceState financeState) {
+    final saved = financeState.houseSettings.importMatching;
+    final savedDefaults = financeState.houseSettings.importDefaults;
+    final fields = <String, TextEditingController>{
+      'date': TextEditingController(text: '${saved.dateWindowDays}'),
+      'other': TextEditingController(text: '${saved.otherMethodWindowDays}'),
+      'differs': TextEditingController(text: '${saved.amountDiffersDays}'),
+      'drift': TextEditingController(text: '${saved.amountDriftPercent}'),
+      'similarity': TextEditingController(text: '${saved.minSimilarityPercent}'),
+      'invoice': TextEditingController(text: '${saved.invoiceWindowDays}'),
+    };
+    const labels = {
+      'date': 'Dias de diferença aceitos (0 a 10)',
+      'other': 'Dias em outra forma de pagamento (até o anterior)',
+      'differs': 'Dias com valor diferente (até o primeiro)',
+      'drift': 'Valor diferente aceito (% de 0 a 100)',
+      'similarity': 'Nome parecido com valor diferente (% de 0 a 100)',
+      'invoice': 'Pagamento de fatura até (1 a 120 dias do vencimento)',
+    };
+    final categories = financeState.categories;
+    final sources = financeState.paymentMethods
+        .where((p) => p.type == PaymentMethodType.card || p.type == PaymentMethodType.account)
+        .toList();
+    String? categoryId = categories.any((c) => c.id == savedDefaults.categoryId) ? savedDefaults.categoryId : null;
+    String? sourceId = sources.any((p) => p.id == savedDefaults.paymentMethodId) ? savedDefaults.paymentMethodId : null;
+    var splitMode = savedDefaults.splitMode;
+    String? error;
+    bool isSaving = false;
+    showDialog(
+      context: context,
+      builder: (dialogCtx) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: const Text('Importação de extrato', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                for (final entry in labels.entries)
+                  TextField(
+                    key: ValueKey('import_matching_${entry.key}'),
+                    controller: fields[entry.key],
+                    keyboardType: TextInputType.number,
+                    decoration: InputDecoration(labelText: entry.value),
+                  ),
+                const SizedBox(height: 12),
+                DropdownButtonFormField<String?>(
+                  key: const ValueKey('import_default_category'),
+                  initialValue: categoryId,
+                  isExpanded: true,
+                  decoration: const InputDecoration(labelText: 'Categoria das linhas novas'),
+                  items: [
+                    const DropdownMenuItem<String?>(value: null, child: Text('A primeira da casa')),
+                    for (final c in categories) DropdownMenuItem<String?>(value: c.id, child: Text(c.name)),
+                  ],
+                  onChanged: (value) => setDialogState(() => categoryId = value),
+                ),
+                DropdownButtonFormField<ImportSplitMode>(
+                  key: const ValueKey('import_default_split'),
+                  initialValue: splitMode,
+                  isExpanded: true,
+                  decoration: const InputDecoration(labelText: 'Divisão das linhas novas'),
+                  items: [
+                    for (final mode in ImportSplitMode.values)
+                      DropdownMenuItem(value: mode, child: Text(mode.label)),
+                  ],
+                  onChanged: (value) => setDialogState(() => splitMode = value ?? splitMode),
+                ),
+                DropdownButtonFormField<String?>(
+                  key: const ValueKey('import_default_source'),
+                  initialValue: sourceId,
+                  isExpanded: true,
+                  decoration: const InputDecoration(labelText: 'Abrir a importação em'),
+                  items: [
+                    const DropdownMenuItem<String?>(value: null, child: Text('Sem preferência')),
+                    for (final p in sources) DropdownMenuItem<String?>(value: p.id, child: Text(p.name)),
+                  ],
+                  onChanged: (value) => setDialogState(() => sourceId = value),
+                ),
+                if (error != null)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 8),
+                    child: Text(
+                      error!,
+                      key: const Key('import_params_error'),
+                      style: const TextStyle(color: AppColors.debtRed, fontSize: 12),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(dialogCtx), child: const Text('Cancelar')),
+            FilledButton(
+              onPressed: isSaving
+                  ? null
+                  : () async {
+                      int read(String key) => int.tryParse(fields[key]!.text.trim()) ?? -1;
+                      final next = ImportMatching(
+                        dateWindowDays: read('date'),
+                        otherMethodWindowDays: read('other'),
+                        amountDiffersDays: read('differs'),
+                        amountDriftPercent: read('drift'),
+                        minSimilarityPercent: read('similarity'),
+                        invoiceWindowDays: read('invoice'),
+                      );
+                      if (!next.isValid) {
+                        setDialogState(() => error =
+                            'Confira os valores: dias de 0 a 10 (os de outra forma de pagamento e de valor '
+                            'diferente não passam dos dias aceitos), percentuais de 0 a 100 e fatura de 1 a 120 dias.');
+                        return;
+                      }
+                      final nextDefaults = ImportDefaults(
+                        categoryId: categoryId,
+                        splitMode: splitMode,
+                        paymentMethodId: sourceId,
+                      );
+                      setDialogState(() {
+                        error = null;
+                        isSaving = true;
+                      });
+                      final messenger = ScaffoldMessenger.of(context);
+                      final navigator = Navigator.of(dialogCtx);
+                      final ok = (next == saved && nextDefaults == savedDefaults) ||
+                          await context.read<FinanceCubit>().updateHouseSettings(
+                                importMatching: next == saved ? null : next,
+                                importDefaults: nextDefaults == savedDefaults ? null : nextDefaults,
+                              );
+                      if (ok) navigator.pop();
+                      setDialogState(() => isSaving = false);
+                      showSaveFeedback(messenger, ok: ok, success: 'Parâmetros da importação atualizados.');
+                    },
+              style: FilledButton.styleFrom(backgroundColor: AppColors.primary),
+              child: const Text('Salvar'),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   Widget _paymentMethodLine(

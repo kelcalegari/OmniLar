@@ -1,4 +1,5 @@
 import '../../../finance/domain/entities/house_expense.dart';
+import '../../../finance/domain/entities/import_params.dart';
 import '../entities/imported_statement_line.dart';
 import 'statement_text.dart';
 
@@ -34,11 +35,10 @@ class LineMatch {
 class StatementMatcher {
   const StatementMatcher._();
 
+  /// Padrões das janelas (a casa pode mudar em `houses.import_matching`, 0100).
   /// A fatura costuma registrar a compra um ou dois dias depois.
-  static const int dateWindowDays = 3;
-  static const int otherMethodWindowDays = 2;
-  static const double _maxAmountDrift = 0.25;
-  static const double _minSimilarityForDrift = 0.5;
+  static const int dateWindowDays = ImportMatching.defaultDateWindowDays;
+  static const int otherMethodWindowDays = ImportMatching.defaultOtherMethodWindowDays;
 
   static int _daysApart(DateTime a, DateTime b) =>
       DateTime(a.year, a.month, a.day).difference(DateTime(b.year, b.month, b.day)).inDays.abs();
@@ -57,7 +57,9 @@ class StatementMatcher {
     HouseExpense expense,
     String paymentMethodId,
     bool pendingCountsAsLaunched,
+    ImportMatching matching,
   ) {
+    final dateWindowDays = matching.dateWindowDays;
     final days = _distance(line, expense);
     if (days > dateWindowDays) return null;
 
@@ -78,7 +80,7 @@ class StatementMatcher {
       );
     }
 
-    if (sameAmount && days <= otherMethodWindowDays) {
+    if (sameAmount && days <= matching.otherMethodWindowDays) {
       return LineMatch(
         lineId: line.id,
         expense: expense,
@@ -87,10 +89,10 @@ class StatementMatcher {
       );
     }
 
-    if (!sameAmount && sameMethod && launched && days <= 1) {
+    if (!sameAmount && sameMethod && launched && days <= matching.amountDiffersDays) {
       final larger = expense.amount.cents > line.amount.cents ? expense.amount.cents : line.amount.cents;
       final drift = (expense.amount.cents - line.amount.cents).abs() / larger;
-      if (drift <= _maxAmountDrift && similarity >= _minSimilarityForDrift) {
+      if (drift <= matching.maxAmountDrift && similarity >= matching.minSimilarityForDrift) {
         return LineMatch(
           lineId: line.id,
           expense: expense,
@@ -110,13 +112,14 @@ class StatementMatcher {
     required List<HouseExpense> expenses,
     required String paymentMethodId,
     bool pendingCountsAsLaunched = false,
+    ImportMatching matching = const ImportMatching(),
   }) {
     final candidates = <LineMatch>[];
     for (final line in lines) {
       if (!line.isPurchase) continue;
       for (final expense in expenses) {
         if (expense.isProjectExpense) continue;
-        final match = _evaluate(line, expense, paymentMethodId, pendingCountsAsLaunched);
+        final match = _evaluate(line, expense, paymentMethodId, pendingCountsAsLaunched, matching);
         if (match != null) candidates.add(match);
       }
     }

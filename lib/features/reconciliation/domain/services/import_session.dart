@@ -7,6 +7,7 @@ import '../../../../core/utils/uuid.dart';
 import '../../../finance/domain/entities/category.dart';
 import '../../../finance/domain/entities/house_expense.dart';
 import '../../../finance/domain/entities/house_member.dart';
+import '../../../finance/domain/entities/import_params.dart';
 import '../../../finance/domain/entities/payment_method.dart';
 import '../../../finance/domain/entities/split_rule.dart';
 import '../../../finance/domain/services/credit_card_invoice_calculator.dart';
@@ -215,6 +216,12 @@ class ImportSession {
   /// A fatura foi paga pelo Caixa da Casa (e não pelo titular).
   final bool invoicePaidByHouse;
 
+  /// Janelas do casamento de linhas com despesas, da casa (0100).
+  final ImportMatching matching;
+
+  /// Destino padrão das linhas novas, da casa (0100).
+  final ImportDefaults defaults;
+
   const ImportSession({
     required this.source,
     required this.fileName,
@@ -233,6 +240,8 @@ class ImportSession {
     this.ruledLineIds = const {},
     this.invoicePaidAt,
     this.invoicePaidByHouse = false,
+    this.matching = const ImportMatching(),
+    this.defaults = const ImportDefaults(),
   });
 
   static final _dayMonth = DateFormat('dd/MM');
@@ -253,12 +262,16 @@ class ImportSession {
     required String fileName,
     required List<ImportedStatementLine> lines,
     required String payerMemberId,
+    ImportMatching matching = const ImportMatching(),
+    ImportDefaults defaults = const ImportDefaults(),
   }) {
     return ImportSession(
       source: source,
       fileName: fileName,
       lines: lines,
       payerMemberId: payerMemberId,
+      matching: matching,
+      defaults: defaults,
       invoiceDueDate: source.isCreditCard ? suggestInvoiceDueDate(lines, source) : null,
     );
   }
@@ -326,6 +339,8 @@ class ImportSession {
       ruledLineIds: ruledLineIds ?? this.ruledLineIds,
       invoicePaidAt: invoicePayment != null ? invoicePayment.paidAt : invoicePaidAt,
       invoicePaidByHouse: invoicePayment != null ? invoicePayment.byHouse : invoicePaidByHouse,
+      matching: matching,
+      defaults: defaults,
     );
   }
 
@@ -569,6 +584,30 @@ class ImportSession {
       importedSignatures.contains(line.signature) &&
       !forcedLineIds.contains(line.id);
 
+  /// Parâmetros da casa para esta importação: janelas do casamento e destino
+  /// padrão das linhas novas (0100).
+  ImportSession withParams({ImportMatching? matching, ImportDefaults? defaults}) => ImportSession(
+        source: source,
+        fileName: fileName,
+        lines: lines,
+        matches: matches,
+        decisions: decisions,
+        invoiceDueDate: invoiceDueDate,
+        payerMemberId: payerMemberId,
+        importedSignatures: importedSignatures,
+        forcedLineIds: forcedLineIds,
+        extraOptions: extraOptions,
+        extraChoices: extraChoices,
+        knownExpenses: knownExpenses,
+        refundChoices: refundChoices,
+        decisionTargets: decisionTargets,
+        ruledLineIds: ruledLineIds,
+        invoicePaidAt: invoicePaidAt,
+        invoicePaidByHouse: invoicePaidByHouse,
+        matching: matching ?? this.matching,
+        defaults: defaults ?? this.defaults,
+      );
+
   ImportSession withInvoiceDueDate(DateTime dueDate) =>
       _copy(invoiceDueDate: DateTime(dueDate.year, dueDate.month, dueDate.day));
 
@@ -601,6 +640,7 @@ class ImportSession {
       expenses: expenses,
       paymentMethodId: source.id,
       pendingCountsAsLaunched: ExpenseLaunchDefaults.waitsForInvoice(source),
+      matching: matching,
     );
     final kept = <String, MatchDecision>{
       for (final entry in decisions.entries)
@@ -703,6 +743,8 @@ class ImportSession {
   }) {
     if (categories.isEmpty) return this;
     final validIds = {for (final c in categories) c.id};
+    // Categoria padrão da importação (0100), se ainda existir
+    final defaultCategoryId = validIds.contains(defaults.categoryId) ? defaults.categoryId : null;
 
     String? suggest(ImportedStatementLine line) {
       HouseExpense? best;
@@ -727,7 +769,7 @@ class ImportSession {
       lines: [
         for (final line in lines)
           line.isPurchase && line.categoryId == null
-              ? line.copyWith(categoryId: suggest(line))
+              ? line.copyWith(categoryId: suggest(line) ?? defaultCategoryId)
               : line,
       ],
     );
@@ -877,7 +919,7 @@ class ImportSession {
     final cycles = <FinancialCycle>{};
     for (final line in lines) {
       if (!line.isPurchase) continue;
-      for (final offset in const [-StatementMatcher.dateWindowDays, StatementMatcher.dateWindowDays]) {
+      for (final offset in [-matching.dateWindowDays, matching.dateWindowDays]) {
         cycles.add(schedule.cycleFor(line.date.add(Duration(days: offset))));
       }
     }
@@ -890,6 +932,27 @@ class ImportSession {
     final edited = line.title?.trim();
     final base = edited != null && edited.isNotEmpty ? edited : StatementText.cleanTitle(line.description);
     return line.isInstallment ? '$base (${line.installmentNumber}/${line.installmentsTotal})' : base;
+  }
+
+  /// Divisão das linhas novas: categoria com dono é sempre 100% do dono; no
+  /// resto vale o modo escolhido pela casa (0100), e por padrão a divisão da
+  /// categoria ou da casa.
+  SplitRule _splitRuleFor({required ExpenseCategory? category, required List<HouseMember> members}) {
+    if (category?.ownerMemberId == null && members.isNotEmpty) {
+      switch (defaults.splitMode) {
+        case ImportSplitMode.equal:
+          return SplitRule.percentage({for (final m in members) m.id: 100.0 / members.length});
+        case ImportSplitMode.payer:
+          return SplitRule.singleResponsible(payerMemberId);
+        case ImportSplitMode.category:
+          break;
+      }
+    }
+    return ExpenseLaunchDefaults.splitRule(
+      category: category,
+      members: members,
+      paidByMemberId: payerMemberId,
+    );
   }
 
   /// Monta o que a confirmação vai gravar. [closedCycles] são os ciclos já
@@ -905,7 +968,8 @@ class ImportSession {
   }) {
     final today = now ?? DateTime.now();
     final memberNames = {for (final m in members) m.id: m.name.split(' ').first};
-    final defaultCategory = ExpenseLaunchDefaults.matchCategory(categories);
+    final defaultCategory =
+        ExpenseLaunchDefaults.matchCategory(categories, preferred: defaults.categoryId);
     final outOfPocket = ExpenseLaunchDefaults.paidOutOfPocket(source);
 
     final newExpenses = <HouseExpense>[];
@@ -955,11 +1019,7 @@ class ImportSession {
               paymentMethodId: source.id,
               // Pendente até a fatura ser paga: quem pagou se decide no pagamento
               paidOutOfPocket: waitsForInvoice ? false : outOfPocket,
-              splitRule: ExpenseLaunchDefaults.splitRule(
-                category: category,
-                members: members,
-                paidByMemberId: payerMemberId,
-              ),
+              splitRule: _splitRuleFor(category: category, members: members),
               status: waitsForInvoice ? ExpenseStatus.pending : ExpenseStatus.paid,
               notes: 'Importado de ${source.name}: ${line.description}',
             ),
