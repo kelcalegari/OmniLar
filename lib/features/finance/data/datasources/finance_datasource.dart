@@ -1,5 +1,6 @@
 import '../../domain/entities/card_invoice.dart';
 import '../../../../core/domain/enums/recurrence.dart';
+import '../../domain/entities/house_initial_balance.dart';
 import '../../domain/entities/house_settings.dart';
 import '../../../../core/domain/value_objects/financial_cycle.dart';
 import '../../../../core/domain/value_objects/money.dart';
@@ -87,6 +88,18 @@ abstract class FinanceDataSource {
 
   /// Grava só as chaves de [changes] (colunas de `houses`) e devolve o resultado.
   Future<HouseSettings> updateHouseSettings(Map<String, dynamic> changes);
+
+  /// Dinheiro que a casa já tinha ao começar (0093).
+  Future<HouseInitialBalance> getHouseInitialBalance();
+
+  /// Grava a reserva guardada (na Reserva da Casa) e o saldo na conta da casa
+  /// (sobra do ciclo que começa em [cycleStart]). Gravar de novo troca os
+  /// valores, sem somar. Só administradores.
+  Future<HouseInitialBalance> setHouseInitialBalance({
+    required Money reserve,
+    required Money cash,
+    required DateTime cycleStart,
+  });
 
   // Caixinhas & Metas da Casa
   Future<List<SavingsVault>> getSavingsVaults();

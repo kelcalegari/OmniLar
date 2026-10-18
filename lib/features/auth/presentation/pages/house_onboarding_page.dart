@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import '../../../../core/domain/value_objects/money.dart';
 import '../../../../core/theme/app_colors.dart';
+import '../../../../core/widgets/money_input_field.dart';
 import '../cubit/auth_cubit.dart';
 import '../cubit/auth_state.dart';
 
@@ -19,6 +21,11 @@ class _HouseOnboardingPageState extends State<HouseOnboardingPage> {
   final _houseNameController = TextEditingController(text: 'Nossa Casa');
   int _cycleStartDay = 5;
 
+  // Dinheiro que a casa já tem (opcional): reserva guardada e saldo na conta
+  bool _showInitialBalance = false;
+  Money _initialReserve = const Money.zero();
+  Money _initialCash = const Money.zero();
+
   // Entrar com Convite
   final _joinFormKey = GlobalKey<FormState>();
   final _inviteCodeController = TextEditingController();
@@ -35,6 +42,80 @@ class _HouseOnboardingPageState extends State<HouseOnboardingPage> {
     context.read<AuthCubit>().createHouse(
       name: _houseNameController.text,
       cycleStartDay: _cycleStartDay,
+      initialReserveCents: _initialReserve.cents,
+      initialCashCents: _initialCash.cents,
+    );
+  }
+
+  /// Passo opcional: o dinheiro que a casa já tem ao começar.
+  Widget _initialBalanceStep(ThemeData theme) {
+    return Container(
+      decoration: BoxDecoration(
+        color: theme.cardColor,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: Colors.grey.withValues(alpha: 0.2)),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          InkWell(
+            onTap: () => setState(() => _showInitialBalance = !_showInitialBalance),
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Row(
+                children: [
+                  const Icon(Icons.savings_outlined, color: AppColors.primary),
+                  const SizedBox(width: 12),
+                  const Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'A casa já tem dinheiro? (opcional)',
+                          style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
+                        ),
+                        SizedBox(height: 2),
+                        Text(
+                          'Reserva guardada e saldo na conta da casa. Dá para informar depois em Ajustes.',
+                          style: TextStyle(fontSize: 12, color: Colors.grey),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Icon(_showInitialBalance ? Icons.expand_less_rounded : Icons.expand_more_rounded),
+                ],
+              ),
+            ),
+          ),
+          if (_showInitialBalance)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  MoneyTextFormField(
+                    key: const ValueKey('onboarding_initial_reserve'),
+                    initialValue: _initialReserve,
+                    labelText: 'Reserva guardada',
+                    helperText: 'Dinheiro já guardado. Entra na Reserva da Casa.',
+                    prefixIcon: const Icon(Icons.savings_outlined),
+                    onChanged: (m) => _initialReserve = m,
+                  ),
+                  const SizedBox(height: 12),
+                  MoneyTextFormField(
+                    key: const ValueKey('onboarding_initial_cash'),
+                    initialValue: _initialCash,
+                    labelText: 'Saldo na conta da casa',
+                    helperText: 'O que já está no Caixa hoje. Vale como a sobra do primeiro ciclo.',
+                    prefixIcon: const Icon(Icons.account_balance_wallet_outlined),
+                    onChanged: (m) => _initialCash = m,
+                  ),
+                ],
+              ),
+            ),
+        ],
+      ),
     );
   }
 
@@ -294,6 +375,9 @@ class _HouseOnboardingPageState extends State<HouseOnboardingPage> {
                                   ],
                                 ),
                               ),
+                              const SizedBox(height: 16),
+
+                              _initialBalanceStep(theme),
                               const SizedBox(height: 16),
 
                               Container(

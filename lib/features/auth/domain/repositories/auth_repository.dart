@@ -88,7 +88,14 @@ abstract class AuthRepository {
   });
 
   Future<List<House>> getUserHouses();
-  Future<House> createHouse({required String name, int cycleStartDay = 5});
+  /// Cria a casa. [initialReserveCents] e [initialCashCents] são o dinheiro
+  /// que ela já tinha (0093): reserva guardada e saldo na conta da casa.
+  Future<House> createHouse({
+    required String name,
+    int cycleStartDay = 5,
+    int initialReserveCents = 0,
+    int initialCashCents = 0,
+  });
   Future<House> updateHouse({
     required String houseId,
     String? name,

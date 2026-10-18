@@ -153,8 +153,18 @@ class AuthRepositoryImpl implements AuthRepository {
   }
 
   @override
-  Future<House> createHouse({required String name, int cycleStartDay = 5}) {
-    return _dataSource.createHouse(name: name, cycleStartDay: cycleStartDay);
+  Future<House> createHouse({
+    required String name,
+    int cycleStartDay = 5,
+    int initialReserveCents = 0,
+    int initialCashCents = 0,
+  }) {
+    return _dataSource.createHouse(
+      name: name,
+      cycleStartDay: cycleStartDay,
+      initialReserveCents: initialReserveCents,
+      initialCashCents: initialCashCents,
+    );
   }
 
   @override

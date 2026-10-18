@@ -509,4 +509,33 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.textContaining('Importar'), findsWidgets);
   });
+
+  // Fica por último: grava o saldo inicial no modo demo compartilhado
+  testWidgets('Saldo inicial da casa: o administrador informa a reserva e o saldo na conta', (tester) async {
+    await sl<FinanceCubit>().loadCycleData();
+
+    await tester.pumpWidget(buildTestableWidget());
+    await tester.pumpAndSettle();
+    await openGroup(tester, 'Divisão das despesas');
+
+    final panel = find.text('Saldo inicial da casa');
+    await tester.ensureVisible(panel);
+    expect(find.textContaining('A casa começou do zero'), findsOneWidget);
+    await tester.tap(find.text('Informar'));
+    await tester.pumpAndSettle();
+
+    await tester.enterText(find.byKey(const ValueKey('initial_reserve_field')), '50000');
+    await tester.enterText(find.byKey(const ValueKey('initial_cash_field')), '120000');
+    await tester.tap(find.text('Salvar'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Saldo inicial atualizado.'), findsOneWidget);
+    final saved = sl<FinanceCubit>().state.initialBalance;
+    expect(saved.reserve, const Money(50000));
+    expect(saved.cash, const Money(120000));
+    expect(saved.cashCycleStart, isNotNull);
+    expect(find.text('Reserva guardada'), findsOneWidget);
+    expect(find.text(const Money(120000).format()), findsWidgets);
+    expect(find.text('Alterar'), findsWidgets);
+  });
 }

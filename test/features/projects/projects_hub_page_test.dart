@@ -1,5 +1,6 @@
 import 'package:omni_lar/features/finance/domain/entities/card_invoice.dart';
 import 'package:flutter/material.dart';
+import 'package:omni_lar/features/finance/domain/entities/house_initial_balance.dart';
 import 'package:omni_lar/features/finance/domain/entities/house_settings.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -114,6 +115,15 @@ class _FakeFinanceRepository implements FinanceRepository {
   @override
   Future<HouseSettings> updateHouseSettings(Map<String, dynamic> changes) async =>
       HouseSettings.fromJson(changes);
+  @override
+  Future<HouseInitialBalance> getHouseInitialBalance() async => const HouseInitialBalance();
+  @override
+  Future<HouseInitialBalance> setHouseInitialBalance({
+    required Money reserve,
+    required Money cash,
+    required DateTime cycleStart,
+  }) async =>
+      HouseInitialBalance(reserve: reserve, cash: cash, cashCycleStart: cycleStart);
   @override
   Future<void> updateHouseSplitModel({
     required String splitModel,

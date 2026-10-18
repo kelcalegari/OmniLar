@@ -210,6 +210,7 @@ extension _SettingsGroupViews on _SettingsPageState {
         ],
       ),
       _planningPanel(context, financeState),
+      _initialBalancePanel(context, financeState),
       _panel(
         context,
         title: 'Categorias de Gastos',
@@ -269,6 +270,119 @@ extension _SettingsGroupViews on _SettingsPageState {
           value: '${settings.adjustPercent}%',
         ),
       ],
+    );
+  }
+
+  /// Dinheiro que a casa já tinha ao começar a usar o app (0093).
+  Widget _initialBalancePanel(BuildContext context, FinanceState financeState) {
+    final initial = financeState.initialBalance;
+    final currentUserId = sl<AuthRepository>().currentUser?.id;
+    final me = financeState.members.where((m) => m.id == currentUserId).firstOrNull;
+    final isAdmin = me?.role == 'owner' || me?.role == 'admin';
+    final cashStart = initial.cashCycleStart;
+    return _panel(
+      context,
+      title: 'Saldo inicial da casa',
+      actionLabel: isAdmin ? (initial.isEmpty ? 'Informar' : 'Alterar') : null,
+      onAction: isAdmin ? () => _showInitialBalanceDialog(context, financeState) : null,
+      children: [
+        if (initial.isEmpty)
+          _emptyLine(
+            isAdmin
+                ? 'A casa começou do zero. Se já havia dinheiro guardado ou na conta da casa, informe aqui.'
+                : 'A casa começou do zero. Só administradores informam o saldo inicial.',
+          )
+        else ...[
+          _line(title: 'Reserva guardada', value: initial.reserve.format()),
+          _line(
+            title: 'Saldo na conta da casa',
+            subtitle: cashStart == null
+                ? null
+                : 'Sobra do ciclo que começou em ${_twoDigits(cashStart.day)}/${_twoDigits(cashStart.month)}',
+            value: initial.cash.format(),
+          ),
+        ],
+      ],
+    );
+  }
+
+  static String _twoDigits(int n) => n.toString().padLeft(2, '0');
+
+  void _showInitialBalanceDialog(BuildContext context, FinanceState financeState) {
+    final initial = financeState.initialBalance;
+    var reserve = initial.reserve;
+    var cash = initial.cash;
+    bool isSaving = false;
+
+    showDialog(
+      context: context,
+      builder: (dialogCtx) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: const Text(
+            'Saldo inicial da casa',
+            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+          ),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Text(
+                  'O dinheiro que a casa já tinha quando começou a usar o app. Pode deixar em branco o que não houver.',
+                  style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+                ),
+                const SizedBox(height: 16),
+                MoneyTextFormField(
+                  key: const ValueKey('initial_reserve_field'),
+                  initialValue: reserve,
+                  labelText: 'Reserva guardada',
+                  helperText: 'Entra na Reserva da Casa. Não mexe no Caixa do ciclo.',
+                  prefixIcon: const Icon(Icons.savings_outlined),
+                  onChanged: (m) => reserve = m,
+                ),
+                const SizedBox(height: 12),
+                MoneyTextFormField(
+                  key: const ValueKey('initial_cash_field'),
+                  initialValue: cash,
+                  labelText: 'Saldo na conta da casa',
+                  helperText: 'Vale como a sobra do primeiro ciclo e segue a regra da sobra.',
+                  prefixIcon: const Icon(Icons.account_balance_wallet_outlined),
+                  onChanged: (m) => cash = m,
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogCtx),
+              child: const Text('Cancelar'),
+            ),
+            FilledButton(
+              onPressed: isSaving
+                  ? null
+                  : () async {
+                      setDialogState(() => isSaving = true);
+                      final messenger = ScaffoldMessenger.of(context);
+                      final navigator = Navigator.of(dialogCtx);
+                      final error = await context.read<FinanceCubit>().setHouseInitialBalance(
+                            reserve: reserve,
+                            cash: cash,
+                          );
+                      if (error == null) navigator.pop();
+                      setDialogState(() => isSaving = false);
+                      showSaveFeedback(
+                        messenger,
+                        ok: error == null,
+                        success: 'Saldo inicial atualizado.',
+                        failure: error,
+                      );
+                    },
+              style: FilledButton.styleFrom(backgroundColor: AppColors.primary),
+              child: const Text('Salvar'),
+            ),
+          ],
+        ),
+      ),
     );
   }
 
@@ -1306,6 +1420,9 @@ extension _SettingsSearch on _SettingsPageState {
       ]),
       option(_SettingsGroup.split, 'Modelos de Rateio', Icons.tune_rounded, const [
         'divisao', 'porcentagem', 'percentual', 'aportes fixos', 'balde', 'por categoria', 'dividir',
+      ]),
+      option(_SettingsGroup.split, 'Saldo inicial da casa', Icons.savings_outlined, const [
+        'reserva guardada', 'saldo na conta', 'dinheiro guardado', 'comecar', 'caixa',
       ]),
       option(_SettingsGroup.split, 'Categorias de Gastos', Icons.category_outlined, const [
         'categoria', 'dono', 'responsavel',

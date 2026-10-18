@@ -444,6 +444,9 @@ class MockAuthDataSource implements AuthDataSource {
   Future<House> createHouse({
     required String name,
     int cycleStartDay = 5,
+    // No modo demo o financeiro é o da casa de demonstração
+    int initialReserveCents = 0,
+    int initialCashCents = 0,
   }) async {
     if (_currentUser == null) {
       throw const AuthFailure(
