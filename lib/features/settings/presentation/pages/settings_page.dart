@@ -1,6 +1,8 @@
 import '../../../../core/domain/value_objects/cycle_schedule.dart';
 import 'package:flutter/material.dart';
+import '../../../finance/domain/entities/category_default_split.dart';
 import '../../../finance/domain/entities/closing_defaults.dart';
+import '../../../finance/domain/entities/split_rule.dart';
 import '../../../finance/domain/entities/house_settings.dart';
 import '../../../finance/domain/entities/member_settings.dart';
 import 'package:flutter/services.dart';
@@ -443,6 +445,45 @@ class _SettingsPageState extends State<SettingsPage> {
     bool? variableSpend = existing?.isVariableSpend;
     final messenger = ScaffoldMessenger.of(context);
 
+    // Divisão padrão da categoria (0097): sugestão ao lançar despesa dela
+    final savedSplit = existing?.defaultSplit;
+    var splitMode = savedSplit == null
+        ? 'none'
+        : (savedSplit.type == SplitType.categoryOwner ? 'single' : 'percent');
+    String? splitMemberId = members.any((m) => m.id == savedSplit?.memberId) ? savedSplit?.memberId : null;
+    String percentText(double value) =>
+        value == value.roundToDouble() ? value.toStringAsFixed(0) : value.toString();
+    final percentControllers = {
+      for (final m in members)
+        m.id as String: TextEditingController(
+          text: percentText(savedSplit?.percentages?[m.id] ?? (m.defaultSplitPercent as double)),
+        ),
+    };
+    String? splitError;
+    // Devolve o padrão digitado (null = sem padrão) ou marca o erro no diálogo
+    CategoryDefaultSplit? readSplit(void Function(void Function()) setDialogState) {
+      if (selectedOwnerId != null || splitMode == 'none') return null;
+      if (splitMode == 'single') {
+        return splitMemberId == null ? null : CategoryDefaultSplit.singleResponsible(splitMemberId!);
+      }
+      final values = <String, double>{};
+      for (final entry in percentControllers.entries) {
+        final value = double.tryParse(entry.value.text.trim().replaceAll(',', '.')) ?? 0;
+        if (value < 0 || value > 100) {
+          setDialogState(() => splitError = 'Use percentuais de 0 a 100.');
+          throw const FormatException();
+        }
+        if (value > 0) values[entry.key] = value;
+      }
+      if (!CategoryDefaultSplit.percentagesClose(values.values)) {
+        final total = values.values.fold<double>(0, (a, b) => a + b);
+        setDialogState(() => splitError = 'Os percentuais somam ${percentText(total)}%. Precisam fechar 100%.');
+        throw const FormatException();
+      }
+      setDialogState(() => splitError = null);
+      return CategoryDefaultSplit.percentage(values);
+    }
+
     showDialog(
       context: context,
       builder: (dialogCtx) => StatefulBuilder(
@@ -506,6 +547,78 @@ class _SettingsPageState extends State<SettingsPage> {
                     });
                   },
                 ),
+                if (selectedOwnerId == null && members.length > 1) ...[
+                  const SizedBox(height: 16),
+                  const Text(
+                    'Divisão padrão (Opcional):',
+                    style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.grey),
+                  ),
+                  const SizedBox(height: 6),
+                  DropdownButtonFormField<String>(
+                    key: const Key('category_split_mode'),
+                    initialValue: splitMode,
+                    decoration: InputDecoration(
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                    ),
+                    items: const [
+                      DropdownMenuItem(value: 'none', child: Text('Sem padrão (divisão da casa)')),
+                      DropdownMenuItem(value: 'percent', child: Text('Percentuais próprios')),
+                      DropdownMenuItem(value: 'single', child: Text('Um morador responde por tudo')),
+                    ],
+                    onChanged: (value) => setDialogState(() {
+                      splitMode = value ?? 'none';
+                      splitError = null;
+                    }),
+                  ),
+                  if (splitMode == 'percent') ...[
+                    const SizedBox(height: 8),
+                    for (final m in members)
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 6),
+                        child: TextField(
+                          key: ValueKey('category_split_percent_${m.id}'),
+                          controller: percentControllers[m.id],
+                          keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                          decoration: InputDecoration(
+                            labelText: m.name as String,
+                            suffixText: '%',
+                            isDense: true,
+                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                          ),
+                        ),
+                      ),
+                  ],
+                  if (splitMode == 'single')
+                    Wrap(
+                      spacing: 8,
+                      children: [
+                        for (final m in members)
+                          ChoiceChip(
+                            key: ValueKey('category_split_single_${m.id}'),
+                            label: Text(m.name as String),
+                            selected: splitMemberId == m.id,
+                            onSelected: (_) => setDialogState(() => splitMemberId = m.id as String),
+                          ),
+                      ],
+                    ),
+                  if (splitError != null)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 4),
+                      child: Text(
+                        splitError!,
+                        key: const Key('category_split_error'),
+                        style: const TextStyle(color: AppColors.debtRed, fontSize: 12),
+                      ),
+                    ),
+                  const Padding(
+                    padding: EdgeInsets.only(top: 4),
+                    child: Text(
+                      'Ao lançar despesa desta categoria, a divisão já abre assim. Quem lança ainda pode escolher outra.',
+                      style: TextStyle(fontSize: 12, color: Colors.grey),
+                    ),
+                  ),
+                ],
                 const SizedBox(height: 8),
                 SwitchListTile(
                   key: const Key('category_variable_spend'),
@@ -531,6 +644,12 @@ class _SettingsPageState extends State<SettingsPage> {
                 onPressed: () async {
                   final name = nameController.text.trim();
                   if (name.isEmpty) return;
+                  final CategoryDefaultSplit? defaultSplit;
+                  try {
+                    defaultSplit = readSplit(setDialogState);
+                  } on FormatException {
+                    return;
+                  }
 
                   if (existing != null) {
                     Navigator.pop(dialogCtx);
@@ -542,6 +661,7 @@ class _SettingsPageState extends State<SettingsPage> {
                         colorHex: existing.colorHex,
                         ownerMemberId: selectedOwnerId,
                         isVariableSpend: variableSpend ?? existing.isVariableSpend,
+                        defaultSplit: defaultSplit,
                       ),
                     );
                     messenger.showSnackBar(
@@ -560,6 +680,7 @@ class _SettingsPageState extends State<SettingsPage> {
                     colorHex: '#0F766E',
                     ownerMemberId: selectedOwnerId,
                     isVariableSpend: variableSpend,
+                    defaultSplit: defaultSplit,
                   );
 
                   Navigator.pop(dialogCtx);

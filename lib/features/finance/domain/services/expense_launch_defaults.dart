@@ -80,8 +80,10 @@ class ExpenseLaunchDefaults {
   }) =>
       chosenMemberId ?? itemCategory?.ownerMemberId;
 
-  /// Rateio padrão: categoria com dono vai 100% para o dono; as demais seguem
-  /// o percentual padrão dos moradores.
+  /// Rateio padrão: categoria com dono vai 100% para o dono; senão vale a
+  /// divisão padrão da categoria (0097), se tiver; as demais seguem o
+  /// percentual padrão dos moradores. Morador com 0% fica fora (quem entrou
+  /// sem parte na divisão); só quando ninguém tem percentual a divisão é igual.
   static SplitRule splitRule({
     required ExpenseCategory? category,
     required List<HouseMember> members,
@@ -89,10 +91,13 @@ class ExpenseLaunchDefaults {
   }) {
     final ownerId = category?.ownerMemberId;
     if (ownerId != null) return SplitRule.singleResponsible(ownerId);
+    final categorySplit = category?.defaultSplit?.toRule(members);
+    if (categorySplit != null) return categorySplit;
     if (members.isEmpty) return SplitRule.singleResponsible(paidByMemberId);
+    final anyShare = members.any((m) => m.defaultSplitPercent > 0);
     return SplitRule.percentage({
       for (final m in members)
-        m.id: m.defaultSplitPercent > 0 ? m.defaultSplitPercent : (100.0 / members.length),
+        m.id: anyShare ? m.defaultSplitPercent : (100.0 / members.length),
     });
   }
 

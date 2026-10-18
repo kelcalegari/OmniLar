@@ -422,6 +422,7 @@ class FinanceCubit extends Cubit<FinanceState> {
     OpeningBalanceRule? openingBalanceRule,
     OpeningInflowRules? inflowRules,
     ClosingDefaults? closingDefaults,
+    NewMemberSplitPolicy? newMemberSplitPolicy,
     int? historyCycles,
     int? adjustPercent,
   }) async {
@@ -431,6 +432,8 @@ class FinanceCubit extends Cubit<FinanceState> {
       'opening_inflow_rules': ?inflowRules?.toJson(),
       // Padrões do fechamento (0094), também inteiros
       'closing_defaults': ?closingDefaults?.toJson(),
+      // Política de divisão para novo morador (0097)
+      'new_member_split_policy': ?newMemberSplitPolicy?.dbValue,
       'planner_history_cycles': ?historyCycles,
       'planner_adjust_percent': ?adjustPercent,
     };

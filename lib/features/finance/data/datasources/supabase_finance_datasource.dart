@@ -20,6 +20,7 @@ import '../../domain/entities/opening_inflows.dart';
 import '../../domain/entities/savings_vault.dart';
 import '../../domain/entities/third_party_receipt.dart';
 import '../../domain/entities/house_inflow.dart';
+import '../../domain/entities/category_default_split.dart';
 import '../../domain/entities/split_rule.dart';
 import '../../domain/entities/audit_entry.dart';
 import '../../domain/services/cycle_expense_filter.dart';
@@ -217,6 +218,7 @@ class SupabaseFinanceDataSource implements FinanceDataSource {
             colorHex: r['color_hex'] as String? ?? '0xFF2196F3',
             ownerMemberId: r['owner_member_id'] as String?,
             isVariableSpend: r['is_variable_spend'] as bool?,
+            defaultSplit: CategoryDefaultSplit.fromJson(r['default_split']),
           );
         }).toList();
       }
@@ -1004,6 +1006,7 @@ class SupabaseFinanceDataSource implements FinanceDataSource {
         'color_hex': category.colorHex,
         'owner_member_id': category.ownerMemberId,
         if (category.isVariableSpend != null) 'is_variable_spend': category.isVariableSpend,
+        if (category.defaultSplit != null) 'default_split': category.defaultSplit!.toJson(),
       });
     } catch (e) {
       throw ServerFailure('Erro ao criar categoria: $e');
@@ -1021,6 +1024,8 @@ class SupabaseFinanceDataSource implements FinanceDataSource {
             'name': category.name,
             'owner_member_id': _isUuid(category.ownerMemberId) ? category.ownerMemberId : null,
             if (category.isVariableSpend != null) 'is_variable_spend': category.isVariableSpend,
+            // Null limpa o padrão (volta à divisão da casa)
+            'default_split': category.defaultSplit?.toJson(),
           })
           .eq('id', category.id)
           .eq('house_id', _houseId)
@@ -1403,25 +1408,24 @@ class SupabaseFinanceDataSource implements FinanceDataSource {
       final row = await OfflineSnapshot.instance.row(
         'house_settings_$_houseId',
         () async {
-          try {
-            return await client.from('houses').select(HouseSettings.columns).eq('id', _houseId).maybeSingle();
-          } catch (_) {
+          // Da mais nova para a mais antiga: banco sem a 0097, a 0094 ou a 0092
+          // ainda lê as colunas que já tem
+          const attempts = [
+            HouseSettings.columns,
+            HouseSettings.columnsBefore0097,
+            HouseSettings.columnsBefore0094,
+          ];
+          for (final columns in attempts) {
             try {
-              // Coluna da 0094 ainda não aplicada: lê só as até a 0092
-              return await client
-                  .from('houses')
-                  .select(HouseSettings.columnsBefore0094)
-                  .eq('id', _houseId)
-                  .maybeSingle();
-            } catch (_) {
-              // Coluna da 0092 ainda não aplicada: lê só as da 0091
-              return await client
-                  .from('houses')
-                  .select(HouseSettings.columnsBefore0092)
-                  .eq('id', _houseId)
-                  .maybeSingle();
-            }
+              return await client.from('houses').select(columns).eq('id', _houseId).maybeSingle();
+            } catch (_) {}
           }
+          // Colunas da 0091 ainda não aplicadas lançam daqui para o catch abaixo
+          return await client
+              .from('houses')
+              .select(HouseSettings.columnsBefore0092)
+              .eq('id', _houseId)
+              .maybeSingle();
         },
       );
       return HouseSettings.fromJson(row);

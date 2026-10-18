@@ -69,6 +69,12 @@ class _AddExpensePageState extends State<AddExpensePage> {
   SplitType _selectedSplitType = SplitType.percentage;
   final Map<String, int> _fixedCents = {};
   String? _singleResponsibleId;
+  // Divisão padrão da categoria (0097): entra como sugestão ao escolher a
+  // categoria; escolher a divisão à mão vale sempre mais
+  bool _splitChosenManually = false;
+  bool _splitFromCategory = false;
+  String? _splitSuggestedFor;
+  Map<String, double>? _categoryPercentages;
   // Os padrões de quem lança entram uma vez só, quando as listas chegam
   bool _launchDefaultsApplied = false;
   DateTime _selectedDate = DateTime.now();
@@ -334,6 +340,12 @@ class _AddExpensePageState extends State<AddExpensePage> {
     } else if (splitChoice == SplitType.categoryOwner) {
       // Um morador só responde pela despesa inteira
       rule = SplitRule.singleResponsible(_singleResponsibleId ?? paidById);
+    } else if (splitChoice == SplitType.percentage && _categoryPercentages != null) {
+      // Percentuais da categoria, só para quem ainda mora na casa
+      rule = SplitRule.percentage({
+        for (final m in state.members)
+          if (_categoryPercentages!.containsKey(m.id)) m.id: _categoryPercentages![m.id]!,
+      });
     } else if (splitChoice == SplitType.fixed) {
       rule = SplitRule.fixed({
         for (final m in state.members)
@@ -651,6 +663,32 @@ class _AddExpensePageState extends State<AddExpensePage> {
     return category == null || !category.hasOwner;
   }
 
+  /// Divisão padrão da categoria escolhida, como sugestão: roda quando a
+  /// categoria muda e nunca passa por cima de uma divisão escolhida à mão.
+  /// Categoria sem padrão volta ao que a sugestão anterior tinha trocado.
+  void _syncCategorySplit(FinanceState state) {
+    if (widget.expenseToEdit != null || _selectedCategoryId == _splitSuggestedFor) return;
+    if (state.categories.isEmpty || state.members.isEmpty) return;
+    _splitSuggestedFor = _selectedCategoryId;
+    if (_splitChosenManually) return;
+    if (_splitFromCategory) {
+      _selectedSplitType = SplitType.percentage;
+      _singleResponsibleId = null;
+    }
+    _categoryPercentages = null;
+    _splitFromCategory = false;
+    final category = state.categories.where((c) => c.id == _selectedCategoryId).firstOrNull;
+    final rule = category?.defaultSplit?.toRule(state.members);
+    if (rule == null) return;
+    _splitFromCategory = true;
+    _selectedSplitType = rule.type;
+    if (rule.type == SplitType.categoryOwner) {
+      _singleResponsibleId = rule.singleResponsibleMemberId;
+    } else {
+      _categoryPercentages = rule.percentages;
+    }
+  }
+
   /// Valores fixos começam pela divisão da casa aplicada ao valor digitado.
   void _prefillFixedAmounts(FinanceState state) {
     final rule = ExpenseLaunchDefaults.splitRule(
@@ -681,6 +719,9 @@ class _AddExpensePageState extends State<AddExpensePage> {
       tooltip: 'Como dividir',
       initialValue: _selectedSplitType,
       onSelected: (type) => setState(() {
+        _splitChosenManually = true;
+        _splitFromCategory = false;
+        _categoryPercentages = null;
         _selectedSplitType = type;
         if (type == SplitType.fixed && _fixedCents.values.every((c) => c == 0)) {
           _prefillFixedAmounts(state);
@@ -707,7 +748,9 @@ class _AddExpensePageState extends State<AddExpensePage> {
             const Icon(Icons.call_split_rounded, size: 16, color: AppColors.primary),
             const SizedBox(width: 4),
             Text(
-              _splitTypeLabel(_selectedSplitType),
+              _selectedSplitType == SplitType.percentage && _categoryPercentages != null
+                  ? 'Divisão da categoria'
+                  : _splitTypeLabel(_selectedSplitType),
               style: theme.textTheme.bodySmall?.copyWith(
                 color: AppColors.primary,
                 fontWeight: FontWeight.w600,
@@ -779,7 +822,12 @@ class _AddExpensePageState extends State<AddExpensePage> {
                   selected: (_singleResponsibleId ?? _selectedPaidByMemberId) == m.id,
                   selectedColor: AppColors.primary.withValues(alpha: 0.15),
                   onSelected: (selected) {
-                    if (selected) setState(() => _singleResponsibleId = m.id);
+                    if (selected) {
+                      setState(() {
+                        _splitChosenManually = true;
+                        _singleResponsibleId = m.id;
+                      });
+                    }
                   },
                 ),
             ],
@@ -806,6 +854,7 @@ class _AddExpensePageState extends State<AddExpensePage> {
                 !state.categories.any((c) => c.id == _selectedCategoryId))) {
           _selectedCategoryId = state.categories.first.id;
         }
+        _syncCategorySplit(state);
         if (state.paymentMethods.isNotEmpty &&
             (_selectedPaymentMethodId == null ||
                 !state.paymentMethods.any((pm) => pm.id == _selectedPaymentMethodId))) {

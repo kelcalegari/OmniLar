@@ -121,6 +121,45 @@ class OpeningInflowRules extends Equatable {
   List<Object?> get props => [rolledSurplus, houseLoansRepaid, vaultWithdrawals, vaultOverrides, thirdParty];
 }
 
+/// O que acontece com o rateio padrão quando alguém entra na casa por convite
+/// (coluna `houses.new_member_split_policy`, 0097).
+enum NewMemberSplitPolicy {
+  /// Fatia igual para quem chega; os demais encolhem na mesma proporção.
+  equal('equal'),
+
+  /// Ninguém muda: quem chega começa com 0% e os administradores ajustam.
+  keepCurrent('keep_current'),
+
+  /// Como [keepCurrent], e o app avisa que há morador sem parte na divisão.
+  ask('ask');
+
+  final String dbValue;
+  const NewMemberSplitPolicy(this.dbValue);
+
+  /// Valor desconhecido vale como o de sempre (fatia igual).
+  static NewMemberSplitPolicy fromDb(Object? value) {
+    for (final policy in values) {
+      if (policy.dbValue == value) return policy;
+    }
+    return equal;
+  }
+
+  String get label => switch (this) {
+        NewMemberSplitPolicy.equal => 'Fatia igual para quem chega',
+        NewMemberSplitPolicy.keepCurrent => 'Manter a divisão atual',
+        NewMemberSplitPolicy.ask => 'Perguntar aos administradores',
+      };
+
+  String get description => switch (this) {
+        NewMemberSplitPolicy.equal =>
+          'Quem entra recebe uma parte igual e os demais encolhem na mesma proporção.',
+        NewMemberSplitPolicy.keepCurrent =>
+          'Ninguém muda. Quem entra começa com 0% até um administrador ajustar.',
+        NewMemberSplitPolicy.ask =>
+          'Quem entra começa com 0% e o app avisa nos Ajustes até um administrador definir a divisão.',
+      };
+}
+
 /// Configurações de planejamento e fechamento da casa (colunas de `houses`, 0091).
 class HouseSettings extends Equatable {
   static const int defaultHistoryCycles = 3;
@@ -151,6 +190,9 @@ class HouseSettings extends Equatable {
   /// Escolhas que o fechamento já abre marcadas (0094).
   final ClosingDefaults closingDefaults;
 
+  /// Rateio padrão de quem entra na casa (0097).
+  final NewMemberSplitPolicy newMemberSplitPolicy;
+
   const HouseSettings({
     this.openingBalanceRule,
     this.historyCycles = defaultHistoryCycles,
@@ -159,6 +201,7 @@ class HouseSettings extends Equatable {
     this.categoryOverrides = const {},
     this.inflowRules = const OpeningInflowRules(),
     this.closingDefaults = const ClosingDefaults(),
+    this.newMemberSplitPolicy = NewMemberSplitPolicy.equal,
   });
 
   static String plannerModeToDb(FundingEstimateMode mode) => switch (mode) {
@@ -193,11 +236,15 @@ class HouseSettings extends Equatable {
       categoryOverrides: overrides,
       inflowRules: OpeningInflowRules.fromJson(json['opening_inflow_rules']),
       closingDefaults: ClosingDefaults.fromJson(json['closing_defaults']),
+      newMemberSplitPolicy: NewMemberSplitPolicy.fromDb(json['new_member_split_policy']),
     );
   }
 
   /// Colunas lidas de `houses`.
-  static const String columns = '$columnsBefore0094, closing_defaults';
+  static const String columns = '$columnsBefore0097, new_member_split_policy';
+
+  /// Colunas até a 0094, para o banco que ainda não tem a 0097.
+  static const String columnsBefore0097 = '$columnsBefore0094, closing_defaults';
 
   /// Colunas até a 0092, para o banco que ainda não tem a 0094.
   static const String columnsBefore0094 = '$columnsBefore0092, opening_inflow_rules';
@@ -219,6 +266,7 @@ class HouseSettings extends Equatable {
     Map<String, Money>? categoryOverrides,
     OpeningInflowRules? inflowRules,
     ClosingDefaults? closingDefaults,
+    NewMemberSplitPolicy? newMemberSplitPolicy,
   }) =>
       HouseSettings(
         openingBalanceRule:
@@ -229,9 +277,10 @@ class HouseSettings extends Equatable {
         categoryOverrides: categoryOverrides ?? this.categoryOverrides,
         inflowRules: inflowRules ?? this.inflowRules,
         closingDefaults: closingDefaults ?? this.closingDefaults,
+        newMemberSplitPolicy: newMemberSplitPolicy ?? this.newMemberSplitPolicy,
       );
 
   @override
   List<Object?> get props =>
-      [openingBalanceRule, historyCycles, plannerMode, adjustPercent, categoryOverrides, inflowRules, closingDefaults];
+      [openingBalanceRule, historyCycles, plannerMode, adjustPercent, categoryOverrides, inflowRules, closingDefaults, newMemberSplitPolicy];
 }
