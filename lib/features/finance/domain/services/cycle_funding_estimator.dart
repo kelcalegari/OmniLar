@@ -110,12 +110,13 @@ class CycleFundingEstimator {
         .where((p) => p.amount.isPositive && test(p.rule))
         .fold<int>(0, (acc, p) => acc + p.amount.cents);
     final balanceUsed = sumWhere((rule) => _balanceCountsAsFunding(rule, hasFixedAmount));
-    // Resgate de caixinha que entra na conta aparece junto da sobra do Caixa
+    // Resgate de caixinha que entra na conta aparece junto da sobra do Caixa.
+    // A entrada de fora (0096) já está na sobra ([currentHouseBalance]).
     final shownBalance = byKind
         ? currentHouseBalance +
             Money(balanceParts
                 .where((p) =>
-                    (p.kind == OpeningInflowKind.vaultWithdrawal || p.kind == OpeningInflowKind.thirdParty) &&
+                    p.kind == OpeningInflowKind.vaultWithdrawal &&
                     _balanceCountsAsFunding(p.rule, hasFixedAmount))
                 .fold<int>(0, (acc, p) => acc + p.amount.cents))
         : currentHouseBalance;

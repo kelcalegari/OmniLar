@@ -16,6 +16,7 @@ import '../../domain/repositories/finance_repository.dart';
 import '../datasources/finance_datasource.dart';
 import '../../domain/entities/savings_vault.dart';
 import '../../domain/entities/third_party_receipt.dart';
+import '../../domain/entities/house_inflow.dart';
 import '../../domain/entities/audit_entry.dart';
 import '../../../../core/domain/enums/recurrence.dart';
 import '../../../../core/domain/value_objects/money.dart';
@@ -323,4 +324,17 @@ class FinanceRepositoryImpl implements FinanceRepository {
 
   @override
   Future<void> deleteThirdPartyReceipt(String receiptId) => _dataSource.deleteThirdPartyReceipt(receiptId);
+
+  @override
+  Future<List<HouseInflow>> getHouseInflowsForCycle(FinancialCycle cycle) =>
+      _dataSource.getHouseInflowsForCycle(cycle);
+
+  @override
+  Future<void> addHouseInflow(HouseInflow inflow) => _dataSource.addHouseInflow(inflow);
+
+  @override
+  Future<void> updateHouseInflow(HouseInflow inflow) => _dataSource.updateHouseInflow(inflow);
+
+  @override
+  Future<void> deleteHouseInflow(String inflowId) => _dataSource.deleteHouseInflow(inflowId);
 }

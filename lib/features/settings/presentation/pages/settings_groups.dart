@@ -412,6 +412,10 @@ extension _SettingsGroupViews on _SettingsPageState {
               : '${vaultDefault.label} (+$vaultOverrides com regra própria)',
         ),
         _line(
+          title: 'Entrada de fora',
+          value: inflowRules.thirdParty?.label ?? 'Igual à sobra',
+        ),
+        _line(
           title: 'Média dos gastos variáveis',
           value: settings.historyCycles == 1 ? 'Último ciclo' : 'Últimos ${settings.historyCycles} ciclos',
         ),
@@ -760,6 +764,8 @@ extension _SettingsGroupViews on _SettingsPageState {
     OpeningBalanceRule vaultDefault = savedRules.vaultWithdrawals ?? OpeningBalanceRule.keep;
     final vaults = financeState.savingsVaults;
     final vaultOverrides = Map<String, OpeningBalanceRule>.of(savedRules.vaultOverrides);
+    // Entrada de fora (0096): sem escolha própria, segue a sobra
+    OpeningBalanceRule? thirdPartyRule = savedRules.thirdParty;
     int historyCycles = settings.historyCycles;
     int adjustPercent = settings.adjustPercent;
     bool isSaving = false;
@@ -880,6 +886,13 @@ extension _SettingsGroupViews on _SettingsPageState {
                     ),
                     if (lowersVault(vaultOverrides[vault.id]) && !lowersVault(vaultDefault)) vaultWarning,
                   ],
+                  kindTitle('Entrada de fora'),
+                  ruleChoice(thirdPartyRule ?? rolledRule, (r) => thirdPartyRule = r),
+                  if (thirdPartyRule == null)
+                    const Text(
+                      'Sem escolha própria: segue a regra da sobra do ciclo anterior.',
+                      style: TextStyle(fontSize: 12, color: Colors.teal),
+                    ),
                   const Divider(height: 24),
                   const Text('Média dos gastos variáveis', style: TextStyle(fontWeight: FontWeight.bold)),
                   const SizedBox(height: 4),
@@ -941,7 +954,7 @@ extension _SettingsGroupViews on _SettingsPageState {
                               ? vaultDefault
                               : savedRules.vaultWithdrawals,
                           vaultOverrides: vaultOverrides,
-                          thirdParty: savedRules.thirdParty,
+                          thirdParty: thirdPartyRule,
                         );
                         final ok = await context.read<FinanceCubit>().updateHouseSettings(
                               inflowRules: isAdmin && rules != savedRules ? rules : null,

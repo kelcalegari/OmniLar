@@ -13,6 +13,7 @@ import '../../domain/entities/financial_cycle_summary.dart';
 import '../../domain/entities/opening_inflows.dart';
 import '../../domain/entities/savings_vault.dart';
 import '../../domain/entities/third_party_receipt.dart';
+import '../../domain/entities/house_inflow.dart';
 import '../../domain/entities/audit_entry.dart';
 
 /// Aviso único (banco e modo demo) para a categoria que não pode ser excluída.
@@ -206,4 +207,16 @@ abstract class FinanceDataSource {
 
   /// Exclui uma entrada ainda guardada: o valor sai da caixinha.
   Future<void> deleteThirdPartyReceipt(String receiptId);
+
+  // Entradas de fora (dinheiro que entra no Caixa sem ser aporte, 0096)
+  /// Entradas de fora que caem em [cycle], da mais nova para a mais antiga.
+  Future<List<HouseInflow>> getHouseInflowsForCycle(FinancialCycle cycle);
+
+  /// Lança uma entrada de fora no Caixa do ciclo do dia em que ela caiu.
+  Future<void> addHouseInflow(HouseInflow inflow);
+
+  /// Corrige valor, dia, descrição, origem ou despesa reembolsada.
+  Future<void> updateHouseInflow(HouseInflow inflow);
+
+  Future<void> deleteHouseInflow(String inflowId);
 }

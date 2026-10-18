@@ -13,6 +13,7 @@ import '../../domain/entities/house_member.dart';
 import '../../domain/entities/payment_method.dart';
 import '../../domain/entities/savings_vault.dart';
 import '../../domain/entities/third_party_receipt.dart';
+import '../../domain/entities/house_inflow.dart';
 import '../../domain/entities/audit_entry.dart';
 import 'finance_datasource.dart';
 
@@ -318,4 +319,17 @@ class DynamicFinanceDataSource implements FinanceDataSource {
 
   @override
   Future<void> deleteThirdPartyReceipt(String receiptId) => _active.deleteThirdPartyReceipt(receiptId);
+
+  @override
+  Future<List<HouseInflow>> getHouseInflowsForCycle(FinancialCycle cycle) =>
+      _active.getHouseInflowsForCycle(cycle);
+
+  @override
+  Future<void> addHouseInflow(HouseInflow inflow) => _active.addHouseInflow(inflow);
+
+  @override
+  Future<void> updateHouseInflow(HouseInflow inflow) => _active.updateHouseInflow(inflow);
+
+  @override
+  Future<void> deleteHouseInflow(String inflowId) => _active.deleteHouseInflow(inflowId);
 }

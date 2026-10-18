@@ -31,6 +31,10 @@ class SettlementSummary {
   /// Parte de [openingBalance] que voltou das caixinhas neste ciclo.
   final Money vaultReturns;
 
+  /// Parte de [openingBalance] que entrou de fora neste ciclo (Pix de
+  /// terceiro, reembolso, devolução; 0096).
+  final Money thirdPartyInflows;
+
   /// Sobra deste fechamento devolvida aos moradores (já abatida dos aportes devidos).
   final Money surplusRefunded;
 
@@ -60,6 +64,7 @@ class SettlementSummary {
     this.deficitCoveredByVault = const Money.zero(),
     this.openingBalance = const Money.zero(),
     this.vaultReturns = const Money.zero(),
+    this.thirdPartyInflows = const Money.zero(),
     this.surplusRefunded = const Money.zero(),
     this.houseLoanReceipts = const Money.zero(),
     this.isReopened = false,
@@ -105,6 +110,7 @@ class SettlementSummary {
     Money? deficitCoveredByVault,
     Money? openingBalance,
     Money? vaultReturns,
+    Money? thirdPartyInflows,
     Money? surplusRefunded,
     Money? houseLoanReceipts,
     bool? isReopened,
@@ -125,6 +131,7 @@ class SettlementSummary {
       deficitCoveredByVault: deficitCoveredByVault ?? this.deficitCoveredByVault,
       openingBalance: openingBalance ?? this.openingBalance,
       vaultReturns: vaultReturns ?? this.vaultReturns,
+      thirdPartyInflows: thirdPartyInflows ?? this.thirdPartyInflows,
       surplusRefunded: surplusRefunded ?? this.surplusRefunded,
       houseLoanReceipts: houseLoanReceipts ?? this.houseLoanReceipts,
       isReopened: isReopened ?? this.isReopened,

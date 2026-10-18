@@ -5,6 +5,8 @@ import '../theme/app_colors.dart';
 import '../utils/responsive.dart';
 import '../../features/finance/presentation/pages/add_expense_page.dart';
 import '../../features/finance/presentation/pages/add_contribution_page.dart';
+import '../../features/finance/presentation/cubit/finance_cubit.dart';
+import '../../features/finance/presentation/widgets/house_inflows_card.dart';
 import '../../features/p2p/presentation/pages/create_loan_page.dart';
 import '../../features/calendar/presentation/cubit/calendar_cubit.dart';
 import '../../features/calendar/presentation/widgets/add_event_sheet.dart';
@@ -576,11 +578,27 @@ class _SmartFABContent extends StatelessWidget {
                     );
                   },
                 ),
+                const SizedBox(width: 12),
+                _buildActionButton(
+                  context,
+                  icon: Icons.south_west_rounded,
+                  label: 'Entrada de fora',
+                  subtitle: 'Pix, reembolso',
+                  color: AppColors.creditGreen,
+                  onTap: () => _openHouseInflowForm(context),
+                ),
               ],
             ),
           ],
         );
     }
+  }
+
+  /// Entrada de fora (0096): o formulário abre por cima, já fora deste menu.
+  void _openHouseInflowForm(BuildContext context) {
+    final cubit = context.read<FinanceCubit>();
+    Navigator.pop(context);
+    showHouseInflowForm(context, cubit, cubit.state);
   }
 
   Widget _buildSecondaryActions(BuildContext context) {
