@@ -190,10 +190,13 @@ class LoanDetailsSheet extends StatelessWidget {
 
   /// Acordo com o Lar pago fora do fechamento: o valor é guardado em uma
   /// Caixinha. Devolve a escolhida, null quando não se aplica (credor é um
-  /// morador, reposição que já tem Caixinha de origem ou casa sem Caixinhas).
+  /// morador, reposição que já tem Caixinha de origem, empréstimo do Caixa do
+  /// ciclo, que volta para o Caixa, ou casa sem Caixinhas).
   /// [proceed] é false quando o usuário desistiu.
   Future<({bool proceed, String? vaultId})> _pickDestinationVault(BuildContext context) async {
-    if (!loan.isHouseLender || loan.repayToVaultId != null) {
+    if (!loan.isHouseLender ||
+        loan.repayToVaultId != null ||
+        loan.houseFunding == HouseLoanFunding.cycle) {
       return (proceed: true, vaultId: null);
     }
     var vaults = <SavingsVault>[];
