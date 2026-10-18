@@ -3,6 +3,7 @@ import 'package:intl/intl.dart';
 import '../../../finance/domain/entities/card_invoice.dart';
 import '../../../finance/domain/entities/house_member.dart';
 import '../../../finance/domain/entities/payment_method.dart';
+import '../../../finance/domain/entities/savings_vault.dart';
 import '../../../p2p/domain/entities/p2p_loan.dart';
 import '../entities/imported_statement_line.dart';
 import '../repositories/import_repository.dart';
@@ -17,6 +18,10 @@ enum ExtraActionType {
 
   /// Entrada que abate um empréstimo de quem é dono da conta.
   loanPayment,
+
+  /// Entrada na conta da casa de quem não mora nela (ex.: o Pix das marmitas):
+  /// fica guardada numa caixinha até a fatura ser paga, sem virar aporte.
+  thirdPartyReceipt,
 }
 
 /// O que uma linha que não é compra pode virar no app: nada disso é despesa
@@ -35,6 +40,9 @@ class ExtraAction {
   final String? memberId;
   final String? loanId;
 
+  /// Caixinha que guarda o repasse de terceiros.
+  final String? vaultId;
+
   const ExtraAction({
     required this.type,
     required this.key,
@@ -44,11 +52,13 @@ class ExtraAction {
     this.invoiceDueDate,
     this.memberId,
     this.loanId,
+    this.vaultId,
   });
 }
 
 /// Monta, para as linhas de um extrato de conta que não são compra, o que cada
-/// uma pode ser: pagamento de fatura, aporte ou abatimento de empréstimo.
+/// uma pode ser: pagamento de fatura, aporte, abatimento de empréstimo ou
+/// repasse de terceiros guardado em caixinha.
 class StatementExtras {
   const StatementExtras._();
 
@@ -74,6 +84,7 @@ class StatementExtras {
     required List<CardInvoice> openInvoices,
     required List<ImportBatch> history,
     required List<P2PLoan> loans,
+    List<SavingsVault> vaults = const [],
   }) {
     if (source.isCreditCard) return const {};
     final names = {for (final m in members) m.id: m.name.split(' ').first};
@@ -141,6 +152,20 @@ class StatementExtras {
               suggested: exactInstallment &&
                   (borrower == null || _mentions(line.description, borrower.name) || loans.length == 1),
               loanId: loan.id,
+            ),
+          );
+        }
+      }
+
+      // Dinheiro de fora na conta da casa: guardado para a fatura, sem ser aporte
+      if (line.kind == StatementLineKind.income && source.ownerMemberId == null) {
+        for (final vault in vaults) {
+          found.add(
+            ExtraAction(
+              type: ExtraActionType.thirdPartyReceipt,
+              key: 'third_party:${vault.id}',
+              label: 'Repasse de terceiros (guardar em ${vault.name})',
+              vaultId: vault.id,
             ),
           );
         }

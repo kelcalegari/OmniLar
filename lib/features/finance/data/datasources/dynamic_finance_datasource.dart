@@ -9,6 +9,7 @@ import '../../domain/entities/house_expense.dart';
 import '../../domain/entities/house_member.dart';
 import '../../domain/entities/payment_method.dart';
 import '../../domain/entities/savings_vault.dart';
+import '../../domain/entities/third_party_receipt.dart';
 import '../../domain/entities/audit_entry.dart';
 import 'finance_datasource.dart';
 
@@ -243,4 +244,54 @@ class DynamicFinanceDataSource implements FinanceDataSource {
         invoiceDueDate: invoiceDueDate,
         barcode: barcode,
       );
+
+  @override
+  Future<List<ThirdPartyReceipt>> getThirdPartyReceipts() => _active.getThirdPartyReceipts();
+
+  @override
+  Future<void> registerThirdPartyReceipt({
+    required String payerName,
+    required Money amount,
+    required DateTime receivedOn,
+    required String vaultId,
+    String? paymentMethodId,
+    String? description,
+  }) =>
+      _active.registerThirdPartyReceipt(
+        payerName: payerName,
+        amount: amount,
+        receivedOn: receivedOn,
+        vaultId: vaultId,
+        paymentMethodId: paymentMethodId,
+        description: description,
+      );
+
+  @override
+  Future<void> useThirdPartyReceipts({
+    required List<String> receiptIds,
+    required ThirdPartyReceiptUse use,
+    String? paymentMethodId,
+    DateTime? invoiceDueDate,
+  }) =>
+      _active.useThirdPartyReceipts(
+        receiptIds: receiptIds,
+        use: use,
+        paymentMethodId: paymentMethodId,
+        invoiceDueDate: invoiceDueDate,
+      );
+
+  @override
+  Future<void> reopenThirdPartyReceipts({
+    List<String>? receiptIds,
+    String? paymentMethodId,
+    DateTime? invoiceDueDate,
+  }) =>
+      _active.reopenThirdPartyReceipts(
+        receiptIds: receiptIds,
+        paymentMethodId: paymentMethodId,
+        invoiceDueDate: invoiceDueDate,
+      );
+
+  @override
+  Future<void> deleteThirdPartyReceipt(String receiptId) => _active.deleteThirdPartyReceipt(receiptId);
 }

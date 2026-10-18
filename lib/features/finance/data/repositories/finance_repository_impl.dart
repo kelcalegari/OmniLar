@@ -12,6 +12,7 @@ import '../../domain/entities/financial_cycle_summary.dart';
 import '../../domain/repositories/finance_repository.dart';
 import '../datasources/finance_datasource.dart';
 import '../../domain/entities/savings_vault.dart';
+import '../../domain/entities/third_party_receipt.dart';
 import '../../domain/entities/audit_entry.dart';
 import '../../../../core/domain/enums/recurrence.dart';
 import '../../../../core/domain/value_objects/money.dart';
@@ -248,4 +249,54 @@ class FinanceRepositoryImpl implements FinanceRepository {
         invoiceDueDate: invoiceDueDate,
         barcode: barcode,
       );
+
+  @override
+  Future<List<ThirdPartyReceipt>> getThirdPartyReceipts() => _dataSource.getThirdPartyReceipts();
+
+  @override
+  Future<void> registerThirdPartyReceipt({
+    required String payerName,
+    required Money amount,
+    required DateTime receivedOn,
+    required String vaultId,
+    String? paymentMethodId,
+    String? description,
+  }) =>
+      _dataSource.registerThirdPartyReceipt(
+        payerName: payerName,
+        amount: amount,
+        receivedOn: receivedOn,
+        vaultId: vaultId,
+        paymentMethodId: paymentMethodId,
+        description: description,
+      );
+
+  @override
+  Future<void> useThirdPartyReceipts({
+    required List<String> receiptIds,
+    required ThirdPartyReceiptUse use,
+    String? paymentMethodId,
+    DateTime? invoiceDueDate,
+  }) =>
+      _dataSource.useThirdPartyReceipts(
+        receiptIds: receiptIds,
+        use: use,
+        paymentMethodId: paymentMethodId,
+        invoiceDueDate: invoiceDueDate,
+      );
+
+  @override
+  Future<void> reopenThirdPartyReceipts({
+    List<String>? receiptIds,
+    String? paymentMethodId,
+    DateTime? invoiceDueDate,
+  }) =>
+      _dataSource.reopenThirdPartyReceipts(
+        receiptIds: receiptIds,
+        paymentMethodId: paymentMethodId,
+        invoiceDueDate: invoiceDueDate,
+      );
+
+  @override
+  Future<void> deleteThirdPartyReceipt(String receiptId) => _dataSource.deleteThirdPartyReceipt(receiptId);
 }

@@ -597,6 +597,7 @@ class _ImportPageState extends State<ImportPage> {
             openInvoices: openInvoices,
             history: _history,
             loans: p2pCubit.state.allLoans,
+            vaults: _finance.state.savingsVaults,
           ),
         );
     if (suggestCategories) {
@@ -668,6 +669,7 @@ class _ImportPageState extends State<ImportPage> {
   static const _houseKey = 'house';
   static const _personalKey = 'personal';
   static const _ignoredKey = 'ignored';
+  static const _thirdPartyKey = 'third_party';
   static const _loanPrefix = 'loan:';
 
   /// Opção marcada para [line]. Null quando é empréstimo ainda sem devedor.
@@ -683,6 +685,8 @@ class _ImportPageState extends State<ImportPage> {
         return allowPersonal ? _personalKey : null;
       case LineDestination.ignored:
         return _ignoredKey;
+      case LineDestination.thirdParty:
+        return _thirdPartyKey;
       case LineDestination.splitP2P:
         return debtors.any((m) => m.id == line.assignedMemberId)
             ? '$_loanPrefix${line.assignedMemberId}'
@@ -701,6 +705,7 @@ class _ImportPageState extends State<ImportPage> {
       destination: switch (key) {
         _personalKey => LineDestination.cardOwnerPersonal,
         _ignoredKey => LineDestination.ignored,
+        _thirdPartyKey => LineDestination.thirdParty,
         _ => LineDestination.house,
       },
       clearAssignedMember: true,
@@ -736,6 +741,10 @@ class _ImportPageState extends State<ImportPage> {
           value: _personalKey,
           child: Text('Pessoal de $payerName', style: style(Colors.blueGrey)),
         ),
+      DropdownMenuItem(
+        value: _thirdPartyKey,
+        child: Text('Pago por terceiros', style: style(Colors.teal)),
+      ),
       DropdownMenuItem(
         value: _ignoredKey,
         child: Text('Ignorar', style: style(Colors.grey)),
@@ -1009,6 +1018,14 @@ class _ImportPageState extends State<ImportPage> {
             );
           case ExtraActionType.loanPayment:
             await sl<P2PRepository>().payLoan(action.loanId!, extra.line.amount);
+          case ExtraActionType.thirdPartyReceipt:
+            await finance.registerThirdPartyReceipt(
+              payerName: StatementText.cleanTitle(extra.line.description),
+              amount: extra.line.amount,
+              receivedOn: extra.line.date,
+              vaultId: action.vaultId!,
+              description: 'Entrada importada de ${session.source.name}',
+            );
         }
       } catch (e) {
         warnings.add('${action.label}: $e');
@@ -1452,6 +1469,7 @@ class _ImportPageState extends State<ImportPage> {
               _total('Casa', totals.house, AppColors.primary),
               _total('Empréstimos', totals.loans, AppColors.debtRed),
               _total('Pessoal', totals.personal, Colors.blueGrey),
+              if (!totals.thirdParty.isZero) _total('Pago por terceiros', totals.thirdParty, Colors.teal),
               if (!totals.ignored.isZero) _total('Ignorado', totals.ignored, Colors.grey),
             ],
           ),
@@ -1895,6 +1913,8 @@ class _ImportPageState extends State<ImportPage> {
           return 'Pessoal';
         case LineDestination.ignored:
           return 'Ignorar';
+        case LineDestination.thirdParty:
+          return 'Pago por terceiros';
       }
     }
 

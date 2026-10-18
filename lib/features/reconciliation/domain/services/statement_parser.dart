@@ -518,6 +518,8 @@ class StatementParser {
           p2pMap[debtor] = (p2pMap[debtor] ?? 0) + line.amount.cents;
           break;
         case LineDestination.ignored:
+        case LineDestination.thirdParty:
+          // Pago por terceiros: está na fatura, mas não é da casa nem de um morador
           break;
       }
     }

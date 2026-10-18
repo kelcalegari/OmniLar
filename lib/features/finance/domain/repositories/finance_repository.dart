@@ -7,6 +7,7 @@ import '../entities/house_expense.dart';
 import '../entities/contribution.dart';
 import '../entities/financial_cycle_summary.dart';
 import '../entities/savings_vault.dart';
+import '../entities/third_party_receipt.dart';
 import '../entities/audit_entry.dart';
 import '../../../../core/domain/value_objects/money.dart';
 import '../../../../core/domain/value_objects/financial_cycle.dart';
@@ -117,4 +118,38 @@ abstract class FinanceRepository {
     required DateTime invoiceDueDate,
     String? barcode,
   });
+
+  // Entradas de terceiros (repasses guardados em caixinha)
+  /// Entradas guardadas e as usadas recentemente, da mais nova para a mais antiga.
+  Future<List<ThirdPartyReceipt>> getThirdPartyReceipts();
+
+  /// Registra o dinheiro de fora que entrou na conta da Casa e o guarda na
+  /// caixinha [vaultId] (sem tirar do Caixa do ciclo nem virar aporte).
+  Future<void> registerThirdPartyReceipt({
+    required String payerName,
+    required Money amount,
+    required DateTime receivedOn,
+    required String vaultId,
+    String? paymentMethodId,
+    String? description,
+  });
+
+  /// Usa as entradas na fatura do cartão: o valor sai da caixinha.
+  Future<void> useThirdPartyReceipts({
+    required List<String> receiptIds,
+    required ThirdPartyReceiptUse use,
+    String? paymentMethodId,
+    DateTime? invoiceDueDate,
+  });
+
+  /// Desfaz o uso: o valor volta para a caixinha. Sem [receiptIds], desfaz as
+  /// entradas usadas na fatura de [paymentMethodId] que vence em [invoiceDueDate].
+  Future<void> reopenThirdPartyReceipts({
+    List<String>? receiptIds,
+    String? paymentMethodId,
+    DateTime? invoiceDueDate,
+  });
+
+  /// Exclui uma entrada ainda guardada: o valor sai da caixinha.
+  Future<void> deleteThirdPartyReceipt(String receiptId);
 }

@@ -7,6 +7,7 @@ import '../../domain/entities/house_expense.dart';
 import '../../domain/entities/contribution.dart';
 import '../../domain/entities/financial_cycle_summary.dart';
 import '../../domain/entities/savings_vault.dart';
+import '../../domain/entities/third_party_receipt.dart';
 import '../../domain/entities/cycle_funding_estimate.dart';
 import '../../../../core/domain/value_objects/money.dart';
 import '../../../../core/domain/value_objects/financial_cycle.dart';
@@ -26,6 +27,9 @@ class FinanceState extends Equatable {
   final List<ExpenseCategory> categories;
   final List<PaymentMethod> paymentMethods;
   final List<SavingsVault> savingsVaults;
+
+  /// Entradas de terceiros guardadas em caixinha e as usadas recentemente.
+  final List<ThirdPartyReceipt> thirdPartyReceipts;
 
   /// Séries recorrentes ativas da casa (a ocorrência mais recente de cada uma).
   final List<HouseExpense> recurringSeries;
@@ -51,6 +55,7 @@ class FinanceState extends Equatable {
     this.categories = const [],
     this.paymentMethods = const [],
     this.savingsVaults = const [],
+    this.thirdPartyReceipts = const [],
     this.recurringSeries = const [],
     this.splitModel = 'percentage',
     this.cardInvoiceCodes = const {},
@@ -61,6 +66,10 @@ class FinanceState extends Equatable {
   /// Código do boleto da fatura do cartão [paymentMethodId] que vence em [dueDate].
   String? invoiceCodeFor(String paymentMethodId, DateTime dueDate) =>
       cardInvoiceCodes[CardInvoiceCode.keyOf(paymentMethodId, dueDate)];
+
+  /// Entradas de terceiros ainda guardadas.
+  List<ThirdPartyReceipt> get heldThirdPartyReceipts =>
+      thirdPartyReceipts.where((r) => r.isHeld).toList();
 
   Money get totalSavings =>
       savingsVaults.fold(const Money.zero(), (total, v) => total + v.currentBalance);
@@ -78,6 +87,7 @@ class FinanceState extends Equatable {
     List<ExpenseCategory>? categories,
     List<PaymentMethod>? paymentMethods,
     List<SavingsVault>? savingsVaults,
+    List<ThirdPartyReceipt>? thirdPartyReceipts,
     List<HouseExpense>? recurringSeries,
     String? splitModel,
     Map<String, String>? cardInvoiceCodes,
@@ -97,6 +107,7 @@ class FinanceState extends Equatable {
       categories: categories ?? this.categories,
       paymentMethods: paymentMethods ?? this.paymentMethods,
       savingsVaults: savingsVaults ?? this.savingsVaults,
+      thirdPartyReceipts: thirdPartyReceipts ?? this.thirdPartyReceipts,
       recurringSeries: recurringSeries ?? this.recurringSeries,
       splitModel: splitModel ?? this.splitModel,
       cardInvoiceCodes: cardInvoiceCodes ?? this.cardInvoiceCodes,
@@ -119,6 +130,7 @@ class FinanceState extends Equatable {
         categories,
         paymentMethods,
         savingsVaults,
+        thirdPartyReceipts,
         recurringSeries,
         splitModel,
         cardInvoiceCodes,

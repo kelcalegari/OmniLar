@@ -155,6 +155,9 @@ class ImportTotals {
   final Money personal;
   final Money ignored;
 
+  /// Parte que quem não mora na casa pagou (repasse).
+  final Money thirdParty;
+
   const ImportTotals({
     required this.file,
     required this.alreadyLaunched,
@@ -162,6 +165,7 @@ class ImportTotals {
     required this.loans,
     required this.personal,
     required this.ignored,
+    this.thirdParty = const Money.zero(),
   });
 }
 
@@ -399,6 +403,8 @@ class ImportSession {
       if (!consistent) continue;
       if (first.destination == LineDestination.house && first.categoryId == null) continue;
       if (first.destination == LineDestination.splitP2P && first.assignedMemberId == null) continue;
+      // Quem paga por terceiros muda de uma compra para outra: não vira regra
+      if (first.destination == LineDestination.thirdParty) continue;
 
       final isHouse = first.destination == LineDestination.house;
       rules.add(
@@ -767,6 +773,7 @@ class ImportSession {
     var loans = 0;
     var personal = 0;
     var ignored = 0;
+    var thirdParty = 0;
     for (final line in lines) {
       if (!line.isPurchase) continue;
       file += line.amount.cents;
@@ -787,6 +794,8 @@ class ImportSession {
               personal += cents;
             case LineDestination.ignored:
               ignored += cents;
+            case LineDestination.thirdParty:
+              thirdParty += cents;
           }
         case LineStatus.needsReview:
         case LineStatus.informational:
@@ -800,6 +809,7 @@ class ImportSession {
       loans: Money(loans),
       personal: Money(personal),
       ignored: Money(ignored),
+      thirdParty: Money(thirdParty),
     );
   }
 
@@ -961,6 +971,7 @@ class ImportSession {
           }
         case LineDestination.cardOwnerPersonal:
         case LineDestination.ignored:
+        case LineDestination.thirdParty:
           break;
       }
     }
@@ -1010,10 +1021,12 @@ class ImportSession {
     final refundedExpenses = <String, int>{};
     for (final line in lines) {
       final status = statusOf(line);
-      // Pessoal, ignorada, pagamento, estorno e entrada: ficam só no histórico
+      // Pessoal, de terceiros, ignorada, pagamento, estorno e entrada: ficam só no histórico
       final leftOut = status == LineStatus.informational ||
           status == LineStatus.ignored ||
-          (status == LineStatus.newLine && line.destination == LineDestination.cardOwnerPersonal);
+          (status == LineStatus.newLine &&
+              (line.destination == LineDestination.cardOwnerPersonal ||
+                  line.destination == LineDestination.thirdParty));
       final refundTarget = chosenRefund(line);
       if (refundTarget != null) {
         records.add(

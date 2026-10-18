@@ -16,12 +16,14 @@ String _destinationToDb(LineDestination destination) => switch (destination) {
       LineDestination.splitP2P => 'p2p_loan',
       LineDestination.cardOwnerPersonal => 'personal',
       LineDestination.ignored => 'ignored',
+      LineDestination.thirdParty => 'third_party',
     };
 
 LineDestination _destinationFromDb(String? value) => switch (value) {
       'p2p_loan' => LineDestination.splitP2P,
       'personal' => LineDestination.cardOwnerPersonal,
       'ignored' => LineDestination.ignored,
+      'third_party' => LineDestination.thirdParty,
       _ => LineDestination.house,
     };
 

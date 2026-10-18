@@ -11,6 +11,7 @@ import '../../domain/entities/contribution.dart';
 import '../../domain/entities/category.dart';
 import '../../domain/entities/payment_method.dart';
 import '../../domain/entities/savings_vault.dart';
+import '../../domain/entities/third_party_receipt.dart';
 import '../../domain/entities/financial_cycle_summary.dart';
 import '../../domain/entities/audit_entry.dart';
 import '../../domain/entities/cycle_funding_estimate.dart';
@@ -145,6 +146,9 @@ class FinanceCubit extends Cubit<FinanceState> {
         ),
       );
       final vaultsFuture = _repository.getSavingsVaults();
+      final receiptsFuture = Future<List<ThirdPartyReceipt>?>.sync(
+        () => _repository.getThirdPartyReceipts(),
+      ).catchError((_) => null);
       // As três abaixo são opcionais: se falharem, vale o que já se tinha
       final splitModelFuture = Future<String?>.sync(
         () => _repository.getHouseSplitModel(),
@@ -171,6 +175,7 @@ class FinanceCubit extends Cubit<FinanceState> {
         expensesFuture,
         contributionsFuture,
         vaultsFuture,
+        receiptsFuture,
         splitModelFuture,
         recurringFuture,
         invoiceCodesFuture,
@@ -187,6 +192,7 @@ class FinanceCubit extends Cubit<FinanceState> {
       final expenses = await expensesFuture;
       final contributions = await contributionsFuture;
       final vaults = await vaultsFuture;
+      final receipts = await receiptsFuture;
       final splitModel = await splitModelFuture ?? state.splitModel;
       // Sem a lista da casa, valem as recorrentes do ciclo aberto
       var recurringSeries = expenses.where((e) => e.isRecurring).toList();
@@ -227,6 +233,7 @@ class FinanceCubit extends Cubit<FinanceState> {
         categories: categories,
         paymentMethods: paymentMethods,
         savingsVaults: vaults,
+        thirdPartyReceipts: receipts,
         splitModel: splitModel,
         recurringSeries: recurringSeries,
         cardInvoiceCodes: invoiceCodes == null ? null : {for (final c in invoiceCodes) c.key: c.barcode},
@@ -602,6 +609,7 @@ class FinanceCubit extends Cubit<FinanceState> {
     required DateTime invoiceDueDate,
     required DateTime paidAt,
     bool paidByHouse = false,
+    List<String> thirdPartyReceiptIds = const [],
   }) async {
     try {
       await _repository.payCardInvoice(
@@ -610,6 +618,29 @@ class FinanceCubit extends Cubit<FinanceState> {
         paidAt: paidAt,
         paidByHouse: paidByHouse,
       );
+      if (thirdPartyReceiptIds.isNotEmpty) {
+        final card = state.paymentMethods.where((p) => p.id == paymentMethodId).firstOrNull;
+        try {
+          // Pela Casa (ou cartão sem dono) o repasse sai pelo banco; pelo
+          // titular, ele recebe o repasse
+          await _repository.useThirdPartyReceipts(
+            receiptIds: thirdPartyReceiptIds,
+            use: paidByHouse || card?.ownerMemberId == null
+                ? ThirdPartyReceiptUse.housePaid
+                : ThirdPartyReceiptUse.passedToOwner,
+            paymentMethodId: paymentMethodId,
+            invoiceDueDate: invoiceDueDate,
+          );
+        } catch (e) {
+          // A fatura já está paga: o repasse fica guardado para usar depois
+          await loadCycleData(cycle: state.currentCycle);
+          emit(state.copyWith(
+            status: FinanceStatus.failure,
+            errorMessage: 'A fatura foi paga, mas o repasse continua na caixinha: $e',
+          ));
+          return false;
+        }
+      }
       await loadCycleData(cycle: state.currentCycle);
       return true;
     } catch (e) {
@@ -661,6 +692,19 @@ class FinanceCubit extends Cubit<FinanceState> {
         paymentMethodId: paymentMethodId,
         invoiceDueDate: invoiceDueDate,
       );
+      // Repasses usados nesta fatura voltam para a caixinha
+      final usedHere = state.thirdPartyReceipts.any((r) =>
+          r.isUsed &&
+          r.usedPaymentMethodId == paymentMethodId &&
+          r.usedDueDate?.year == invoiceDueDate.year &&
+          r.usedDueDate?.month == invoiceDueDate.month &&
+          r.usedDueDate?.day == invoiceDueDate.day);
+      if (usedHere) {
+        await _repository.reopenThirdPartyReceipts(
+          paymentMethodId: paymentMethodId,
+          invoiceDueDate: invoiceDueDate,
+        );
+      }
       await loadCycleData(cycle: state.currentCycle);
       return true;
     } catch (e) {
@@ -774,6 +818,53 @@ class FinanceCubit extends Cubit<FinanceState> {
       return false;
     }
   }
+
+  // --- Entradas de terceiros (repasses guardados em caixinha) ---
+  Future<bool> registerThirdPartyReceipt({
+    required String payerName,
+    required Money amount,
+    required DateTime receivedOn,
+    required String vaultId,
+    String? paymentMethodId,
+    String? description,
+  }) =>
+      _runVaultAction(
+        () => _repository.registerThirdPartyReceipt(
+          payerName: payerName,
+          amount: amount,
+          receivedOn: receivedOn,
+          vaultId: vaultId,
+          paymentMethodId: paymentMethodId,
+          description: description,
+        ),
+        'Erro ao registrar o repasse',
+      );
+
+  Future<bool> useThirdPartyReceipts({
+    required List<String> receiptIds,
+    required ThirdPartyReceiptUse use,
+    String? paymentMethodId,
+    DateTime? invoiceDueDate,
+  }) =>
+      _runVaultAction(
+        () => _repository.useThirdPartyReceipts(
+          receiptIds: receiptIds,
+          use: use,
+          paymentMethodId: paymentMethodId,
+          invoiceDueDate: invoiceDueDate,
+        ),
+        'Erro ao usar o repasse',
+      );
+
+  Future<bool> reopenThirdPartyReceipt(String receiptId) => _runVaultAction(
+        () => _repository.reopenThirdPartyReceipts(receiptIds: [receiptId]),
+        'Erro ao devolver o repasse para a caixinha',
+      );
+
+  Future<bool> deleteThirdPartyReceipt(String receiptId) => _runVaultAction(
+        () => _repository.deleteThirdPartyReceipt(receiptId),
+        'Erro ao excluir o repasse',
+      );
 
   Future<List<AuditEntry>> getAuditLog({String? entityId, int limit = 50}) async {
     try {

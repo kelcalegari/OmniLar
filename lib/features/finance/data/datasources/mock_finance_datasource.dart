@@ -9,6 +9,7 @@ import '../../domain/entities/contribution.dart';
 import '../../domain/entities/split_rule.dart';
 import '../../domain/entities/financial_cycle_summary.dart';
 import '../../domain/entities/savings_vault.dart';
+import '../../domain/entities/third_party_receipt.dart';
 import '../../domain/entities/audit_entry.dart';
 import '../../../../core/domain/enums/recurrence.dart';
 import '../../../../core/domain/value_objects/money.dart';
@@ -1077,5 +1078,120 @@ class MockFinanceDataSource implements FinanceDataSource {
         barcode: barcode.trim(),
       );
     }
+  }
+
+  final List<ThirdPartyReceipt> _thirdPartyReceipts = [];
+  int _receiptSequence = 0;
+
+  @override
+  Future<List<ThirdPartyReceipt>> getThirdPartyReceipts() async =>
+      [..._thirdPartyReceipts]..sort((a, b) => b.receivedOn.compareTo(a.receivedOn));
+
+  @override
+  Future<void> registerThirdPartyReceipt({
+    required String payerName,
+    required Money amount,
+    required DateTime receivedOn,
+    required String vaultId,
+    String? paymentMethodId,
+    String? description,
+  }) async {
+    final payer = payerName.trim();
+    if (payer.isEmpty) throw const ServerFailure('Informe quem pagou.');
+    if (amount.cents <= 0) throw const ServerFailure('O valor deve ser maior que zero.');
+    if (!_savingsVaults.any((v) => v.id == vaultId)) {
+      throw const ServerFailure('Caixinha não encontrada nesta casa.');
+    }
+    final note = description?.trim();
+    // Como no banco: a entrada e o depósito na caixinha andam juntos
+    await depositToVault(
+      vaultId: vaultId,
+      memberId: _members.first.id,
+      amount: amount,
+      description: 'Repasse de $payer${note == null || note.isEmpty ? '' : ': $note'}',
+    );
+    _thirdPartyReceipts.add(ThirdPartyReceipt(
+      id: 'receipt_${++_receiptSequence}',
+      payerName: payer,
+      description: note == null || note.isEmpty ? null : note,
+      amount: amount,
+      receivedOn: DateTime(receivedOn.year, receivedOn.month, receivedOn.day),
+      vaultId: vaultId,
+      paymentMethodId: paymentMethodId,
+    ));
+  }
+
+  @override
+  Future<void> useThirdPartyReceipts({
+    required List<String> receiptIds,
+    required ThirdPartyReceiptUse use,
+    String? paymentMethodId,
+    DateTime? invoiceDueDate,
+  }) async {
+    final targets = [
+      for (final id in receiptIds) _thirdPartyReceipts.where((r) => r.id == id).firstOrNull,
+    ];
+    if (targets.any((r) => r == null)) {
+      throw const ServerFailure('Entrada de terceiros não encontrada nesta casa.');
+    }
+    for (final receipt in targets.cast<ThirdPartyReceipt>()) {
+      if (receipt.isUsed) throw ServerFailure('O repasse de ${receipt.payerName} já foi usado.');
+    }
+    for (final receipt in targets.cast<ThirdPartyReceipt>()) {
+      await withdrawFromVault(
+        vaultId: receipt.vaultId,
+        memberId: _members.first.id,
+        amount: receipt.amount,
+        description: use == ThirdPartyReceiptUse.housePaid
+            ? 'Repasse de ${receipt.payerName} usado na fatura'
+            : 'Repasse de ${receipt.payerName} entregue a quem pagou a fatura',
+      );
+      final index = _thirdPartyReceipts.indexOf(receipt);
+      _thirdPartyReceipts[index] = receipt.markUsed(
+        use: use,
+        paymentMethodId: paymentMethodId,
+        dueDate: invoiceDueDate,
+        at: DateTime.now(),
+      );
+    }
+  }
+
+  @override
+  Future<void> reopenThirdPartyReceipts({
+    List<String>? receiptIds,
+    String? paymentMethodId,
+    DateTime? invoiceDueDate,
+  }) async {
+    bool sameDay(DateTime? a, DateTime? b) =>
+        a != null && b != null && a.year == b.year && a.month == b.month && a.day == b.day;
+    for (var i = 0; i < _thirdPartyReceipts.length; i++) {
+      final receipt = _thirdPartyReceipts[i];
+      if (!receipt.isUsed) continue;
+      final matches = receiptIds != null
+          ? receiptIds.contains(receipt.id)
+          : receipt.usedPaymentMethodId == paymentMethodId && sameDay(receipt.usedDueDate, invoiceDueDate);
+      if (!matches) continue;
+      await depositToVault(
+        vaultId: receipt.vaultId,
+        memberId: _members.first.id,
+        amount: receipt.amount,
+        description: 'Repasse de ${receipt.payerName} voltou para a caixinha',
+      );
+      _thirdPartyReceipts[i] = receipt.reopened();
+    }
+  }
+
+  @override
+  Future<void> deleteThirdPartyReceipt(String receiptId) async {
+    final receipt = _thirdPartyReceipts.where((r) => r.id == receiptId).firstOrNull;
+    if (receipt == null) throw const ServerFailure('Entrada de terceiros não encontrada nesta casa.');
+    if (receipt.isUsed) throw const ServerFailure('Desfaça o uso do repasse antes de excluí-lo.');
+    await withdrawFromVault(
+      vaultId: receipt.vaultId,
+      memberId: _members.first.id,
+      amount: receipt.amount,
+      description: 'Repasse de ${receipt.payerName} excluído',
+    );
+    _thirdPartyReceipts.remove(receipt);
   }
 }

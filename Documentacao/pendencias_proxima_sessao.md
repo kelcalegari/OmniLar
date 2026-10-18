@@ -152,6 +152,15 @@ O dono seguiu todas as recomendações (⭐) da lista de 15/10. O que foi feito,
 
 ## Testes manuais pendentes
 
+### Repasses de terceiros (branch `feat/repasses-de-terceiros`, migration 0090 ainda não aplicada)
+- **Caso das marmitas:** compra de R$ 192 no cartão de um morador, sendo R$ 32 dele e R$ 160 de quem não mora na casa, que pagou por Pix na conta da Casa.
+- **Registrar:** em Caixinhas, "Repasses de terceiros" › Registrar: quem pagou, valor, dia, caixinha e cartão (opcional). O valor entra na caixinha, não vira aporte e o Caixa do ciclo não muda.
+- **Pelo extrato da conta da Casa:** a entrada (Pix recebido) oferece "Repasse de terceiros (guardar em <caixinha>)".
+- **Pela fatura:** dividir a linha (32 + 160) e marcar a parte dos outros como "Pago por terceiros": não vira despesa nem regra e aparece no total "Pago por terceiros".
+- **Pagar a fatura:** o pagamento lista os repasses guardados do cartão (marcados) e os sem cartão (desmarcados). Pela Casa, o valor sai da caixinha pelo banco; pelo titular, a tela avisa "Repasse R$ X a <titular>". Desfazer o pagamento devolve o repasse à caixinha.
+- **Fatura importada sem compra da casa** (tudo pessoal, de outro morador ou de terceiros): aparece em Ajustes › Formas de pagamento › cartão › Pagamento da fatura como "Fatura importada sem compra da casa". Pagando pela Casa, os gastos pessoais viram dívida com o Caixa (0055) e os repasses marcados saem da caixinha; desfazer limpa o pagamento.
+- **Repasse sem fatura no app:** o menu do repasse › "Usar na fatura" tira o valor da caixinha.
+
 ### Ajustes de 17/10 (na `main`, no site e no APK desde 17/10/2026)
 - **Busca nos lançamentos:** em "Gastos do Ciclo", buscar por nome, categoria, quem pagou, forma de pagamento ou valor ("312,40"); no computador, `Ctrl + F` leva ao campo.
 - **Tabela no computador:** o botão ao lado da contagem de lançamentos troca para a tabela; tocar no título da coluna ordena; tocar na linha abre o detalhe.
@@ -285,6 +294,7 @@ Uma linha por migration, para saber onde está cada regra.
 | 0083 | Alertas de gasto por categoria (`proactive_alert`): 90% e 100% da média dos 3 ciclos anteriores |
 | 0084 | Marca "Pix enviado" no Super Pix e lembrete até a marca |
 | 0085 | Aceite dos Termos, consentimento da IA e `export_my_data` |
+| 0090 | Entradas de terceiros (`third_party_receipts`) guardadas em caixinha, uso no pagamento da fatura e destino "Pago por terceiros" na importação (branch `feat/repasses-de-terceiros`, ainda não aplicada) |
 
 ## Documentos relacionados
 
