@@ -344,7 +344,7 @@ extension _SettingsGroupViews on _SettingsPageState {
       financeState.splitModel,
       for (final m in members)
         '${m.id}:${m.name}:${m.role}:${m.defaultSplitPercent}:${m.defaultFixedAmountCents}',
-      for (final c in categories) '${c.id}:${c.name}:${c.ownerMemberId}',
+      for (final c in categories) '${c.id}:${c.name}:${c.ownerMemberId}:${c.defaultSplit?.toJson()}',
     ].join('|');
 
     return [
@@ -358,6 +358,7 @@ extension _SettingsGroupViews on _SettingsPageState {
           ),
         ],
       ),
+      _newMemberSplitPanel(context, financeState),
       _planningPanel(context, financeState),
       _closingDefaultsPanel(context, financeState),
       _initialBalancePanel(context, financeState),
@@ -382,6 +383,98 @@ extension _SettingsGroupViews on _SettingsPageState {
         ],
       ),
     ];
+  }
+
+  /// O que acontece com o rateio padrão quando entra um morador (0097). Só
+  /// administradores mudam; com a política "perguntar", avisa enquanto houver
+  /// morador sem parte na divisão.
+  Widget _newMemberSplitPanel(BuildContext context, FinanceState financeState) {
+    final policy = financeState.houseSettings.newMemberSplitPolicy;
+    final currentUserId = sl<AuthRepository>().currentUser?.id;
+    final me = financeState.members.where((m) => m.id == currentUserId).firstOrNull;
+    final isAdmin = me?.role == 'owner' || me?.role == 'admin';
+    final withoutShare = financeState.members.length > 1
+        ? financeState.members.where((m) => m.defaultSplitPercent <= 0).toList()
+        : <HouseMember>[];
+    return _panel(
+      context,
+      title: 'Divisão para quem entra',
+      actionLabel: isAdmin ? 'Alterar' : null,
+      onAction: isAdmin ? () => _showNewMemberSplitDialog(context, financeState) : null,
+      children: [
+        _line(title: 'Ao entrar um morador', value: policy.label),
+        if (policy == NewMemberSplitPolicy.ask && withoutShare.isNotEmpty)
+          Padding(
+            key: const Key('new_member_split_notice'),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+            child: Text(
+              '${withoutShare.map((m) => m.name).join(', ')} ainda não tem parte na divisão. '
+              'Defina os percentuais em Modelos de Rateio.',
+              style: const TextStyle(color: AppColors.folegoWarning, fontSize: 13),
+            ),
+          ),
+        if (!isAdmin) _emptyLine('Só administradores mudam esta escolha.'),
+      ],
+    );
+  }
+
+  void _showNewMemberSplitDialog(BuildContext context, FinanceState financeState) {
+    final saved = financeState.houseSettings.newMemberSplitPolicy;
+    var choice = saved;
+    bool isSaving = false;
+    showDialog(
+      context: context,
+      builder: (dialogCtx) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: const Text(
+            'Divisão para quem entra',
+            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+          ),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                for (final policy in NewMemberSplitPolicy.values)
+                  ListTile(
+                    key: ValueKey('new_member_policy_${policy.dbValue}'),
+                    contentPadding: EdgeInsets.zero,
+                    leading: Icon(
+                      choice == policy ? Icons.radio_button_checked : Icons.radio_button_unchecked,
+                      color: choice == policy ? AppColors.primary : Colors.grey,
+                    ),
+                    title: Text(policy.label, style: const TextStyle(fontWeight: FontWeight.w600)),
+                    subtitle: Text(policy.description, style: const TextStyle(fontSize: 12)),
+                    onTap: () => setDialogState(() => choice = policy),
+                  ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogCtx),
+              child: const Text('Cancelar'),
+            ),
+            FilledButton(
+              onPressed: isSaving
+                  ? null
+                  : () async {
+                      setDialogState(() => isSaving = true);
+                      final messenger = ScaffoldMessenger.of(context);
+                      final navigator = Navigator.of(dialogCtx);
+                      final ok = choice == saved ||
+                          await context.read<FinanceCubit>().updateHouseSettings(newMemberSplitPolicy: choice);
+                      if (ok) navigator.pop();
+                      setDialogState(() => isSaving = false);
+                      showSaveFeedback(messenger, ok: ok, success: 'Divisão para quem entra atualizada.');
+                    },
+              style: FilledButton.styleFrom(backgroundColor: AppColors.primary),
+              child: const Text('Salvar'),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   Widget _planningPanel(BuildContext context, FinanceState financeState) {
@@ -979,6 +1072,18 @@ extension _SettingsGroupViews on _SettingsPageState {
     );
   }
 
+  /// Resumo da divisão padrão da categoria (0097); null quando não tem.
+  String? _categorySplitLabel(ExpenseCategory cat, List<HouseMember> members) {
+    final rule = cat.defaultSplit?.toRule(members);
+    if (rule == null) return null;
+    String name(String id) => members.firstWhere((m) => m.id == id).name.split(' ').first;
+    String percent(double value) => value == value.roundToDouble() ? value.toStringAsFixed(0) : value.toString();
+    if (rule.type == SplitType.categoryOwner) {
+      return 'Divisão padrão: ${name(rule.singleResponsibleMemberId!)} responde por tudo';
+    }
+    return 'Divisão padrão: ${rule.percentages!.entries.map((e) => '${name(e.key)} ${percent(e.value)}%').join(' / ')}';
+  }
+
   Widget _categoryLine(
     BuildContext context,
     FinanceCubit financeCubit,
@@ -997,7 +1102,9 @@ extension _SettingsGroupViews on _SettingsPageState {
       ),
       title: Text(cat.name, style: const TextStyle(fontWeight: FontWeight.w600)),
       subtitle: Text(
-        owner != null ? 'Responsável: 100% ${owner.name}' : 'Divisão padrão da casa',
+        owner != null
+            ? 'Responsável: 100% ${owner.name}'
+            : (_categorySplitLabel(cat, members) ?? 'Divisão padrão da casa'),
         style: TextStyle(
           fontSize: 12,
           color: owner != null ? AppColors.accent : Colors.grey,
