@@ -1117,169 +1117,120 @@ class _HomePageContentState extends State<_HomePageContent> {
     final isDark = theme.brightness == Brightness.dark;
     final dateStr = DateFormat('dd/MM/yyyy').format(item.date);
 
-    return Card(
-      key: ValueKey('inflow_item_${item.id}'),
-      margin: const EdgeInsets.only(bottom: 8),
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
-        side: BorderSide(color: theme.dividerColor.withValues(alpha: 0.4)),
+    final amountText = PrivacySensitiveText(
+      '+ ${item.amount.formatted}',
+      style: const TextStyle(
+        fontWeight: FontWeight.bold,
+        fontSize: 15,
+        color: AppColors.creditGreen,
       ),
-      elevation: 0,
-      child: ListTile(
-        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-        leading: CircleAvatar(
-          backgroundColor: item.color.withValues(alpha: isDark ? 0.25 : 0.12),
-          child: Icon(item.icon, color: item.color, size: 20),
-        ),
-        title: Row(
-          children: [
-            Expanded(
-              child: Text(
-                item.title,
-                style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
+    );
+
+    final menuButton = PopupMenuButton<String>(
+      key: ValueKey('inflow_menu_${item.id}'),
+      padding: EdgeInsets.zero,
+      icon: const Icon(Icons.more_vert_rounded, size: 20, color: Colors.grey),
+      tooltip: 'Opções da entrada',
+      onSelected: (val) {
+        if (item is _HouseInflowItem) {
+          if (val == 'edit') {
+            showHouseInflowForm(
+              context,
+              context.read<FinanceCubit>(),
+              state,
+              editing: item.inflow,
+            );
+          } else if (val == 'delete') {
+            _confirmDeleteHouseInflow(context, item.inflow);
+          }
+        } else if (item is _ThirdPartyReceiptInflowItem) {
+          if (val == 'use') {
+            _showUseReceiptDialog(context, item.receipt, state);
+          } else if (val == 'reopen') {
+            _reopenReceipt(context, item.receipt);
+          } else if (val == 'delete') {
+            _confirmDeleteReceipt(context, item.receipt, state);
+          }
+        }
+      },
+      itemBuilder: (ctx) {
+        if (item is _HouseInflowItem) {
+          return [
+            const PopupMenuItem(
+              value: 'edit',
+              child: Row(
+                children: [
+                  Icon(Icons.edit_outlined, size: 18, color: AppColors.primary),
+                  SizedBox(width: 10),
+                  Expanded(child: Text('Editar Entrada')),
+                ],
               ),
             ),
-            const SizedBox(width: 6),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
-              decoration: BoxDecoration(
-                color: item.color.withValues(alpha: isDark ? 0.25 : 0.12),
-                borderRadius: BorderRadius.circular(8),
+            const PopupMenuItem(
+              value: 'delete',
+              child: Row(
+                children: [
+                  Icon(Icons.delete_outline_rounded, size: 18, color: AppColors.debtRed),
+                  SizedBox(width: 10),
+                  Expanded(child: Text('Excluir Entrada', style: TextStyle(color: AppColors.debtRed))),
+                ],
               ),
-              child: Text(
-                item.badgeLabel,
-                style: TextStyle(
-                  fontSize: 10,
-                  fontWeight: FontWeight.bold,
-                  color: item.color,
+            ),
+          ];
+        } else if (item is _ThirdPartyReceiptInflowItem) {
+          final receipt = item.receipt;
+          return [
+            if (receipt.isHeld)
+              const PopupMenuItem(
+                value: 'use',
+                child: Row(
+                  children: [
+                    Icon(Icons.credit_card_rounded, size: 18, color: AppColors.primary),
+                    SizedBox(width: 10),
+                    Expanded(child: Text('Usar na fatura')),
+                  ],
+                ),
+              )
+            else
+              const PopupMenuItem(
+                value: 'reopen',
+                child: Row(
+                  children: [
+                    Icon(Icons.undo_rounded, size: 18, color: AppColors.primary),
+                    SizedBox(width: 10),
+                    Expanded(child: Text('Devolver para caixinha')),
+                  ],
                 ),
               ),
-            ),
-          ],
-        ),
-        subtitle: Padding(
-          padding: const EdgeInsets.only(top: 4),
-          child: Row(
-            children: [
-              Text(dateStr, style: theme.textTheme.bodySmall),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  item.subtitle,
-                  style: theme.textTheme.bodySmall?.copyWith(color: Colors.grey),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ),
-            ],
-          ),
-        ),
-        trailing: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            PrivacySensitiveText(
-              '+ ${item.amount.formatted}',
-              style: const TextStyle(
-                fontWeight: FontWeight.bold,
-                fontSize: 14,
-                color: AppColors.creditGreen,
+            const PopupMenuItem(
+              value: 'delete',
+              child: Row(
+                children: [
+                  Icon(Icons.delete_outline_rounded, size: 18, color: AppColors.debtRed),
+                  SizedBox(width: 10),
+                  Expanded(child: Text('Excluir Repasse', style: TextStyle(color: AppColors.debtRed))),
+                ],
               ),
             ),
-            PopupMenuButton<String>(
-              key: ValueKey('inflow_menu_${item.id}'),
-              padding: EdgeInsets.zero,
-              icon: const Icon(Icons.more_vert_rounded, size: 18, color: Colors.grey),
-              tooltip: 'Opções da entrada',
-              onSelected: (val) {
-                if (item is _HouseInflowItem) {
-                  if (val == 'edit') {
-                    showHouseInflowForm(
-                      context,
-                      context.read<FinanceCubit>(),
-                      state,
-                      editing: item.inflow,
-                    );
-                  } else if (val == 'delete') {
-                    _confirmDeleteHouseInflow(context, item.inflow);
-                  }
-                } else if (item is _ThirdPartyReceiptInflowItem) {
-                  if (val == 'use') {
-                    _showUseReceiptDialog(context, item.receipt, state);
-                  } else if (val == 'reopen') {
-                    _reopenReceipt(context, item.receipt);
-                  } else if (val == 'delete') {
-                    _confirmDeleteReceipt(context, item.receipt, state);
-                  }
-                }
-              },
-              itemBuilder: (ctx) {
-                if (item is _HouseInflowItem) {
-                  return [
-                    const PopupMenuItem(
-                      value: 'edit',
-                      child: Row(
-                        children: [
-                          Icon(Icons.edit_outlined, size: 18, color: AppColors.primary),
-                          SizedBox(width: 10),
-                          Expanded(child: Text('Editar Entrada')),
-                        ],
-                      ),
-                    ),
-                    const PopupMenuItem(
-                      value: 'delete',
-                      child: Row(
-                        children: [
-                          Icon(Icons.delete_outline_rounded, size: 18, color: AppColors.debtRed),
-                          SizedBox(width: 10),
-                          Expanded(child: Text('Excluir Entrada', style: TextStyle(color: AppColors.debtRed))),
-                        ],
-                      ),
-                    ),
-                  ];
-                } else if (item is _ThirdPartyReceiptInflowItem) {
-                  final receipt = item.receipt;
-                  return [
-                    if (receipt.isHeld)
-                      const PopupMenuItem(
-                        value: 'use',
-                        child: Row(
-                          children: [
-                            Icon(Icons.credit_card_rounded, size: 18, color: AppColors.primary),
-                            SizedBox(width: 10),
-                            Expanded(child: Text('Usar na fatura')),
-                          ],
-                        ),
-                      )
-                    else
-                      const PopupMenuItem(
-                        value: 'reopen',
-                        child: Row(
-                          children: [
-                            Icon(Icons.undo_rounded, size: 18, color: AppColors.primary),
-                            SizedBox(width: 10),
-                            Expanded(child: Text('Devolver para caixinha')),
-                          ],
-                        ),
-                      ),
-                    const PopupMenuItem(
-                      value: 'delete',
-                      child: Row(
-                        children: [
-                          Icon(Icons.delete_outline_rounded, size: 18, color: AppColors.debtRed),
-                          SizedBox(width: 10),
-                          Expanded(child: Text('Excluir Repasse', style: TextStyle(color: AppColors.debtRed))),
-                        ],
-                      ),
-                    ),
-                  ];
-                }
-                return const [];
-              },
-            ),
-          ],
+          ];
+        }
+        return const [];
+      },
+    );
+
+    return Container(
+      key: ValueKey('inflow_item_${item.id}'),
+      margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: theme.cardTheme.color,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: isDark ? AppColors.borderDark : AppColors.borderLight,
         ),
+      ),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(16),
         onTap: () {
           if (item is _HouseInflowItem) {
             showHouseInflowForm(
@@ -1296,6 +1247,105 @@ class _HomePageContentState extends State<_HomePageContent> {
             }
           }
         },
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final narrow = constraints.maxWidth < 400;
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Row(
+                  children: [
+                    // Ícone em Container 44x44 arredondado (squircle) idêntico às saídas
+                    Container(
+                      width: 44,
+                      height: 44,
+                      decoration: BoxDecoration(
+                        color: item.color.withValues(alpha: isDark ? 0.25 : 0.12),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Icon(
+                        item.icon,
+                        color: item.color,
+                        size: 22,
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+
+                    // Título, Badges e Subtítulo
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Wrap(
+                            crossAxisAlignment: WrapCrossAlignment.center,
+                            spacing: 6,
+                            runSpacing: 4,
+                            children: [
+                              Text(
+                                item.title,
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                  fontSize: 15,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+                                decoration: BoxDecoration(
+                                  color: item.color.withValues(alpha: isDark ? 0.25 : 0.12),
+                                  borderRadius: BorderRadius.circular(4),
+                                ),
+                                child: Text(
+                                  item.badgeLabel,
+                                  style: TextStyle(
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.bold,
+                                    color: item.color,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 4),
+                          Row(
+                            children: [
+                              Flexible(
+                                child: Text(
+                                  '$dateStr • ${item.subtitle}',
+                                  style: theme.textTheme.bodySmall?.copyWith(fontSize: 12),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+
+                    if (!narrow) ...[
+                      amountText,
+                      menuButton,
+                    ],
+                  ],
+                ),
+                if (narrow) ...[
+                  const SizedBox(height: 10),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      amountText,
+                      menuButton,
+                    ],
+                  ),
+                ],
+              ],
+            );
+          },
+        ),
       ),
     );
   }
