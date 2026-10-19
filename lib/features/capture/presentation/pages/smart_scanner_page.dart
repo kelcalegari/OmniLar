@@ -23,6 +23,7 @@ import '../../../../core/utils/responsive.dart';
 import '../../../auth/domain/repositories/auth_repository.dart';
 import '../../../admin/presentation/cubit/account_access_cubit.dart';
 import '../../../finance/domain/services/receipt_attachment_service.dart';
+import '../../../finance/presentation/widgets/receipt_attachment_viewer.dart';
 import '../../domain/entities/capture_proposal.dart';
 import '../../domain/services/boleto_parser.dart';
 import '../../domain/services/capture_service.dart';
@@ -387,6 +388,13 @@ class _SmartScannerPageState extends State<SmartScannerPage> with WidgetsBinding
 
       final fromQr = trySefaz ? await _nfceFromPhoto(image.path) : (proposal: null, failure: null);
       if (fromQr.proposal != null) {
+        final bytes = await image.readAsBytes();
+        _scannedAttachmentFile = ReceiptAttachmentFile(
+          name: image.name,
+          bytes: bytes,
+          sizeBytes: bytes.length,
+          contentType: image.mimeType ?? 'image/jpeg',
+        );
         if (mounted) {
           setState(() {
             _currentProposal = fromQr.proposal;
@@ -721,6 +729,12 @@ class _SmartScannerPageState extends State<SmartScannerPage> with WidgetsBinding
       throw ValidationFailure(financeCubit.state.errorMessage ?? kSaveFailedMessage);
     }
     widget.onProposalReady?.call(proposal);
+  }
+
+  String _formatAttachmentSize(int bytes) {
+    if (bytes < 1024) return '$bytes B';
+    if (bytes < 1024 * 1024) return '${(bytes / 1024).toStringAsFixed(1)} KB';
+    return '${(bytes / (1024 * 1024)).toStringAsFixed(1)} MB';
   }
 
   void _editProposalDetails() {
@@ -1794,6 +1808,67 @@ class _SmartScannerPageState extends State<SmartScannerPage> with WidgetsBinding
                       'Dica: Cadastre sua chave gratuita do Gemini em Ajustes > Assistente IA para leitura com IA, ou clique no lápis acima para definir o valor manualmente.',
                       style: theme.textTheme.bodySmall?.copyWith(fontSize: 11),
                     ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+          if (_scannedAttachmentFile != null) ...[
+            const SizedBox(height: 12),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+              decoration: BoxDecoration(
+                color: AppColors.creditGreen.withValues(alpha: 0.08),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: AppColors.creditGreen.withValues(alpha: 0.3)),
+              ),
+              child: Row(
+                children: [
+                  Icon(
+                    _scannedAttachmentFile!.name.toLowerCase().endsWith('.pdf')
+                        ? Icons.picture_as_pdf_rounded
+                        : Icons.receipt_long_rounded,
+                    color: AppColors.creditGreen,
+                    size: 22,
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          _scannedAttachmentFile!.name,
+                          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        Text(
+                          'Comprovante vinculado • ${_formatAttachmentSize(_scannedAttachmentFile!.sizeBytes)}',
+                          style: const TextStyle(fontSize: 11, color: AppColors.creditGreen),
+                        ),
+                      ],
+                    ),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.visibility_outlined, size: 20, color: AppColors.primary),
+                    tooltip: 'Visualizar comprovante',
+                    onPressed: () {
+                      ReceiptViewerModal.show(
+                        context,
+                        localBytes: _scannedAttachmentFile!.bytes,
+                        attachmentName: _scannedAttachmentFile!.name,
+                        attachmentContentType: _scannedAttachmentFile!.contentType,
+                      );
+                    },
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.close_rounded, size: 18, color: Colors.grey),
+                    tooltip: 'Desvincular',
+                    onPressed: () {
+                      setState(() {
+                        _scannedAttachmentFile = null;
+                      });
+                    },
                   ),
                 ],
               ),

@@ -16,6 +16,7 @@ class AccountAccessState extends Equatable {
   /// Conta conhecida e não liberada: o app mostra a tela de espera.
   bool get isBlocked => access != null && !access!.isActive;
   bool get isAdmin => access?.isAdmin ?? false;
+  bool get isPremium => access?.isPremium ?? false;
 
   @override
   List<Object?> get props => [access];

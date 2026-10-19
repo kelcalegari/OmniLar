@@ -1,3 +1,4 @@
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../../../../core/di/service_locator.dart';
@@ -122,22 +123,25 @@ class PremiumReceiptInfoSheet extends StatelessWidget {
   }
 }
 
-/// Visualizador interativo do comprovante anexado.
+/// Visualizador interativo do comprovante anexado (remoto ou bytes locais).
 class ReceiptViewerModal extends StatefulWidget {
-  final String attachmentPath;
+  final String? attachmentPath;
+  final Uint8List? localBytes;
   final String? attachmentName;
   final String? attachmentContentType;
 
   const ReceiptViewerModal({
     super.key,
-    required this.attachmentPath,
+    this.attachmentPath,
+    this.localBytes,
     this.attachmentName,
     this.attachmentContentType,
   });
 
   static Future<void> show(
     BuildContext context, {
-    required String attachmentPath,
+    String? attachmentPath,
+    Uint8List? localBytes,
     String? attachmentName,
     String? attachmentContentType,
   }) {
@@ -145,6 +149,7 @@ class ReceiptViewerModal extends StatefulWidget {
       context: context,
       builder: (ctx) => ReceiptViewerModal(
         attachmentPath: attachmentPath,
+        localBytes: localBytes,
         attachmentName: attachmentName,
         attachmentContentType: attachmentContentType,
       ),
@@ -156,7 +161,7 @@ class ReceiptViewerModal extends StatefulWidget {
 }
 
 class _ReceiptViewerModalState extends State<ReceiptViewerModal> {
-  late Future<String> _signedUrlFuture;
+  Future<String>? _signedUrlFuture;
 
   @override
   void initState() {
@@ -165,7 +170,9 @@ class _ReceiptViewerModalState extends State<ReceiptViewerModal> {
   }
 
   void _loadUrl() {
-    _signedUrlFuture = sl<ReceiptAttachmentService>().getSignedUrl(widget.attachmentPath);
+    if (widget.localBytes == null && widget.attachmentPath != null) {
+      _signedUrlFuture = sl<ReceiptAttachmentService>().getSignedUrl(widget.attachmentPath!);
+    }
   }
 
   bool get _isPdf =>
@@ -204,22 +211,23 @@ class _ReceiptViewerModalState extends State<ReceiptViewerModal> {
                       overflow: TextOverflow.ellipsis,
                     ),
                   ),
-                  FutureBuilder<String>(
-                    future: _signedUrlFuture,
-                    builder: (context, snapshot) {
-                      if (!snapshot.hasData) return const SizedBox.shrink();
-                      return IconButton(
-                        icon: const Icon(Icons.download_rounded, size: 20),
-                        tooltip: 'Baixar arquivo',
-                        onPressed: () {
-                          downloadReceiptFile(snapshot.data!, fileName);
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(content: Text('Download iniciado.')),
-                          );
-                        },
-                      );
-                    },
-                  ),
+                  if (_signedUrlFuture != null)
+                    FutureBuilder<String>(
+                      future: _signedUrlFuture,
+                      builder: (context, snapshot) {
+                        if (!snapshot.hasData) return const SizedBox.shrink();
+                        return IconButton(
+                          icon: const Icon(Icons.download_rounded, size: 20),
+                          tooltip: 'Baixar arquivo',
+                          onPressed: () {
+                            downloadReceiptFile(snapshot.data!, fileName);
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(content: Text('Download iniciado.')),
+                            );
+                          },
+                        );
+                      },
+                    ),
                   IconButton(
                     icon: const Icon(Icons.close_rounded, size: 20),
                     tooltip: 'Fechar',
@@ -232,124 +240,195 @@ class _ReceiptViewerModalState extends State<ReceiptViewerModal> {
 
             // Content Viewer
             Expanded(
-              child: FutureBuilder<String>(
-                future: _signedUrlFuture,
-                builder: (context, snapshot) {
-                  if (snapshot.connectionState == ConnectionState.waiting) {
-                    return const Center(
-                      child: CircularProgressIndicator(),
-                    );
-                  }
-                  if (snapshot.hasError || !snapshot.hasData) {
-                    return Center(
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          const Icon(Icons.broken_image_rounded, size: 48, color: Colors.grey),
-                          const SizedBox(height: 12),
-                          const Text(
-                            'Não foi possível carregar o arquivo.',
-                            style: TextStyle(color: Colors.grey, fontSize: 13),
-                          ),
-                          const SizedBox(height: 12),
-                          TextButton.icon(
-                            icon: const Icon(Icons.refresh_rounded, size: 16),
-                            label: const Text('Tentar novamente'),
-                            onPressed: () => setState(_loadUrl),
-                          ),
-                        ],
-                      ),
-                    );
-                  }
+              child: _buildViewerContent(theme, fileName),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 
-                  final url = snapshot.data!;
+  Widget _buildViewerContent(ThemeData theme, String fileName) {
+    if (widget.localBytes != null) {
+      if (_isPdf) {
+        return Center(
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: AppColors.debtRed.withValues(alpha: 0.1),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(
+                    Icons.picture_as_pdf_rounded,
+                    size: 48,
+                    color: AppColors.debtRed,
+                  ),
+                ),
+                const SizedBox(height: 16),
+                Text(
+                  fileName,
+                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 8),
+                const Text(
+                  'Documento em formato PDF pronto para envio.',
+                  style: TextStyle(color: Colors.grey, fontSize: 12),
+                ),
+              ],
+            ),
+          ),
+        );
+      }
 
-                  if (_isPdf) {
-                    return Center(
-                      child: Padding(
-                        padding: const EdgeInsets.all(24),
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Container(
-                              padding: const EdgeInsets.all(16),
-                              decoration: BoxDecoration(
-                                color: AppColors.debtRed.withValues(alpha: 0.1),
-                                shape: BoxShape.circle,
-                              ),
-                              child: const Icon(
-                                Icons.picture_as_pdf_rounded,
-                                size: 48,
-                                color: AppColors.debtRed,
-                              ),
-                            ),
-                            const SizedBox(height: 16),
-                            Text(
-                              fileName,
-                              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
-                              textAlign: TextAlign.center,
-                            ),
-                            const SizedBox(height: 8),
-                            const Text(
-                              'Documento em formato PDF.',
-                              style: TextStyle(color: Colors.grey, fontSize: 12),
-                            ),
-                            const SizedBox(height: 20),
-                            ElevatedButton.icon(
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: AppColors.primary,
-                                foregroundColor: Colors.white,
-                                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                              ),
-                              icon: const Icon(Icons.open_in_new_rounded, size: 18),
-                              label: const Text('Abrir / Baixar PDF'),
-                              onPressed: () => downloadReceiptFile(url, fileName),
-                            ),
-                          ],
-                        ),
-                      ),
-                    );
-                  }
+      return Container(
+        color: Colors.black.withValues(alpha: 0.05),
+        child: InteractiveViewer(
+          panEnabled: true,
+          minScale: 0.8,
+          maxScale: 4.0,
+          child: Center(
+            child: Image.memory(
+              widget.localBytes!,
+              fit: BoxFit.contain,
+              errorBuilder: (context, error, stackTrace) => const Center(
+                child: Text('Erro ao carregar pré-visualização da imagem'),
+              ),
+            ),
+          ),
+        ),
+      );
+    }
 
-                  return Container(
-                    color: Colors.black.withValues(alpha: 0.05),
-                    child: InteractiveViewer(
-                      panEnabled: true,
-                      minScale: 0.8,
-                      maxScale: 4.0,
-                      child: Center(
-                        child: Image.network(
-                          url,
-                          fit: BoxFit.contain,
-                          loadingBuilder: (context, child, loadingProgress) {
-                            if (loadingProgress == null) return child;
-                            return Center(
-                              child: CircularProgressIndicator(
-                                value: loadingProgress.expectedTotalBytes != null
-                                    ? loadingProgress.cumulativeBytesLoaded /
-                                        loadingProgress.expectedTotalBytes!
-                                    : null,
-                              ),
-                            );
-                          },
-                          errorBuilder: (context, error, stackTrace) => const Center(
-                            child: Column(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Icon(Icons.error_outline_rounded, size: 36, color: Colors.grey),
-                                SizedBox(height: 8),
-                                Text('Erro ao exibir imagem do comprovante', style: TextStyle(fontSize: 12, color: Colors.grey)),
-                              ],
-                            ),
-                          ),
-                        ),
-                      ),
+    if (_signedUrlFuture == null) {
+      return const Center(
+        child: Text('Nenhum comprovante para exibir.', style: TextStyle(color: Colors.grey)),
+      );
+    }
+
+    return FutureBuilder<String>(
+      future: _signedUrlFuture,
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Center(
+            child: CircularProgressIndicator(),
+          );
+        }
+        if (snapshot.hasError || !snapshot.hasData) {
+          return Center(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(Icons.broken_image_rounded, size: 48, color: Colors.grey),
+                const SizedBox(height: 12),
+                const Text(
+                  'Não foi possível carregar o arquivo.',
+                  style: TextStyle(color: Colors.grey, fontSize: 13),
+                ),
+                const SizedBox(height: 12),
+                TextButton.icon(
+                  icon: const Icon(Icons.refresh_rounded, size: 16),
+                  label: const Text('Tentar novamente'),
+                  onPressed: () => setState(_loadUrl),
+                ),
+              ],
+            ),
+          );
+        }
+
+        final url = snapshot.data!;
+
+        if (_isPdf) {
+          return Center(
+            child: Padding(
+              padding: const EdgeInsets.all(24),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: AppColors.debtRed.withValues(alpha: 0.1),
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(
+                      Icons.picture_as_pdf_rounded,
+                      size: 48,
+                      color: AppColors.debtRed,
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  Text(
+                    fileName,
+                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 8),
+                  const Text(
+                    'Documento em formato PDF.',
+                    style: TextStyle(color: Colors.grey, fontSize: 12),
+                  ),
+                  const SizedBox(height: 20),
+                  ElevatedButton.icon(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppColors.primary,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                    ),
+                    icon: const Icon(Icons.open_in_new_rounded, size: 18),
+                    label: const Text('Abrir / Baixar PDF'),
+                    onPressed: () => downloadReceiptFile(url, fileName),
+                  ),
+                ],
+              ),
+            ),
+          );
+        }
+
+        return Container(
+          color: Colors.black.withValues(alpha: 0.05),
+          child: InteractiveViewer(
+            panEnabled: true,
+            minScale: 0.8,
+            maxScale: 4.0,
+            child: Center(
+              child: Image.network(
+                url,
+                fit: BoxFit.contain,
+                loadingBuilder: (context, child, loadingProgress) {
+                  if (loadingProgress == null) return child;
+                  return Center(
+                    child: CircularProgressIndicator(
+                      value: loadingProgress.expectedTotalBytes != null
+                          ? loadingProgress.cumulativeBytesLoaded /
+                              loadingProgress.expectedTotalBytes!
+                          : null,
                     ),
                   );
                 },
+                errorBuilder: (context, error, stackTrace) => const Center(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.error_outline_rounded, size: 36, color: Colors.grey),
+                      SizedBox(height: 8),
+                      Text('Erro ao exibir imagem do comprovante', style: TextStyle(fontSize: 12, color: Colors.grey)),
+                    ],
+                  ),
+                ),
               ),
             ),
+          ),
+        );
+      },
+    );
+  }
           ],
         ),
       ),

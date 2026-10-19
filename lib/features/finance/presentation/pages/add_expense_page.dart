@@ -2010,59 +2010,77 @@ class _AddExpensePageState extends State<AddExpensePage> {
             : '${(sizeBytes / (1024 * 1024)).toStringAsFixed(1)} MB')
         : null;
 
-    if (!isPremium) {
-      return InkWell(
-        borderRadius: BorderRadius.circular(12),
-        onTap: () => PremiumReceiptInfoSheet.show(context),
-        child: Container(
-          padding: const EdgeInsets.all(12),
-          decoration: BoxDecoration(
-            color: theme.cardColor,
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: Colors.grey.withValues(alpha: 0.2)),
+    if (hasAttachment) {
+      return Container(
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: theme.cardColor,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: AppColors.creditGreen.withValues(alpha: 0.5),
           ),
-          child: Row(
-            children: [
-              Container(
+        ),
+        child: Row(
+          children: [
+            InkWell(
+              borderRadius: BorderRadius.circular(8),
+              onTap: () {
+                ReceiptViewerModal.show(
+                  context,
+                  attachmentPath: _existingAttachmentPath,
+                  localBytes: _pendingAttachmentFile?.bytes,
+                  attachmentName: fileName,
+                  attachmentContentType: _pendingAttachmentFile?.contentType ?? _existingAttachmentContentType,
+                );
+              },
+              child: Container(
                 padding: const EdgeInsets.all(8),
                 decoration: BoxDecoration(
-                  color: const Color(0xFFF59E0B).withValues(alpha: 0.1),
+                  color: AppColors.creditGreen.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: const Icon(
-                  Icons.stars_rounded,
-                  color: Color(0xFFF59E0B),
+                  Icons.receipt_long_rounded,
+                  color: AppColors.creditGreen,
                   size: 20,
                 ),
               ),
-              const SizedBox(width: 12),
-              Expanded(
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: InkWell(
+                borderRadius: BorderRadius.circular(6),
+                onTap: () {
+                  ReceiptViewerModal.show(
+                    context,
+                    attachmentPath: _existingAttachmentPath,
+                    localBytes: _pendingAttachmentFile?.bytes,
+                    attachmentName: fileName,
+                    attachmentContentType: _pendingAttachmentFile?.contentType ?? _existingAttachmentContentType,
+                  );
+                },
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Row(
+                    Row(
                       children: [
-                        Text(
-                          'Comprovante / Cupom',
-                          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
-                        ),
-                        SizedBox(width: 6),
-                        Text(
-                          '⭐ Premium',
-                          style: TextStyle(
-                            fontSize: 10,
-                            fontWeight: FontWeight.w600,
-                            color: Color(0xFFB45309),
+                        Flexible(
+                          child: Text(
+                            fileName,
+                            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
                           ),
                         ),
+                        const SizedBox(width: 6),
+                        const Icon(Icons.visibility_outlined, size: 14, color: AppColors.primary),
                       ],
                     ),
-                    const SizedBox(height: 2),
                     Text(
-                      'Guarda em nuvem durante o ciclo e 30 dias após',
-                      style: TextStyle(
+                      sizeText != null ? 'Comprovante anexado • $sizeText' : 'Comprovante anexado (toque para ver)',
+                      style: const TextStyle(
                         fontSize: 11,
-                        color: Colors.grey.shade600,
+                        color: AppColors.creditGreen,
                       ),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
@@ -2070,67 +2088,12 @@ class _AddExpensePageState extends State<AddExpensePage> {
                   ],
                 ),
               ),
-              TextButton.icon(
-                onPressed: () => PremiumReceiptInfoSheet.show(context),
-                icon: const Icon(Icons.info_outline_rounded, size: 16),
-                label: const Text('Saiba mais', style: TextStyle(fontSize: 12)),
-              ),
-            ],
-          ),
-        ),
-      );
-    }
-
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: theme.cardColor,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: hasAttachment
-              ? AppColors.creditGreen.withValues(alpha: 0.5)
-              : Colors.grey.withValues(alpha: 0.2),
-        ),
-      ),
-      child: Row(
-        children: [
-          Container(
-            padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(
-              color: (hasAttachment ? AppColors.creditGreen : AppColors.primary)
-                  .withValues(alpha: 0.1),
-              borderRadius: BorderRadius.circular(8),
             ),
-            child: Icon(
-              hasAttachment ? Icons.receipt_long_rounded : Icons.camera_alt_outlined,
-              color: hasAttachment ? AppColors.creditGreen : AppColors.primary,
-              size: 20,
+            IconButton(
+              icon: const Icon(Icons.edit_outlined, size: 18, color: AppColors.primary),
+              tooltip: 'Trocar comprovante',
+              onPressed: _pickReceiptAttachment,
             ),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  hasAttachment ? 'Comprovante Anexado' : 'Comprovante / Cupom Fiscal',
-                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
-                ),
-                Text(
-                  hasAttachment
-                      ? '$fileName${sizeText != null ? ' • $sizeText' : ''}'
-                      : 'Anexe a foto da nota ou comprovante de pagamento',
-                  style: TextStyle(
-                    fontSize: 11,
-                    color: hasAttachment ? AppColors.creditGreen : Colors.grey,
-                  ),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ],
-            ),
-          ),
-          if (hasAttachment)
             IconButton(
               icon: const Icon(Icons.close_rounded, size: 18, color: Colors.grey),
               tooltip: 'Remover comprovante',
@@ -2140,13 +2103,82 @@ class _AddExpensePageState extends State<AddExpensePage> {
                   _clearAttachment = true;
                 });
               },
-            )
-          else
-            TextButton.icon(
-              onPressed: _pickReceiptAttachment,
-              icon: const Icon(Icons.upload_file_rounded, size: 16),
-              label: const Text('Anexar', style: TextStyle(fontSize: 12)),
             ),
+          ],
+        ),
+      );
+    }
+
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: theme.cardColor,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.grey.withValues(alpha: 0.2)),
+      ),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: AppColors.primary.withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: const Icon(
+              Icons.camera_alt_outlined,
+              color: AppColors.primary,
+              size: 20,
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    const Text(
+                      'Comprovante / Cupom',
+                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                    ),
+                    if (!isPremium) ...[
+                      const SizedBox(width: 6),
+                      const Text(
+                        '⭐ Premium',
+                        style: TextStyle(
+                          fontSize: 10,
+                          fontWeight: FontWeight.w600,
+                          color: Color(0xFFB45309),
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+                Text(
+                  isPremium
+                      ? 'Anexe a foto da nota ou comprovante de pagamento'
+                      : 'Guarda em nuvem durante o ciclo e 30 dias após',
+                  style: TextStyle(
+                    fontSize: 11,
+                    color: Colors.grey.shade600,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ],
+            ),
+          ),
+          TextButton.icon(
+            onPressed: () {
+              if (isPremium) {
+                _pickReceiptAttachment();
+              } else {
+                PremiumReceiptInfoSheet.show(context);
+              }
+            },
+            icon: Icon(isPremium ? Icons.upload_file_rounded : Icons.info_outline_rounded, size: 16),
+            label: Text(isPremium ? 'Anexar' : 'Saiba mais', style: const TextStyle(fontSize: 12)),
+          ),
         ],
       ),
     );
