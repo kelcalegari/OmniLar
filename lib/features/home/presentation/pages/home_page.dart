@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
+import 'package:intl/intl.dart';
+import '../../../../core/domain/value_objects/money.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/utils/responsive.dart';
 import '../../../../core/widgets/privacy_toggle.dart';
@@ -12,7 +14,12 @@ import '../../../auth/presentation/cubit/auth_cubit.dart';
 import '../../../auth/presentation/cubit/auth_state.dart';
 import '../../../finance/presentation/cubit/finance_cubit.dart';
 import '../../../finance/presentation/cubit/finance_state.dart';
+import '../../../finance/domain/entities/contribution.dart';
 import '../../../finance/domain/entities/house_expense.dart';
+import '../../../finance/domain/entities/house_inflow.dart';
+import '../../../finance/domain/entities/third_party_receipt.dart';
+import '../../../finance/presentation/widgets/house_inflows_card.dart';
+import '../../../finance/presentation/widgets/third_party_receipts_card.dart';
 import '../../../finance/domain/repositories/finance_repository.dart';
 import '../../../finance/domain/services/cycle_expense_grouping.dart';
 import '../../../finance/domain/services/expense_search.dart';
@@ -71,6 +78,10 @@ class _HomePageContent extends StatefulWidget {
 class _HomePageContentState extends State<_HomePageContent> {
   String _selectedExpenseFilter = 'all'; // 'all', 'mine', 'recurring', 'bills'
   String? _selectedExpenseId;
+
+  /// Alternador da lista: false = Saídas / Gastos, true = Entradas
+  bool _showInflows = false;
+  String _selectedInflowFilter = 'all'; // 'all', 'unapplied', 'receipts', 'contributions', 'inflows'
 
   /// Busca nos lançamentos do ciclo (Ctrl + F no computador).
   final _searchController = TextEditingController();
@@ -779,33 +790,66 @@ class _HomePageContentState extends State<_HomePageContent> {
       );
     }).toList();
 
+    final allInflows = _buildInflowItems(state);
+    final unappliedCount = allInflows.where((i) => i.isUnapplied).length;
+    final filteredInflows = _filterInflows(allInflows);
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        Wrap(
+          alignment: WrapAlignment.spaceBetween,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          spacing: 8,
+          runSpacing: 8,
           children: [
-            Text(
-              'Gastos do Ciclo',
-              style: theme.textTheme.titleMedium?.copyWith(
-                fontWeight: FontWeight.bold,
+            SegmentedButton<bool>(
+              key: const Key('timeline_direction_toggle'),
+              style: const ButtonStyle(
+                visualDensity: VisualDensity.compact,
+                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
               ),
+              segments: [
+                ButtonSegment<bool>(
+                  value: false,
+                  label: Text('Saídas (${state.expenses.length})'),
+                  icon: const Icon(Icons.arrow_upward_rounded, size: 16),
+                ),
+                ButtonSegment<bool>(
+                  value: true,
+                  label: Text('Entradas (${allInflows.length})'),
+                  icon: const Icon(Icons.arrow_downward_rounded, size: 16),
+                ),
+              ],
+              selected: {_showInflows},
+              onSelectionChanged: (selected) {
+                setState(() {
+                  _showInflows = selected.first;
+                });
+              },
             ),
             Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Text(
-                  '${filteredExpenses.length} de ${state.expenses.length} lançamentos',
-                  style: theme.textTheme.bodySmall,
-                ),
-                if (isDesktop) ...[
-                  const SizedBox(width: 8),
-                  IconButton(
-                    key: const Key('expense_view_toggle'),
-                    tooltip: _gridView ? 'Ver em lista' : 'Ver em tabela',
-                    icon: Icon(_gridView ? Icons.view_agenda_outlined : Icons.table_rows_outlined, size: 20),
-                    visualDensity: VisualDensity.compact,
-                    onPressed: () => setState(() => _gridView = !_gridView),
+                if (!_showInflows) ...[
+                  Text(
+                    '${filteredExpenses.length} de ${state.expenses.length} lançamentos',
+                    style: theme.textTheme.bodySmall,
+                  ),
+                  if (isDesktop) ...[
+                    const SizedBox(width: 8),
+                    IconButton(
+                      key: const Key('expense_view_toggle'),
+                      tooltip: _gridView ? 'Ver em lista' : 'Ver em tabela',
+                      icon: Icon(_gridView ? Icons.view_agenda_outlined : Icons.table_rows_outlined, size: 20),
+                      visualDensity: VisualDensity.compact,
+                      onPressed: () => setState(() => _gridView = !_gridView),
+                    ),
+                  ],
+                ] else ...[
+                  Text(
+                    '${filteredInflows.length} de ${allInflows.length} entradas',
+                    style: theme.textTheme.bodySmall,
                   ),
                 ],
               ],
@@ -813,20 +857,43 @@ class _HomePageContentState extends State<_HomePageContent> {
           ],
         ),
         const SizedBox(height: 8),
-        SingleChildScrollView(
-          scrollDirection: Axis.horizontal,
-          child: Row(
-            children: [
-              _buildFilterChip('all', 'Todos', theme),
-              const SizedBox(width: 6),
-              _buildFilterChip('recurring', 'Recorrentes', theme),
-              const SizedBox(width: 6),
-              _buildFilterChip('mine', 'Minhas', theme),
-              const SizedBox(width: 6),
-              _buildFilterChip('bills', 'Contas/Fixas', theme),
-            ],
+        if (!_showInflows)
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(
+              children: [
+                _buildFilterChip('all', 'Todos', theme),
+                const SizedBox(width: 6),
+                _buildFilterChip('recurring', 'Recorrentes', theme),
+                const SizedBox(width: 6),
+                _buildFilterChip('mine', 'Minhas', theme),
+                const SizedBox(width: 6),
+                _buildFilterChip('bills', 'Contas/Fixas', theme),
+              ],
+            ),
+          )
+        else
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(
+              children: [
+                _buildInflowFilterChip('all', 'Todas', theme),
+                const SizedBox(width: 6),
+                _buildInflowFilterChip(
+                  'unapplied',
+                  unappliedCount > 0 ? 'Sem aplicar ($unappliedCount)' : 'Sem aplicar',
+                  theme,
+                  badgeColor: unappliedCount > 0 ? Colors.amber.shade800 : null,
+                ),
+                const SizedBox(width: 6),
+                _buildInflowFilterChip('receipts', 'Repasses', theme),
+                const SizedBox(width: 6),
+                _buildInflowFilterChip('contributions', 'Aportes', theme),
+                const SizedBox(width: 6),
+                _buildInflowFilterChip('inflows', 'De fora', theme),
+              ],
+            ),
           ),
-        ),
         const SizedBox(height: 8),
         TextField(
           key: const Key('expense_search'),
@@ -835,7 +902,7 @@ class _HomePageContentState extends State<_HomePageContent> {
           onChanged: (value) => setState(() => _searchQuery = value),
           textInputAction: TextInputAction.search,
           decoration: InputDecoration(
-            hintText: 'Buscar nos lançamentos',
+            hintText: _showInflows ? 'Buscar nas entradas' : 'Buscar nos lançamentos',
             prefixIcon: const Icon(Icons.search_rounded),
             suffixIcon: _searchQuery.isEmpty
                 ? null
@@ -852,82 +919,273 @@ class _HomePageContentState extends State<_HomePageContent> {
           ),
         ),
         const SizedBox(height: 12),
-        if (filteredExpenses.isEmpty)
-          Container(
-            padding: const EdgeInsets.all(24),
-            alignment: Alignment.center,
-            child: Text(
-              _searchQuery.trim().isNotEmpty
-                  ? 'Nenhum lançamento encontrado para "${_searchQuery.trim()}"'
-                  : _selectedExpenseFilter == 'all'
-                      ? 'Nenhuma despesa lançada neste ciclo'
-                      : 'Nenhum gasto encontrado para este filtro',
-              style: theme.textTheme.bodyMedium?.copyWith(color: Colors.grey),
-            ),
-          )
-        else if (isDesktop && _gridView)
-          ExpenseGridTable(
-            expenses: filteredExpenses,
-            categories: state.categories,
-            members: state.members,
-            paymentMethods: state.paymentMethods,
-            selectedExpenseId: _selectedExpenseId,
-            onSelect: (id) => setState(() => _selectedExpenseId = _selectedExpenseId == id ? null : id),
-          )
-        else
-          ...groupCardInvoices(filteredExpenses, state.paymentMethods).map((entry) {
-            Widget item(HouseExpense expense, {bool inInvoice = false}) =>
-                _buildExpenseItem(state, expense, isDesktop: isDesktop, inInvoice: inInvoice);
+        if (!_showInflows) ...[
+          if (filteredExpenses.isEmpty)
+            Container(
+              padding: const EdgeInsets.all(24),
+              alignment: Alignment.center,
+              child: Text(
+                _searchQuery.trim().isNotEmpty
+                    ? 'Nenhum lançamento encontrado para "${_searchQuery.trim()}"'
+                    : _selectedExpenseFilter == 'all'
+                        ? 'Nenhuma despesa lançada neste ciclo'
+                        : 'Nenhum gasto encontrado para este filtro',
+                style: theme.textTheme.bodyMedium?.copyWith(color: Colors.grey),
+              ),
+            )
+          else if (isDesktop && _gridView)
+            ExpenseGridTable(
+              expenses: filteredExpenses,
+              categories: state.categories,
+              members: state.members,
+              paymentMethods: state.paymentMethods,
+              selectedExpenseId: _selectedExpenseId,
+              onSelect: (id) => setState(() => _selectedExpenseId = _selectedExpenseId == id ? null : id),
+            )
+          else
+            ...groupCardInvoices(filteredExpenses, state.paymentMethods).map((entry) {
+              Widget item(HouseExpense expense, {bool inInvoice = false}) =>
+                  _buildExpenseItem(state, expense, isDesktop: isDesktop, inInvoice: inInvoice);
 
-            switch (entry) {
-              case SingleExpenseEntry(:final expense):
-                return item(expense);
-              case CardInvoiceEntry():
-                // A fatura que guarda a despesa selecionada fica aberta
-                final expanded = _expandedInvoices.contains(entry.key) ||
-                    entry.purchases.any((e) => e.id == _selectedExpenseId);
-                return CardInvoiceGroupTile(
-                  invoice: entry,
-                  barcode: state.invoiceCodeFor(entry.card.id, entry.dueDate),
-                  expanded: expanded,
-                  onToggle: () => setState(() {
-                    if (expanded) {
-                      _expandedInvoices.remove(entry.key);
-                      if (entry.purchases.any((e) => e.id == _selectedExpenseId)) {
-                        _selectedExpenseId = null;
+              switch (entry) {
+                case SingleExpenseEntry(:final expense):
+                  return item(expense);
+                case CardInvoiceEntry():
+                  // A fatura que guarda a despesa selecionada fica aberta
+                  final expanded = _expandedInvoices.contains(entry.key) ||
+                      entry.purchases.any((e) => e.id == _selectedExpenseId);
+                  return CardInvoiceGroupTile(
+                    invoice: entry,
+                    barcode: state.invoiceCodeFor(entry.card.id, entry.dueDate),
+                    expanded: expanded,
+                    onToggle: () => setState(() {
+                      if (expanded) {
+                        _expandedInvoices.remove(entry.key);
+                        if (entry.purchases.any((e) => e.id == _selectedExpenseId)) {
+                          _selectedExpenseId = null;
+                        }
+                      } else {
+                        _expandedInvoices.add(entry.key);
                       }
-                    } else {
-                      _expandedInvoices.add(entry.key);
-                    }
-                  }),
-                  onImport: () => context.push(
-                    Uri(path: '/importar', queryParameters: {'origem': entry.card.id}).toString(),
+                    }),
+                    onImport: () => context.push(
+                      Uri(path: '/importar', queryParameters: {'origem': entry.card.id}).toString(),
+                    ),
+                    onRegisterPayment: () {
+                      final financeCubit = context.read<FinanceCubit>();
+                      showAdaptiveModal(
+                        context: context,
+                        maxWidth: 480,
+                        child: CardInvoicePaymentSheet(
+                          card: entry.card,
+                          initialDueDate: entry.dueDate,
+                          memberNames: {for (final m in state.members) m.id: m.name.split(' ').first},
+                          repository: sl<FinanceRepository>(),
+                          financeCubit: financeCubit,
+                          cycleSchedule: financeCubit.cycleSchedule,
+                          isCycleClosed: (cycle) async =>
+                              (await sl<SettlementRepository>().getSettlementSummary(cycle)).status ==
+                              SettlementStatus.settled,
+                        ),
+                      );
+                    },
+                    children: [
+                      for (final expense in entry.purchases) item(expense, inInvoice: true),
+                    ],
+                  );
+              }
+            }),
+        ] else ...[
+          if (filteredInflows.isEmpty)
+            Container(
+              padding: const EdgeInsets.all(24),
+              alignment: Alignment.center,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    _searchQuery.trim().isNotEmpty
+                        ? 'Nenhuma entrada encontrada para "${_searchQuery.trim()}"'
+                        : _selectedInflowFilter == 'all'
+                            ? 'Nenhuma entrada registrada neste ciclo'
+                            : _selectedInflowFilter == 'unapplied'
+                                ? 'Tudo aplicado! Não há repasses ou entradas livres pendentes'
+                                : 'Nenhuma entrada encontrada para este filtro',
+                    style: theme.textTheme.bodyMedium?.copyWith(color: Colors.grey),
                   ),
-                  onRegisterPayment: () {
-                    final financeCubit = context.read<FinanceCubit>();
-                    showAdaptiveModal(
-                      context: context,
-                      maxWidth: 480,
-                      child: CardInvoicePaymentSheet(
-                        card: entry.card,
-                        initialDueDate: entry.dueDate,
-                        memberNames: {for (final m in state.members) m.id: m.name.split(' ').first},
-                        repository: sl<FinanceRepository>(),
-                        financeCubit: financeCubit,
-                        cycleSchedule: financeCubit.cycleSchedule,
-                        isCycleClosed: (cycle) async =>
-                            (await sl<SettlementRepository>().getSettlementSummary(cycle)).status ==
-                            SettlementStatus.settled,
-                      ),
-                    );
-                  },
-                  children: [
-                    for (final expense in entry.purchases) item(expense, inInvoice: true),
-                  ],
-                );
-            }
-          }),
+                  const SizedBox(height: 12),
+                  FilledButton.tonalIcon(
+                    onPressed: () => showHouseInflowForm(context, context.read<FinanceCubit>(), state),
+                    icon: const Icon(Icons.add_rounded),
+                    label: const Text('Registrar entrada'),
+                  ),
+                ],
+              ),
+            )
+          else
+            ...filteredInflows.map((item) => _buildInflowCard(item, theme, state)),
+        ],
       ],
+    );
+  }
+
+  List<_UnifiedInflowItem> _buildInflowItems(FinanceState state) {
+    final list = <_UnifiedInflowItem>[];
+
+    for (final r in state.thirdPartyReceipts) {
+      list.add(_ThirdPartyReceiptInflowItem(r));
+    }
+    for (final c in state.contributions) {
+      list.add(_ContributionInflowItem(c));
+    }
+    for (final i in state.houseInflows) {
+      list.add(_HouseInflowItem(i));
+    }
+
+    list.sort((a, b) => b.date.compareTo(a.date));
+    return list;
+  }
+
+  List<_UnifiedInflowItem> _filterInflows(List<_UnifiedInflowItem> items) {
+    return items.where((item) {
+      switch (_selectedInflowFilter) {
+        case 'unapplied':
+          return item.isUnapplied;
+        case 'receipts':
+          return item is _ThirdPartyReceiptInflowItem;
+        case 'contributions':
+          return item is _ContributionInflowItem;
+        case 'inflows':
+          return item is _HouseInflowItem;
+        case 'all':
+        default:
+          return true;
+      }
+    }).where((item) {
+      if (_searchQuery.trim().isEmpty) return true;
+      final query = _searchQuery.trim().toLowerCase();
+      return item.title.toLowerCase().contains(query) ||
+          item.subtitle.toLowerCase().contains(query) ||
+          item.badgeLabel.toLowerCase().contains(query);
+    }).toList();
+  }
+
+  Widget _buildInflowCard(_UnifiedInflowItem item, ThemeData theme, FinanceState state) {
+    final isDark = theme.brightness == Brightness.dark;
+    final dateStr = DateFormat('dd/MM/yyyy').format(item.date);
+
+    return Card(
+      key: ValueKey('inflow_item_${item.id}'),
+      margin: const EdgeInsets.only(bottom: 8),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+        side: BorderSide(color: theme.dividerColor.withValues(alpha: 0.4)),
+      ),
+      elevation: 0,
+      child: ListTile(
+        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+        leading: CircleAvatar(
+          backgroundColor: item.color.withValues(alpha: isDark ? 0.25 : 0.12),
+          child: Icon(item.icon, color: item.color, size: 20),
+        ),
+        title: Row(
+          children: [
+            Expanded(
+              child: Text(
+                item.title,
+                style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+              decoration: BoxDecoration(
+                color: item.color.withValues(alpha: isDark ? 0.25 : 0.12),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Text(
+                item.badgeLabel,
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.bold,
+                  color: item.color,
+                ),
+              ),
+            ),
+          ],
+        ),
+        subtitle: Padding(
+          padding: const EdgeInsets.only(top: 4),
+          child: Row(
+            children: [
+              Text(dateStr, style: theme.textTheme.bodySmall),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  item.subtitle,
+                  style: theme.textTheme.bodySmall?.copyWith(color: Colors.grey),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            ],
+          ),
+        ),
+        trailing: PrivacySensitiveText(
+          '+ ${item.amount.formatted}',
+          style: const TextStyle(
+            fontWeight: FontWeight.bold,
+            fontSize: 15,
+            color: AppColors.creditGreen,
+          ),
+        ),
+        onTap: () {
+          if (item is _HouseInflowItem) {
+            showHouseInflowForm(
+              context,
+              context.read<FinanceCubit>(),
+              state,
+              editing: item.inflow,
+            );
+          } else if (item is _ThirdPartyReceiptInflowItem) {
+            showThirdPartyReceiptForm(
+              context,
+              context.read<FinanceCubit>(),
+              state,
+            );
+          }
+        },
+      ),
+    );
+  }
+
+  Widget _buildInflowFilterChip(
+    String filterKey,
+    String label,
+    ThemeData theme, {
+    Color? badgeColor,
+  }) {
+    final isSelected = _selectedInflowFilter == filterKey;
+    return ChoiceChip(
+      label: Text(label),
+      labelStyle: TextStyle(
+        fontSize: 12,
+        fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+        color: isSelected
+            ? Colors.white
+            : (badgeColor ?? theme.textTheme.bodyMedium?.color),
+      ),
+      selected: isSelected,
+      selectedColor: badgeColor ?? theme.colorScheme.primary,
+      onSelected: (selected) {
+        if (selected) {
+          setState(() {
+            _selectedInflowFilter = filterKey;
+          });
+        }
+      },
+      visualDensity: VisualDensity.compact,
     );
   }
 
@@ -1015,3 +1273,114 @@ class _ShortcutItem {
     required this.route,
   });
 }
+
+abstract class _UnifiedInflowItem {
+  String get id;
+  String get title;
+  String get subtitle;
+  Money get amount;
+  DateTime get date;
+  IconData get icon;
+  Color get color;
+  String get badgeLabel;
+  bool get isUnapplied;
+}
+
+class _ThirdPartyReceiptInflowItem implements _UnifiedInflowItem {
+  final ThirdPartyReceipt receipt;
+  const _ThirdPartyReceiptInflowItem(this.receipt);
+
+  @override
+  String get id => receipt.id;
+
+  @override
+  String get title => receipt.payerName;
+
+  @override
+  String get subtitle => receipt.description?.isNotEmpty == true
+      ? '${receipt.description!} • ${receipt.isHeld ? 'Guardado' : 'Usado'}'
+      : (receipt.isHeld ? 'Guardado para fatura' : 'Usado em fatura');
+
+  @override
+  Money get amount => receipt.amount;
+
+  @override
+  DateTime get date => receipt.receivedOn;
+
+  @override
+  IconData get icon => Icons.call_received_rounded;
+
+  @override
+  Color get color => receipt.isHeld ? Colors.amber.shade700 : Colors.teal;
+
+  @override
+  String get badgeLabel => receipt.isHeld ? 'Repasse (guardado)' : 'Repasse (usado)';
+
+  @override
+  bool get isUnapplied => receipt.isHeld;
+}
+
+class _ContributionInflowItem implements _UnifiedInflowItem {
+  final Contribution contribution;
+  const _ContributionInflowItem(this.contribution);
+
+  @override
+  String get id => contribution.id;
+
+  @override
+  String get title => 'Aporte no Caixa';
+
+  @override
+  String get subtitle => 'Depósito para custeio do ciclo';
+
+  @override
+  Money get amount => contribution.amount;
+
+  @override
+  DateTime get date => contribution.date;
+
+  @override
+  IconData get icon => Icons.payments_outlined;
+
+  @override
+  Color get color => Colors.blue;
+
+  @override
+  String get badgeLabel => 'Aporte';
+
+  @override
+  bool get isUnapplied => false;
+}
+
+class _HouseInflowItem implements _UnifiedInflowItem {
+  final HouseInflow inflow;
+  const _HouseInflowItem(this.inflow);
+
+  @override
+  String get id => inflow.id;
+
+  @override
+  String get title => inflow.description.isNotEmpty ? inflow.description : inflow.source.label;
+
+  @override
+  String get subtitle => inflow.expenseId != null ? 'Reembolsa despesa' : 'Entrada livre do ciclo';
+
+  @override
+  Money get amount => inflow.amount;
+
+  @override
+  DateTime get date => inflow.receivedOn;
+
+  @override
+  IconData get icon => Icons.account_balance_wallet_outlined;
+
+  @override
+  Color get color => inflow.expenseId == null ? Colors.green.shade700 : Colors.indigo;
+
+  @override
+  String get badgeLabel => inflow.expenseId == null ? 'Livre' : 'Reembolso';
+
+  @override
+  bool get isUnapplied => inflow.expenseId == null;
+}
+
