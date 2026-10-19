@@ -19,6 +19,10 @@ class PaymentMethod extends Equatable {
   final int? dueDay;
   final String? colorHex;
 
+  /// Morador que costuma pagar a fatura do cartão (0100): só sugestão, a
+  /// escolha manual sempre vence.
+  final String? usualInvoicePayerId;
+
   const PaymentMethod({
     required this.id,
     required this.name,
@@ -27,6 +31,7 @@ class PaymentMethod extends Equatable {
     this.closingDay,
     this.dueDay,
     this.colorHex,
+    this.usualInvoicePayerId,
   });
 
   bool get isBenefit => type == PaymentMethodType.vr || type == PaymentMethodType.va;
@@ -44,6 +49,8 @@ class PaymentMethod extends Equatable {
     bool clearDueDay = false,
     String? colorHex,
     bool clearColorHex = false,
+    String? usualInvoicePayerId,
+    bool clearUsualInvoicePayer = false,
   }) {
     return PaymentMethod(
       id: id ?? this.id,
@@ -53,9 +60,11 @@ class PaymentMethod extends Equatable {
       closingDay: clearClosingDay ? null : (closingDay ?? this.closingDay),
       dueDay: clearDueDay ? null : (dueDay ?? this.dueDay),
       colorHex: clearColorHex ? null : (colorHex ?? this.colorHex),
+      usualInvoicePayerId:
+          clearUsualInvoicePayer ? null : (usualInvoicePayerId ?? this.usualInvoicePayerId),
     );
   }
 
   @override
-  List<Object?> get props => [id, name, type, ownerMemberId, closingDay, dueDay, colorHex];
+  List<Object?> get props => [id, name, type, ownerMemberId, closingDay, dueDay, colorHex, usualInvoicePayerId];
 }

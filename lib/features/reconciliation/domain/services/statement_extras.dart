@@ -2,6 +2,7 @@ import 'package:intl/intl.dart';
 
 import '../../../finance/domain/entities/card_invoice.dart';
 import '../../../finance/domain/entities/house_member.dart';
+import '../../../finance/domain/entities/import_params.dart';
 import '../../../finance/domain/entities/payment_method.dart';
 import '../../../finance/domain/entities/savings_vault.dart';
 import '../../../p2p/domain/entities/p2p_loan.dart';
@@ -64,8 +65,9 @@ class StatementExtras {
 
   static final _day = DateFormat('dd/MM');
 
-  /// Um pagamento de fatura cai perto do vencimento dela.
-  static const int invoiceWindowDays = 45;
+  /// Um pagamento de fatura cai perto do vencimento dela (padrão; a casa muda
+  /// em `houses.import_matching`, 0100).
+  static const int invoiceWindowDays = ImportMatching.defaultInvoiceWindowDays;
 
   static bool _sameDay(DateTime a, DateTime b) =>
       a.year == b.year && a.month == b.month && a.day == b.day;
@@ -85,6 +87,7 @@ class StatementExtras {
     required List<ImportBatch> history,
     required List<P2PLoan> loans,
     List<SavingsVault> vaults = const [],
+    ImportMatching matching = const ImportMatching(),
   }) {
     if (source.isCreditCard) return const {};
     final names = {for (final m in members) m.id: m.name.split(' ').first};
@@ -98,7 +101,7 @@ class StatementExtras {
         for (final invoice in openInvoices) {
           final cardName = cardNames[invoice.paymentMethodId];
           if (cardName == null) continue;
-          if (line.date.difference(invoice.dueDate).inDays.abs() > invoiceWindowDays) continue;
+          if (line.date.difference(invoice.dueDate).inDays.abs() > matching.invoiceWindowDays) continue;
 
           // O banco cobra a fatura inteira; o app só conhece a parte da casa.
           // O total do arquivo importado daquela fatura é o que mais se aproxima.

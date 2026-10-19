@@ -138,10 +138,15 @@ class InvoicePaymentOption {
 /// titular do cartão (pago por ele, reembolsado no fechamento). Outro cartão
 /// de crédito não entra. Sem meio cadastrado do titular ou da casa, entra uma
 /// opção genérica. A primeira opção é a sugerida.
+///
+/// [usualPayerId] (quem costuma pagar a fatura, 0100) só reordena: as opções
+/// dele vão na frente, e a opção genérica do titular conta como dele. A
+/// escolha manual na tela sempre vence.
 List<InvoicePaymentOption> invoicePaymentOptions(
   PaymentMethod card,
   List<PaymentMethod> methods, {
   Map<String, String> memberNames = const {},
+  String? usualPayerId,
 }) {
   final owner = card.ownerMemberId;
   final ownerName = memberNames[owner] ?? 'titular';
@@ -173,5 +178,12 @@ List<InvoicePaymentOption> invoicePaymentOptions(
     ));
   }
   // Cartão com dono: em geral é o titular que paga; cartão da casa, o Caixa
-  return owner != null ? [...holder, ...house] : house;
+  final options = owner != null ? [...holder, ...house] : house;
+  if (usualPayerId == null) return options;
+
+  // Dono de cada opção: o meio cadastrado, ou o titular na opção genérica
+  final owners = {for (final m in methods) m.id: m.ownerMemberId};
+  bool usual(InvoicePaymentOption o) =>
+      o.key == InvoicePaymentOption.holderOption ? owner == usualPayerId : owners[o.key] == usualPayerId;
+  return [...options.where(usual), ...options.where((o) => !usual(o))];
 }

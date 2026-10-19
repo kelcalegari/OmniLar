@@ -5,6 +5,7 @@ import 'budget_alert_stages.dart';
 import 'closing_defaults.dart';
 import 'cycle_funding_estimate.dart';
 import 'folego_params.dart';
+import 'import_params.dart';
 
 /// O que o dinheiro que já está no Caixa no início do ciclo (sobra do ciclo
 /// anterior e pagamentos de empréstimo do Caixa que voltaram a ele) faz no
@@ -201,6 +202,12 @@ class HouseSettings extends Equatable {
   /// Estágios do alerta de orçamento das categorias (0099).
   final BudgetAlertStages budgetAlertStages;
 
+  /// Janelas do casamento de linhas do extrato com despesas (0100).
+  final ImportMatching importMatching;
+
+  /// Destino padrão das linhas novas importadas (0100).
+  final ImportDefaults importDefaults;
+
   const HouseSettings({
     this.openingBalanceRule,
     this.historyCycles = defaultHistoryCycles,
@@ -212,6 +219,8 @@ class HouseSettings extends Equatable {
     this.newMemberSplitPolicy = NewMemberSplitPolicy.equal,
     this.folegoParams = const FolegoParams(),
     this.budgetAlertStages = BudgetAlertStages.defaults,
+    this.importMatching = const ImportMatching(),
+    this.importDefaults = const ImportDefaults(),
   });
 
   static String plannerModeToDb(FundingEstimateMode mode) => switch (mode) {
@@ -249,11 +258,16 @@ class HouseSettings extends Equatable {
       newMemberSplitPolicy: NewMemberSplitPolicy.fromDb(json['new_member_split_policy']),
       folegoParams: FolegoParams.fromJson(json['folego_params']),
       budgetAlertStages: BudgetAlertStages.fromJson(json['budget_alert_stages']),
+      importMatching: ImportMatching.fromJson(json['import_matching']),
+      importDefaults: ImportDefaults.fromJson(json['import_defaults']),
     );
   }
 
   /// Colunas lidas de `houses`.
-  static const String columns = '$columnsBefore0099, budget_alert_stages';
+  static const String columns = '$columnsBefore0100, import_matching, import_defaults';
+
+  /// Colunas até a 0099, para o banco que ainda não tem a 0100.
+  static const String columnsBefore0100 = '$columnsBefore0099, budget_alert_stages';
 
   /// Colunas até a 0098, para o banco que ainda não tem a 0099.
   static const String columnsBefore0099 = '$columnsBefore0098, folego_params';
@@ -287,6 +301,8 @@ class HouseSettings extends Equatable {
     NewMemberSplitPolicy? newMemberSplitPolicy,
     FolegoParams? folegoParams,
     BudgetAlertStages? budgetAlertStages,
+    ImportMatching? importMatching,
+    ImportDefaults? importDefaults,
   }) =>
       HouseSettings(
         openingBalanceRule:
@@ -300,9 +316,11 @@ class HouseSettings extends Equatable {
         newMemberSplitPolicy: newMemberSplitPolicy ?? this.newMemberSplitPolicy,
         folegoParams: folegoParams ?? this.folegoParams,
         budgetAlertStages: budgetAlertStages ?? this.budgetAlertStages,
+        importMatching: importMatching ?? this.importMatching,
+        importDefaults: importDefaults ?? this.importDefaults,
       );
 
   @override
   List<Object?> get props =>
-      [openingBalanceRule, historyCycles, plannerMode, adjustPercent, categoryOverrides, inflowRules, closingDefaults, newMemberSplitPolicy, folegoParams, budgetAlertStages];
+      [openingBalanceRule, historyCycles, plannerMode, adjustPercent, categoryOverrides, inflowRules, closingDefaults, newMemberSplitPolicy, folegoParams, budgetAlertStages, importMatching, importDefaults];
 }

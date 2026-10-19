@@ -279,6 +279,7 @@ class SupabaseFinanceDataSource implements FinanceDataSource {
             ownerMemberId: (r['owner_member_id'] ?? r['owner_id']) as String?,
             closingDay: (r['closing_day'] ?? r['card_closing_day'] as num?)?.toInt(),
             dueDay: (r['due_day'] ?? r['card_due_day'] as num?)?.toInt(),
+            usualInvoicePayerId: r['usual_invoice_payer'] as String?,
           );
         }).toList();
       }
@@ -1120,7 +1121,18 @@ class SupabaseFinanceDataSource implements FinanceDataSource {
         payload['owner_id'] = paymentMethod.ownerMemberId;
         payload['owner_member_id'] = paymentMethod.ownerMemberId;
       }
-      await client.from('payment_methods').insert(payload);
+      // Só cartão tem quem costuma pagar a fatura (0100)
+      if (paymentMethod.isCreditCard && _isUuid(paymentMethod.usualInvoicePayerId)) {
+        payload['usual_invoice_payer'] = paymentMethod.usualInvoicePayerId;
+      }
+      try {
+        await client.from('payment_methods').insert(payload);
+      } catch (e) {
+        // Banco sem a 0100: cria sem a sugestão de quem paga a fatura
+        if (!payload.containsKey('usual_invoice_payer')) rethrow;
+        payload.remove('usual_invoice_payer');
+        await client.from('payment_methods').insert(payload);
+      }
     } catch (e) {
       throw ServerFailure('Erro ao criar método de pagamento: $e');
     }
@@ -1140,11 +1152,24 @@ class SupabaseFinanceDataSource implements FinanceDataSource {
         'due_day': paymentMethod.dueDay,
         'color_hex': paymentMethod.colorHex,
       };
-      await client
+      Future<void> save() => client
           .from('payment_methods')
           .update(payload)
           .eq('id', paymentMethod.id)
           .eq('house_id', _houseId);
+      // Null limpa a sugestão de quem costuma pagar a fatura (0100)
+      payload['usual_invoice_payer'] =
+          paymentMethod.isCreditCard && _isUuid(paymentMethod.usualInvoicePayerId)
+              ? paymentMethod.usualInvoicePayerId
+              : null;
+      try {
+        await save();
+      } catch (e) {
+        // Banco sem a 0100: grava o resto e deixa a sugestão de fora
+        if (!e.toString().contains('usual_invoice_payer')) rethrow;
+        payload.remove('usual_invoice_payer');
+        await save();
+      }
     } catch (e) {
       throw ServerFailure('Erro ao atualizar método de pagamento: $e');
     }
@@ -1415,10 +1440,11 @@ class SupabaseFinanceDataSource implements FinanceDataSource {
       final row = await OfflineSnapshot.instance.row(
         'house_settings_$_houseId',
         () async {
-          // Da mais nova para a mais antiga: banco sem a 0099, a 0098, a 0097, a 0094 ou a 0092
+          // Da mais nova para a mais antiga: banco sem a 0100, a 0099, a 0098, a 0097, a 0094 ou a 0092
           // ainda lê as colunas que já tem
           const attempts = [
             HouseSettings.columns,
+            HouseSettings.columnsBefore0100,
             HouseSettings.columnsBefore0099,
             HouseSettings.columnsBefore0098,
             HouseSettings.columnsBefore0097,
