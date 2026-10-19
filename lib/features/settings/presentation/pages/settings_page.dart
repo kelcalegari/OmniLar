@@ -7,6 +7,7 @@ import '../../../finance/domain/entities/split_rule.dart';
 import '../../../finance/domain/entities/house_settings.dart';
 import '../../../finance/domain/entities/folego_params.dart';
 import '../../../finance/domain/entities/import_params.dart';
+import '../../../finance/domain/entities/income_split.dart';
 import '../../../finance/domain/entities/member_settings.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';

@@ -25,6 +25,10 @@ import 'package:omni_lar/features/finance/domain/entities/audit_entry.dart';
 
 class _FakeFinanceRepository implements FinanceRepository {
   @override
+  Future<Map<String, Money>> getMemberIncomes() async => {};
+  @override
+  Future<void> setMyIncome(Money? income) async {}
+  @override
   Future<List<HouseInflow>> getHouseInflowsForCycle(FinancialCycle cycle) async => [];
   @override
   Future<void> addHouseInflow(HouseInflow inflow) async {}

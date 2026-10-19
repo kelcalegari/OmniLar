@@ -13,6 +13,13 @@ class SavingsVault extends Equatable {
   /// Prazo da meta (opcional).
   final DateTime? targetDate;
 
+  /// Meta mensal de aporte (0102). Nula: vale o quanto guardar por mês até o prazo.
+  final Money? monthlyGoal;
+
+  /// Soma a meta mensal à cota do Planejamento de Aportes (0102). Falso mantém
+  /// o comportamento de antes: a caixinha não entra na cota.
+  final bool countsInQuota;
+
   const SavingsVault({
     required this.id,
     required this.name,
@@ -22,6 +29,8 @@ class SavingsVault extends Equatable {
     this.colorHex = '#10B981',
     required this.createdAt,
     this.targetDate,
+    this.monthlyGoal,
+    this.countsInQuota = false,
   });
 
   bool get hasGoal => targetAmount.cents > 0;
@@ -45,6 +54,20 @@ class SavingsVault extends Equatable {
     final months = monthsLeft(today);
     if (!hasGoal || months == null) return null;
     return Money((remainingToGoal.cents / months).ceil());
+  }
+
+  /// Quanto esta caixinha soma à cota do mês no Planejamento de Aportes: zero
+  /// se não está marcada, se a meta foi atingida ou se não há meta mensal nem
+  /// prazo. A meta mensal própria vale sobre o cálculo pelo prazo.
+  Money quotaContribution(DateTime today) {
+    if (!countsInQuota || isGoalReached) return const Money.zero();
+    final goal = monthlyGoal;
+    if (goal != null && goal.cents > 0) {
+      // Nunca soma mais do que falta para a meta, quando há meta de valor
+      if (hasGoal && goal.cents > remainingToGoal.cents) return remainingToGoal;
+      return goal;
+    }
+    return monthlyNeeded(today) ?? const Money.zero();
   }
 
   /// Prazo vencido sem a meta atingida.
@@ -85,6 +108,9 @@ class SavingsVault extends Equatable {
     DateTime? createdAt,
     DateTime? targetDate,
     bool clearTargetDate = false,
+    Money? monthlyGoal,
+    bool clearMonthlyGoal = false,
+    bool? countsInQuota,
   }) {
     return SavingsVault(
       id: id ?? this.id,
@@ -95,11 +121,13 @@ class SavingsVault extends Equatable {
       colorHex: colorHex ?? this.colorHex,
       createdAt: createdAt ?? this.createdAt,
       targetDate: clearTargetDate ? null : (targetDate ?? this.targetDate),
+      monthlyGoal: clearMonthlyGoal ? null : (monthlyGoal ?? this.monthlyGoal),
+      countsInQuota: countsInQuota ?? this.countsInQuota,
     );
   }
 
   @override
-  List<Object?> get props => [id, name, targetAmount, currentBalance, icon, colorHex, createdAt, targetDate];
+  List<Object?> get props => [id, name, targetAmount, currentBalance, icon, colorHex, createdAt, targetDate, monthlyGoal, countsInQuota];
 }
 
 class SavingsTransaction extends Equatable {

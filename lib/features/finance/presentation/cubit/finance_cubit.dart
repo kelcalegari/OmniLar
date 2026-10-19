@@ -24,6 +24,7 @@ import '../../domain/entities/budget_alert_stages.dart';
 import '../../domain/entities/folego_params.dart';
 import '../../domain/entities/import_params.dart';
 import '../../domain/entities/house_settings.dart';
+import '../../domain/entities/income_split.dart';
 import '../../domain/entities/member_settings.dart';
 import '../../domain/repositories/member_settings_repository.dart';
 import '../../../settlement/domain/services/open_invoice_choices.dart';
@@ -194,6 +195,10 @@ class FinanceCubit extends Cubit<FinanceState> {
       final memberSettingsFuture = Future<MemberSettings?>.sync(
         () => _memberSettings?.load(),
       ).catchError((_) => null);
+      // Renda dos moradores que o banco libera para este usuário (0102)
+      final incomesFuture = Future<Map<String, Money>?>.sync(
+        () => _repository.getMemberIncomes(),
+      ).catchError((_) => null);
       // Histórico dos ciclos anteriores para as médias de variáveis (ex: Mercado),
       // com os ciclos da média da última carga (acertados abaixo se mudaram)
       final previousCycles = _previousCycles(targetCycle, state.houseSettings.historyCycles);
@@ -217,6 +222,7 @@ class FinanceCubit extends Cubit<FinanceState> {
         settingsFuture,
         initialBalanceFuture,
         memberSettingsFuture,
+        incomesFuture,
       ]);
       // Outro ciclo foi pedido enquanto este carregava: o dele é que vale
       if (sequence != _loadSequence || isClosed) return;
@@ -269,6 +275,7 @@ class FinanceCubit extends Cubit<FinanceState> {
         mode: mode,
         overrides: overrides,
         settings: settings,
+        vaults: vaults,
       );
 
       emit(state.copyWith(
@@ -290,6 +297,7 @@ class FinanceCubit extends Cubit<FinanceState> {
         thirdPartyReceipts: receipts,
         houseInflows: await inflowsFuture,
         splitModel: splitModel,
+        memberIncomes: await incomesFuture ?? state.memberIncomes,
         recurringSeries: recurringSeries,
         cardInvoiceCodes: invoiceCodes == null ? null : {for (final c in invoiceCodes) c.key: c.barcode},
         houseStartDate: houseStartDate,
@@ -339,6 +347,7 @@ class FinanceCubit extends Cubit<FinanceState> {
     required FundingEstimateMode mode,
     required Map<String, Money> overrides,
     HouseSettings? settings,
+    List<SavingsVault>? vaults,
   }) =>
       _fundingEstimator.calculateEstimate(
         cycle: cycle,
@@ -356,6 +365,8 @@ class FinanceCubit extends Cubit<FinanceState> {
         // Cada tipo de entrada no Caixa com a sua regra, como no fechamento
         openingInflows: summary?.openingInflows,
         openingInflowRules: (settings ?? state.houseSettings).inflowRules,
+        // Só as caixinhas marcadas somam a meta mensal à cota (0102)
+        vaults: vaults ?? state.savingsVaults,
       );
 
   /// Sobra que o ciclo anterior deixou no Caixa. O fôlego já desconta as
@@ -433,6 +444,8 @@ class FinanceCubit extends Cubit<FinanceState> {
     String? cashLabel,
     bool clearCashLabel = false,
     List<String>? shoppingUnits,
+    IncomeVisibility? incomeVisibility,
+    SplitBasis? splitBasis,
     int? historyCycles,
     int? adjustPercent,
   }) async {
@@ -455,6 +468,9 @@ class FinanceCubit extends Cubit<FinanceState> {
       if (clearCashLabel) 'cash_label': null else 'cash_label': ?cashLabel?.trim(),
       // Unidades de compra (0101), lista inteira
       'shopping_units': ?shoppingUnits,
+      // Quem lê a renda e base do rateio padrão (0102)
+      'income_visibility': ?incomeVisibility?.dbValue,
+      'split_basis': ?splitBasis?.dbValue,
       'planner_history_cycles': ?historyCycles,
       'planner_adjust_percent': ?adjustPercent,
     };
@@ -469,6 +485,20 @@ class FinanceCubit extends Cubit<FinanceState> {
           categoryOverrides: state.customCategoryOverrides,
         ),
       ));
+      await loadCycleData(cycle: state.currentCycle);
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  /// Informa (ou limpa, com nulo) a própria renda mensal. Com a divisão
+  /// "proporcional à renda", os percentuais mudam, então refaz o ciclo.
+  /// Devolve false se não deu para gravar.
+  Future<bool> setMyIncome(Money? income) async {
+    try {
+      await _repository.setMyIncome(income);
+      if (isClosed) return true;
       await loadCycleData(cycle: state.currentCycle);
       return true;
     } catch (_) {

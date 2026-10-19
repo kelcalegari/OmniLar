@@ -70,6 +70,15 @@ abstract class FinanceRepository {
     required Map<String, int> fixedAmountsCents,
   });
 
+  /// Renda mensal dos moradores que o usuário pode ler (0102): a própria
+  /// sempre; as dos outros só se `houses.income_visibility` permitir. Quem não
+  /// pode ver não recebe a renda: o filtro é do banco (RLS), não da tela.
+  Future<Map<String, Money>> getMemberIncomes();
+
+  /// Informa a própria renda mensal; nula limpa. Com a divisão "proporcional à
+  /// renda", o banco refaz os percentuais.
+  Future<void> setMyIncome(Money? income);
+
   /// Configurações de planejamento e fechamento da casa (0091).
   Future<HouseSettings> getHouseSettings();
 

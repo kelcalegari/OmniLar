@@ -42,6 +42,10 @@ class FinanceState extends Equatable {
   final List<HouseExpense> recurringSeries;
   final String splitModel; // 'percentage', 'fixed' ou 'category'
 
+  /// Renda mensal que o usuário pode ler (0102): a própria e, se a casa
+  /// permitir, a dos outros. Nunca traz a renda de quem o banco não liberou.
+  final Map<String, Money> memberIncomes;
+
   /// Código do boleto de cada fatura, pela chave [CardInvoiceCode.keyOf].
   final Map<String, String> cardInvoiceCodes;
 
@@ -75,6 +79,7 @@ class FinanceState extends Equatable {
     this.houseInflows = const [],
     this.recurringSeries = const [],
     this.splitModel = 'percentage',
+    this.memberIncomes = const {},
     this.cardInvoiceCodes = const {},
     this.houseStartDate,
     this.houseSettings = const HouseSettings(),
@@ -114,6 +119,7 @@ class FinanceState extends Equatable {
     List<HouseInflow>? houseInflows,
     List<HouseExpense>? recurringSeries,
     String? splitModel,
+    Map<String, Money>? memberIncomes,
     Map<String, String>? cardInvoiceCodes,
     DateTime? houseStartDate,
     HouseSettings? houseSettings,
@@ -138,6 +144,7 @@ class FinanceState extends Equatable {
       houseInflows: houseInflows ?? this.houseInflows,
       recurringSeries: recurringSeries ?? this.recurringSeries,
       splitModel: splitModel ?? this.splitModel,
+      memberIncomes: memberIncomes ?? this.memberIncomes,
       cardInvoiceCodes: cardInvoiceCodes ?? this.cardInvoiceCodes,
       houseStartDate: houseStartDate ?? this.houseStartDate,
       houseSettings: houseSettings ?? this.houseSettings,
@@ -165,6 +172,7 @@ class FinanceState extends Equatable {
         houseInflows,
         recurringSeries,
         splitModel,
+        memberIncomes,
         cardInvoiceCodes,
         houseStartDate,
         houseSettings,

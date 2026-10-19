@@ -6,6 +6,7 @@ import 'closing_defaults.dart';
 import 'cycle_funding_estimate.dart';
 import 'folego_params.dart';
 import 'import_params.dart';
+import 'income_split.dart';
 
 /// O que o dinheiro que já está no Caixa no início do ciclo (sobra do ciclo
 /// anterior e pagamentos de empréstimo do Caixa que voltaram a ele) faz no
@@ -214,6 +215,12 @@ class HouseSettings extends Equatable {
   /// Unidades de compra da casa (0101); a primeira é a de um item novo.
   final List<String> shoppingUnits;
 
+  /// Quem lê a renda mensal dos moradores (0102); padrão: cada um vê só a sua.
+  final IncomeVisibility incomeVisibility;
+
+  /// Base do rateio padrão (0102): à mão ou proporcional à renda.
+  final SplitBasis splitBasis;
+
   static const String defaultCashLabel = 'Caixa da Casa';
   static const List<String> defaultShoppingUnits = ['un', 'kg', 'g', 'l', 'ml', 'pct', 'cx', 'dz'];
 
@@ -242,6 +249,8 @@ class HouseSettings extends Equatable {
   const HouseSettings({
     this.cashLabel,
     this.shoppingUnits = defaultShoppingUnits,
+    this.incomeVisibility = IncomeVisibility.self,
+    this.splitBasis = SplitBasis.manual,
     this.openingBalanceRule,
     this.historyCycles = defaultHistoryCycles,
     this.plannerMode = FundingEstimateMode.historicalAverage,
@@ -298,11 +307,16 @@ class HouseSettings extends Equatable {
         _ => null,
       },
       shoppingUnits: _unitsFromJson(json['shopping_units']),
+      incomeVisibility: IncomeVisibility.fromDb(json['income_visibility']),
+      splitBasis: SplitBasis.fromDb(json['split_basis']),
     );
   }
 
   /// Colunas lidas de `houses`.
-  static const String columns = '$columnsBefore0101, cash_label, shopping_units';
+  static const String columns = '$columnsBefore0102, income_visibility, split_basis';
+
+  /// Colunas até a 0101, para o banco que ainda não tem a 0102.
+  static const String columnsBefore0102 = '$columnsBefore0101, cash_label, shopping_units';
 
   /// Colunas até a 0100, para o banco que ainda não tem a 0101.
   static const String columnsBefore0101 = '$columnsBefore0100, import_matching, import_defaults';
@@ -347,10 +361,14 @@ class HouseSettings extends Equatable {
     String? cashLabel,
     bool clearCashLabel = false,
     List<String>? shoppingUnits,
+    IncomeVisibility? incomeVisibility,
+    SplitBasis? splitBasis,
   }) =>
       HouseSettings(
         cashLabel: clearCashLabel ? null : (cashLabel ?? this.cashLabel),
         shoppingUnits: shoppingUnits ?? this.shoppingUnits,
+        incomeVisibility: incomeVisibility ?? this.incomeVisibility,
+        splitBasis: splitBasis ?? this.splitBasis,
         openingBalanceRule:
             clearOpeningBalanceRule ? null : (openingBalanceRule ?? this.openingBalanceRule),
         historyCycles: historyCycles ?? this.historyCycles,
@@ -368,5 +386,5 @@ class HouseSettings extends Equatable {
 
   @override
   List<Object?> get props =>
-      [openingBalanceRule, historyCycles, plannerMode, adjustPercent, categoryOverrides, inflowRules, closingDefaults, newMemberSplitPolicy, folegoParams, budgetAlertStages, importMatching, importDefaults, cashLabel, shoppingUnits];
+      [openingBalanceRule, historyCycles, plannerMode, adjustPercent, categoryOverrides, inflowRules, closingDefaults, newMemberSplitPolicy, folegoParams, budgetAlertStages, importMatching, importDefaults, cashLabel, shoppingUnits, incomeVisibility, splitBasis];
 }

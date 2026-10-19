@@ -139,6 +139,12 @@ class DynamicFinanceDataSource implements FinanceDataSource {
       );
 
   @override
+  Future<Map<String, Money>> getMemberIncomes() => _active.getMemberIncomes();
+
+  @override
+  Future<void> setMyIncome(Money? income) => _active.setMyIncome(income);
+
+  @override
   Future<HouseSettings> getHouseSettings() => _active.getHouseSettings();
 
   @override

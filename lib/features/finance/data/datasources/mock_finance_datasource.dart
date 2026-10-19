@@ -3,6 +3,7 @@ import '../../domain/entities/card_invoice.dart';
 import '../../domain/entities/house_initial_balance.dart';
 import '../../domain/entities/house_settings.dart';
 import '../../domain/entities/house_member.dart';
+import '../../domain/entities/income_split.dart';
 import '../../domain/entities/category.dart';
 import '../../domain/entities/payment_method.dart';
 import '../../domain/entities/house_expense.dart';
@@ -872,12 +873,60 @@ class MockFinanceDataSource implements FinanceDataSource {
 
   Map<String, dynamic> _houseSettingsRow = {};
 
+  /// Quem está usando o app (o banco usa auth.uid()); os testes trocam para
+  /// conferir o que cada morador consegue ler.
+  String viewerId = 'member_carlos';
+
+  /// Renda mensal de cada morador, em centavos. Privada: só sai por [getMemberIncomes].
+  final Map<String, int> _incomes = {};
+
+  @override
+  Future<Map<String, Money>> getMemberIncomes() async {
+    final viewer = _members.where((m) => m.id == viewerId).firstOrNull;
+    final visible = IncomeSplit.visibleTo(
+      all: _incomes,
+      viewerId: viewerId,
+      viewerIsAdmin: viewer?.role == 'owner' || viewer?.role == 'admin',
+      visibility: IncomeVisibility.fromDb(_houseSettingsRow['income_visibility']),
+    );
+    return {for (final e in visible.entries) e.key: Money(e.value)};
+  }
+
+  @override
+  Future<void> setMyIncome(Money? income) async {
+    if (income != null && income.cents <= 0) {
+      throw const ServerFailure('A renda deve ser maior que zero.');
+    }
+    if (income == null) {
+      _incomes.remove(viewerId);
+    } else {
+      _incomes[viewerId] = income.cents;
+    }
+    _applyIncomeSplit();
+  }
+
+  /// Como o banco: com a base "renda" e todos com renda, refaz os percentuais.
+  void _applyIncomeSplit() {
+    if (SplitBasis.fromDb(_houseSettingsRow['split_basis']) != SplitBasis.income) return;
+    final split = IncomeSplit.compute(_incomes, [for (final m in _members) m.id]);
+    if (split == null) return;
+    for (var i = 0; i < _members.length; i++) {
+      _members[i] = _members[i].copyWith(defaultSplitPercent: split[_members[i].id]);
+    }
+  }
+
   @override
   Future<HouseSettings> getHouseSettings() async => HouseSettings.fromJson(_houseSettingsRow);
 
   @override
   Future<HouseSettings> updateHouseSettings(Map<String, dynamic> changes) async {
+    final viewer = _members.where((m) => m.id == viewerId).firstOrNull;
+    final isAdmin = viewer?.role == 'owner' || viewer?.role == 'admin';
+    if ((changes.containsKey('income_visibility') || changes.containsKey('split_basis')) && !isAdmin) {
+      throw const ServerFailure('Só administradores mudam a renda e a divisão da casa.');
+    }
     _houseSettingsRow = {..._houseSettingsRow, ...changes};
+    if (changes.containsKey('split_basis')) _applyIncomeSplit();
     return HouseSettings.fromJson(_houseSettingsRow);
   }
 

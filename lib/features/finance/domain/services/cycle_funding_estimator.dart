@@ -7,6 +7,7 @@ import '../entities/house_expense.dart';
 import '../entities/house_member.dart';
 import '../entities/house_settings.dart';
 import '../entities/opening_inflows.dart';
+import '../entities/savings_vault.dart';
 import '../entities/split_rule.dart';
 import 'exclusive_charges.dart';
 
@@ -31,7 +32,15 @@ class CycleFundingEstimator {
     OpeningBalanceRule? openingBalanceRule,
     OpeningInflows? openingInflows,
     OpeningInflowRules openingInflowRules = const OpeningInflowRules(),
+    List<SavingsVault> vaults = const [],
+    DateTime? today,
   }) {
+    // Meta mensal das caixinhas marcadas para entrar na cota (0102). As não
+    // marcadas não somam nada: o planejador se comporta como antes.
+    final vaultGoalsCents = vaults.fold<int>(
+      0,
+      (acc, v) => acc + v.quotaContribution(today ?? DateTime.now()).cents,
+    );
     // A conta é a do ciclo inteiro, como no fechamento: tudo o que o ciclo custa
     // (o que já foi pago e o que ainda vence), menos a sobra que veio do ciclo
     // anterior. O que cada um já aportou só é abatido da cota dele, no fim.
@@ -89,7 +98,7 @@ class CycleFundingEstimator {
       (acc, v) => acc + v.adjustedAmount.cents,
     );
     final totalProjectedCents =
-        fixedCommittedExpenses.cents + totalVariablesCents;
+        fixedCommittedExpenses.cents + totalVariablesCents + vaultGoalsCents;
     final totalProjectedExpenses = Money(totalProjectedCents);
 
     // 4. Necessidade de aportes no ciclo (abatendo a sobra do ciclo anterior,
@@ -128,7 +137,7 @@ class CycleFundingEstimator {
     final memberQuotes = _calculateMemberQuotes(
       members: members,
       houseExpenses: houseExpenses,
-      variableRemainder: Money(variableRemainderCents),
+      variableRemainder: Money(variableRemainderCents + vaultGoalsCents),
       // Com valor fixo só "abater os aportes" reduz a cota; na divisão por
       // despesa, também a sobra de quem ainda não escolheu a regra
       fixedAbatement: Money(sumWhere((rule) => rule == OpeningBalanceRule.reduceQuotas)),
@@ -143,6 +152,7 @@ class CycleFundingEstimator {
       mode: mode,
       fixedCommittedExpenses: fixedCommittedExpenses,
       variableCategoryEstimates: variableCategoryEstimates,
+      vaultGoalsInQuota: Money(vaultGoalsCents),
       currentHouseBalance: shownBalance,
       totalProjectedExpenses: totalProjectedExpenses,
       netFundingRequired: netFundingRequired,
@@ -297,6 +307,16 @@ class CycleFundingEstimator {
         ruleDescMap[m.id] = exclusiveCents > 0
             ? 'Valor fixo + ${Money(exclusiveCents).format()} de despesas só suas'
             : 'Valor fixo definido no perfil';
+      }
+      // Meta das caixinhas na cota: na proporção do valor fixo de cada um
+      final totalFixedForGoals = members.fold<int>(0, (acc, m) => acc + (m.defaultFixedAmountCents ?? 0));
+      if (variableRemainder.isPositive && totalFixedForGoals > 0) {
+        final shares = SplitRule.percentage({
+          for (final m in members) m.id: (m.defaultFixedAmountCents ?? 0) * 100 / totalFixedForGoals,
+        }).calculateAllocations(totalAmount: variableRemainder, memberIds: memberIds);
+        for (final m in members) {
+          recommendedMap[m.id] = recommendedMap[m.id]! + (shares[m.id] ?? const Money.zero());
+        }
       }
       // Sobra que abate os aportes: na proporção do valor fixo de cada um
       if (fixedAbatement.isPositive) {
