@@ -1,4 +1,5 @@
 import 'package:equatable/equatable.dart';
+import '../../domain/entities/house_permissions.dart';
 import '../../domain/entities/card_invoice.dart';
 import '../../domain/entities/house_initial_balance.dart';
 import '../../domain/entities/house_settings.dart';
@@ -101,6 +102,15 @@ class FinanceState extends Equatable {
 
   Money get totalSavings =>
       savingsVaults.fold(const Money.zero(), (total, v) => total + v.currentBalance);
+
+  /// Se o morador [userId] pode fazer [action] (administradores sempre podem;
+  /// os demais seguem as permissões da casa, 0103). Morador desconhecido não pode.
+  bool canDo(HousePermissionAction action, String? userId) {
+    final me = members.where((m) => m.id == userId).firstOrNull;
+    if (me == null) return false;
+    return houseSettings.permissions
+        .allows(action, isAdmin: me.role == 'owner' || me.role == 'admin', memberId: me.id);
+  }
 
   FinanceState copyWith({
     FinanceStatus? status,

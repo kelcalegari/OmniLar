@@ -1,4 +1,5 @@
 import '../../../../core/errors/failures.dart';
+import '../../domain/entities/house_permissions.dart';
 import '../../domain/entities/card_invoice.dart';
 import '../../domain/entities/house_initial_balance.dart';
 import '../../domain/entities/house_settings.dart';
@@ -922,8 +923,14 @@ class MockFinanceDataSource implements FinanceDataSource {
   Future<HouseSettings> updateHouseSettings(Map<String, dynamic> changes) async {
     final viewer = _members.where((m) => m.id == viewerId).firstOrNull;
     final isAdmin = viewer?.role == 'owner' || viewer?.role == 'admin';
-    if ((changes.containsKey('income_visibility') || changes.containsKey('split_basis')) && !isAdmin) {
-      throw const ServerFailure('Só administradores mudam a renda e a divisão da casa.');
+    if (changes.containsKey('permissions') && !isAdmin) {
+      throw const ServerFailure('Só administradores mudam quem pode fazer cada ação.');
+    }
+    final canEdit = HouseSettings.fromJson(_houseSettingsRow)
+        .permissions
+        .allows(HousePermissionAction.editConfigurations, isAdmin: isAdmin, memberId: viewer?.id);
+    if ((changes.containsKey('income_visibility') || changes.containsKey('split_basis')) && !canEdit) {
+      throw const ServerFailure('Você não tem permissão para mudar a renda e a divisão da casa.');
     }
     _houseSettingsRow = {..._houseSettingsRow, ...changes};
     if (changes.containsKey('split_basis')) _applyIncomeSplit();
