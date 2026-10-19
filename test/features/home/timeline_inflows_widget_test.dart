@@ -27,6 +27,16 @@ void main() {
       description: 'Pix pizza cartão',
     );
 
+    // Repasse vindo de ciclo anterior (60 dias atrás)
+    final pastDate = now.subtract(const Duration(days: 60));
+    await financeCubit.registerThirdPartyReceipt(
+      payerName: 'Lucas Trabalho',
+      amount: const Money(5000),
+      receivedOn: pastDate,
+      vaultId: 'vault_reserva',
+      description: 'Almoço mês passado',
+    );
+
     await financeCubit.addHouseInflow(
       HouseInflow(
         id: 'inflow_test_1',
@@ -58,16 +68,26 @@ void main() {
     expect(find.textContaining('Sem aplicar'), findsOneWidget);
     expect(find.text('Repasses'), findsOneWidget);
 
+    // Seção de pendências de ciclos anteriores e do ciclo atual
+    expect(find.text('Pendências de Ciclos Anteriores'), findsOneWidget);
+    expect(find.text('Deste Ciclo'), findsOneWidget);
+
+    // Badge de ciclo anterior para Lucas
+    expect(find.text('Repasse (ciclo anterior)'), findsOneWidget);
+    expect(find.text('Repasse (guardado)'), findsOneWidget);
+
     // Os itens devem estar visíveis
     expect(find.text('Roberta'), findsOneWidget);
+    expect(find.text('Lucas Trabalho'), findsOneWidget);
     expect(find.text('Reembolso mercado'), findsOneWidget);
 
     // Filtra por "Sem aplicar"
     await tester.tap(find.textContaining('Sem aplicar'));
     await tester.pumpAndSettle();
 
-    // O repasse guardado e a entrada sem despesa associada permanecem visíveis
+    // Ambos os repasses e o reembolso livre aparecem no filtro sem aplicar
     expect(find.text('Roberta'), findsOneWidget);
+    expect(find.text('Lucas Trabalho'), findsOneWidget);
     expect(find.text('Reembolso mercado'), findsOneWidget);
   });
 }

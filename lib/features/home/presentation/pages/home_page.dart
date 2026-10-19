@@ -1022,8 +1022,50 @@ class _HomePageContentState extends State<_HomePageContent> {
                 ],
               ),
             )
-          else
-            ...filteredInflows.map((item) => _buildInflowCard(item, theme, state)),
+          else ...[
+            if (filteredInflows.any((i) => i.isFromPreviousCycle)) ...[
+              Padding(
+                padding: const EdgeInsets.only(top: 4, bottom: 8),
+                child: Row(
+                  children: [
+                    Icon(Icons.history_rounded, size: 16, color: Colors.deepOrange.shade600),
+                    const SizedBox(width: 6),
+                    Text(
+                      'Pendências de Ciclos Anteriores',
+                      style: theme.textTheme.labelMedium?.copyWith(
+                        fontWeight: FontWeight.bold,
+                        color: Colors.deepOrange.shade600,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              ...filteredInflows
+                  .where((i) => i.isFromPreviousCycle)
+                  .map((item) => _buildInflowCard(item, theme, state)),
+              const SizedBox(height: 8),
+              if (filteredInflows.any((i) => !i.isFromPreviousCycle))
+                Padding(
+                  padding: const EdgeInsets.only(top: 4, bottom: 8),
+                  child: Row(
+                    children: [
+                      Icon(Icons.calendar_today_rounded, size: 15, color: theme.colorScheme.primary),
+                      const SizedBox(width: 6),
+                      Text(
+                        'Deste Ciclo',
+                        style: theme.textTheme.labelMedium?.copyWith(
+                          fontWeight: FontWeight.bold,
+                          color: theme.colorScheme.primary,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+            ],
+            ...filteredInflows
+                .where((i) => !i.isFromPreviousCycle)
+                .map((item) => _buildInflowCard(item, theme, state)),
+          ],
         ],
       ],
     );
@@ -1031,15 +1073,16 @@ class _HomePageContentState extends State<_HomePageContent> {
 
   List<_UnifiedInflowItem> _buildInflowItems(FinanceState state) {
     final list = <_UnifiedInflowItem>[];
+    final cycle = state.currentCycle;
 
     for (final r in state.thirdPartyReceipts) {
-      list.add(_ThirdPartyReceiptInflowItem(r));
+      list.add(_ThirdPartyReceiptInflowItem(r, isInCurrentCycle: cycle.contains(r.receivedOn)));
     }
     for (final c in state.contributions) {
-      list.add(_ContributionInflowItem(c));
+      list.add(_ContributionInflowItem(c, isInCurrentCycle: cycle.contains(c.date)));
     }
     for (final i in state.houseInflows) {
-      list.add(_HouseInflowItem(i));
+      list.add(_HouseInflowItem(i, isInCurrentCycle: cycle.contains(i.receivedOn)));
     }
 
     list.sort((a, b) => b.date.compareTo(a.date));
@@ -1284,11 +1327,14 @@ abstract class _UnifiedInflowItem {
   Color get color;
   String get badgeLabel;
   bool get isUnapplied;
+  bool get isFromPreviousCycle;
 }
 
 class _ThirdPartyReceiptInflowItem implements _UnifiedInflowItem {
   final ThirdPartyReceipt receipt;
-  const _ThirdPartyReceiptInflowItem(this.receipt);
+  final bool isInCurrentCycle;
+
+  const _ThirdPartyReceiptInflowItem(this.receipt, {required this.isInCurrentCycle});
 
   @override
   String get id => receipt.id;
@@ -1297,9 +1343,12 @@ class _ThirdPartyReceiptInflowItem implements _UnifiedInflowItem {
   String get title => receipt.payerName;
 
   @override
-  String get subtitle => receipt.description?.isNotEmpty == true
-      ? '${receipt.description!} • ${receipt.isHeld ? 'Guardado' : 'Usado'}'
-      : (receipt.isHeld ? 'Guardado para fatura' : 'Usado em fatura');
+  String get subtitle {
+    final status = receipt.isHeld
+        ? (isInCurrentCycle ? 'Guardado para fatura' : 'Guardado • de ciclo anterior')
+        : 'Usado em fatura';
+    return receipt.description?.isNotEmpty == true ? '${receipt.description!} • $status' : status;
+  }
 
   @override
   Money get amount => receipt.amount;
@@ -1311,18 +1360,30 @@ class _ThirdPartyReceiptInflowItem implements _UnifiedInflowItem {
   IconData get icon => Icons.call_received_rounded;
 
   @override
-  Color get color => receipt.isHeld ? Colors.amber.shade700 : Colors.teal;
+  Color get color => receipt.isHeld
+      ? (isInCurrentCycle ? Colors.amber.shade700 : Colors.deepOrange.shade600)
+      : Colors.teal;
 
   @override
-  String get badgeLabel => receipt.isHeld ? 'Repasse (guardado)' : 'Repasse (usado)';
+  String get badgeLabel {
+    if (receipt.isHeld) {
+      return isInCurrentCycle ? 'Repasse (guardado)' : 'Repasse (ciclo anterior)';
+    }
+    return 'Repasse (usado)';
+  }
 
   @override
   bool get isUnapplied => receipt.isHeld;
+
+  @override
+  bool get isFromPreviousCycle => !isInCurrentCycle;
 }
 
 class _ContributionInflowItem implements _UnifiedInflowItem {
   final Contribution contribution;
-  const _ContributionInflowItem(this.contribution);
+  final bool isInCurrentCycle;
+
+  const _ContributionInflowItem(this.contribution, {required this.isInCurrentCycle});
 
   @override
   String get id => contribution.id;
@@ -1331,7 +1392,7 @@ class _ContributionInflowItem implements _UnifiedInflowItem {
   String get title => 'Aporte no Caixa';
 
   @override
-  String get subtitle => 'Depósito para custeio do ciclo';
+  String get subtitle => isInCurrentCycle ? 'Depósito para custeio do ciclo' : 'Depósito • de ciclo anterior';
 
   @override
   Money get amount => contribution.amount;
@@ -1350,11 +1411,16 @@ class _ContributionInflowItem implements _UnifiedInflowItem {
 
   @override
   bool get isUnapplied => false;
+
+  @override
+  bool get isFromPreviousCycle => !isInCurrentCycle;
 }
 
 class _HouseInflowItem implements _UnifiedInflowItem {
   final HouseInflow inflow;
-  const _HouseInflowItem(this.inflow);
+  final bool isInCurrentCycle;
+
+  const _HouseInflowItem(this.inflow, {required this.isInCurrentCycle});
 
   @override
   String get id => inflow.id;
@@ -1382,5 +1448,8 @@ class _HouseInflowItem implements _UnifiedInflowItem {
 
   @override
   bool get isUnapplied => inflow.expenseId == null;
+
+  @override
+  bool get isFromPreviousCycle => !isInCurrentCycle;
 }
 
