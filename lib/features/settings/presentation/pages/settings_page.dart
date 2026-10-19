@@ -2399,6 +2399,7 @@ class _SettingsPageState extends State<SettingsPage> {
                 return BlocBuilder<FinanceCubit, FinanceState>(
                   builder: (context, financeState) {
                     return SingleChildScrollView(
+                      padding: const EdgeInsets.only(bottom: 96),
                       child: ResponsiveContainer(
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.stretch,

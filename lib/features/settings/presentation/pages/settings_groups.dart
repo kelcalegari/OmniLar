@@ -52,6 +52,64 @@ const _reminderGroupLabels = {
 };
 const _weekdayNames = ['Domingo', 'Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado'];
 
+Widget _settingSummaryLine(
+  String title,
+  String value, {
+  String? subtitle,
+}) {
+  final isLong = (title.length + value.length) > 34 || value.length > 22;
+  return Padding(
+    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+    child: isLong
+        ? Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                title,
+                style: const TextStyle(fontSize: 13, color: Colors.grey),
+              ),
+              if (subtitle != null) ...[
+                const SizedBox(height: 2),
+                Text(
+                  subtitle,
+                  style: const TextStyle(fontSize: 11, color: Colors.grey),
+                ),
+              ],
+              const SizedBox(height: 3),
+              Text(
+                value,
+                style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+              ),
+            ],
+          )
+        : Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(title, style: const TextStyle(fontSize: 14)),
+                    if (subtitle != null) ...[
+                      const SizedBox(height: 2),
+                      Text(subtitle, style: const TextStyle(fontSize: 12, color: Colors.grey)),
+                    ],
+                  ],
+                ),
+              ),
+              const SizedBox(width: 12),
+              Flexible(
+                child: Text(
+                  value,
+                  textAlign: TextAlign.end,
+                  style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+                ),
+              ),
+            ],
+          ),
+  );
+}
+
 extension _SettingsGroupViews on _SettingsPageState {
   /// Índice dos grupos. Com [selected] (PC) o grupo aberto fica destacado; sem
   /// ele (celular) cada linha leva à página do grupo.
@@ -3332,12 +3390,12 @@ class _FolegoParamsBlockState extends State<_FolegoParamsBlock> {
   bool _isSaving = false;
 
   static const _labels = {
-    'warning': 'Atenção abaixo de (% dos aportes)',
-    'commitment_warning': 'Barra em atenção acima de (%)',
-    'commitment_danger': 'Barra crítica acima de (%)',
-    'daily': 'Gasto diário confortável (R\$)',
-    'horizon': 'Recorrentes à frente (1 a 6 meses)',
-    'transition': 'Transição do ciclo (15 a 30 dias)',
+    'warning': (label: 'Atenção do Fôlego', helper: '% dos aportes da casa'),
+    'commitment_warning': (label: 'Barra em atenção', helper: 'Percentual acima de (%)'),
+    'commitment_danger': (label: 'Barra crítica', helper: 'Percentual acima de (%)'),
+    'daily': (label: 'Gasto diário confortável', helper: 'Valor em R\$'),
+    'horizon': (label: 'Recorrentes à frente', helper: '1 a 6 meses'),
+    'transition': (label: 'Ciclo de transição', helper: '15 a 30 dias mínimos'),
   };
 
   @override
@@ -3425,51 +3483,14 @@ class _FolegoParamsBlockState extends State<_FolegoParamsBlock> {
             ),
             const Divider(height: 1),
             const SizedBox(height: 8),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-              child: Row(
-                children: [
-                  const Expanded(child: Text('Fôlego em atenção abaixo de', style: TextStyle(fontSize: 14))),
-                  Text('${params.warningPercent}% dos aportes', style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
-                ],
-              ),
+            _settingSummaryLine('Fôlego em atenção abaixo de', '${params.warningPercent}% dos aportes'),
+            _settingSummaryLine(
+              'Barra de comprometimento',
+              'atenção acima de ${params.commitmentWarningPercent}%, crítica acima de ${params.commitmentDangerPercent}%',
             ),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-              child: Row(
-                children: [
-                  const Expanded(child: Text('Barra de comprometimento', style: TextStyle(fontSize: 14))),
-                  Text('atenção acima de ${params.commitmentWarningPercent}%, crítica acima de ${params.commitmentDangerPercent}%', style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
-                ],
-              ),
-            ),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-              child: Row(
-                children: [
-                  const Expanded(child: Text('Gasto diário confortável a partir de', style: TextStyle(fontSize: 14))),
-                  Text(Money(params.comfortableDailyCents).format(), style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
-                ],
-              ),
-            ),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-              child: Row(
-                children: [
-                  const Expanded(child: Text('Contas recorrentes geradas até', style: TextStyle(fontSize: 14))),
-                  Text('${params.recurringHorizonMonths} meses à frente', style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
-                ],
-              ),
-            ),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-              child: Row(
-                children: [
-                  const Expanded(child: Text('Ciclo de transição (troca do dia)', style: TextStyle(fontSize: 14))),
-                  Text('mínimo de ${params.transitionMinDays} dias', style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
-                ],
-              ),
-            ),
+            _settingSummaryLine('Gasto diário confortável a partir de', Money(params.comfortableDailyCents).format()),
+            _settingSummaryLine('Contas recorrentes geradas até', '${params.recurringHorizonMonths} meses à frente'),
+            _settingSummaryLine('Ciclo de transição (troca do dia)', 'mínimo de ${params.transitionMinDays} dias'),
             if (!isAdmin)
               const Padding(
                 padding: EdgeInsets.symmetric(horizontal: 16, vertical: 6),
@@ -3483,11 +3504,19 @@ class _FolegoParamsBlockState extends State<_FolegoParamsBlock> {
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
                     for (final entry in _labels.entries)
-                      TextField(
-                        key: ValueKey('folego_param_${entry.key}'),
-                        controller: _fields[entry.key],
-                        keyboardType: TextInputType.number,
-                        decoration: InputDecoration(labelText: entry.value),
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 12),
+                        child: TextField(
+                          key: ValueKey('folego_param_${entry.key}'),
+                          controller: _fields[entry.key],
+                          keyboardType: TextInputType.number,
+                          decoration: InputDecoration(
+                            labelText: entry.value.label,
+                            helperText: entry.value.helper,
+                            isDense: true,
+                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                          ),
+                        ),
                       ),
                     if (_error != null)
                       Padding(
@@ -3869,49 +3898,22 @@ class _ClosingDefaultsBlockState extends State<_ClosingDefaultsBlock> {
             ),
             const Divider(height: 1),
             const SizedBox(height: 8),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-              child: Row(
-                children: [
-                  const Expanded(child: Text('Destino da sobra', style: TextStyle(fontSize: 14))),
-                  Text(
-                    surplusAction == SurplusAction.toVault && surplusVault != null
-                        ? 'Caixinha $surplusVault'
-                        : _surplusActionLabel(surplusAction),
-                    style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
-                  ),
-                ],
-              ),
+            _settingSummaryLine(
+              'Destino da sobra',
+              surplusAction == SurplusAction.toVault && surplusVault != null
+                  ? 'Caixinha $surplusVault'
+                  : _surplusActionLabel(surplusAction),
             ),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Text('Gastos acima do balde', style: TextStyle(fontSize: 14)),
-                        if (vaultName(defaults.deficitVaultId) != null)
-                          Text(
-                            'Antes, usa a caixinha ${vaultName(defaults.deficitVaultId)}',
-                            style: const TextStyle(fontSize: 12, color: Colors.grey),
-                          ),
-                      ],
-                    ),
-                  ),
-                  Text(_deficitSplitLabel(defaults.deficitSplit ?? DeficitSplit.proportional), style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
-                ],
-              ),
+            _settingSummaryLine(
+              'Gastos acima do balde',
+              _deficitSplitLabel(defaults.deficitSplit ?? DeficitSplit.proportional),
+              subtitle: vaultName(defaults.deficitVaultId) != null
+                  ? 'Antes, usa a caixinha ${vaultName(defaults.deficitVaultId)}'
+                  : null,
             ),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-              child: Row(
-                children: [
-                  const Expanded(child: Text('Quem pagou menos', style: TextStyle(fontSize: 14))),
-                  Text(_shortfallActionLabel(defaults.shortfallAction ?? ShortfallAction.createP2PLoan), style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
-                ],
-              ),
+            _settingSummaryLine(
+              'Quem pagou menos',
+              _shortfallActionLabel(defaults.shortfallAction ?? ShortfallAction.createP2PLoan),
             ),
             if (!isAdmin)
               const Padding(
@@ -4408,65 +4410,27 @@ class _PlanningSettingsBlockState extends State<_PlanningSettingsBlock> {
             ),
             const Divider(height: 1),
             const SizedBox(height: 8),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-              child: Row(
-                children: [
-                  const Expanded(child: Text('Sobra do ciclo anterior', style: TextStyle(fontSize: 14))),
-                  Text(inflowRules.rolledSurplusRule(settings.openingBalanceRule)?.label ?? 'Padrão', style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
-                ],
-              ),
+            _settingSummaryLine(
+              'Sobra do ciclo anterior',
+              inflowRules.rolledSurplusRule(settings.openingBalanceRule)?.label ?? 'Padrão',
             ),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-              child: Row(
-                children: [
-                  const Expanded(child: Text('Empréstimo do Caixa pago de volta', style: TextStyle(fontSize: 14))),
-                  Text(inflowRules.houseLoansRepaidRule(settings.openingBalanceRule)?.label ?? 'Padrão', style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
-                ],
-              ),
+            _settingSummaryLine(
+              'Empréstimo do Caixa pago de volta',
+              inflowRules.houseLoansRepaidRule(settings.openingBalanceRule)?.label ?? 'Padrão',
             ),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-              child: Row(
-                children: [
-                  const Expanded(child: Text('Resgate de caixinha', style: TextStyle(fontSize: 14))),
-                  Text(
-                    vaultOverridesCount == 0
-                        ? currentVaultDefault.label
-                        : '${currentVaultDefault.label} (+$vaultOverridesCount com regra própria)',
-                    style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
-                  ),
-                ],
-              ),
+            _settingSummaryLine(
+              'Resgate de caixinha',
+              vaultOverridesCount == 0
+                  ? currentVaultDefault.label
+                  : '${currentVaultDefault.label} (+$vaultOverridesCount com regra própria)',
             ),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-              child: Row(
-                children: [
-                  const Expanded(child: Text('Entrada de fora', style: TextStyle(fontSize: 14))),
-                  Text(inflowRules.thirdParty?.label ?? 'Igual à sobra', style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
-                ],
-              ),
+            _settingSummaryLine('Entrada de fora', inflowRules.thirdParty?.label ?? 'Igual à sobra'),
+            _settingSummaryLine(
+              'Média dos gastos variáveis',
+              settings.historyCycles == 1 ? 'Último ciclo' : 'Últimos ${settings.historyCycles} ciclos',
             ),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-              child: Row(
-                children: [
-                  const Expanded(child: Text('Média dos gastos variáveis', style: TextStyle(fontSize: 14))),
-                  Text(settings.historyCycles == 1 ? 'Último ciclo' : 'Últimos ${settings.historyCycles} ciclos', style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
-                ],
-              ),
-            ),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-              child: Row(
-                children: [
-                  const Expanded(child: Text('Modos Econômico e Com folga', style: TextStyle(fontSize: 14))),
-                  Text('${settings.adjustPercent}%', style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
-                ],
-              ),
-            ),
+            _settingSummaryLine('Modos Econômico e Com folga', '${settings.adjustPercent}%'),
+
             if (_expanded) ...[
               const Divider(height: 16),
               Padding(
@@ -4653,12 +4617,12 @@ class _ImportParamsBlockState extends State<_ImportParamsBlock> {
   bool _isSaving = false;
 
   static const _labels = {
-    'date': 'Dias de diferença aceitos (0 a 10)',
-    'other': 'Dias em outra forma de pagamento (até o anterior)',
-    'differs': 'Dias com valor diferente (até o primeiro)',
-    'drift': 'Valor diferente aceito (% de 0 a 100)',
-    'similarity': 'Nome parecido com valor diferente (% de 0 a 100)',
-    'invoice': 'Pagamento de fatura até (1 a 120 dias do vencimento)',
+    'date': (label: 'Diferença de datas aceita', helper: '0 a 10 dias de diferença'),
+    'other': (label: 'Em outra forma de pagamento', helper: 'Dias aceitos (até o anterior)'),
+    'differs': (label: 'Com valor diferente', helper: 'Dias aceitos (até o primeiro)'),
+    'drift': (label: 'Variação de valor aceita', helper: '% de 0 a 100 (gorjetas, taxas)'),
+    'similarity': (label: 'Similaridade mínima do nome', helper: '% de 0 a 100'),
+    'invoice': (label: 'Pagamento de fatura no extrato', helper: '1 a 120 dias do vencimento'),
   };
 
   @override
@@ -4769,60 +4733,18 @@ class _ImportParamsBlockState extends State<_ImportParamsBlock> {
             ),
             const Divider(height: 1),
             const SizedBox(height: 8),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-              child: Row(
-                children: [
-                  const Expanded(child: Text('Mesma compra se a data difere até', style: TextStyle(fontSize: 14))),
-                  Text('${matching.dateWindowDays} dias (${matching.otherMethodWindowDays} em outra forma de pagamento)', style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
-                ],
-              ),
+            _settingSummaryLine(
+              'Mesma compra se a data difere até',
+              '${matching.dateWindowDays} dias (${matching.otherMethodWindowDays} em outra forma de pagamento)',
             ),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-              child: Row(
-                children: [
-                  const Expanded(child: Text('Valor diferente (gorjeta, taxa)', style: TextStyle(fontSize: 14))),
-                  Text('até ${matching.amountDriftPercent}% em ${matching.amountDiffersDays} dia(s), nome ${matching.minSimilarityPercent}% parecido', style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
-                ],
-              ),
+            _settingSummaryLine(
+              'Valor diferente (gorjeta, taxa)',
+              'até ${matching.amountDriftPercent}% em ${matching.amountDiffersDays} dia(s), nome ${matching.minSimilarityPercent}% parecido',
             ),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-              child: Row(
-                children: [
-                  const Expanded(child: Text('Pagamento de fatura no extrato', style: TextStyle(fontSize: 14))),
-                  Text('até ${matching.invoiceWindowDays} dias do vencimento', style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
-                ],
-              ),
-            ),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-              child: Row(
-                children: [
-                  const Expanded(child: Text('Categoria das linhas novas', style: TextStyle(fontSize: 14))),
-                  Text(category?.name ?? 'A primeira da casa', style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
-                ],
-              ),
-            ),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-              child: Row(
-                children: [
-                  const Expanded(child: Text('Divisão das linhas novas', style: TextStyle(fontSize: 14))),
-                  Text(defaults.splitMode.label, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
-                ],
-              ),
-            ),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-              child: Row(
-                children: [
-                  const Expanded(child: Text('Abre a importação em', style: TextStyle(fontSize: 14))),
-                  Text(source?.name ?? 'Sem preferência', style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
-                ],
-              ),
-            ),
+            _settingSummaryLine('Pagamento de fatura no extrato', 'até ${matching.invoiceWindowDays} dias do vencimento'),
+            _settingSummaryLine('Categoria das linhas novas', category?.name ?? 'A primeira da casa'),
+            _settingSummaryLine('Divisão das linhas novas', defaults.splitMode.label),
+            _settingSummaryLine('Abre a importação em', source?.name ?? 'Sem preferência'),
             if (!isAdmin)
               const Padding(
                 padding: EdgeInsets.symmetric(horizontal: 16, vertical: 6),
@@ -4836,11 +4758,19 @@ class _ImportParamsBlockState extends State<_ImportParamsBlock> {
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
                     for (final entry in _labels.entries)
-                      TextField(
-                        key: ValueKey('import_matching_${entry.key}'),
-                        controller: _fields[entry.key],
-                        keyboardType: TextInputType.number,
-                        decoration: InputDecoration(labelText: entry.value),
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 12),
+                        child: TextField(
+                          key: ValueKey('import_matching_${entry.key}'),
+                          controller: _fields[entry.key],
+                          keyboardType: TextInputType.number,
+                          decoration: InputDecoration(
+                            labelText: entry.value.label,
+                            helperText: entry.value.helper,
+                            isDense: true,
+                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                          ),
+                        ),
                       ),
                     const SizedBox(height: 12),
                     DropdownButtonFormField<String?>(
