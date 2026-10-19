@@ -3,6 +3,7 @@ import '../../../../core/domain/value_objects/financial_cycle.dart';
 import '../../../../core/domain/value_objects/money.dart';
 import '../../../finance/domain/entities/house_expense.dart';
 import '../../../finance/domain/entities/house_member.dart';
+import '../../../finance/domain/entities/house_settings.dart';
 import '../../../finance/domain/entities/payment_method.dart';
 import '../../../p2p/domain/entities/p2p_installment.dart';
 import '../../../p2p/domain/entities/p2p_loan.dart';
@@ -17,8 +18,6 @@ import 'cycle_preview_builder.dart';
 /// (contas recorrentes geradas, faturas, parcelas), sem estimativa.
 class UpcomingCyclesBuilder {
   const UpcomingCyclesBuilder();
-
-  static const String _houseName = 'Caixa da Casa';
 
   /// Os [count] ciclos seguintes ao ciclo de [today].
   static List<FinancialCycle> upcomingCycles(
@@ -44,6 +43,7 @@ class UpcomingCyclesBuilder {
     Map<String, String> invoiceCodes = const {},
     required DateTime today,
     int count = 3,
+    String cashLabel = HouseSettings.defaultCashLabel,
   }) {
     final day = DateTime(today.year, today.month, today.day);
     final current = schedule.cycleFor(day);
@@ -51,7 +51,7 @@ class UpcomingCyclesBuilder {
     final memberIds = members.map((m) => m.id).toSet();
     final names = {for (final m in members) m.id: m.name};
     String nameOf(String id) =>
-        id == P2PLoan.houseLenderId ? _houseName : (names[id] ?? 'Membro');
+        id == P2PLoan.houseLenderId ? cashLabel : (names[id] ?? 'Membro');
     String? memberOrHouse(String id) => id == P2PLoan.houseLenderId ? null : id;
 
     final active = loans

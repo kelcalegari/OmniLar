@@ -1092,6 +1092,7 @@ class _TasksAndShoppingPageState extends State<TasksAndShoppingPage> with Single
     shoppingCubit
         .addItem(
           name: text,
+          unit: context.read<FinanceCubit>().state.houseSettings.defaultUnit,
           isPersonal: _isPersonalShoppingItem,
           assignedMemberId: _isPersonalShoppingItem ? defaultMemberId : null,
         )
@@ -1175,6 +1176,10 @@ class _TasksAndShoppingPageState extends State<TasksAndShoppingPage> with Single
           : item.quantity.toString().replaceAll('.', ','),
     );
     var isPersonal = item.isPersonal;
+    // Unidades da casa (0101); a do item continua nas opções mesmo se saiu da lista
+    final houseUnits = context.read<FinanceCubit>().state.houseSettings.shoppingUnits;
+    final units = houseUnits.contains(item.unit) ? houseUnits : [item.unit, ...houseUnits];
+    var unit = item.unit;
 
     showDialog<void>(
       context: context,
@@ -1198,9 +1203,18 @@ class _TasksAndShoppingPageState extends State<TasksAndShoppingPage> with Single
                 keyboardType: const TextInputType.numberWithOptions(decimal: true),
                 decoration: InputDecoration(
                   labelText: 'Quantidade',
-                  suffixText: item.unit,
+                  suffixText: unit,
                   border: const OutlineInputBorder(),
                 ),
+              ),
+              const SizedBox(height: 12),
+              DropdownButtonFormField<String>(
+                key: const ValueKey('shopping_item_unit'),
+                initialValue: unit,
+                isExpanded: true,
+                decoration: const InputDecoration(labelText: 'Unidade', border: OutlineInputBorder()),
+                items: [for (final u in units) DropdownMenuItem(value: u, child: Text(u))],
+                onChanged: (value) => setDialogState(() => unit = value ?? unit),
               ),
               CheckboxListTile(
                 contentPadding: EdgeInsets.zero,
@@ -1221,7 +1235,7 @@ class _TasksAndShoppingPageState extends State<TasksAndShoppingPage> with Single
                 final quantity = double.tryParse(quantityController.text.trim().replaceAll(',', '.'));
                 if (name.isEmpty || quantity == null || quantity <= 0) return;
                 cubit.updateItem(
-                  item.copyWith(name: name, quantity: quantity, isPersonal: isPersonal),
+                  item.copyWith(name: name, quantity: quantity, unit: unit, isPersonal: isPersonal),
                 );
                 Navigator.pop(dialogCtx);
               },

@@ -937,23 +937,13 @@ class ImportSession {
   /// Divisão das linhas novas: categoria com dono é sempre 100% do dono; no
   /// resto vale o modo escolhido pela casa (0100), e por padrão a divisão da
   /// categoria ou da casa.
-  SplitRule _splitRuleFor({required ExpenseCategory? category, required List<HouseMember> members}) {
-    if (category?.ownerMemberId == null && members.isNotEmpty) {
-      switch (defaults.splitMode) {
-        case ImportSplitMode.equal:
-          return SplitRule.percentage({for (final m in members) m.id: 100.0 / members.length});
-        case ImportSplitMode.payer:
-          return SplitRule.singleResponsible(payerMemberId);
-        case ImportSplitMode.category:
-          break;
-      }
-    }
-    return ExpenseLaunchDefaults.splitRule(
-      category: category,
-      members: members,
-      paidByMemberId: payerMemberId,
-    );
-  }
+  SplitRule _splitRuleFor({required ExpenseCategory? category, required List<HouseMember> members}) =>
+      ExpenseLaunchDefaults.splitRuleForMode(
+        mode: defaults.splitMode,
+        category: category,
+        members: members,
+        paidByMemberId: payerMemberId,
+      );
 
   /// Monta o que a confirmação vai gravar. [closedCycles] são os ciclos já
   /// fechados entre os de [countingCycles].

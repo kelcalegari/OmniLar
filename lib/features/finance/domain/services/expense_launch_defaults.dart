@@ -1,6 +1,7 @@
 import '../entities/category.dart';
 import '../entities/house_expense.dart';
 import '../entities/house_member.dart';
+import '../entities/import_params.dart';
 import '../entities/member_settings.dart';
 import '../entities/payment_method.dart';
 import '../entities/split_rule.dart';
@@ -99,6 +100,29 @@ class ExpenseLaunchDefaults {
       for (final m in members)
         m.id: anyShare ? m.defaultSplitPercent : (100.0 / members.length),
     });
+  }
+
+  /// Rateio de uma escolha de divisão ([ImportSplitMode], usada pela importação
+  /// e pelas listas de compras): categoria com dono vai sempre 100% para o dono;
+  /// senão 'equal' divide em partes iguais, 'payer' fica só com quem paga e
+  /// 'category' é o rateio padrão acima.
+  static SplitRule splitRuleForMode({
+    required ImportSplitMode mode,
+    required ExpenseCategory? category,
+    required List<HouseMember> members,
+    required String paidByMemberId,
+  }) {
+    if (category?.ownerMemberId == null && members.isNotEmpty) {
+      switch (mode) {
+        case ImportSplitMode.equal:
+          return SplitRule.percentage({for (final m in members) m.id: 100.0 / members.length});
+        case ImportSplitMode.payer:
+          return SplitRule.singleResponsible(paidByMemberId);
+        case ImportSplitMode.category:
+          break;
+      }
+    }
+    return splitRule(category: category, members: members, paidByMemberId: paidByMemberId);
   }
 
   /// O que o formulário de despesa nova já abre marcado para quem lança:

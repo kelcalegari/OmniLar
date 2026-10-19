@@ -10,6 +10,7 @@ import '../../../finance/domain/entities/house_expense.dart';
 import '../../../finance/domain/repositories/finance_repository.dart';
 import '../../../p2p/domain/entities/p2p_loan.dart';
 import '../../../p2p/domain/repositories/p2p_repository.dart';
+import '../../../finance/domain/entities/import_params.dart';
 import '../../domain/entities/shopping_item.dart';
 import '../../domain/entities/shopping_list.dart';
 import '../../domain/entities/shopping_trip.dart';
@@ -82,6 +83,8 @@ class SupabaseShoppingDataSource implements ShoppingDataSource {
           name: r['name'] as String,
           icon: r['icon'] as String? ?? 'shopping_cart_outlined',
           isDefault: (r['is_default'] as bool?) ?? false,
+          defaultCategoryId: r['default_category_id'] as String?,
+          defaultSplitMode: ImportSplitMode.fromDb(r['default_split_mode']),
         );
       }).toList();
     } catch (e) {
@@ -242,10 +245,45 @@ class SupabaseShoppingDataSource implements ShoppingDataSource {
       await client.from('shopping_items').update({
         'name': item.name.trim(),
         'quantity': item.quantity,
+        'unit': item.unit,
         'is_personal': item.isPersonal,
       }).eq('id', item.id);
     } catch (e) {
       throw ServerFailure('Erro ao atualizar item da lista de compras: $e');
+    }
+  }
+
+  @override
+  Future<void> updateListDefaults(
+    String listId, {
+    String? categoryId,
+    required ImportSplitMode splitMode,
+  }) async {
+    try {
+      await client.from('shopping_lists').update({
+        'default_category_id': categoryId,
+        'default_split_mode': splitMode == ImportSplitMode.category ? null : splitMode.dbValue,
+      }).eq('id', listId).eq('house_id', _houseId);
+    } catch (e) {
+      throw ServerFailure('Erro ao salvar os padrões da lista de compras: $e');
+    }
+  }
+
+  /// Categoria e divisão padrão da lista (0101); banco sem a 0101 ou lista sem
+  /// escolha vale o de sempre.
+  Future<({String? categoryId, ImportSplitMode splitMode})> _listDefaults(String listId) async {
+    try {
+      final row = await client
+          .from('shopping_lists')
+          .select('default_category_id, default_split_mode')
+          .eq('id', listId)
+          .maybeSingle();
+      return (
+        categoryId: row?['default_category_id'] as String?,
+        splitMode: ImportSplitMode.fromDb(row?['default_split_mode']),
+      );
+    } catch (_) {
+      return (categoryId: null, splitMode: ImportSplitMode.category);
     }
   }
 
@@ -281,8 +319,11 @@ class SupabaseShoppingDataSource implements ShoppingDataSource {
         // Id real desde já, para a viagem de compras apontar para a despesa
         createdExpenseId = generateUuidV4();
         final members = await financeRepository.getMembers();
+        final listDefaults = await _listDefaults(listId);
+        // Categoria escolhida na lista; sem ela (ou se foi apagada), a de mercado
         final category = ExpenseLaunchDefaults.matchCategory(
           await financeRepository.getCategories(),
+          preferred: listDefaults.categoryId,
           nameKeywords: const ['mercado'],
         );
         final paymentMethod = (await financeRepository.getPaymentMethods())
@@ -313,7 +354,8 @@ class SupabaseShoppingDataSource implements ShoppingDataSource {
             paymentMethodId: paymentMethodId,
             paidOutOfPocket: ExpenseLaunchDefaults.launchPaidOutOfPocket(paymentMethod),
             status: ExpenseLaunchDefaults.launchStatus(paymentMethod),
-            splitRule: ExpenseLaunchDefaults.splitRule(
+            splitRule: ExpenseLaunchDefaults.splitRuleForMode(
+              mode: listDefaults.splitMode,
               category: category,
               members: members,
               paidByMemberId: paidByMemberId,

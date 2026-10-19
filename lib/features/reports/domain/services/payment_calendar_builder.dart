@@ -1,4 +1,5 @@
 import '../../../finance/domain/entities/house_member.dart';
+import '../../../finance/domain/entities/house_settings.dart';
 import '../../../p2p/domain/entities/p2p_loan.dart';
 import '../entities/cycle_preview.dart';
 import '../entities/payment_due_entry.dart';
@@ -12,13 +13,12 @@ import '../entities/payment_due_entry.dart';
 class PaymentCalendarBuilder {
   const PaymentCalendarBuilder();
 
-  static const String _houseName = 'Caixa da Casa';
-
   PaymentCalendar build({
     required CyclePreview preview,
     required List<P2PLoan> loans,
     required List<HouseMember> members,
     required DateTime today,
+    String cashLabel = HouseSettings.defaultCashLabel,
   }) {
     final cycle = preview.cycle;
     final day = DateTime(today.year, today.month, today.day);
@@ -27,7 +27,7 @@ class PaymentCalendarBuilder {
 
     final names = {for (final m in members) m.id: m.name};
     String nameOf(String? id) => id == null || id == P2PLoan.houseLenderId
-        ? _houseName
+        ? cashLabel
         : (names[id] ?? 'Membro');
     String? memberOrHouse(String id) => id == P2PLoan.houseLenderId ? null : id;
     final memberIds = names.keys.toSet();

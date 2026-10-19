@@ -208,7 +208,40 @@ class HouseSettings extends Equatable {
   /// Destino padrão das linhas novas importadas (0100).
   final ImportDefaults importDefaults;
 
+  /// Nome do Caixa nas telas (0101); nulo vale [defaultCashLabel].
+  final String? cashLabel;
+
+  /// Unidades de compra da casa (0101); a primeira é a de um item novo.
+  final List<String> shoppingUnits;
+
+  static const String defaultCashLabel = 'Caixa da Casa';
+  static const List<String> defaultShoppingUnits = ['un', 'kg', 'g', 'l', 'ml', 'pct', 'cx', 'dz'];
+
+  /// Nome do Caixa a mostrar.
+  String get cashName => cashLabel ?? defaultCashLabel;
+
+  /// Unidade de um item novo.
+  String get defaultUnit => shoppingUnits.first;
+
+  /// Nome do Caixa válido: de 1 a 30 caracteres.
+  static bool isValidCashLabel(String label) => label.trim().isNotEmpty && label.trim().length <= 30;
+
+  /// Lista de unidades válida: de 1 a 20, de 1 a 8 caracteres, sem repetir.
+  static bool areValidShoppingUnits(List<String> units) =>
+      units.isNotEmpty &&
+      units.length <= 20 &&
+      units.every((u) => u.isNotEmpty && u.length <= 8 && u == u.trim()) &&
+      units.map((u) => u.toLowerCase()).toSet().length == units.length;
+
+  static List<String> _unitsFromJson(Object? raw) {
+    if (raw is! List) return defaultShoppingUnits;
+    final units = [for (final u in raw) if (u is String) u];
+    return units.length == raw.length && areValidShoppingUnits(units) ? units : defaultShoppingUnits;
+  }
+
   const HouseSettings({
+    this.cashLabel,
+    this.shoppingUnits = defaultShoppingUnits,
     this.openingBalanceRule,
     this.historyCycles = defaultHistoryCycles,
     this.plannerMode = FundingEstimateMode.historicalAverage,
@@ -260,11 +293,19 @@ class HouseSettings extends Equatable {
       budgetAlertStages: BudgetAlertStages.fromJson(json['budget_alert_stages']),
       importMatching: ImportMatching.fromJson(json['import_matching']),
       importDefaults: ImportDefaults.fromJson(json['import_defaults']),
+      cashLabel: switch (json['cash_label']) {
+        final String label when isValidCashLabel(label) => label.trim(),
+        _ => null,
+      },
+      shoppingUnits: _unitsFromJson(json['shopping_units']),
     );
   }
 
   /// Colunas lidas de `houses`.
-  static const String columns = '$columnsBefore0100, import_matching, import_defaults';
+  static const String columns = '$columnsBefore0101, cash_label, shopping_units';
+
+  /// Colunas até a 0100, para o banco que ainda não tem a 0101.
+  static const String columnsBefore0101 = '$columnsBefore0100, import_matching, import_defaults';
 
   /// Colunas até a 0099, para o banco que ainda não tem a 0100.
   static const String columnsBefore0100 = '$columnsBefore0099, budget_alert_stages';
@@ -303,8 +344,13 @@ class HouseSettings extends Equatable {
     BudgetAlertStages? budgetAlertStages,
     ImportMatching? importMatching,
     ImportDefaults? importDefaults,
+    String? cashLabel,
+    bool clearCashLabel = false,
+    List<String>? shoppingUnits,
   }) =>
       HouseSettings(
+        cashLabel: clearCashLabel ? null : (cashLabel ?? this.cashLabel),
+        shoppingUnits: shoppingUnits ?? this.shoppingUnits,
         openingBalanceRule:
             clearOpeningBalanceRule ? null : (openingBalanceRule ?? this.openingBalanceRule),
         historyCycles: historyCycles ?? this.historyCycles,
@@ -322,5 +368,5 @@ class HouseSettings extends Equatable {
 
   @override
   List<Object?> get props =>
-      [openingBalanceRule, historyCycles, plannerMode, adjustPercent, categoryOverrides, inflowRules, closingDefaults, newMemberSplitPolicy, folegoParams, budgetAlertStages, importMatching, importDefaults];
+      [openingBalanceRule, historyCycles, plannerMode, adjustPercent, categoryOverrides, inflowRules, closingDefaults, newMemberSplitPolicy, folegoParams, budgetAlertStages, importMatching, importDefaults, cashLabel, shoppingUnits];
 }

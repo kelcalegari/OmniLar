@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../../../core/domain/value_objects/money.dart';
+import '../../../finance/domain/entities/import_params.dart';
 import '../../domain/entities/shopping_item.dart';
 import '../../domain/entities/shopping_list.dart';
 import '../../domain/repositories/shopping_repository.dart';
@@ -104,6 +105,31 @@ class ShoppingCubit extends BlocBase<ShoppingState> {
       return true;
     } catch (e) {
       emit(state.copyWith(errorMessage: 'Erro ao adicionar item: $e'));
+      return false;
+    }
+  }
+
+  /// Categoria e divisão da despesa criada ao fechar a compra da lista (0101).
+  /// Devolve false se não deu para gravar.
+  Future<bool> updateListDefaults(
+    ShoppingList list, {
+    String? categoryId,
+    required ImportSplitMode splitMode,
+  }) async {
+    try {
+      await _repository.updateListDefaults(list.id, categoryId: categoryId, splitMode: splitMode);
+      final updated = list.copyWith(
+        defaultCategoryId: categoryId,
+        clearDefaultCategory: categoryId == null,
+        defaultSplitMode: splitMode,
+      );
+      emit(state.copyWith(
+        lists: [for (final l in state.lists) l.id == list.id ? updated : l],
+        selectedList: state.selectedList?.id == list.id ? updated : state.selectedList,
+      ));
+      return true;
+    } catch (e) {
+      emit(state.copyWith(errorMessage: 'Erro ao salvar os padrões da lista: $e'));
       return false;
     }
   }

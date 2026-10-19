@@ -3,6 +3,7 @@ import '../../../../core/network/offline_sync_service.dart';
 import '../../../../core/utils/uuid.dart';
 import '../offline/shopping_item_offline_codec.dart';
 import '../../../../core/domain/value_objects/money.dart';
+import '../../../finance/domain/entities/import_params.dart';
 import '../../domain/entities/shopping_item.dart';
 import '../../domain/entities/shopping_list.dart';
 import '../../domain/entities/shopping_trip.dart';
@@ -70,6 +71,10 @@ class ShoppingRepositoryImpl implements ShoppingRepository {
       () => _dataSource.deleteItem(itemId),
     );
   }
+
+  @override
+  Future<void> updateListDefaults(String listId, {String? categoryId, required ImportSplitMode splitMode}) =>
+      _dataSource.updateListDefaults(listId, categoryId: categoryId, splitMode: splitMode);
 
   @override
   Future<void> updateItem(ShoppingItem item) async {

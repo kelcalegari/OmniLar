@@ -185,7 +185,233 @@ extension _SettingsGroupViews on _SettingsPageState {
             _emptyLine('Nenhuma chave cadastrada. É ela que recebe os aportes do Caixa da Casa.'),
         ],
       ),
+      _houseLabelsPanel(context, financeState),
+      _shoppingListsPanel(context, financeState),
     ];
+  }
+
+  bool _isHouseAdmin(FinanceState financeState) {
+    final currentUserId = sl<AuthRepository>().currentUser?.id;
+    final me = financeState.members.where((m) => m.id == currentUserId).firstOrNull;
+    return me?.role == 'owner' || me?.role == 'admin';
+  }
+
+  /// Nome do Caixa nas telas e unidades de compra da casa (0101). Só
+  /// administradores mudam.
+  Widget _houseLabelsPanel(BuildContext context, FinanceState financeState) {
+    final settings = financeState.houseSettings;
+    final isAdmin = _isHouseAdmin(financeState);
+    return _panel(
+      context,
+      title: 'Nomes e compras',
+      actionLabel: isAdmin ? 'Alterar' : null,
+      onAction: isAdmin ? () => _showHouseLabelsDialog(context, financeState) : null,
+      children: [
+        _line(title: 'Nome do Caixa nas telas', value: settings.cashName),
+        _line(title: 'Unidades de compra', value: settings.shoppingUnits.join(', ')),
+        if (!isAdmin) _emptyLine('Só administradores mudam estes nomes.'),
+      ],
+    );
+  }
+
+  void _showHouseLabelsDialog(BuildContext context, FinanceState financeState) {
+    final saved = financeState.houseSettings;
+    final cashController = TextEditingController(text: saved.cashLabel ?? '');
+    final unitsController = TextEditingController(text: saved.shoppingUnits.join(', '));
+    String? error;
+    bool isSaving = false;
+    showDialog(
+      context: context,
+      builder: (dialogCtx) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: const Text('Nomes e compras', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                TextField(
+                  key: const ValueKey('cash_label_field'),
+                  controller: cashController,
+                  maxLength: 30,
+                  decoration: InputDecoration(
+                    labelText: 'Nome do Caixa',
+                    helperText: 'Vazio volta para "${HouseSettings.defaultCashLabel}".',
+                  ),
+                ),
+                const SizedBox(height: 8),
+                TextField(
+                  key: const ValueKey('shopping_units_field'),
+                  controller: unitsController,
+                  decoration: const InputDecoration(
+                    labelText: 'Unidades de compra',
+                    helperText: 'Separadas por vírgula; a primeira é a de um item novo (até 20, de 1 a 8 letras).',
+                    helperMaxLines: 3,
+                  ),
+                ),
+                if (error != null)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 8),
+                    child: Text(
+                      error!,
+                      key: const Key('house_labels_error'),
+                      style: const TextStyle(color: AppColors.debtRed, fontSize: 12),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(dialogCtx), child: const Text('Cancelar')),
+            FilledButton(
+              onPressed: isSaving
+                  ? null
+                  : () async {
+                      final cash = cashController.text.trim();
+                      final units = [
+                        for (final u in unitsController.text.split(','))
+                          if (u.trim().isNotEmpty) u.trim(),
+                      ];
+                      if (cash.isNotEmpty && !HouseSettings.isValidCashLabel(cash)) {
+                        setDialogState(() => error = 'O nome do Caixa tem até 30 caracteres.');
+                        return;
+                      }
+                      if (!HouseSettings.areValidShoppingUnits(units)) {
+                        setDialogState(() => error =
+                            'Informe de 1 a 20 unidades diferentes, de 1 a 8 caracteres cada.');
+                        return;
+                      }
+                      final cashChanged = (cash.isEmpty ? null : cash) != saved.cashLabel;
+                      final unitsChanged = units.join('\u0000') != saved.shoppingUnits.join('\u0000');
+                      setDialogState(() {
+                        error = null;
+                        isSaving = true;
+                      });
+                      final messenger = ScaffoldMessenger.of(context);
+                      final navigator = Navigator.of(dialogCtx);
+                      final ok = (!cashChanged && !unitsChanged) ||
+                          await context.read<FinanceCubit>().updateHouseSettings(
+                                cashLabel: cashChanged && cash.isNotEmpty ? cash : null,
+                                clearCashLabel: cashChanged && cash.isEmpty,
+                                shoppingUnits: unitsChanged ? units : null,
+                              );
+                      if (ok) navigator.pop();
+                      setDialogState(() => isSaving = false);
+                      showSaveFeedback(messenger, ok: ok, success: 'Nomes da casa atualizados.');
+                    },
+              style: FilledButton.styleFrom(backgroundColor: AppColors.primary),
+              child: const Text('Salvar'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// Categoria e divisão da despesa criada ao fechar a compra de cada lista
+  /// (0101). Quem edita listas (qualquer morador) muda.
+  Widget _shoppingListsPanel(BuildContext context, FinanceState financeState) {
+    final cubit = sl<ShoppingCubit>();
+    return BlocBuilder<ShoppingCubit, ShoppingState>(
+      bloc: cubit,
+      builder: (context, shopping) {
+        if (shopping.status == ShoppingCubitStatus.initial) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (cubit.state.status == ShoppingCubitStatus.initial) cubit.loadShoppingData();
+          });
+        }
+        return _panel(
+          context,
+          title: 'Compras de mercado por lista',
+          children: [
+            if (shopping.lists.isEmpty)
+              _emptyLine('Nenhuma lista de compras ainda.')
+            else
+              for (final list in shopping.lists)
+                InkWell(
+                  key: ValueKey('shopping_list_defaults_${list.id}'),
+                  onTap: () => _showShoppingListDefaultsDialog(context, financeState, cubit, list),
+                  child: _line(
+                    title: list.name,
+                    subtitle: list.defaultSplitMode.label,
+                    value: financeState.categories.where((c) => c.id == list.defaultCategoryId).firstOrNull?.name ??
+                        'Categoria de mercado',
+                  ),
+                ),
+            if (shopping.lists.isNotEmpty)
+              _emptyLine('Ao fechar a compra, a despesa usa a categoria e a divisão da lista.'),
+          ],
+        );
+      },
+    );
+  }
+
+  void _showShoppingListDefaultsDialog(
+    BuildContext context,
+    FinanceState financeState,
+    ShoppingCubit cubit,
+    ShoppingList list,
+  ) {
+    final categories = financeState.categories;
+    String? categoryId = categories.any((c) => c.id == list.defaultCategoryId) ? list.defaultCategoryId : null;
+    var splitMode = list.defaultSplitMode;
+    bool isSaving = false;
+    showDialog(
+      context: context,
+      builder: (dialogCtx) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: Text(list.name, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                DropdownButtonFormField<String?>(
+                  key: const ValueKey('list_default_category'),
+                  initialValue: categoryId,
+                  isExpanded: true,
+                  decoration: const InputDecoration(labelText: 'Categoria da compra'),
+                  items: [
+                    const DropdownMenuItem<String?>(value: null, child: Text('Categoria de mercado')),
+                    for (final c in categories) DropdownMenuItem<String?>(value: c.id, child: Text(c.name)),
+                  ],
+                  onChanged: (value) => setDialogState(() => categoryId = value),
+                ),
+                DropdownButtonFormField<ImportSplitMode>(
+                  key: const ValueKey('list_default_split'),
+                  initialValue: splitMode,
+                  isExpanded: true,
+                  decoration: const InputDecoration(labelText: 'Divisão da compra'),
+                  items: [
+                    for (final mode in ImportSplitMode.values)
+                      DropdownMenuItem(value: mode, child: Text(mode.label)),
+                  ],
+                  onChanged: (value) => setDialogState(() => splitMode = value ?? splitMode),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(dialogCtx), child: const Text('Cancelar')),
+            FilledButton(
+              onPressed: isSaving
+                  ? null
+                  : () async {
+                      setDialogState(() => isSaving = true);
+                      final messenger = ScaffoldMessenger.of(context);
+                      final navigator = Navigator.of(dialogCtx);
+                      final ok = await cubit.updateListDefaults(list, categoryId: categoryId, splitMode: splitMode);
+                      if (ok) navigator.pop();
+                      setDialogState(() => isSaving = false);
+                      showSaveFeedback(messenger, ok: ok, success: 'Padrões da lista atualizados.');
+                    },
+              style: FilledButton.styleFrom(backgroundColor: AppColors.primary),
+              child: const Text('Salvar'),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   // --- Conta: meus padrões de lançamento ---

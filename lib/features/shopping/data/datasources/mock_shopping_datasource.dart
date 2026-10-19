@@ -2,6 +2,7 @@ import '../../../finance/domain/services/expense_launch_defaults.dart';
 import 'dart:async';
 import '../../../../core/domain/value_objects/money.dart';
 import '../../../finance/domain/entities/house_expense.dart';
+import '../../../finance/domain/entities/import_params.dart';
 import '../../../finance/domain/entities/split_rule.dart';
 import '../../../finance/domain/repositories/finance_repository.dart';
 import '../../../p2p/domain/entities/p2p_loan.dart';
@@ -165,6 +166,17 @@ class MockShoppingDataSource implements ShoppingDataSource {
 
   // RN06: Encerramento com integração ao Caixa da Casa e Empréstimos P2P
   @override
+  Future<void> updateListDefaults(String listId, {String? categoryId, required ImportSplitMode splitMode}) async {
+    final index = _lists.indexWhere((l) => l.id == listId);
+    if (index < 0) return;
+    _lists[index] = _lists[index].copyWith(
+      defaultCategoryId: categoryId,
+      clearDefaultCategory: categoryId == null,
+      defaultSplitMode: splitMode,
+    );
+  }
+
+  @override
   Future<ShoppingTrip> completeTrip({
     required String listId,
     required Money totalAmount,
@@ -192,18 +204,36 @@ class MockShoppingDataSource implements ShoppingDataSource {
           .where((p) => p.id == paymentMethodId)
           .firstOrNull;
       final waitsForInvoice = ExpenseLaunchDefaults.waitsForInvoice(paymentMethod);
+      // Padrões da lista (0101); sem escolha, a divisão e a categoria de sempre
+      final list = _lists.where((l) => l.id == listId).firstOrNull;
+      final hasListDefaults =
+          list != null && (list.defaultCategoryId != null || list.defaultSplitMode != ImportSplitMode.category);
+      final category = hasListDefaults
+          ? ExpenseLaunchDefaults.matchCategory(
+              await financeRepository.getCategories(),
+              preferred: list.defaultCategoryId,
+              nameKeywords: const ['mercado'],
+            )
+          : null;
       await financeRepository.addExpense(
         HouseExpense(
           id: createdExpenseId,
           title: 'Compras de Mercado',
           amount: houseExpenseAmount,
           date: now,
-          categoryId: 'cat_mercado',
+          categoryId: category?.id ?? 'cat_mercado',
           paidByMemberId: paidByMemberId,
           paymentMethodId: paymentMethodId,
           paidOutOfPocket: !waitsForInvoice,
           status: waitsForInvoice ? ExpenseStatus.pending : ExpenseStatus.paid,
-          splitRule: SplitRule.percentage(splitPercentages),
+          splitRule: hasListDefaults
+              ? ExpenseLaunchDefaults.splitRuleForMode(
+                  mode: list.defaultSplitMode,
+                  category: category,
+                  members: members,
+                  paidByMemberId: paidByMemberId,
+                )
+              : SplitRule.percentage(splitPercentages),
         ),
       );
     }
