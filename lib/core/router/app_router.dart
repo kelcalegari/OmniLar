@@ -5,6 +5,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 
 import '../di/service_locator.dart';
+import '../utils/app_download.dart';
 import '../widgets/desktop_shortcuts_wrapper.dart';
 import '../widgets/scaffold_with_nav_bar.dart';
 import '../../features/auth/domain/repositories/auth_repository.dart';
@@ -168,6 +169,24 @@ class AppRouter {
         name: 'splash',
         parentNavigatorKey: _rootNavigatorKey,
         builder: (context, state) => SplashPage(returnTo: state.uri.queryParameters['from']),
+      ),
+      GoRoute(
+        path: '/apk',
+        name: 'apk-download',
+        parentNavigatorKey: _rootNavigatorKey,
+        redirect: (context, state) {
+          AppDownloadConfig.downloadApk();
+          return '/login';
+        },
+      ),
+      GoRoute(
+        path: '/download',
+        name: 'app-download',
+        parentNavigatorKey: _rootNavigatorKey,
+        redirect: (context, state) {
+          AppDownloadConfig.downloadApk();
+          return '/login';
+        },
       ),
       GoRoute(
         path: '/login',

@@ -705,6 +705,20 @@ extension _SettingsGroupViews on _SettingsPageState {
           AuditLogView(key: ValueKey(_auditVersion)),
         ],
       ),
+      if (kIsWeb)
+        _panel(
+          context,
+          title: 'Versão do Aplicativo',
+          children: [
+            ListTile(
+              leading: const Icon(Icons.android_rounded, color: AppColors.creditGreen),
+              title: const Text('Baixar App para Android (.apk)'),
+              subtitle: const Text('Instale o app diretamente no seu celular Android (versão ARM64, 34.7 MB)'),
+              trailing: const Icon(Icons.download_rounded),
+              onTap: AppDownloadConfig.downloadApk,
+            ),
+          ],
+        ),
     ];
   }
 

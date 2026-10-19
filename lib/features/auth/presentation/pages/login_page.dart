@@ -1,9 +1,11 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 import '../../../../core/network/google_auth_config.dart';
 import '../../../../core/theme/app_colors.dart';
+import '../../../../core/utils/app_download.dart';
 import '../../../../core/widgets/omni_logo.dart';
 import '../cubit/auth_cubit.dart';
 import '../cubit/auth_state.dart';
@@ -534,6 +536,27 @@ class _LoginPageState extends State<LoginPage> {
                             ),
                           ),
                         ),
+                        if (kIsWeb) ...[
+                          const SizedBox(height: 18),
+                          Center(
+                            child: TextButton.icon(
+                              onPressed: AppDownloadConfig.downloadApk,
+                              icon: const Icon(
+                                Icons.android_rounded,
+                                size: 20,
+                                color: AppColors.creditGreen,
+                              ),
+                              label: const Text(
+                                'Baixar App para Android (.apk)',
+                                style: TextStyle(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w600,
+                                  color: AppColors.creditGreen,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
                       ],
                     ),
                   ),

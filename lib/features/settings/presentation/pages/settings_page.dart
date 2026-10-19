@@ -52,6 +52,8 @@ import '../../../../core/widgets/money_input_field.dart';
 import '../../../../core/widgets/save_feedback.dart';
 import '../../../../core/widgets/search_shortcut.dart';
 import '../widgets/ai_consent_tile.dart';
+import 'package:flutter/foundation.dart';
+import '../../../../core/utils/app_download.dart';
 
 part 'settings_groups.dart';
 

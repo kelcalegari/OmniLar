@@ -2,7 +2,18 @@
   "hosting": {
     "site": "omnilar",
     "public": "build/web",
-    "ignore": ["firebase.json", "**/.*", "**/node_modules/**"],
+    "redirects": [
+      {
+        "source": "/apk",
+        "destination": "https://rygxmpwzofgieodvhpcy.supabase.co/storage/v1/object/public/releases/OmniLar-arm64-release.apk",
+        "type": 302
+      },
+      {
+        "source": "/download",
+        "destination": "https://rygxmpwzofgieodvhpcy.supabase.co/storage/v1/object/public/releases/OmniLar-arm64-release.apk",
+        "type": 302
+      }
+    ],
     "rewrites": [
       { "source": "**", "destination": "/index.html" }
     ],
