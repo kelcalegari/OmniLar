@@ -10,10 +10,26 @@ import '../../../../core/widgets/save_feedback.dart';
 import '../../../auth/domain/repositories/auth_repository.dart';
 import '../../domain/entities/house_expense.dart';
 import '../../domain/entities/house_inflow.dart';
+import '../../domain/entities/payment_method.dart';
 import '../cubit/finance_cubit.dart';
 import '../cubit/finance_state.dart';
 
 final _day = DateFormat('dd/MM/yyyy');
+
+/// Nome do cartão com o dono, para as listas de repasse.
+String _cardLabel(PaymentMethod card, FinanceState state) {
+  final owner = state.members.where((m) => m.id == card.ownerMemberId).firstOrNull;
+  return owner == null ? '${card.name} (da casa)' : '${card.name} (${owner.name.split(' ').first})';
+}
+
+String _vaultName(FinanceState state, String vaultId) =>
+    state.savingsVaults.where((v) => v.id == vaultId).firstOrNull?.name ?? 'Caixinha';
+
+/// Destino da entrada: para o Caixa do ciclo ou para pagar fatura de cartão (repasse).
+enum InflowDestinationType {
+  cycleCash,
+  cardInvoice,
+}
 
 /// Morador logado; null fora da sessão (testes, modo sem login).
 String? _signedInMemberId() {
@@ -161,17 +177,22 @@ class HouseInflowsCard extends StatelessWidget {
   }
 }
 
-/// Formulário para lançar (ou, com [editing], corrigir) uma entrada de fora.
+/// Formulário para lançar (ou, com [editing], corrigir) uma entrada de fora ou repasse de cartão.
 Future<bool> showHouseInflowForm(
   BuildContext context,
   FinanceCubit cubit,
   FinanceState state, {
   HouseInflow? editing,
   String? currentMemberId,
+  bool initialForCard = false,
 }) async {
   final messenger = ScaffoldMessenger.of(context);
   final expenses = _refundableExpenses(state);
+  final cards = state.paymentMethods.where((p) => p.isCreditCard).toList();
+  final vaults = state.savingsVaults;
+
   final descriptionController = TextEditingController(text: editing?.description ?? '');
+  final payerController = TextEditingController();
   var cents = editing?.amount.cents ?? 0;
   final now = DateTime.now();
   final today = DateTime(now.year, now.month, now.day);
@@ -180,120 +201,303 @@ Future<bool> showHouseInflowForm(
   String? expenseId = editing?.expenseId;
   // Despesa reembolsada que não está no ciclo carregado: fica como estava
   final keepsOtherExpense = expenseId != null && !expenses.any((e) => e.id == expenseId);
+
+  var destinationType = initialForCard ? InflowDestinationType.cardInvoice : InflowDestinationType.cycleCash;
+  String? cardId = cards.firstOrNull?.id;
+  String? cardExpenseId;
+  var vaultId = (vaults.where((v) => v.name.toLowerCase().contains('repasse')).firstOrNull ?? vaults.firstOrNull)?.id;
+
   String? error;
 
   final confirmed = await showDialog<bool>(
     context: context,
     builder: (dialogCtx) => StatefulBuilder(
-      builder: (context, setDialogState) => AlertDialog(
-        title: Text(editing == null ? 'Entrada de fora' : 'Editar entrada de fora'),
-        content: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              MoneyInputField(
-                key: const Key('house_inflow_amount'),
-                primaryColor: AppColors.creditGreen,
-                initialValue: Money(cents),
-                onChanged: (value) {
-                  cents = value.cents;
-                  if (error != null) setDialogState(() => error = null);
-                },
-              ),
-              const SizedBox(height: 12),
-              TextField(
-                key: const Key('house_inflow_description'),
-                controller: descriptionController,
-                textCapitalization: TextCapitalization.sentences,
-                decoration: InputDecoration(
-                  labelText: 'Do que é',
-                  hintText: 'Ex.: Pix do João pela pizza',
-                  errorText: error,
+      builder: (context, setDialogState) {
+        final cardExpenses = cardId == null
+            ? const <HouseExpense>[]
+            : state.expenses.where((e) => e.paymentMethodId == cardId && !e.isProjectExpense).toList();
+
+        return AlertDialog(
+          title: Text(
+            editing != null
+                ? 'Editar entrada de fora'
+                : (destinationType == InflowDestinationType.cardInvoice
+                    ? 'Repasse para fatura'
+                    : 'Entrada de fora'),
+          ),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                if (editing == null) ...[
+                  SegmentedButton<InflowDestinationType>(
+                    key: const Key('inflow_destination_selector'),
+                    segments: const [
+                      ButtonSegment(
+                        value: InflowDestinationType.cycleCash,
+                        icon: Icon(Icons.account_balance_wallet_outlined, size: 16),
+                        label: Text('Caixa da Casa'),
+                      ),
+                      ButtonSegment(
+                        value: InflowDestinationType.cardInvoice,
+                        icon: Icon(Icons.credit_card_rounded, size: 16),
+                        label: Text('Fatura de cartão'),
+                      ),
+                    ],
+                    selected: {destinationType},
+                    onSelectionChanged: (s) => setDialogState(() {
+                      destinationType = s.first;
+                      error = null;
+                    }),
+                  ),
+                  const SizedBox(height: 14),
+                ],
+                MoneyInputField(
+                  key: const Key('house_inflow_amount'),
+                  primaryColor: AppColors.creditGreen,
+                  initialValue: Money(cents),
+                  onChanged: (value) {
+                    cents = value.cents;
+                    if (error != null) setDialogState(() => error = null);
+                  },
                 ),
-                onChanged: (_) {
-                  if (error != null) setDialogState(() => error = null);
-                },
-              ),
-              const SizedBox(height: 12),
-              const Text('De onde veio', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.grey)),
-              const SizedBox(height: 4),
-              Wrap(
-                spacing: 6,
-                children: [
-                  for (final option in HouseInflowSource.values)
-                    ChoiceChip(
-                      key: ValueKey('house_inflow_source_${option.dbValue}'),
-                      label: Text(option.label),
-                      selected: source == option,
-                      onSelected: (_) => setDialogState(() => source = option),
+                const SizedBox(height: 12),
+                if (destinationType == InflowDestinationType.cycleCash) ...[
+                  TextField(
+                    key: const Key('house_inflow_description'),
+                    controller: descriptionController,
+                    textCapitalization: TextCapitalization.sentences,
+                    decoration: InputDecoration(
+                      labelText: 'Do que é',
+                      hintText: 'Ex.: Pix do João pela pizza',
+                      errorText: error,
                     ),
-                ],
-              ),
-              const SizedBox(height: 12),
-              OutlinedButton.icon(
-                onPressed: () async {
-                  final picked = await showDatePicker(
-                    context: context,
-                    initialDate: day,
-                    firstDate: DateTime(day.year - 1),
-                    lastDate: today.isAfter(day) ? today : day,
-                  );
-                  if (picked != null) setDialogState(() => day = picked);
-                },
-                icon: const Icon(Icons.event_rounded, size: 18),
-                label: Text('Entrou em ${_day.format(day)}'),
-              ),
-              const SizedBox(height: 12),
-              DropdownButtonFormField<String?>(
-                key: const Key('house_inflow_expense'),
-                initialValue: expenseId,
-                isExpanded: true,
-                decoration: const InputDecoration(labelText: 'Reembolsa uma despesa? (opcional)'),
-                items: [
-                  const DropdownMenuItem<String?>(value: null, child: Text('Nenhuma')),
-                  if (keepsOtherExpense)
-                    DropdownMenuItem<String?>(value: expenseId, child: const Text('Despesa de outro ciclo')),
-                  for (final expense in expenses)
-                    DropdownMenuItem<String?>(
-                      value: expense.id,
-                      child: Text('${expense.title} • ${expense.amount.formatted}', overflow: TextOverflow.ellipsis),
+                    onChanged: (_) {
+                      if (error != null) setDialogState(() => error = null);
+                    },
+                  ),
+                  const SizedBox(height: 12),
+                  const Text('De onde veio', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.grey)),
+                  const SizedBox(height: 4),
+                  Wrap(
+                    spacing: 6,
+                    children: [
+                      for (final option in HouseInflowSource.values)
+                        ChoiceChip(
+                          key: ValueKey('house_inflow_source_${option.dbValue}'),
+                          label: Text(option.label),
+                          selected: source == option,
+                          onSelected: (_) => setDialogState(() => source = option),
+                        ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  OutlinedButton.icon(
+                    onPressed: () async {
+                      final picked = await showDatePicker(
+                        context: context,
+                        initialDate: day,
+                        firstDate: DateTime(day.year - 1),
+                        lastDate: today.isAfter(day) ? today : day,
+                      );
+                      if (picked != null) setDialogState(() => day = picked);
+                    },
+                    icon: const Icon(Icons.event_rounded, size: 18),
+                    label: Text('Entrou em ${_day.format(day)}'),
+                  ),
+                  const SizedBox(height: 12),
+                  DropdownButtonFormField<String?>(
+                    key: const Key('house_inflow_expense'),
+                    initialValue: expenseId,
+                    isExpanded: true,
+                    decoration: const InputDecoration(labelText: 'Reembolsa uma despesa? (opcional)'),
+                    items: [
+                      const DropdownMenuItem<String?>(value: null, child: Text('Nenhuma')),
+                      if (keepsOtherExpense)
+                        DropdownMenuItem<String?>(value: expenseId, child: const Text('Despesa de outro ciclo')),
+                      for (final expense in expenses)
+                        DropdownMenuItem<String?>(
+                          value: expense.id,
+                          child: Text('${expense.title} • ${expense.amount.formatted}', overflow: TextOverflow.ellipsis),
+                        ),
+                    ],
+                    onChanged: (value) => setDialogState(() => expenseId = value),
+                  ),
+                  const SizedBox(height: 8),
+                  const Text(
+                    'Entra no Caixa do ciclo do dia em que caiu e não vira aporte de ninguém.',
+                    style: TextStyle(fontSize: 11, color: Colors.grey),
+                  ),
+                ] else ...[
+                  TextField(
+                    key: const Key('receipt_payer'),
+                    controller: payerController,
+                    textCapitalization: TextCapitalization.words,
+                    decoration: InputDecoration(
+                      labelText: 'Quem enviou o Pix/dinheiro',
+                      hintText: 'Ex.: João Silva',
+                      errorText: error,
                     ),
+                    onChanged: (_) {
+                      if (error != null) setDialogState(() => error = null);
+                    },
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    key: const Key('house_inflow_description'),
+                    controller: descriptionController,
+                    textCapitalization: TextCapitalization.sentences,
+                    decoration: const InputDecoration(
+                      labelText: 'Do que é (opcional)',
+                      hintText: 'Ex.: pizza de sábado, marmitas',
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  OutlinedButton.icon(
+                    onPressed: () async {
+                      final picked = await showDatePicker(
+                        context: context,
+                        initialDate: day,
+                        firstDate: DateTime(day.year - 1),
+                        lastDate: today.isAfter(day) ? today : day,
+                      );
+                      if (picked != null) setDialogState(() => day = picked);
+                    },
+                    icon: const Icon(Icons.event_rounded, size: 18),
+                    label: Text('Entrou em ${_day.format(day)}'),
+                  ),
+                  const SizedBox(height: 12),
+                  DropdownButtonFormField<String?>(
+                    key: const Key('receipt_card'),
+                    initialValue: cardId,
+                    isExpanded: true,
+                    decoration: const InputDecoration(labelText: 'Para a fatura do cartão'),
+                    items: [
+                      const DropdownMenuItem<String?>(value: null, child: Text('Ainda não sei')),
+                      for (final card in cards)
+                        DropdownMenuItem<String?>(value: card.id, child: Text(_cardLabel(card, state))),
+                    ],
+                    onChanged: (value) => setDialogState(() {
+                      cardId = value;
+                      cardExpenseId = null;
+                    }),
+                  ),
+                  if (cardExpenses.isNotEmpty) ...[
+                    const SizedBox(height: 12),
+                    DropdownButtonFormField<String?>(
+                      key: const Key('receipt_card_expense'),
+                      initialValue: cardExpenseId,
+                      isExpanded: true,
+                      decoration: const InputDecoration(labelText: 'Compra desta fatura (opcional)'),
+                      items: [
+                        const DropdownMenuItem<String?>(value: null, child: Text('Nenhuma compra específica')),
+                        for (final exp in cardExpenses)
+                          DropdownMenuItem<String?>(
+                            value: exp.id,
+                            child: Text('${exp.title} • ${exp.amount.formatted}', overflow: TextOverflow.ellipsis),
+                          ),
+                      ],
+                      onChanged: (value) => setDialogState(() {
+                        cardExpenseId = value;
+                        if (value != null) {
+                          final exp = cardExpenses.firstWhere((e) => e.id == value);
+                          if (descriptionController.text.trim().isEmpty) {
+                            descriptionController.text = exp.title;
+                          }
+                          if (cents <= 0) {
+                            cents = exp.amount.cents;
+                          }
+                        }
+                      }),
+                    ),
+                  ],
+                  const SizedBox(height: 12),
+                  if (vaults.isEmpty) ...[
+                    const Text(
+                      'Crie uma caixinha (ex.: "Repasses") para guardar o dinheiro de terceiros.',
+                      style: TextStyle(fontSize: 12, color: AppColors.debtRed),
+                    ),
+                  ] else ...[
+                    DropdownButtonFormField<String>(
+                      key: const Key('receipt_vault'),
+                      initialValue: vaultId,
+                      isExpanded: true,
+                      decoration: const InputDecoration(labelText: 'Guardar na caixinha'),
+                      items: [
+                        for (final vault in vaults) DropdownMenuItem(value: vault.id, child: Text(vault.name)),
+                      ],
+                      onChanged: (value) => setDialogState(() => vaultId = value ?? vaultId),
+                    ),
+                  ],
+                  const SizedBox(height: 8),
+                  const Text(
+                    'Não entra no Caixa do ciclo e não vira aporte de ninguém. '
+                    'O valor fica guardado na caixinha até a fatura ser paga.',
+                    style: TextStyle(fontSize: 11, color: Colors.grey),
+                  ),
                 ],
-                onChanged: (value) => setDialogState(() => expenseId = value),
-              ),
-              const SizedBox(height: 8),
-              const Text(
-                'Entra no Caixa do ciclo do dia em que caiu e não vira aporte de ninguém. '
-                'Pix para pagar a fatura de um cartão vai em Repasses de terceiros, nas Caixinhas.',
-                style: TextStyle(fontSize: 11, color: Colors.grey),
-              ),
-            ],
+              ],
+            ),
           ),
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(dialogCtx, false), child: const Text('Cancelar')),
-          FilledButton(
-            key: const Key('house_inflow_save'),
-            style: FilledButton.styleFrom(backgroundColor: AppColors.creditGreen),
-            onPressed: () {
-              if (cents <= 0) {
-                setDialogState(() => error = 'Informe o valor.');
-                return;
-              }
-              if (descriptionController.text.trim().isEmpty) {
-                setDialogState(() => error = 'Diga do que é a entrada.');
-                return;
-              }
-              Navigator.pop(dialogCtx, true);
-            },
-            child: Text(editing == null ? 'Lançar' : 'Salvar'),
-          ),
-        ],
-      ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(dialogCtx, false), child: const Text('Cancelar')),
+            FilledButton(
+              key: const Key('house_inflow_save'),
+              style: FilledButton.styleFrom(backgroundColor: AppColors.creditGreen),
+              onPressed: () {
+                if (cents <= 0) {
+                  setDialogState(() => error = 'Informe o valor.');
+                  return;
+                }
+                if (destinationType == InflowDestinationType.cycleCash) {
+                  if (descriptionController.text.trim().isEmpty) {
+                    setDialogState(() => error = 'Diga do que é a entrada.');
+                    return;
+                  }
+                } else {
+                  if (payerController.text.trim().isEmpty) {
+                    setDialogState(() => error = 'Informe quem enviou o dinheiro.');
+                    return;
+                  }
+                  if (vaultId == null) {
+                    setDialogState(() => error = 'Crie uma caixinha para guardar o repasse.');
+                    return;
+                  }
+                }
+                Navigator.pop(dialogCtx, true);
+              },
+              child: Text(
+                editing == null
+                    ? (destinationType == InflowDestinationType.cardInvoice ? 'Guardar' : 'Lançar')
+                    : 'Salvar',
+              ),
+            ),
+          ],
+        );
+      },
     ),
   );
   if (confirmed != true) return false;
+
+  if (destinationType == InflowDestinationType.cardInvoice) {
+    final payer = payerController.text.trim();
+    final ok = await cubit.registerThirdPartyReceipt(
+      payerName: payer,
+      amount: Money(cents),
+      receivedOn: DateTime(day.year, day.month, day.day),
+      vaultId: vaultId!,
+      paymentMethodId: cardId,
+      description: descriptionController.text.trim().isEmpty ? null : descriptionController.text.trim(),
+    );
+    showSaveFeedback(
+      messenger,
+      ok: ok,
+      success: 'Repasse de $payer guardado em ${_vaultName(cubit.state, vaultId!)}.',
+      failure: cubit.state.errorMessage,
+    );
+    return ok;
+  }
 
   final inflow = HouseInflow(
     id: editing?.id ?? 'inflow_${DateTime.now().millisecondsSinceEpoch}',

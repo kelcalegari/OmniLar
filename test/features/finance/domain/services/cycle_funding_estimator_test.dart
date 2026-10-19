@@ -426,5 +426,48 @@ void main() {
       expect(energia.adjustedAmount.cents, 0);
       expect(estimate.totalProjectedExpenses.cents, 12990);
     });
+
+    test('Modo de valor fixo mantém a cota fixa sem somar a estimativa variável por cima', () {
+      const fixedMembers = [
+        HouseMember(
+          id: 'm_kelvynn',
+          name: 'Kelvynn',
+          role: 'owner',
+          defaultSplitPercent: 77.3,
+          defaultFixedAmountCents: 243500, // R$ 2.435,00
+        ),
+        HouseMember(
+          id: 'm_cris',
+          name: 'Cris',
+          role: 'member',
+          defaultSplitPercent: 22.7,
+          defaultFixedAmountCents: 71500, // R$ 715,00
+        ),
+      ];
+
+      final estimate = estimator.calculateEstimate(
+        cycle: currentCycle,
+        members: fixedMembers,
+        categories: categories,
+        currentCycleExpenses: [
+          expense(
+            id: 'pessoal_cris',
+            cents: 16000, // R$ 160,00 só do Cris
+            categoryId: 'cat_moradia',
+            rule: const SplitRule.singleResponsible('m_cris'),
+          ),
+        ],
+        historicalExpenses: historicalExpenses, // R$ 1.500,00 de média de mercado
+        currentCycleContributions: [],
+      );
+
+      final qKelvynn = estimate.memberQuotes.firstWhere((q) => q.memberId == 'm_kelvynn');
+      final qCris = estimate.memberQuotes.firstWhere((q) => q.memberId == 'm_cris');
+
+      // Kelvynn: apenas o valor fixo (R$ 2.435,00)
+      expect(qKelvynn.recommendedAmount.cents, 243500);
+      // Cris: valor fixo (R$ 715,00) + despesa exclusiva (R$ 160,00) = R$ 875,00
+      expect(qCris.recommendedAmount.cents, 87500);
+    });
   });
 }

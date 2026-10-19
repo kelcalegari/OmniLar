@@ -24,10 +24,12 @@ Future<T?> showAdaptiveModal<T>({
   required Widget child,
   double maxWidth = 540.0,
   bool isDismissible = true,
+  bool useRootNavigator = true,
 }) {
   if (context.isMobile) {
     return showModalBottomSheet<T>(
       context: context,
+      useRootNavigator: useRootNavigator,
       isScrollControlled: true,
       useSafeArea: true,
       isDismissible: isDismissible,
@@ -39,6 +41,7 @@ Future<T?> showAdaptiveModal<T>({
   } else {
     return showDialog<T>(
       context: context,
+      useRootNavigator: useRootNavigator,
       barrierDismissible: isDismissible,
       builder: (dialogCtx) {
         return Dialog(

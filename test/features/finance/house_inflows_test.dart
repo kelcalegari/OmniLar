@@ -225,6 +225,32 @@ void main() {
       expect(cubit.state.houseInflows.single.createdBy, 'member_carlos');
       expect(find.textContaining('Pix do João'), findsOneWidget);
     });
+
+    testWidgets('Lança um repasse para fatura de cartão pelo formulário unificado', (tester) async {
+      await pump(tester);
+
+      await tester.tap(find.byKey(const Key('add_house_inflow')));
+      await tester.pumpAndSettle();
+
+      // Troca para o modo "Fatura de cartão"
+      await tester.tap(find.text('Fatura de cartão'));
+      await tester.pumpAndSettle();
+
+      // Sem valor, não fecha
+      await tester.tap(find.byKey(const Key('house_inflow_save')));
+      await tester.pumpAndSettle();
+      expect(find.text('Informe o valor.'), findsOneWidget);
+
+      await tester.enterText(find.byType(TextField).first, '5000');
+      await tester.enterText(find.byKey(const Key('receipt_payer')), 'Ana');
+      await tester.tap(find.byKey(const Key('house_inflow_save')));
+      await tester.pumpAndSettle();
+
+      expect(cubit.state.heldThirdPartyReceipts.length, 1);
+      final receipt = cubit.state.heldThirdPartyReceipts.single;
+      expect(receipt.payerName, 'Ana');
+      expect(receipt.amount.cents, 5000);
+    });
   });
 }
 

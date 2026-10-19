@@ -138,6 +138,7 @@ class CycleFundingEstimator {
       members: members,
       houseExpenses: houseExpenses,
       variableRemainder: Money(variableRemainderCents + vaultGoalsCents),
+      vaultGoals: Money(vaultGoalsCents),
       // Com valor fixo só "abater os aportes" reduz a cota; na divisão por
       // despesa, também a sobra de quem ainda não escolheu a regra
       fixedAbatement: Money(sumWhere((rule) => rule == OpeningBalanceRule.reduceQuotas)),
@@ -278,6 +279,7 @@ class CycleFundingEstimator {
     required List<HouseMember> members,
     required List<HouseExpense> houseExpenses,
     required Money variableRemainder,
+    required Money vaultGoals,
     required Money fixedAbatement,
     required Money percentAbatement,
     required List<Contribution> contributions,
@@ -310,10 +312,10 @@ class CycleFundingEstimator {
       }
       // Meta das caixinhas na cota: na proporção do valor fixo de cada um
       final totalFixedForGoals = members.fold<int>(0, (acc, m) => acc + (m.defaultFixedAmountCents ?? 0));
-      if (variableRemainder.isPositive && totalFixedForGoals > 0) {
+      if (vaultGoals.isPositive && totalFixedForGoals > 0) {
         final shares = SplitRule.percentage({
           for (final m in members) m.id: (m.defaultFixedAmountCents ?? 0) * 100 / totalFixedForGoals,
-        }).calculateAllocations(totalAmount: variableRemainder, memberIds: memberIds);
+        }).calculateAllocations(totalAmount: vaultGoals, memberIds: memberIds);
         for (final m in members) {
           recommendedMap[m.id] = recommendedMap[m.id]! + (shares[m.id] ?? const Money.zero());
         }

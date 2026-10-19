@@ -583,7 +583,7 @@ class _SmartFABContent extends StatelessWidget {
                   context,
                   icon: Icons.south_west_rounded,
                   label: 'Entrada de fora',
-                  subtitle: 'Pix, reembolso',
+                  subtitle: 'Pix, repasse, reembolso',
                   color: AppColors.creditGreen,
                   onTap: () => _openHouseInflowForm(context),
                 ),

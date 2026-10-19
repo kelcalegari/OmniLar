@@ -372,8 +372,7 @@ class _ExpenseDetailDesktopPaneState extends State<ExpenseDetailDesktopPane> {
                     icon: const Icon(Icons.edit_outlined, size: 16),
                     label: const Text('Editar', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
                     onPressed: () {
-                      Navigator.push(
-                        context,
+                      Navigator.of(context, rootNavigator: true).push(
                         MaterialPageRoute(builder: (_) => AddExpensePage(expenseToEdit: expense)),
                       );
                     },

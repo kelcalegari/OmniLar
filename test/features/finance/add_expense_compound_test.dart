@@ -48,6 +48,61 @@ void main() {
       expect(find.text('Adicionar Sub-item'), findsOneWidget);
       expect(find.text('Sub-item #1'), findsOneWidget);
     });
+
+    testWidgets('Exibe valores e títulos dos sub-itens legíveis ao editar despesa composta', (tester) async {
+      tester.view.physicalSize = const Size(800, 1400);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.resetPhysicalSize);
+
+      await sl<FinanceCubit>().loadCycleData();
+
+      final compoundExpense = HouseExpense(
+        id: 'exp_edit_test',
+        title: 'Boleto Condomínio Teste',
+        amount: const Money(19200),
+        date: DateTime(2026, 10, 10),
+        dueDate: DateTime(2026, 10, 10),
+        categoryId: 'cat_moradia',
+        paidByMemberId: 'member_carlos',
+        paymentMethodId: 'pm_caixa',
+        splitRule: const SplitRule.percentage({'member_carlos': 100}),
+        status: ExpenseStatus.pending,
+        items: const [
+          HouseExpenseItem(
+            id: 'it_1',
+            expenseId: 'exp_edit_test',
+            title: 'Outros',
+            amount: Money(10000),
+          ),
+          HouseExpenseItem(
+            id: 'it_2',
+            expenseId: 'exp_edit_test',
+            title: 'Marmita Cris',
+            amount: Money(9200),
+          ),
+        ],
+      );
+
+      await tester.pumpWidget(
+        BlocProvider<FinanceCubit>.value(
+          value: sl<FinanceCubit>(),
+          child: MaterialApp(
+            home: AddExpensePage(expenseToEdit: compoundExpense),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      // Verifica que está no modo de edição e com o banner 100% batendo
+      expect(find.text('Editar Despesa'), findsOneWidget);
+      expect(find.textContaining('100% batendo'), findsOneWidget);
+
+      // Sub-itens exibem os títulos e os valores formatados nos campos
+      expect(find.text('Outros'), findsOneWidget);
+      expect(find.text('Marmita Cris'), findsOneWidget);
+      expect(find.text(const Money(10000).format()), findsOneWidget);
+      expect(find.text(const Money(9200).format()), findsOneWidget);
+    });
   });
 
   group('ExpenseTimelineItem - Exibição de Despesas Compostas', () {

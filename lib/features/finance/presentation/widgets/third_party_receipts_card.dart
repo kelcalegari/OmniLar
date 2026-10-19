@@ -73,17 +73,25 @@ class ThirdPartyReceiptsCard extends StatelessWidget {
               'Fica guardado na caixinha até a fatura ser paga e não vira aporte de ninguém.',
               style: TextStyle(fontSize: 12, color: Colors.grey),
             ),
-            if (held.isNotEmpty) ...[
-              const SizedBox(height: 12),
-              Row(
-                children: [
-                  const Text('Guardado para faturas: ', style: TextStyle(fontSize: 13)),
-                  PrivacySensitiveText(
-                    total.formatted,
-                    style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold),
-                  ),
-                ],
-              ),
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                const Text('Guardado para faturas: ', style: TextStyle(fontSize: 13)),
+                PrivacySensitiveText(
+                  total.formatted,
+                  style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold),
+                ),
+              ],
+            ),
+            if (held.isEmpty)
+              const Padding(
+                padding: EdgeInsets.symmetric(vertical: 8),
+                child: Text(
+                  'Nenhum repasse guardado no momento.',
+                  style: TextStyle(fontSize: 12, color: Colors.grey),
+                ),
+              )
+            else
               for (final receipt in held)
                 ListTile(
                   key: ValueKey('held_receipt_${receipt.id}'),
@@ -103,7 +111,6 @@ class ThirdPartyReceiptsCard extends StatelessWidget {
                     ],
                   ),
                 ),
-            ],
             if (used.isNotEmpty) ...[
               const Divider(height: 24),
               const Text('Usados recentemente', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),

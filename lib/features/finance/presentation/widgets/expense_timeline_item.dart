@@ -297,8 +297,7 @@ class ExpenseTimelineItem extends StatelessWidget {
                         label: const Text('Editar Dados', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
                         onPressed: () {
                           Navigator.pop(modalContext);
-                          Navigator.push(
-                            context,
+                          Navigator.of(context, rootNavigator: true).push(
                             MaterialPageRoute(
                               builder: (_) => AddExpensePage(expenseToEdit: expense),
                             ),
@@ -516,8 +515,7 @@ class ExpenseTimelineItem extends StatelessWidget {
                     label: const Text('Editar Despesa', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
                     onPressed: () {
                       Navigator.pop(modalContext);
-                      Navigator.push(
-                        context,
+                      Navigator.of(context, rootNavigator: true).push(
                         MaterialPageRoute(
                           builder: (_) => AddExpensePage(expenseToEdit: expense),
                         ),
@@ -859,8 +857,7 @@ class ExpenseTimelineItem extends StatelessWidget {
                   tooltip: 'Opções da despesa',
                   onSelected: (val) {
                     if (val == 'edit') {
-                      Navigator.push(
-                        context,
+                      Navigator.of(context, rootNavigator: true).push(
                         MaterialPageRoute(
                           builder: (_) => AddExpensePage(expenseToEdit: expense),
                         ),

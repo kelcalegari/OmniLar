@@ -24,6 +24,7 @@ import '../../../../core/widgets/save_feedback.dart';
 
 class _DraftExpenseItem {
   final TextEditingController titleController;
+  final MoneyTextEditingController amountController;
   int cents;
   String? categoryId;
   String? responsibleMemberId;
@@ -33,10 +34,15 @@ class _DraftExpenseItem {
     required this.cents,
     this.categoryId,
     this.responsibleMemberId,
-  }) : titleController = TextEditingController(text: title);
+  })  : titleController = TextEditingController(text: title),
+        amountController = MoneyTextEditingController(
+          initialMoney: Money(cents),
+          allowEmpty: false,
+        );
 
   void dispose() {
     titleController.dispose();
+    amountController.dispose();
   }
 }
 
@@ -1563,6 +1569,7 @@ class _AddExpensePageState extends State<AddExpensePage> {
                 onTap: () {
                   setState(() {
                     _draftItems.last.cents += diffCents;
+                    _draftItems.last.amountController.setMoney(Money(_draftItems.last.cents));
                   });
                 },
                 child: Text(
@@ -1664,10 +1671,16 @@ class _AddExpensePageState extends State<AddExpensePage> {
               const SizedBox(width: 8),
               Expanded(
                 flex: 2,
-                child: MoneyInputField(
-                  label: 'Valor',
-                  initialValue: Money(item.cents),
-                  primaryColor: AppColors.primary,
+                child: MoneyTextFormField(
+                  controller: item.amountController,
+                  labelText: 'Valor',
+                  allowEmpty: false,
+                  decoration: InputDecoration(
+                    labelText: 'Valor',
+                    isDense: true,
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                  ),
                   onChanged: (money) {
                     setState(() {
                       item.cents = money.cents;
