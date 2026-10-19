@@ -1,44 +1,18 @@
 -- 0105_contributions_edit_delete.sql
--- Criação completa e permissões de edição e exclusão de aportes (contributions).
+-- Edição e exclusão de aportes (contributions).
+--
+-- Por quê: a tabela (0002) só tinha políticas de SELECT e INSERT. Sem política
+-- de UPDATE/DELETE, o RLS não dá erro: filtra tudo e altera 0 linhas, então o
+-- app parecia salvar e nada mudava. Aqui entram as duas políticas, a trava de
+-- ciclo fechado passa a cobrir UPDATE/DELETE (a 0030 só cobria INSERT) e o
+-- aporte fica preso à casa e a quem registrou.
+--
+-- A tabela, os índices, o RLS ligado e o Realtime já existem (0002, 0061).
 
--- 1. Cria a tabela caso ainda não exista no banco
-create table if not exists public.contributions (
-  id uuid primary key default gen_random_uuid(),
-  house_id uuid not null references public.houses(id) on delete cascade,
-  member_id uuid not null references auth.users(id) on delete cascade,
-  amount_cents bigint not null,
-  cycle_start_date date not null,
-  paid_at timestamptz not null default now(),
-  notes text,
-  payment_method_id uuid references public.payment_methods(id) on delete set null,
-  proof_attachment_id text,
-  created_by uuid not null references auth.users(id),
-  created_at timestamptz not null default now()
-);
-
--- 2. Índices de busca e filtros de ciclo
-create index if not exists idx_contributions_house_cycle on public.contributions (house_id, cycle_start_date);
-create index if not exists idx_contributions_member on public.contributions (member_id);
-
--- 3. Habilita Row Level Security
-alter table public.contributions enable row level security;
-
--- 4. Tempo real e réplica completa
-alter table public.contributions replica identity full;
-do $$
-begin
-  if not exists (
-    select 1 from pg_publication_tables
-    where pubname = 'supabase_realtime' and schemaname = 'public' and tablename = 'contributions'
-  ) then
-    alter publication supabase_realtime add table public.contributions;
-  end if;
-end $$;
-
--- 5. Garante permissões completas na tabela para usuários autenticados
+-- 1. Permissões de tabela para usuários autenticados (o RLS decide as linhas)
 grant select, insert, update, delete on public.contributions to authenticated;
 
--- 6. Trigger para impedir alteração de casa ou do criador original
+-- 2. O aporte não muda de casa nem de quem registrou
 create or replace function public.contributions_keep_owner()
 returns trigger
 language plpgsql
@@ -57,13 +31,14 @@ create trigger trg_contributions_keep_owner
   before update on public.contributions
   for each row execute function public.contributions_keep_owner();
 
--- 7. Função de guarda para tratar INSERT, UPDATE e DELETE em ciclos fechados
+-- 3. Ciclo fechado: substitui a guarda da 0030 (só INSERT) por INSERT/UPDATE/DELETE
 create or replace function public.guard_closed_cycle_contribution()
 returns trigger
 language plpgsql
 set search_path = public
 as $$
 begin
+  -- As funções do banco (fechamento, reabertura) aplicam as próprias regras
   if current_user not in ('authenticated', 'anon') or pg_trigger_depth() > 1 then
     return coalesce(new, old);
   end if;
@@ -76,12 +51,16 @@ begin
     return old;
   end if;
 
+  -- Devolução de aporte (negativa) só nasce do fechamento do ciclo (0031)
+  if new.amount_cents <= 0 then
+    raise exception 'O valor do aporte deve ser maior que zero.';
+  end if;
+
+  -- Espera um fechamento em andamento nesta casa
   perform pg_advisory_xact_lock_shared(hashtextextended('house-ledger:' || new.house_id::text, 0));
 
-  if tg_op = 'UPDATE' then
-    if public.house_date_is_closed(old.house_id, old.cycle_start_date) then
-      raise exception 'O ciclo original deste aporte já foi fechado. Reabra o ciclo no Fechamento para alterá-lo.';
-    end if;
+  if tg_op = 'UPDATE' and public.house_date_is_closed(old.house_id, old.cycle_start_date) then
+    raise exception 'O ciclo original deste aporte já foi fechado. Reabra o ciclo no Fechamento para alterá-lo.';
   end if;
 
   if public.house_date_is_closed(new.house_id, new.cycle_start_date) then
@@ -97,43 +76,39 @@ create trigger trg_contributions_guard_closed_cycle
   before insert or update or delete on public.contributions
   for each row execute function public.guard_closed_cycle_contribution();
 
--- 8. Políticas RLS (SELECT, INSERT, UPDATE, DELETE)
-
--- SELECT: Membros da casa podem visualizar os aportes da casa
-drop policy if exists "contributions_select_member" on public.contributions;
-create policy "contributions_select_member" on public.contributions
-  for select using (public.is_house_member(house_id));
-
--- INSERT: Membros da casa registrando o próprio aporte ou no nome de morador
-drop policy if exists "contributions_insert_member" on public.contributions;
-create policy "contributions_insert_member" on public.contributions
-  for insert with check (
-    public.is_house_member(house_id)
-    and (created_by = (select auth.uid()))
-  );
-
--- UPDATE: Autor, morador dono do aporte ou admin, em ciclo aberto
+-- 4. UPDATE: quem registrou, o morador do aporte ou um admin da casa
 drop policy if exists "contributions_update_member" on public.contributions;
 create policy "contributions_update_member" on public.contributions
-  for update using (
+  for update to authenticated
+  using (
     public.is_house_member(house_id)
-    and (created_by = (select auth.uid()) or member_id = (select auth.uid()) or public.is_house_admin(house_id))
-    and not public.house_date_is_closed(house_id, cycle_start_date)
+    and (
+      created_by = (select auth.uid())
+      or member_id = (select auth.uid())
+      or public.is_house_admin(house_id)
+    )
   )
   with check (
     public.is_house_member(house_id)
-    and (created_by = (select auth.uid()) or member_id = (select auth.uid()) or public.is_house_admin(house_id))
-    and not public.house_date_is_closed(house_id, cycle_start_date)
+    and (
+      created_by = (select auth.uid())
+      or member_id = (select auth.uid())
+      or public.is_house_admin(house_id)
+    )
   );
 
--- DELETE: Autor, morador dono do aporte ou admin, em ciclo aberto
+-- 5. DELETE: mesmas pessoas
 drop policy if exists "contributions_delete_member" on public.contributions;
 create policy "contributions_delete_member" on public.contributions
-  for delete using (
+  for delete to authenticated
+  using (
     public.is_house_member(house_id)
-    and (created_by = (select auth.uid()) or member_id = (select auth.uid()) or public.is_house_admin(house_id))
-    and not public.house_date_is_closed(house_id, cycle_start_date)
+    and (
+      created_by = (select auth.uid())
+      or member_id = (select auth.uid())
+      or public.is_house_admin(house_id)
+    )
   );
 
--- 9. Recarrega o cache do PostgREST
+-- 6. Recarrega o cache do PostgREST
 notify pgrst, 'reload schema';

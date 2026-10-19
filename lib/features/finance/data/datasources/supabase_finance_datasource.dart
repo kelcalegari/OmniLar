@@ -609,7 +609,7 @@ class SupabaseFinanceDataSource implements FinanceDataSource {
       });
 
       return rows.map((r) {
-        final dateStr = (r['created_at'] ?? r['cycle_start_date']) as String?;
+        final dateStr = (r['paid_at'] ?? r['date'] ?? r['cycle_start_date'] ?? r['created_at']) as String?;
         final date = dateStr != null ? (DateTime.tryParse(dateStr)?.toLocal() ?? DateTime.now()) : DateTime.now();
         return Contribution(
           id: r['id'] as String,
