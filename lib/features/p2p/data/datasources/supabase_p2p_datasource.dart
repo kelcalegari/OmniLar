@@ -113,6 +113,7 @@ class SupabaseP2PDataSource implements P2PDataSource {
           repaymentMode: repaymentMode,
           settleInCycle: (r['settle_in_cycle'] as bool?) ?? true,
           awaitingAcceptance: (r['awaiting_acceptance'] as bool?) ?? false,
+          awaitingApproval: (r['awaiting_approval'] as bool?) ?? false,
           houseFunding: switch (r['house_funding'] as String?) {
             'cycle' => HouseLoanFunding.cycle,
             'vault' => HouseLoanFunding.vault,
@@ -216,6 +217,18 @@ class SupabaseP2PDataSource implements P2PDataSource {
       await client.rpc('decline_p2p_loan', params: {'p_loan_id': loanId});
     } catch (e) {
       throw ServerFailure('Erro ao recusar o empréstimo: $e');
+    }
+  }
+
+  @override
+  Future<void> decideLoanApproval(String loanId, {required bool approve}) async {
+    try {
+      await client.rpc('decide_p2p_loan_approval', params: {
+        'p_loan_id': loanId,
+        'p_approve': approve,
+      });
+    } catch (e) {
+      throw ServerFailure('Erro ao ${approve ? 'aprovar' : 'recusar'} o empréstimo: $e');
     }
   }
 

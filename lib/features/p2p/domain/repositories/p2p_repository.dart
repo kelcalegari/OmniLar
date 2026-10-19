@@ -22,5 +22,9 @@ abstract class P2PRepository {
 
   /// O devedor recusa o empréstimo ainda não aceito (ele é cancelado).
   Future<void> declineLoan(String loanId);
+
+  /// Quem administra a casa aprova ([approve]) ou recusa o empréstimo que passou
+  /// do limite de aprovação da casa (0104). Recusar cancela o empréstimo.
+  Future<void> decideLoanApproval(String loanId, {required bool approve});
   Future<List<P2PPaymentRecord>> getLoanPayments(String loanId);
 }

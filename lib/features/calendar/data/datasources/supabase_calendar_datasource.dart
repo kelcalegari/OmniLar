@@ -485,6 +485,9 @@ class SupabaseCalendarDataSource implements CalendarDataSource {
     }
   }
 
+  static List<String> _uuidList(Object? raw) =>
+      raw is List ? [for (final m in raw) if (m is String) m] : const [];
+
   @override
   Future<List<TaskItem>> getTasks({bool includeArchived = false}) async {
     try {
@@ -564,6 +567,9 @@ class SupabaseCalendarDataSource implements CalendarDataSource {
           cost: costCents != null ? Money(costCents) : null,
           createdByMemberId: r['created_by'] as String? ?? '',
           createdAt: DateTime.parse(r['created_at'] as String).toLocal(),
+          recurrence: TaskRecurrence.fromDb(r['recurrence']),
+          rotationMemberIds: _uuidList(r['rotation_members']),
+          nextAssigneeMemberId: r['next_assignee'] as String?,
         );
       }).toList();
     } catch (e) {
@@ -617,6 +623,9 @@ class SupabaseCalendarDataSource implements CalendarDataSource {
               cost: costCents != null ? Money(costCents) : null,
               createdByMemberId: r['created_by'] as String? ?? '',
               createdAt: DateTime.tryParse(r['created_at'] as String? ?? '')?.toLocal() ?? DateTime.now(),
+              recurrence: TaskRecurrence.fromDb(r['recurrence']),
+              rotationMemberIds: _uuidList(r['rotation_members']),
+              nextAssigneeMemberId: r['next_assignee'] as String?,
             );
           }).toList();
         });
@@ -637,6 +646,12 @@ class SupabaseCalendarDataSource implements CalendarDataSource {
         'priority': task.priority.name,
         'cost_cents': task.cost?.cents,
         'created_by': currentUserId ?? task.createdByMemberId,
+        // Repetição com rodízio (0104): só vai quando a tarefa se repete
+        if (task.isRecurring) ...{
+          'recurrence': task.recurrence.dbValue,
+          'rotation_members': task.rotationMemberIds,
+          'next_assignee': task.nextAssigneeMemberId,
+        },
       };
 
       await client.from('tasks').insert(taskRow);

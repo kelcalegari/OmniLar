@@ -101,9 +101,12 @@ class _SettlementHubContent extends StatelessWidget {
           .state
           .allLoans
           .where((l) =>
-              l.awaitingAcceptance &&
+              (l.awaitingAcceptance || l.awaitingApproval) &&
               l.status == LoanStatus.active &&
-              l.copyWith(awaitingAcceptance: false).installmentsChargedIn(cycle).isNotEmpty)
+              l
+                  .copyWith(awaitingAcceptance: false, awaitingApproval: false)
+                  .installmentsChargedIn(cycle)
+                  .isNotEmpty)
           .toList();
     } catch (_) {
       waiting = const [];

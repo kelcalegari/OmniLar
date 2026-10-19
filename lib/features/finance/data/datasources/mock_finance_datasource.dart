@@ -336,8 +336,15 @@ class MockFinanceDataSource implements FinanceDataSource {
     // Como no banco: ciclo atual ou futuro ganha as contas recorrentes que faltam
     if (!cycle.endDate.isBefore(DateTime.now())) _generateRecurringExpenses(cycle.endDate);
     return _expenses.where((e) {
-      final isCard = _paymentMethods.any((pm) => pm.id == e.paymentMethodId && pm.type == PaymentMethodType.card);
-      return expenseBelongsToCycle(e, cycle, isCardPayment: isCard);
+      final card = _paymentMethods
+          .where((pm) => pm.id == e.paymentMethodId && pm.type == PaymentMethodType.card)
+          .firstOrNull;
+      return expenseBelongsToCycle(
+        e,
+        cycle,
+        isCardPayment: card != null,
+        cardCycleAssignment: card?.cycleAssignment ?? CardCycleAssignment.invoiceDue,
+      );
     }).toList()
       ..sort((a, b) => b.effectiveDueDate.compareTo(a.effectiveDueDate));
   }
@@ -931,6 +938,9 @@ class MockFinanceDataSource implements FinanceDataSource {
         .allows(HousePermissionAction.editConfigurations, isAdmin: isAdmin, memberId: viewer?.id);
     if ((changes.containsKey('income_visibility') || changes.containsKey('split_basis')) && !canEdit) {
       throw const ServerFailure('Você não tem permissão para mudar a renda e a divisão da casa.');
+    }
+    if (changes.containsKey('approval_threshold_cents') && !canEdit) {
+      throw const ServerFailure('Você não tem permissão para mudar a aprovação por valor.');
     }
     _houseSettingsRow = {..._houseSettingsRow, ...changes};
     if (changes.containsKey('split_basis')) _applyIncomeSplit();
