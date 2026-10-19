@@ -329,7 +329,7 @@ class AppRouter {
               ),
             ],
           ),
-          // Aba 2: Tarefas & Compras da Casa
+          // Aba 2: Compras & Tarefas da Casa
           StatefulShellBranch(
             routes: [
               GoRoute(
@@ -337,11 +337,15 @@ class AppRouter {
                 name: 'tasks_and_shopping',
                 pageBuilder: (context, state) {
                   final tabStr = state.uri.queryParameters['tab'];
-                  final initialTab = tabStr == 'compras' ? 1 : 0;
+                  final initialTab = tabStr == 'tarefas' ? 1 : 0;
                   return NoTransitionPage(
                     child: TasksAndShoppingPage(initialTabIndex: initialTab),
                   );
                 },
+              ),
+              GoRoute(
+                path: '/compras',
+                redirect: (context, state) => '/tarefas-compras?tab=compras',
               ),
               GoRoute(
                 path: '/tarefas',
@@ -351,10 +355,6 @@ class AppRouter {
               GoRoute(
                 path: '/tarefas/:id',
                 redirect: (context, state) => '/tarefas-compras?tab=tarefas',
-              ),
-              GoRoute(
-                path: '/compras',
-                redirect: (context, state) => '/tarefas-compras?tab=compras',
               ),
             ],
           ),

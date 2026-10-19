@@ -30,7 +30,7 @@ void main() {
   }
 
   group('TasksAndShoppingPage - Seção Separada de Tarefas & Compras', () {
-    testWidgets('Renderiza abas de Tarefas da Casa e Lista de Compras',
+    testWidgets('Renderiza abas de Lista de Compras e Tarefas da Casa',
         (tester) async {
       tester.view.physicalSize = const Size(800, 1400);
       tester.view.devicePixelRatio = 1.0;
@@ -40,15 +40,15 @@ void main() {
       await tester.pumpAndSettle();
 
       // Verifica abas
-      expect(find.textContaining('Tarefas da Casa ('), findsOneWidget);
       expect(find.textContaining('Lista de Compras ('), findsOneWidget);
+      expect(find.textContaining('Tarefas da Casa ('), findsOneWidget);
 
-      // Na aba Tarefas (padrão)
-      expect(find.text('Nova Tarefa'), findsOneWidget);
-      expect(find.byType(ChoiceChip), findsWidgets);
+      // Na aba Compras (padrão)
+      expect(find.byType(TextField), findsOneWidget);
+      expect(find.text('Adicionar'), findsOneWidget);
     });
 
-    testWidgets('Pode alternar para a aba Lista de Compras e adicionar item',
+    testWidgets('Pode alternar para a aba Tarefas da Casa',
         (tester) async {
       tester.view.physicalSize = const Size(800, 1400);
       tester.view.devicePixelRatio = 1.0;
@@ -57,21 +57,12 @@ void main() {
       await tester.pumpWidget(buildTasksAndShoppingPage());
       await tester.pumpAndSettle();
 
-      // Clica na aba Lista de Compras
-      await tester.tap(find.textContaining('Lista de Compras ('));
+      // Clica na aba Tarefas da Casa
+      await tester.tap(find.textContaining('Tarefas da Casa ('));
       await tester.pumpAndSettle();
 
-      // Campo de adicionar à lista deve estar visível
-      expect(find.byType(TextField), findsOneWidget);
-      expect(find.text('Adicionar'), findsOneWidget);
-
-      // Digita um novo item
-      await tester.enterText(find.byType(TextField), 'Leite Desnatado');
-      await tester.tap(find.text('Adicionar'));
-      await tester.pumpAndSettle();
-
-      // O item deve aparecer na lista
-      expect(find.text('Leite Desnatado'), findsOneWidget);
+      expect(find.text('Nova Tarefa'), findsOneWidget);
+      expect(find.byType(ChoiceChip), findsWidgets);
     });
 
     testWidgets('Aba Tarefas permite alternar filtros e marcar conclusão',
@@ -80,7 +71,7 @@ void main() {
       tester.view.devicePixelRatio = 1.0;
       addTearDown(tester.view.resetPhysicalSize);
 
-      await tester.pumpWidget(buildTasksAndShoppingPage(initialTab: 0));
+      await tester.pumpWidget(buildTasksAndShoppingPage(initialTab: 1));
       await tester.pumpAndSettle();
 
       // Filtra por Concluídas

@@ -5,7 +5,7 @@ class ShoppingTrip extends Equatable {
   final String id;
   final String listId;
   final Money totalAmount;
-  final String paymentMethodId;
+  final String? paymentMethodId;
   final String? houseExpenseId;
   final String? p2pLoanId;
   final DateTime completedAt;
@@ -14,7 +14,7 @@ class ShoppingTrip extends Equatable {
     required this.id,
     required this.listId,
     required this.totalAmount,
-    required this.paymentMethodId,
+    this.paymentMethodId,
     this.houseExpenseId,
     this.p2pLoanId,
     required this.completedAt,

@@ -44,7 +44,7 @@ void main() {
         BlocProvider.value(value: finance),
         BlocProvider.value(value: sl<P2PCubit>()),
       ],
-      child: const MaterialApp(home: TasksAndShoppingPage(initialTabIndex: 1)),
+      child: const MaterialApp(home: TasksAndShoppingPage(initialTabIndex: 0)),
     ));
     await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 300)));
     await tester.pumpAndSettle();
@@ -75,6 +75,62 @@ void main() {
 
     await tester.tap(find.text('Cancelar'));
     await tester.pumpAndSettle();
+    expect(find.text('Finalizar Compra da Casa'), findsNothing);
+  });
+
+  testWidgets('permite fechar a compra sem lançar despesa marcando Apenas dar baixa na lista', (tester) async {
+    tester.view.physicalSize = const Size(800, 1600);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.resetPhysicalSize);
+
+    final previous = FlutterError.onError;
+    FlutterError.onError = (details) {
+      if (details.exceptionAsString().contains('overflowed')) return;
+      previous?.call(details);
+    };
+    addTearDown(() => FlutterError.onError = previous);
+
+    final shopping = sl<ShoppingCubit>();
+    final finance = sl<FinanceCubit>();
+    await tester.runAsync(() async {
+      await finance.loadCycleData();
+      await shopping.loadShoppingData();
+      final item = shopping.state.items.first;
+      if (!item.isBought) await shopping.toggleItemBought(item.id);
+    });
+
+    await tester.pumpWidget(MultiBlocProvider(
+      providers: [
+        BlocProvider.value(value: sl<AuthCubit>()),
+        BlocProvider.value(value: sl<CalendarCubit>()),
+        BlocProvider.value(value: shopping),
+        BlocProvider.value(value: finance),
+        BlocProvider.value(value: sl<P2PCubit>()),
+      ],
+      child: const MaterialApp(home: TasksAndShoppingPage(initialTabIndex: 0)),
+    ));
+    await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 300)));
+    await tester.pumpAndSettle();
+
+    final finish = find.byIcon(Icons.receipt_long_rounded).first;
+    await tester.ensureVisible(finish);
+    await tester.tap(finish);
+    await tester.pumpAndSettle();
+
+    expect(find.text('Finalizar Compra da Casa'), findsOneWidget);
+    expect(find.text('Apenas dar baixa na lista'), findsOneWidget);
+
+    // Marca a opção de não lançar despesa
+    await tester.tap(find.text('Apenas dar baixa na lista'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Concluir sem Despesa'), findsOneWidget);
+
+    // Confirma sem valor da nota fiscal
+    await tester.tap(find.text('Concluir sem Despesa'));
+    await tester.pumpAndSettle();
+
+    // A janela deve fechar com sucesso
     expect(find.text('Finalizar Compra da Casa'), findsNothing);
   });
 }

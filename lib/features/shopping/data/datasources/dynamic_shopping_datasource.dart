@@ -51,8 +51,8 @@ class DynamicShoppingDataSource implements ShoppingDataSource {
   Future<ShoppingTrip> completeTrip({
     required String listId,
     required Money totalAmount,
-    required String paymentMethodId,
-    required String paidByMemberId,
+    String? paymentMethodId,
+    String? paidByMemberId,
     Money? personalItemsAmount,
     String? personalDebtorMemberId,
   }) =>

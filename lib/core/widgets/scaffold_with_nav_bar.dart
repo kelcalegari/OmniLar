@@ -72,9 +72,9 @@ class ScaffoldWithNavBar extends StatelessWidget {
                   label: Text('A Casa'),
                 ),
                 NavigationRailDestination(
-                  icon: Icon(Icons.checklist_rtl_outlined),
-                  selectedIcon: Icon(Icons.checklist_rtl_rounded),
-                  label: Text('Tarefas'),
+                  icon: Icon(Icons.shopping_cart_outlined),
+                  selectedIcon: Icon(Icons.shopping_cart_rounded),
+                  label: Text('Compras'),
                 ),
                 NavigationRailDestination(
                   icon: Icon(Icons.calendar_today_outlined),
@@ -145,9 +145,9 @@ class ScaffoldWithNavBar extends StatelessWidget {
             label: 'A Casa',
           ),
           NavigationDestination(
-            icon: Icon(Icons.checklist_rtl_outlined),
-            selectedIcon: Icon(Icons.checklist_rtl_rounded),
-            label: 'Tarefas',
+            icon: Icon(Icons.shopping_cart_outlined),
+            selectedIcon: Icon(Icons.shopping_cart_rounded),
+            label: 'Compras',
           ),
           NavigationDestination(
             icon: Icon(Icons.calendar_today_outlined),

@@ -77,7 +77,7 @@ class _TasksAndShoppingPageState extends State<TasksAndShoppingPage> with Single
       return Scaffold(
         appBar: AppBar(
           title: const Text(
-            'Tarefas & Compras',
+            'Compras & Tarefas',
             style: TextStyle(fontWeight: FontWeight.bold),
           ),
         ),
@@ -88,7 +88,7 @@ class _TasksAndShoppingPageState extends State<TasksAndShoppingPage> with Single
     return Scaffold(
       appBar: AppBar(
         title: const Text(
-          'Tarefas & Compras',
+          'Compras & Tarefas',
           style: TextStyle(fontWeight: FontWeight.bold),
         ),
         bottom: PreferredSize(
@@ -112,21 +112,6 @@ class _TasksAndShoppingPageState extends State<TasksAndShoppingPage> with Single
               labelStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
               tabs: [
                 Tab(
-                  child: BlocBuilder<CalendarCubit, CalendarState>(
-                    builder: (context, state) {
-                      final pendingCount = state.tasks.where((t) => !t.isCompleted).length;
-                      return Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          const Icon(Icons.check_circle_outline_rounded, size: 18),
-                          const SizedBox(width: 6),
-                          Text('Tarefas da Casa ($pendingCount)'),
-                        ],
-                      );
-                    },
-                  ),
-                ),
-                Tab(
                   child: BlocBuilder<ShoppingCubit, ShoppingState>(
                     builder: (context, state) {
                       final pendingCount = state.items.where((i) => !i.isBought).length;
@@ -141,6 +126,21 @@ class _TasksAndShoppingPageState extends State<TasksAndShoppingPage> with Single
                     },
                   ),
                 ),
+                Tab(
+                  child: BlocBuilder<CalendarCubit, CalendarState>(
+                    builder: (context, state) {
+                      final pendingCount = state.tasks.where((t) => !t.isCompleted).length;
+                      return Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          const Icon(Icons.check_circle_outline_rounded, size: 18),
+                          const SizedBox(width: 6),
+                          Text('Tarefas da Casa ($pendingCount)'),
+                        ],
+                      );
+                    },
+                  ),
+                ),
               ],
             ),
           ),
@@ -149,8 +149,8 @@ class _TasksAndShoppingPageState extends State<TasksAndShoppingPage> with Single
       body: TabBarView(
         controller: _tabController,
         children: [
-          _buildTasksTab(context, theme),
           _buildShoppingTab(context, theme),
+          _buildTasksTab(context, theme),
         ],
       ),
     );
@@ -179,28 +179,7 @@ class _TasksAndShoppingPageState extends State<TasksAndShoppingPage> with Single
                       child: Row(
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
-                          // Coluna 1: Tarefas da Casa
-                          Expanded(
-                            child: Card(
-                              elevation: 0,
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(16),
-                                side: BorderSide(color: Colors.grey.withValues(alpha: 0.15)),
-                              ),
-                              child: Padding(
-                                padding: const EdgeInsets.all(16),
-                                child: _buildTasksColumnContent(
-                                  context,
-                                  calState,
-                                  theme,
-                                  isDesktop: true,
-                                ),
-                              ),
-                            ),
-                          ),
-                          const SizedBox(width: 16),
-
-                          // Coluna 2: Lista de Compras
+                          // Coluna 1: Lista de Compras
                           Expanded(
                             child: Card(
                               elevation: 0,
@@ -213,6 +192,27 @@ class _TasksAndShoppingPageState extends State<TasksAndShoppingPage> with Single
                                 child: _buildShoppingColumnContent(
                                   context,
                                   shopState,
+                                  theme,
+                                  isDesktop: true,
+                                ),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 16),
+
+                          // Coluna 2: Tarefas da Casa
+                          Expanded(
+                            child: Card(
+                              elevation: 0,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(16),
+                                side: BorderSide(color: Colors.grey.withValues(alpha: 0.15)),
+                              ),
+                              child: Padding(
+                                padding: const EdgeInsets.all(16),
+                                child: _buildTasksColumnContent(
+                                  context,
+                                  calState,
                                   theme,
                                   isDesktop: true,
                                 ),
@@ -242,26 +242,6 @@ class _TasksAndShoppingPageState extends State<TasksAndShoppingPage> with Single
       children: [
         Expanded(
           child: _buildKpiCard(
-            title: 'Tarefas Pendentes',
-            count: pendingTasks.toString(),
-            icon: Icons.check_circle_outline_rounded,
-            color: AppColors.primary,
-            theme: theme,
-          ),
-        ),
-        const SizedBox(width: 12),
-        Expanded(
-          child: _buildKpiCard(
-            title: 'Tarefas Atrasadas',
-            count: overdueTasks.toString(),
-            icon: Icons.warning_amber_rounded,
-            color: overdueTasks > 0 ? AppColors.debtRed : Colors.grey,
-            theme: theme,
-          ),
-        ),
-        const SizedBox(width: 12),
-        Expanded(
-          child: _buildKpiCard(
             title: 'Itens a Comprar',
             count: pendingShopping.toString(),
             icon: Icons.shopping_basket_outlined,
@@ -276,6 +256,26 @@ class _TasksAndShoppingPageState extends State<TasksAndShoppingPage> with Single
             count: cartItems.toString(),
             icon: Icons.shopping_bag_outlined,
             color: AppColors.creditGreen,
+            theme: theme,
+          ),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: _buildKpiCard(
+            title: 'Tarefas Pendentes',
+            count: pendingTasks.toString(),
+            icon: Icons.check_circle_outline_rounded,
+            color: AppColors.primary,
+            theme: theme,
+          ),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: _buildKpiCard(
+            title: 'Tarefas Atrasadas',
+            count: overdueTasks.toString(),
+            icon: Icons.warning_amber_rounded,
+            color: overdueTasks > 0 ? AppColors.debtRed : Colors.grey,
             theme: theme,
           ),
         ),
@@ -1273,6 +1273,9 @@ class _TasksAndShoppingPageState extends State<TasksAndShoppingPage> with Single
         ? currentUserId
         : (members.isNotEmpty ? members.first.id : currentUserId);
 
+    bool withoutExpense = false;
+    String? amountError;
+
     showDialog(
       context: context,
       builder: (dialogCtx) {
@@ -1294,89 +1297,161 @@ class _TasksAndShoppingPageState extends State<TasksAndShoppingPage> with Single
                     mainAxisSize: MainAxisSize.min,
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Text(
-                        'Lança o gasto no Caixa da Casa e calcula ressarcimento para itens pessoais.',
-                        style: TextStyle(fontSize: 12, color: Colors.grey),
-                      ),
-                      const SizedBox(height: 16),
-                      MoneyTextFormField(
-                        controller: amountController,
-                        labelText: 'Valor Total da Nota Fiscal',
-                        hintText: 'R\$ 0,00',
-                        prefixIcon: const Icon(Icons.receipt_long_rounded),
-                        allowEmpty: false,
+                      Text(
+                        withoutExpense
+                            ? 'Arquiva os itens comprados da lista sem lançar despesa no Caixa da Casa.'
+                            : 'Lança o gasto no Caixa da Casa e calcula ressarcimento para itens pessoais.',
+                        style: const TextStyle(fontSize: 12, color: Colors.grey),
                       ),
                       const SizedBox(height: 12),
-                      DropdownButtonFormField<String>(
-                        initialValue: selectedPmId,
-                        decoration: InputDecoration(
-                          labelText: 'Forma de Pagamento',
-                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                      Container(
+                        decoration: BoxDecoration(
+                          color: withoutExpense ? AppColors.primary.withValues(alpha: 0.08) : Colors.transparent,
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(
+                            color: withoutExpense
+                                ? AppColors.primary.withValues(alpha: 0.3)
+                                : Colors.grey.withValues(alpha: 0.25),
+                          ),
                         ),
-                        items: paymentMethods.map((pm) {
-                          return DropdownMenuItem(value: pm.id, child: Text(pm.name));
-                        }).toList(),
-                        onChanged: (val) {
-                          if (val != null) setDialogState(() => selectedPmId = val);
-                        },
-                      ),
-                      const SizedBox(height: 12),
-                      DropdownButtonFormField<String>(
-                        initialValue: selectedPayerId,
-                        decoration: InputDecoration(
-                          labelText: 'Quem Pagou no Caixa',
-                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                        child: CheckboxListTile(
+                          contentPadding: const EdgeInsets.symmetric(horizontal: 10),
+                          dense: true,
+                          title: const Text(
+                            'Apenas dar baixa na lista',
+                            style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+                          ),
+                          subtitle: const Text(
+                            'Não lançar despesa no Caixa (ex: já importou por scanner/foto ou pagou por fora)',
+                            style: TextStyle(fontSize: 11),
+                          ),
+                          value: withoutExpense,
+                          onChanged: (val) {
+                            setDialogState(() {
+                              withoutExpense = val ?? false;
+                              amountError = null;
+                            });
+                          },
                         ),
-                        items: members.map((m) {
-                          return DropdownMenuItem(value: m.id, child: Text(m.name));
-                        }).toList(),
-                        onChanged: (val) {
-                          if (val != null) setDialogState(() => selectedPayerId = val);
-                        },
                       ),
-                      if (hasPersonal) ...[
-                        const SizedBox(height: 14),
+                      if (withoutExpense) ...[
+                        const SizedBox(height: 12),
                         Container(
                           padding: const EdgeInsets.all(12),
                           decoration: BoxDecoration(
-                            color: Colors.amber.withValues(alpha: 0.1),
+                            color: AppColors.primary.withValues(alpha: 0.08),
                             borderRadius: BorderRadius.circular(12),
-                            border: Border.all(color: Colors.amber.withValues(alpha: 0.3)),
+                            border: Border.all(color: AppColors.primary.withValues(alpha: 0.2)),
                           ),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
+                          child: const Row(
                             children: [
-                              Text(
-                                'Há ${personalItems.length} item(ns) pessoais nesta compra!',
-                                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Colors.orange),
-                              ),
-                              const SizedBox(height: 8),
-                              MoneyTextFormField(
-                                controller: personalAmountController,
-                                labelText: 'Subtotal dos Itens Pessoais',
-                                hintText: 'R\$ 0,00',
-                                prefixIcon: const Icon(Icons.person_pin_circle_outlined),
-                                allowEmpty: true,
-                              ),
-                              if (members.isNotEmpty) ...[
-                                const SizedBox(height: 10),
-                                DropdownButtonFormField<String>(
-                                  initialValue: selectedDebtorId,
-                                  decoration: InputDecoration(
-                                    labelText: 'De quem são os itens pessoais',
-                                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                                  ),
-                                  items: members.map((m) {
-                                    return DropdownMenuItem(value: m.id, child: Text(m.name));
-                                  }).toList(),
-                                  onChanged: (val) {
-                                    if (val != null) setDialogState(() => selectedDebtorId = val);
-                                  },
+                              Icon(Icons.check_circle_outline_rounded, color: AppColors.primary, size: 20),
+                              SizedBox(width: 10),
+                              Expanded(
+                                child: Text(
+                                  'Os itens marcados no carrinho serão removidos da lista e a compra arquivada sem gerar despesa.',
+                                  style: TextStyle(fontSize: 12),
                                 ),
-                              ],
+                              ),
                             ],
                           ),
                         ),
+                      ] else ...[
+                        const SizedBox(height: 14),
+                        MoneyTextFormField(
+                          controller: amountController,
+                          labelText: 'Valor Total da Nota Fiscal',
+                          hintText: 'R\$ 0,00',
+                          prefixIcon: const Icon(Icons.receipt_long_rounded),
+                          allowEmpty: false,
+                          onChanged: (_) {
+                            if (amountError != null) {
+                              setDialogState(() => amountError = null);
+                            }
+                          },
+                        ),
+                        if (amountError != null) ...[
+                          const SizedBox(height: 4),
+                          Padding(
+                            padding: const EdgeInsets.only(left: 4),
+                            child: Text(
+                              amountError!,
+                              style: const TextStyle(fontSize: 12, color: AppColors.debtRed),
+                            ),
+                          ),
+                        ],
+                        const SizedBox(height: 12),
+                        DropdownButtonFormField<String>(
+                          initialValue: selectedPmId,
+                          decoration: InputDecoration(
+                            labelText: 'Forma de Pagamento',
+                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                          ),
+                          items: paymentMethods.map((pm) {
+                            return DropdownMenuItem(value: pm.id, child: Text(pm.name));
+                          }).toList(),
+                          onChanged: (val) {
+                            if (val != null) setDialogState(() => selectedPmId = val);
+                          },
+                        ),
+                        const SizedBox(height: 12),
+                        DropdownButtonFormField<String>(
+                          initialValue: selectedPayerId,
+                          decoration: InputDecoration(
+                            labelText: 'Quem Pagou no Caixa',
+                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                          ),
+                          items: members.map((m) {
+                            return DropdownMenuItem(value: m.id, child: Text(m.name));
+                          }).toList(),
+                          onChanged: (val) {
+                            if (val != null) setDialogState(() => selectedPayerId = val);
+                          },
+                        ),
+                        if (hasPersonal) ...[
+                          const SizedBox(height: 14),
+                          Container(
+                            padding: const EdgeInsets.all(12),
+                            decoration: BoxDecoration(
+                              color: Colors.amber.withValues(alpha: 0.1),
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(color: Colors.amber.withValues(alpha: 0.3)),
+                            ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'Há ${personalItems.length} item(ns) pessoais nesta compra!',
+                                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Colors.orange),
+                                ),
+                                const SizedBox(height: 8),
+                                MoneyTextFormField(
+                                  controller: personalAmountController,
+                                  labelText: 'Subtotal dos Itens Pessoais',
+                                  hintText: 'R\$ 0,00',
+                                  prefixIcon: const Icon(Icons.person_pin_circle_outlined),
+                                  allowEmpty: true,
+                                ),
+                                if (members.isNotEmpty) ...[
+                                  const SizedBox(height: 10),
+                                  DropdownButtonFormField<String>(
+                                    initialValue: selectedDebtorId,
+                                    decoration: InputDecoration(
+                                      labelText: 'De quem são os itens pessoais',
+                                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                                    ),
+                                    items: members.map((m) {
+                                      return DropdownMenuItem(value: m.id, child: Text(m.name));
+                                    }).toList(),
+                                    onChanged: (val) {
+                                      if (val != null) setDialogState(() => selectedDebtorId = val);
+                                    },
+                                  ),
+                                ],
+                              ],
+                            ),
+                          ),
+                        ],
                       ],
                     ],
                   ),
@@ -1390,9 +1465,14 @@ class _TasksAndShoppingPageState extends State<TasksAndShoppingPage> with Single
                 FilledButton(
                   onPressed: () {
                     final total = amountController.money;
-                    if (total.isZero) return;
-                    final paymentMethodId = selectedPmId;
-                    if (paymentMethodId == null) {
+                    if (!withoutExpense && total.isZero) {
+                      setDialogState(() {
+                        amountError = 'Informe o valor total da compra ou marque "Apenas dar baixa na lista".';
+                      });
+                      return;
+                    }
+                    final paymentMethodId = withoutExpense ? null : selectedPmId;
+                    if (!withoutExpense && paymentMethodId == null) {
                       ScaffoldMessenger.of(context).showSnackBar(
                         const SnackBar(
                           content: Text('Cadastre uma forma de pagamento em Ajustes antes de fechar a compra.'),
@@ -1402,7 +1482,9 @@ class _TasksAndShoppingPageState extends State<TasksAndShoppingPage> with Single
                     }
 
                     Money? personalMoney;
-                    if (personalAmountController.text.isNotEmpty && personalAmountController.cents > 0) {
+                    if (!withoutExpense &&
+                        personalAmountController.text.isNotEmpty &&
+                        personalAmountController.cents > 0) {
                       personalMoney = personalAmountController.money;
                     }
 
@@ -1410,26 +1492,30 @@ class _TasksAndShoppingPageState extends State<TasksAndShoppingPage> with Single
                     final shoppingCubit = context.read<ShoppingCubit>();
                     final messenger = ScaffoldMessenger.of(context);
 
-                    shoppingCubit.completeTrip(
-                          totalAmount: total,
+                    shoppingCubit
+                        .completeTrip(
+                          totalAmount: withoutExpense ? Money.zero : total,
                           paymentMethodId: paymentMethodId,
-                          paidByMemberId: selectedPayerId,
+                          paidByMemberId: withoutExpense ? null : selectedPayerId,
                           personalItemsAmount: personalMoney,
-                          personalDebtorMemberId: selectedDebtorId,
-                        ).then((ok) {
-                      if (ok && context.mounted) {
+                          personalDebtorMemberId: withoutExpense ? null : selectedDebtorId,
+                        )
+                        .then((ok) {
+                      if (ok && context.mounted && !withoutExpense) {
                         context.read<FinanceCubit>().loadCycleData();
                         context.read<P2PCubit>().loadLoans();
                       }
                       showSaveFeedback(
                         messenger,
                         ok: ok,
-                        success: 'Compra de ${total.formatted} lançada! 🛒🎉',
+                        success: withoutExpense
+                            ? 'Lista concluída! Itens comprados arquivados sem gerar despesa. 🛒✅'
+                            : 'Compra de ${total.formatted} lançada! 🛒🎉',
                         failure: shoppingCubit.state.errorMessage,
                       );
                     });
                   },
-                  child: const Text('Confirmar e Lançar'),
+                  child: Text(withoutExpense ? 'Concluir sem Despesa' : 'Confirmar e Lançar'),
                 ),
               ],
             );

@@ -188,8 +188,8 @@ class ShoppingCubit extends BlocBase<ShoppingState> {
 
   Future<bool> completeTrip({
     required Money totalAmount,
-    required String paymentMethodId,
-    required String paidByMemberId,
+    String? paymentMethodId,
+    String? paidByMemberId,
     Money? personalItemsAmount,
     String? personalDebtorMemberId,
   }) async {

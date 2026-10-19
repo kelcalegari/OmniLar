@@ -300,8 +300,8 @@ class SupabaseShoppingDataSource implements ShoppingDataSource {
   Future<ShoppingTrip> completeTrip({
     required String listId,
     required Money totalAmount,
-    required String paymentMethodId,
-    required String paidByMemberId,
+    String? paymentMethodId,
+    String? paidByMemberId,
     Money? personalItemsAmount,
     String? personalDebtorMemberId,
   }) async {
@@ -316,6 +316,9 @@ class SupabaseShoppingDataSource implements ShoppingDataSource {
       Map<String, dynamic>? expensePayload;
       String? createdExpenseId;
       if (houseExpenseAmount.cents > 0) {
+        if (paymentMethodId == null || paidByMemberId == null) {
+          throw const ValidationFailure('Forma de pagamento e pagador são obrigatórios para lançar a despesa.');
+        }
         // Id real desde já, para a viagem de compras apontar para a despesa
         createdExpenseId = generateUuidV4();
         final members = await financeRepository.getMembers();

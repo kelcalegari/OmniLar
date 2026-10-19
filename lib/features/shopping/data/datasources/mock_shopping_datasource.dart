@@ -180,8 +180,8 @@ class MockShoppingDataSource implements ShoppingDataSource {
   Future<ShoppingTrip> completeTrip({
     required String listId,
     required Money totalAmount,
-    required String paymentMethodId,
-    required String paidByMemberId,
+    String? paymentMethodId,
+    String? paidByMemberId,
     Money? personalItemsAmount,
     String? personalDebtorMemberId,
   }) async {
@@ -200,9 +200,10 @@ class MockShoppingDataSource implements ShoppingDataSource {
         for (final m in members) m.id: m.defaultSplitPercent > 0 ? m.defaultSplitPercent : (100.0 / members.length),
       };
 
-      final paymentMethod = (await financeRepository.getPaymentMethods())
-          .where((p) => p.id == paymentMethodId)
-          .firstOrNull;
+      final effectivePayerId = paidByMemberId ?? (members.isNotEmpty ? members.first.id : 'member_carlos');
+      final paymentMethods = await financeRepository.getPaymentMethods();
+      final effectivePmId = paymentMethodId ?? (paymentMethods.isNotEmpty ? paymentMethods.first.id : 'pm_cash');
+      final paymentMethod = paymentMethods.where((p) => p.id == effectivePmId).firstOrNull;
       final waitsForInvoice = ExpenseLaunchDefaults.waitsForInvoice(paymentMethod);
       // Padrões da lista (0101); sem escolha, a divisão e a categoria de sempre
       final list = _lists.where((l) => l.id == listId).firstOrNull;
@@ -222,8 +223,8 @@ class MockShoppingDataSource implements ShoppingDataSource {
           amount: houseExpenseAmount,
           date: now,
           categoryId: category?.id ?? 'cat_mercado',
-          paidByMemberId: paidByMemberId,
-          paymentMethodId: paymentMethodId,
+          paidByMemberId: effectivePayerId,
+          paymentMethodId: effectivePmId,
           paidOutOfPocket: !waitsForInvoice,
           status: waitsForInvoice ? ExpenseStatus.pending : ExpenseStatus.paid,
           splitRule: hasListDefaults
@@ -231,7 +232,7 @@ class MockShoppingDataSource implements ShoppingDataSource {
                   mode: list.defaultSplitMode,
                   category: category,
                   members: members,
-                  paidByMemberId: paidByMemberId,
+                  paidByMemberId: effectivePayerId,
                 )
               : SplitRule.percentage(splitPercentages),
         ),
@@ -258,7 +259,7 @@ class MockShoppingDataSource implements ShoppingDataSource {
           title: 'Item Pessoal na Compra de Mercado',
           description: 'Comprado junto com a feira/mercado da casa',
           totalAmount: personalTotal,
-          lenderMemberId: paidByMemberId,
+          lenderMemberId: paidByMemberId ?? (members.isNotEmpty ? members.first.id : 'member_carlos'),
           borrowerMemberId: personalDebtorMemberId,
           installmentsCount: 1,
           createdAt: now,
