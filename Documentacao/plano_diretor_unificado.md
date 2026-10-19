@@ -75,5 +75,6 @@ Feito em 17/10/2026 e registrado em [plano_proximas_frentes.md](plano_proximas_f
 | [plano_autenticacao.md](plano_autenticacao.md) | Cadastro, senha, e-mail e Google |
 | [plano_importacao_conciliacao.md](plano_importacao_conciliacao.md) | Importação de fatura e extrato |
 | [plano_relatorios_previa_ciclo.md](plano_relatorios_previa_ciclo.md) | Relatórios, prévia e exportação |
+| [plano_anexos_comprovantes.md](plano_anexos_comprovantes.md) | Anexos de comprovantes e política de retenção por ciclo (Modelo A) |
 | [fechamento_no_banco.md](fechamento_no_banco.md) | Trabalho adiado: cálculo do fechamento no banco |
 | `modulo_*.md` e [integracao_modulo_financeiro.md](integracao_modulo_financeiro.md) | Especificação original de cada módulo (06/10/2026); pode divergir do que foi feito, e em caso de dúvida vale o código |

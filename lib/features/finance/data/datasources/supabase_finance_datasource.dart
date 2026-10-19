@@ -790,6 +790,10 @@ class SupabaseFinanceDataSource implements FinanceDataSource {
         // Nulo desvincula a despesa do projeto
         'project_id': expense.projectId,
         'barcode': expense.barcode,
+        'attachment_path': expense.attachmentPath,
+        'attachment_name': expense.attachmentName,
+        'attachment_content_type': expense.attachmentContentType,
+        'attachment_size_bytes': expense.attachmentSizeBytes,
       };
 
       await client.from('house_expenses').update(updateData).eq('id', expense.id);
@@ -1725,6 +1729,11 @@ class SupabaseFinanceDataSource implements FinanceDataSource {
       items: items,
       recurringSeriesId: r['recurring_series_id'] as String?,
       projectId: r['project_id'] as String?,
+      attachmentPath: r['attachment_path'] as String?,
+      attachmentName: r['attachment_name'] as String?,
+      attachmentContentType: r['attachment_content_type'] as String?,
+      attachmentSizeBytes: (r['attachment_size_bytes'] as num?)?.toInt(),
+      attachmentPurgedAt: r['attachment_purged_at'] != null ? DateTime.tryParse(r['attachment_purged_at'] as String)?.toLocal() : null,
     );
   }
 

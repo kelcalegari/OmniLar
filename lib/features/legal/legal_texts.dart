@@ -62,10 +62,14 @@ const termsOfUse = LegalDocument(
       'Empréstimos e acordos registrados entre moradores são combinados entre eles. O app guarda o registro, '
           'mas não garante o pagamento nem interfere em desacordos.',
     ]),
-    LegalSection('5. Leitura de documentos por inteligência artificial', [
+    LegalSection('5. Leitura de documentos e anexos de comprovantes', [
       'Fotos e arquivos de notas, boletos, faturas e extratos podem ser lidos por inteligência artificial. '
-          'A leitura pode ter erros: revise os valores antes de confirmar. '
-          'O funcionamento e os dados envolvidos estão na Política de privacidade.',
+          'A leitura pode ter erros: revise os valores antes de confirmar.',
+      'Comprovantes e notas fiscais anexados às despesas ficam disponíveis para consulta, auditoria e download '
+          'pelos moradores da casa durante o ciclo financeiro ativo e por até 30 dias após o seu fechamento e quitação. '
+          'Decorrido esse período de conferência, os arquivos físicos são excluídos automaticamente, permanecendo '
+          'inalterados os lançamentos contábeis, valores e categorias no histórico da casa.',
+      'O funcionamento e os detalhes sobre privacidade estão na Política de privacidade.',
     ]),
     LegalSection('6. Planos', [
       'O app tem os planos Free e Premium, com limites diferentes (por exemplo, de moradores, casas, projetos '
@@ -112,8 +116,10 @@ const privacyPolicy = LegalDocument(
           'Opcionais: telefone, foto e chave Pix.',
       'Dados da casa: moradores, convites, despesas e seus itens, divisões, aportes, empréstimos entre moradores, '
           'caixinhas, fechamentos, linhas de faturas e extratos importados, compras, tarefas, agenda e projetos.',
-      'Documentos enviados para leitura: fotos e arquivos de notas, boletos, faturas e extratos. '
-          'Eles são lidos e descartados; o app guarda só o resultado da leitura que você confirmar.',
+      'Documentos e comprovantes: fotos e arquivos de notas, boletos, faturas e extratos. '
+          'Documentos enviados apenas para leitura por IA são processados e descartados em seguida. '
+          'Comprovantes anexados a despesas são mantidos temporariamente durante o ciclo financeiro em aberto '
+          'e por até 30 dias após o seu fechamento e quitação para conferência entre os moradores, sendo excluídos definitivamente do armazenamento após esse prazo.',
       'Uso e segurança: contagem de leituras por IA, registro de alterações financeiras da casa (auditoria), '
           'aparelhos cadastrados para notificações e situação da conta (análise, plano).',
     ]),
@@ -153,6 +159,8 @@ const privacyPolicy = LegalDocument(
       'Enquanto a sua conta existir. Ao excluir a conta, os seus dados pessoais são apagados; o que você lançou numa '
           'casa com outros moradores fica no histórico deles, sem o seu nome (aparece como "Ex-morador"), porque faz '
           'parte das contas da casa. Se você era o único morador, a casa é apagada junto.',
+      'Comprovantes e notas fiscais anexadas seguem a política de retenção por ciclo financeiro: ficam disponíveis '
+          'durante o ciclo ativo e são apagados automaticamente 30 dias após o fechamento e quitação do ciclo.',
       'Cópias de segurança do banco são mantidas pelo provedor por um período limitado e depois descartadas.',
     ]),
     LegalSection('8. Segurança', [

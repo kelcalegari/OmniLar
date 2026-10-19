@@ -99,6 +99,7 @@ Uma função `is_account_active(user_id)` concentra a regra, e ela vale **no ban
 | Importação de fatura e extrato (OFX/CSV) | Sim | Sim |
 | Relatórios: prestação de contas em PDF | Sim | Sim |
 | Projetos compartilhados | 1 ativo | Sem limite |
+| Anexo de comprovantes físicos (Storage) | Não (IA lê os dados na memória sem guardar o arquivo) | Sim (Modelo A: ciclo ativo + 30 dias após quitação) |
 | Notificações | Todas | Todas |
 
 O que é essencial para dividir as contas da casa (lançar, fechar o ciclo, empréstimos, compras, tarefas, agenda, caixinhas, relatórios e o PDF de prestação de contas) nunca é cortado no Free.

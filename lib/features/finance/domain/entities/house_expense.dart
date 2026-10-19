@@ -32,6 +32,11 @@ class HouseExpense extends Equatable {
   final DateTime? settledAt; // Quando entrou em um fechamento de ciclo (o reembolso de quem pagou do bolso já foi acertado)
   final String? barcode; // Linha digitável do boleto, para copiar e pagar depois
   final String? createdBy; // Quem lançou (usuário logado na hora); base dos padrões de lançamento de cada morador
+  final String? attachmentPath; // Caminho no bucket receipts: {houseId}/expenses/{filename}
+  final String? attachmentName; // Nome original do arquivo (ex: cupom_fiscal.pdf)
+  final String? attachmentContentType; // image/jpeg, image/png, application/pdf
+  final int? attachmentSizeBytes; // Tamanho em bytes
+  final DateTime? attachmentPurgedAt; // Data em que o anexo físico foi expurgado (Modelo A)
 
   const HouseExpense({
     required this.id,
@@ -57,6 +62,11 @@ class HouseExpense extends Equatable {
     this.settledAt,
     this.barcode,
     this.createdBy,
+    this.attachmentPath,
+    this.attachmentName,
+    this.attachmentContentType,
+    this.attachmentSizeBytes,
+    this.attachmentPurgedAt,
   });
 
   bool get isPaid => status == ExpenseStatus.paid;
@@ -97,6 +107,12 @@ class HouseExpense extends Equatable {
   /// Verifica se os sub-itens somam exatamente o total do boleto
   bool get isItemsBalanced => !isItemized || itemsTotalCents == amount.cents;
 
+  /// Se a despesa possui um comprovante/cupom anexado
+  bool get hasAttachment => attachmentPath != null && attachmentPath!.isNotEmpty;
+
+  /// Se o anexo físico já foi expurgado conforme a retenção do Modelo A
+  bool get isAttachmentPurged => attachmentPurgedAt != null;
+
   HouseExpense copyWith({
     String? id,
     String? title,
@@ -124,6 +140,12 @@ class HouseExpense extends Equatable {
     String? barcode,
     bool clearBarcode = false,
     String? createdBy,
+    String? attachmentPath,
+    bool clearAttachment = false,
+    String? attachmentName,
+    String? attachmentContentType,
+    int? attachmentSizeBytes,
+    DateTime? attachmentPurgedAt,
   }) {
     return HouseExpense(
       id: id ?? this.id,
@@ -149,6 +171,11 @@ class HouseExpense extends Equatable {
       settledAt: settledAt ?? this.settledAt,
       barcode: clearBarcode ? null : (barcode ?? this.barcode),
       createdBy: createdBy ?? this.createdBy,
+      attachmentPath: clearAttachment ? null : (attachmentPath ?? this.attachmentPath),
+      attachmentName: clearAttachment ? null : (attachmentName ?? this.attachmentName),
+      attachmentContentType: clearAttachment ? null : (attachmentContentType ?? this.attachmentContentType),
+      attachmentSizeBytes: clearAttachment ? null : (attachmentSizeBytes ?? this.attachmentSizeBytes),
+      attachmentPurgedAt: clearAttachment ? null : (attachmentPurgedAt ?? this.attachmentPurgedAt),
     );
   }
 
@@ -177,5 +204,10 @@ class HouseExpense extends Equatable {
         settledAt,
         barcode,
         createdBy,
+        attachmentPath,
+        attachmentName,
+        attachmentContentType,
+        attachmentSizeBytes,
+        attachmentPurgedAt,
       ];
 }

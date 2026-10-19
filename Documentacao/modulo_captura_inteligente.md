@@ -24,10 +24,10 @@ Documentação Funcional: Módulo de Captura Inteligente (Foto, QR Code e Boleto
    O app identifica o tipo do documento automaticamente. O usuário pode corrigir o tipo, e a leitura é refeita.
    RN03: QR Code Primeiro
    Se a foto contém QR Code de NFC-e, o app usa os dados oficiais (itens, quantidade, preço, loja, data, total) em vez de fazer OCR dos textos impressos.
-   RN04: Originais como Prova
-   A imagem original fica anexada ao lançamento (alinhado à RN05 do módulo de Empréstimos) e não pode ser alterada. Ela pode ser removida apenas por quem a anexou, e a remoção fica registrada.
-   RN05: Mascaramento de Dados Sensíveis
-   Antes de enviar a imagem ao servidor de leitura, o app oculta dados desnecessários (CPF na nota, número completo de cartão e dados de conta quando possível). O servidor guarda a imagem original pelo prazo definido nas configurações e a descarta depois.
+   RN04: Originais como Prova e Ciclo de Vida (Modelo A)
+   A imagem original ou PDF anexado ao lançamento fica disponível para auditoria e conferência dos membros da Casa durante o ciclo financeiro ativo e por até 30 dias após o seu fechamento e quitação (detalhado em `plano_anexos_comprovantes.md`). Decorrido esse prazo de conciliação, uma rotina automática expurga o arquivo físico do Supabase Storage para otimizar espaço e preservar a privacidade (LGPD), mantendo inalterados os registros contábeis e textuais da despesa.
+   RN05: Mascaramento e Expurgo de Dados Sensíveis
+   Antes de enviar a imagem ao servidor de leitura por IA, o app oculta dados desnecessários (CPF na nota, número completo de cartão e dados de conta quando possível). Imagens enviadas apenas para leitura e extração de dados são descartadas da memória logo após a geração da proposta; quando o usuário opta por vincular o anexo à despesa, ele segue o ciclo de vida do Modelo A (expurgo automático 30 dias pós-fechamento do ciclo).
    RN06: Duplicidade
    Antes de propor um lançamento, o sistema compara valor, data, loja e itens com lançamentos existentes e com compras da Lista de Compras. Se encontrar semelhança, oferece Vincular ao existente em vez de criar outro.
    RN07: Conciliação com a Lista de Compras

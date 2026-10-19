@@ -21,6 +21,8 @@ import '../../../../core/domain/value_objects/money.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/utils/responsive.dart';
 import '../../../auth/domain/repositories/auth_repository.dart';
+import '../../../admin/presentation/cubit/account_access_cubit.dart';
+import '../../../finance/domain/services/receipt_attachment_service.dart';
 import '../../domain/entities/capture_proposal.dart';
 import '../../domain/services/boleto_parser.dart';
 import '../../domain/services/capture_service.dart';
@@ -83,6 +85,7 @@ class _SmartScannerPageState extends State<SmartScannerPage> with WidgetsBinding
   List<CardInvoiceEntry> _knownInvoices = const [];
   CardInvoiceEntry? _useInvoice;
   bool _invoiceDismissed = false;
+  ReceiptAttachmentFile? _scannedAttachmentFile;
 
   MobileScannerController? _scannerController;
   bool _isCameraActive = false;
@@ -395,6 +398,12 @@ class _SmartScannerPageState extends State<SmartScannerPage> with WidgetsBinding
 
       if (mounted) setState(() => _processingMessage = 'Auditando imagem com inteligência artificial...');
       final bytes = await image.readAsBytes();
+      _scannedAttachmentFile = ReceiptAttachmentFile(
+        name: image.name,
+        bytes: bytes,
+        sizeBytes: bytes.length,
+        contentType: image.mimeType ?? 'image/jpeg',
+      );
       final proposal = await sl<CaptureService>().processDocumentFile(
         bytes: bytes,
         fileName: image.name,
@@ -447,6 +456,12 @@ class _SmartScannerPageState extends State<SmartScannerPage> with WidgetsBinding
       });
 
       final isPdf = file.name.toLowerCase().endsWith('.pdf');
+      _scannedAttachmentFile = ReceiptAttachmentFile(
+        name: file.name,
+        bytes: bytes,
+        sizeBytes: bytes.length,
+        contentType: isPdf ? 'application/pdf' : 'image/jpeg',
+      );
       final proposal = await sl<CaptureService>().processDocumentFile(
         bytes: bytes,
         fileName: file.name,
@@ -657,6 +672,19 @@ class _SmartScannerPageState extends State<SmartScannerPage> with WidgetsBinding
           (state.members.isNotEmpty ? state.members.first.id : 'member_carlos');
       final house = ExpenseLaunchDefaults.houseAccount(state.paymentMethods);
       final newId = generateUuidV4();
+      final isPremium = sl<AuthRepository>().isDemoMode ||
+          (sl<AccountAccessCubit>().state.access?.isPremium ?? false);
+      String? attachmentPath;
+      if (isPremium && _scannedAttachmentFile != null) {
+        try {
+          final houseId = sl<AuthRepository>().currentHouse?.id ?? '';
+          attachmentPath = await sl<ReceiptAttachmentService>().uploadReceipt(
+            houseId: houseId,
+            file: _scannedAttachmentFile!,
+            expenseId: newId,
+          );
+        } catch (_) {}
+      }
       pending = HouseExpense(
         id: newId,
         title: typedTitle.isNotEmpty ? typedTitle : proposal.title,
@@ -676,6 +704,10 @@ class _SmartScannerPageState extends State<SmartScannerPage> with WidgetsBinding
         notes: proposal.merchantOrBeneficiary,
         barcode: proposal.rawCode,
         items: _expenseItemsOf(proposal, expenseId: newId, categoryId: categoryId, payerId: payer),
+        attachmentPath: attachmentPath,
+        attachmentName: attachmentPath != null ? _scannedAttachmentFile?.name : null,
+        attachmentContentType: attachmentPath != null ? _scannedAttachmentFile?.contentType : null,
+        attachmentSizeBytes: attachmentPath != null ? _scannedAttachmentFile?.sizeBytes : null,
       );
     }
 
@@ -1272,6 +1304,20 @@ class _SmartScannerPageState extends State<SmartScannerPage> with WidgetsBinding
       final waitsForInvoice = !isPayable && ExpenseLaunchDefaults.waitsForInvoice(scannedMethod);
       final documentDate = _documentDate;
 
+      final isPremium = sl<AuthRepository>().isDemoMode ||
+          (sl<AccountAccessCubit>().state.access?.isPremium ?? false);
+      String? attachmentPath;
+      if (isPremium && _scannedAttachmentFile != null) {
+        try {
+          final houseId = sl<AuthRepository>().currentHouse?.id ?? '';
+          attachmentPath = await sl<ReceiptAttachmentService>().uploadReceipt(
+            houseId: houseId,
+            file: _scannedAttachmentFile!,
+            expenseId: expenseId,
+          );
+        } catch (_) {}
+      }
+
       final expense = HouseExpense(
         id: expenseId,
         title: title,
@@ -1286,6 +1332,10 @@ class _SmartScannerPageState extends State<SmartScannerPage> with WidgetsBinding
         status: waitsForInvoice || isPayable ? ExpenseStatus.pending : ExpenseStatus.paid,
         notes: proposal.merchantOrBeneficiary,
         items: expenseItems,
+        attachmentPath: attachmentPath,
+        attachmentName: attachmentPath != null ? _scannedAttachmentFile?.name : null,
+        attachmentContentType: attachmentPath != null ? _scannedAttachmentFile?.contentType : null,
+        attachmentSizeBytes: attachmentPath != null ? _scannedAttachmentFile?.sizeBytes : null,
       );
 
       // Persistir no repositório (espera o Supabase concluir)

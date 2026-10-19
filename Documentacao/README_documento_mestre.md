@@ -34,6 +34,7 @@ Um **Motor de Compensação Global** cruza as duas e entrega um único fechament
 | Técnico | Notificações | [plano_notificacoes.md](plano_notificacoes.md) | Sino, push pelo FCM, lembretes agendados e catálogo |
 | Técnico | Contas e acesso | [plano_autenticacao.md](plano_autenticacao.md), [plano_painel_admin.md](plano_painel_admin.md) | Cadastro, senha, Google, aprovação de contas, planos Free e Premium, painel administrativo |
 | Financeiro | Relatórios | [plano_relatorios_previa_ciclo.md](plano_relatorios_previa_ciclo.md) | Prévia do fechamento, calendário de pagamentos, próximos ciclos, exportação |
+| Técnico | Monitoramento de Erros | [plano_monitoramento_erros_sentry.md](plano_monitoramento_erros_sentry.md) | Captura de falhas em produção via Sentry, breadcrumbs, LGPD e alertas |
 
 ## 3. Arquitetura de Negócio
 

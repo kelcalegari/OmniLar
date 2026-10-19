@@ -50,6 +50,7 @@ class AccountAccess extends Equatable {
   static const unrestricted = AccountAccess(status: AccountStatus.active);
 
   bool get isActive => status == AccountStatus.active;
+  bool get isPremium => plan == AccountPlan.premium;
 
   factory AccountAccess.fromJson(Map<String, dynamic> json) => AccountAccess(
         status: AccountStatus.fromName(json['status'] as String?),

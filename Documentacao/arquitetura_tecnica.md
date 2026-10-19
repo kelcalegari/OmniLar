@@ -169,8 +169,9 @@ create policy "members insert" on house_expenses for insert
 
 - Caminho com prefixo da Casa (`{house_id}/{entity}/{id}/{arquivo}`), e políticas de Storage que checam a Casa.
 - Hash do arquivo (`file_hash`) para detectar duplicidade.
-- Limites de tamanho e tipo (MIME) validados no servidor.
-- Imagens redimensionadas e comprimidas no app antes do envio.
+- Limites de tamanho e tipo (MIME) validados no servidor (máx 5 MB por arquivo).
+- Imagens redimensionadas e comprimidas no app antes do envio (máx 1600px, JPEG 80%).
+- **Retenção de Comprovantes (Modelo A):** Anexos de despesas em `attachments` permanecem durante o ciclo financeiro ativo e até 30 dias após seu fechamento e quitação; após esse prazo, a rotina semanal `purge-expired-receipts` remove os arquivos físicos do Storage (detalhado em `plano_anexos_comprovantes.md`).
 
 ## 6. Supabase: Realtime
 

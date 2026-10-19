@@ -191,11 +191,11 @@ class MockShoppingDataSource implements ShoppingDataSource {
     final personalCents = personalItemsAmount?.cents ?? 0;
     final houseExpensesCents = (totalAmount.cents - personalCents).clamp(0, totalAmount.cents);
     final houseExpenseAmount = Money(houseExpensesCents);
+    final members = await financeRepository.getMembers();
 
     String? createdExpenseId;
     if (houseExpenseAmount.cents > 0) {
       createdExpenseId = 'exp_shop_${now.millisecondsSinceEpoch}';
-      final members = await financeRepository.getMembers();
       final splitPercentages = {
         for (final m in members) m.id: m.defaultSplitPercent > 0 ? m.defaultSplitPercent : (100.0 / members.length),
       };

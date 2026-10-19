@@ -18,6 +18,7 @@ import '../pages/add_expense_page.dart';
 import '../../../../core/utils/clipboard_helper.dart';
 import 'audit_log_sheet.dart';
 import 'pay_pending_expense_sheet.dart';
+import 'receipt_attachment_viewer.dart';
 import '../../../../core/widgets/save_feedback.dart';
 
 class ExpenseTimelineItem extends StatelessWidget {
@@ -258,6 +259,8 @@ class ExpenseTimelineItem extends StatelessWidget {
                     ),
                   ),
                 ],
+
+                ReceiptAttachmentCard(expense: expense),
 
                 const SizedBox(height: 20),
                 SizedBox(
@@ -502,6 +505,7 @@ class ExpenseTimelineItem extends StatelessWidget {
                   const SizedBox(height: 12),
                   _buildItemizedBreakdown(Theme.of(context)),
                 ],
+                ReceiptAttachmentCard(expense: expense),
                 const SizedBox(height: 20),
                 SizedBox(
                   height: 48,
@@ -776,6 +780,30 @@ class ExpenseTimelineItem extends StatelessWidget {
                                       ),
                                       maxLines: 1,
                                       overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                          if (expense.hasAttachment) ...[
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+                              decoration: BoxDecoration(
+                                color: AppColors.creditGreen.withValues(alpha: 0.12),
+                                borderRadius: BorderRadius.circular(4),
+                              ),
+                              child: const Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(Icons.receipt_long_rounded, size: 10, color: AppColors.creditGreen),
+                                  SizedBox(width: 2),
+                                  Text(
+                                    'Cupom',
+                                    style: TextStyle(
+                                      fontSize: 9,
+                                      fontWeight: FontWeight.bold,
+                                      color: AppColors.creditGreen,
                                     ),
                                   ),
                                 ],

@@ -16,6 +16,7 @@ import '../../../finance/presentation/cubit/finance_cubit.dart';
 import '../../../finance/presentation/pages/add_expense_page.dart';
 import '../../../finance/presentation/widgets/audit_log_sheet.dart';
 import '../../../../core/widgets/save_feedback.dart';
+import 'receipt_attachment_viewer.dart';
 
 class ExpenseDetailDesktopPane extends StatefulWidget {
   final HouseExpense expense;
@@ -268,6 +269,8 @@ class _ExpenseDetailDesktopPaneState extends State<ExpenseDetailDesktopPane> {
                 ],
               ),
             ),
+
+            ReceiptAttachmentCard(expense: expense),
 
             if (expense.isItemized) ...[
               const SizedBox(height: 14),

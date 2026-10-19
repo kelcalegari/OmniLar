@@ -21,6 +21,9 @@ import '../../../../core/widgets/recurrence_scope_dialog.dart';
 import '../cubit/finance_cubit.dart';
 import '../cubit/finance_state.dart';
 import '../../../../core/widgets/save_feedback.dart';
+import '../../../admin/presentation/cubit/account_access_cubit.dart';
+import '../../domain/services/receipt_attachment_service.dart';
+import '../widgets/receipt_attachment_viewer.dart';
 
 class _DraftExpenseItem {
   final TextEditingController titleController;
@@ -103,7 +106,12 @@ class _AddExpensePageState extends State<AddExpensePage> {
 
   bool _isItemized = false;
   final List<_DraftExpenseItem> _draftItems = [];
-  String? _attachedReceiptName;
+  ReceiptAttachmentFile? _pendingAttachmentFile;
+  String? _existingAttachmentPath;
+  String? _existingAttachmentName;
+  String? _existingAttachmentContentType;
+  int? _existingAttachmentSizeBytes;
+  bool _clearAttachment = false;
 
   @override
   void initState() {
@@ -116,6 +124,10 @@ class _AddExpensePageState extends State<AddExpensePage> {
       _selectedPaidByMemberId = edit.paidByMemberId;
       _selectedPaymentMethodId = edit.paymentMethodId;
       _selectedProjectId = edit.projectId;
+      _existingAttachmentPath = edit.attachmentPath;
+      _existingAttachmentName = edit.attachmentName;
+      _existingAttachmentContentType = edit.attachmentContentType;
+      _existingAttachmentSizeBytes = edit.attachmentSizeBytes;
       PaymentMethod? editPm;
       try {
         editPm = context
@@ -459,6 +471,32 @@ class _AddExpensePageState extends State<AddExpensePage> {
         editedStatus = _expenseStatus;
       }
 
+      if (_isSaving) return;
+      setState(() => _isSaving = true);
+
+      String? uploadedPath;
+      if (_pendingAttachmentFile != null) {
+        try {
+          final houseId = sl<AuthRepository>().currentHouse?.id ?? '';
+          uploadedPath = await sl<ReceiptAttachmentService>().uploadReceipt(
+            houseId: houseId,
+            file: _pendingAttachmentFile!,
+            expenseId: oldExpense.id,
+          );
+        } catch (e) {
+          if (mounted) {
+            setState(() => _isSaving = false);
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('Erro ao enviar comprovante: $e'),
+                backgroundColor: AppColors.debtRed,
+              ),
+            );
+          }
+          return;
+        }
+      }
+
       final updatedExpense = oldExpense.copyWith(
         title: _titleController.text.trim(),
         amount: Money(_cents),
@@ -487,12 +525,18 @@ class _AddExpensePageState extends State<AddExpensePage> {
         items: items,
         projectId: _selectedProjectId,
         clearProjectId: _selectedProjectId == null,
+        attachmentPath: uploadedPath ?? (_clearAttachment ? null : _existingAttachmentPath),
+        clearAttachment: _clearAttachment,
+        attachmentName: _pendingAttachmentFile?.name ?? (_clearAttachment ? null : _existingAttachmentName),
+        attachmentContentType: _pendingAttachmentFile?.contentType ?? (_clearAttachment ? null : _existingAttachmentContentType),
+        attachmentSizeBytes: _pendingAttachmentFile?.sizeBytes ?? (_clearAttachment ? null : _existingAttachmentSizeBytes),
       );
 
       if (!mounted) return;
       final cubit = context.read<FinanceCubit>();
       final ok = await cubit.updateExpense(updatedExpense, scope: chosenScope);
       if (!mounted) return;
+      setState(() => _isSaving = false);
       // Falhou: o formulário fica aberto, com o que foi digitado
       if (ok) Navigator.pop(context);
       showSaveFeedback(
@@ -504,7 +548,34 @@ class _AddExpensePageState extends State<AddExpensePage> {
       return;
     }
 
+    if (_isSaving) return;
+    setState(() => _isSaving = true);
+
     final expenseId = 'exp_${DateTime.now().millisecondsSinceEpoch}';
+
+    String? uploadedPath;
+    if (_pendingAttachmentFile != null) {
+      try {
+        final houseId = sl<AuthRepository>().currentHouse?.id ?? '';
+        uploadedPath = await sl<ReceiptAttachmentService>().uploadReceipt(
+          houseId: houseId,
+          file: _pendingAttachmentFile!,
+          expenseId: expenseId,
+        );
+      } catch (e) {
+        if (mounted) {
+          setState(() => _isSaving = false);
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Erro ao enviar comprovante: $e'),
+              backgroundColor: AppColors.debtRed,
+            ),
+          );
+        }
+        return;
+      }
+    }
+
     final List<HouseExpenseItem> items = _isItemized
         ? _draftItems.asMap().entries.map((entry) {
               final idx = entry.key;
@@ -544,12 +615,14 @@ class _AddExpensePageState extends State<AddExpensePage> {
       dueDay: _isRecurring ? _dueDay : null,
       items: items,
       projectId: _selectedProjectId,
+      attachmentPath: uploadedPath,
+      attachmentName: _pendingAttachmentFile?.name,
+      attachmentContentType: _pendingAttachmentFile?.contentType,
+      attachmentSizeBytes: _pendingAttachmentFile?.sizeBytes,
       // Quem lançou: é daqui que saem a última forma e a categoria mais usada dele
       createdBy: sl<AuthRepository>().currentUser?.id,
     );
 
-    if (_isSaving) return;
-    setState(() => _isSaving = true);
     final cubit = context.read<FinanceCubit>();
     final ok = await cubit.addExpense(expense);
     if (!mounted) return;
@@ -1895,14 +1968,126 @@ class _AddExpensePageState extends State<AddExpensePage> {
 
 
 
+  Future<void> _pickReceiptAttachment() async {
+    try {
+      final file = await sl<ReceiptAttachmentService>().pickReceiptFile();
+      if (file != null) {
+        setState(() {
+          _pendingAttachmentFile = file;
+          _clearAttachment = false;
+        });
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Comprovante "${file.name}" anexado! 📄'),
+              backgroundColor: AppColors.creditGreen,
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(e.toString()),
+            backgroundColor: AppColors.debtRed,
+          ),
+        );
+      }
+    }
+  }
+
   Widget _buildReceiptAttachmentSection(ThemeData theme) {
+    final isPremium = sl<AuthRepository>().isDemoMode ||
+        (sl<AccountAccessCubit>().state.access?.isPremium ?? false);
+    final hasAttachment = _pendingAttachmentFile != null ||
+        (!_clearAttachment && _existingAttachmentPath != null);
+    final fileName = _pendingAttachmentFile?.name ?? _existingAttachmentName ?? 'Comprovante';
+    final sizeBytes = _pendingAttachmentFile?.sizeBytes ?? _existingAttachmentSizeBytes;
+    final sizeText = sizeBytes != null
+        ? (sizeBytes < 1024 * 1024
+            ? '${(sizeBytes / 1024).toStringAsFixed(1)} KB'
+            : '${(sizeBytes / (1024 * 1024)).toStringAsFixed(1)} MB')
+        : null;
+
+    if (!isPremium) {
+      return InkWell(
+        borderRadius: BorderRadius.circular(12),
+        onTap: () => PremiumReceiptInfoSheet.show(context),
+        child: Container(
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: theme.cardColor,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: Colors.grey.withValues(alpha: 0.2)),
+          ),
+          child: Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF59E0B).withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: const Icon(
+                  Icons.stars_rounded,
+                  color: Color(0xFFF59E0B),
+                  size: 20,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Row(
+                      children: [
+                        Text(
+                          'Comprovante / Cupom',
+                          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                        ),
+                        SizedBox(width: 6),
+                        Text(
+                          '⭐ Premium',
+                          style: TextStyle(
+                            fontSize: 10,
+                            fontWeight: FontWeight.w600,
+                            color: Color(0xFFB45309),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      'Guarda em nuvem durante o ciclo e 30 dias após',
+                      style: TextStyle(
+                        fontSize: 11,
+                        color: Colors.grey.shade600,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
+                ),
+              ),
+              TextButton.icon(
+                onPressed: () => PremiumReceiptInfoSheet.show(context),
+                icon: const Icon(Icons.info_outline_rounded, size: 16),
+                label: const Text('Saiba mais', style: TextStyle(fontSize: 12)),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         color: theme.cardColor,
         borderRadius: BorderRadius.circular(12),
         border: Border.all(
-          color: _attachedReceiptName != null
+          color: hasAttachment
               ? AppColors.creditGreen.withValues(alpha: 0.5)
               : Colors.grey.withValues(alpha: 0.2),
         ),
@@ -1912,13 +2097,13 @@ class _AddExpensePageState extends State<AddExpensePage> {
           Container(
             padding: const EdgeInsets.all(8),
             decoration: BoxDecoration(
-              color: (_attachedReceiptName != null ? AppColors.creditGreen : AppColors.primary)
+              color: (hasAttachment ? AppColors.creditGreen : AppColors.primary)
                   .withValues(alpha: 0.1),
               borderRadius: BorderRadius.circular(8),
             ),
             child: Icon(
-              _attachedReceiptName != null ? Icons.receipt_long_rounded : Icons.camera_alt_outlined,
-              color: _attachedReceiptName != null ? AppColors.creditGreen : AppColors.primary,
+              hasAttachment ? Icons.receipt_long_rounded : Icons.camera_alt_outlined,
+              color: hasAttachment ? AppColors.creditGreen : AppColors.primary,
               size: 20,
             ),
           ),
@@ -1928,14 +2113,16 @@ class _AddExpensePageState extends State<AddExpensePage> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  _attachedReceiptName != null ? 'Cupom Anexado' : 'Comprovante / Cupom Fiscal',
+                  hasAttachment ? 'Comprovante Anexado' : 'Comprovante / Cupom Fiscal',
                   style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
                 ),
                 Text(
-                  _attachedReceiptName ?? 'Anexe a foto da nota ou comprovante de pagamento',
+                  hasAttachment
+                      ? '$fileName${sizeText != null ? ' • $sizeText' : ''}'
+                      : 'Anexe a foto da nota ou comprovante de pagamento',
                   style: TextStyle(
                     fontSize: 11,
-                    color: _attachedReceiptName != null ? AppColors.creditGreen : Colors.grey,
+                    color: hasAttachment ? AppColors.creditGreen : Colors.grey,
                   ),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
@@ -1943,27 +2130,20 @@ class _AddExpensePageState extends State<AddExpensePage> {
               ],
             ),
           ),
-          if (_attachedReceiptName != null)
+          if (hasAttachment)
             IconButton(
               icon: const Icon(Icons.close_rounded, size: 18, color: Colors.grey),
-              tooltip: 'Remover cupom',
+              tooltip: 'Remover comprovante',
               onPressed: () {
-                setState(() => _attachedReceiptName = null);
+                setState(() {
+                  _pendingAttachmentFile = null;
+                  _clearAttachment = true;
+                });
               },
             )
           else
             TextButton.icon(
-              onPressed: () {
-                setState(() {
-                  _attachedReceiptName = 'cupom_fiscal_${DateTime.now().millisecondsSinceEpoch}.jpg';
-                });
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('Foto do cupom/comprovante vinculada com sucesso! 📸'),
-                    backgroundColor: AppColors.creditGreen,
-                  ),
-                );
-              },
+              onPressed: _pickReceiptAttachment,
               icon: const Icon(Icons.upload_file_rounded, size: 16),
               label: const Text('Anexar', style: TextStyle(fontSize: 12)),
             ),

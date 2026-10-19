@@ -1494,7 +1494,7 @@ class _TasksAndShoppingPageState extends State<TasksAndShoppingPage> with Single
 
                     shoppingCubit
                         .completeTrip(
-                          totalAmount: withoutExpense ? Money.zero : total,
+                          totalAmount: withoutExpense ? const Money.zero() : total,
                           paymentMethodId: paymentMethodId,
                           paidByMemberId: withoutExpense ? null : selectedPayerId,
                           personalItemsAmount: personalMoney,

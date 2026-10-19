@@ -315,13 +315,13 @@ class SupabaseShoppingDataSource implements ShoppingDataSource {
 
       Map<String, dynamic>? expensePayload;
       String? createdExpenseId;
+      final members = await financeRepository.getMembers();
       if (houseExpenseAmount.cents > 0) {
         if (paymentMethodId == null || paidByMemberId == null) {
           throw const ValidationFailure('Forma de pagamento e pagador são obrigatórios para lançar a despesa.');
         }
         // Id real desde já, para a viagem de compras apontar para a despesa
         createdExpenseId = generateUuidV4();
-        final members = await financeRepository.getMembers();
         final listDefaults = await _listDefaults(listId);
         // Categoria escolhida na lista; sem ela (ou se foi apagada), a de mercado
         final category = ExpenseLaunchDefaults.matchCategory(
@@ -385,7 +385,7 @@ class SupabaseShoppingDataSource implements ShoppingDataSource {
             title: 'Item Pessoal na Compra de Mercado',
             description: 'Comprado junto com a feira/mercado da casa',
             totalAmount: personalTotal,
-            lenderMemberId: paidByMemberId,
+            lenderMemberId: paidByMemberId ?? client.auth.currentUser?.id ?? (members.isNotEmpty ? members.first.id : ''),
             borrowerMemberId: personalDebtorMemberId,
             installmentsCount: 1,
             createdAt: now,

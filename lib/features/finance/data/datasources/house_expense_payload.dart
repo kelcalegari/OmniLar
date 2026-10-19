@@ -84,6 +84,10 @@ Map<String, dynamic> houseExpensePayload(
     if (isUuid(expense.projectId)) 'project_id': expense.projectId,
     if (expense.notes != null) 'notes': expense.notes,
     if (expense.barcode != null) 'barcode': expense.barcode,
+    if (expense.attachmentPath != null) 'attachment_path': expense.attachmentPath,
+    if (expense.attachmentName != null) 'attachment_name': expense.attachmentName,
+    if (expense.attachmentContentType != null) 'attachment_content_type': expense.attachmentContentType,
+    if (expense.attachmentSizeBytes != null) 'attachment_size_bytes': expense.attachmentSizeBytes,
     'items': [
       for (final item in expense.items)
         {

@@ -29,6 +29,7 @@ import '../../features/finance/data/repositories/member_settings_repositories.da
 import '../../features/finance/domain/repositories/member_settings_repository.dart';
 import '../../features/finance/domain/repositories/finance_repository.dart';
 import '../../features/finance/domain/services/cycle_funding_estimator.dart';
+import '../../features/finance/domain/services/receipt_attachment_service.dart';
 import '../../features/finance/presentation/cubit/finance_cubit.dart';
 import '../../features/admin/data/datasources/admin_datasource.dart';
 import '../../features/admin/data/datasources/dynamic_admin_datasource.dart';
@@ -196,6 +197,8 @@ Future<void> initServiceLocator() async {
     }
     return mock;
   });
+  sl.registerLazySingleton<ReceiptAttachmentService>(
+      () => ReceiptAttachmentService(client: SupabaseConfig.client));
   sl.registerLazySingleton<FinanceCubit>(() => FinanceCubit(
         sl(),
         const CycleFundingEstimator(),
