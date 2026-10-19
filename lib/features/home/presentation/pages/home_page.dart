@@ -7,6 +7,7 @@ import '../../../../core/theme/app_colors.dart';
 import '../../../../core/utils/responsive.dart';
 import '../../../../core/widgets/privacy_toggle.dart';
 import '../../../../core/widgets/responsive_container.dart';
+import '../../../../core/widgets/save_feedback.dart';
 import '../../../../core/widgets/theme_toggle_button.dart';
 import '../../../../core/di/service_locator.dart';
 import '../../../auth/domain/repositories/auth_repository.dart';
@@ -19,7 +20,6 @@ import '../../../finance/domain/entities/house_expense.dart';
 import '../../../finance/domain/entities/house_inflow.dart';
 import '../../../finance/domain/entities/third_party_receipt.dart';
 import '../../../finance/presentation/widgets/house_inflows_card.dart';
-import '../../../finance/presentation/widgets/third_party_receipts_card.dart';
 import '../../../finance/domain/repositories/finance_repository.dart';
 import '../../../finance/domain/services/cycle_expense_grouping.dart';
 import '../../../finance/domain/services/expense_search.dart';
@@ -1141,8 +1141,9 @@ class _HomePageContentState extends State<_HomePageContent> {
                 overflow: TextOverflow.ellipsis,
               ),
             ),
+            const SizedBox(width: 6),
             Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+              padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
               decoration: BoxDecoration(
                 color: item.color.withValues(alpha: isDark ? 0.25 : 0.12),
                 borderRadius: BorderRadius.circular(8),
@@ -1150,7 +1151,7 @@ class _HomePageContentState extends State<_HomePageContent> {
               child: Text(
                 item.badgeLabel,
                 style: TextStyle(
-                  fontSize: 11,
+                  fontSize: 10,
                   fontWeight: FontWeight.bold,
                   color: item.color,
                 ),
@@ -1175,13 +1176,109 @@ class _HomePageContentState extends State<_HomePageContent> {
             ],
           ),
         ),
-        trailing: PrivacySensitiveText(
-          '+ ${item.amount.formatted}',
-          style: const TextStyle(
-            fontWeight: FontWeight.bold,
-            fontSize: 15,
-            color: AppColors.creditGreen,
-          ),
+        trailing: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            PrivacySensitiveText(
+              '+ ${item.amount.formatted}',
+              style: const TextStyle(
+                fontWeight: FontWeight.bold,
+                fontSize: 14,
+                color: AppColors.creditGreen,
+              ),
+            ),
+            PopupMenuButton<String>(
+              key: ValueKey('inflow_menu_${item.id}'),
+              padding: EdgeInsets.zero,
+              icon: const Icon(Icons.more_vert_rounded, size: 18, color: Colors.grey),
+              tooltip: 'Opções da entrada',
+              onSelected: (val) {
+                if (item is _HouseInflowItem) {
+                  if (val == 'edit') {
+                    showHouseInflowForm(
+                      context,
+                      context.read<FinanceCubit>(),
+                      state,
+                      editing: item.inflow,
+                    );
+                  } else if (val == 'delete') {
+                    _confirmDeleteHouseInflow(context, item.inflow);
+                  }
+                } else if (item is _ThirdPartyReceiptInflowItem) {
+                  if (val == 'use') {
+                    _showUseReceiptDialog(context, item.receipt, state);
+                  } else if (val == 'reopen') {
+                    _reopenReceipt(context, item.receipt);
+                  } else if (val == 'delete') {
+                    _confirmDeleteReceipt(context, item.receipt, state);
+                  }
+                }
+              },
+              itemBuilder: (ctx) {
+                if (item is _HouseInflowItem) {
+                  return [
+                    const PopupMenuItem(
+                      value: 'edit',
+                      child: Row(
+                        children: [
+                          Icon(Icons.edit_outlined, size: 18, color: AppColors.primary),
+                          SizedBox(width: 10),
+                          Expanded(child: Text('Editar Entrada')),
+                        ],
+                      ),
+                    ),
+                    const PopupMenuItem(
+                      value: 'delete',
+                      child: Row(
+                        children: [
+                          Icon(Icons.delete_outline_rounded, size: 18, color: AppColors.debtRed),
+                          SizedBox(width: 10),
+                          Expanded(child: Text('Excluir Entrada', style: TextStyle(color: AppColors.debtRed))),
+                        ],
+                      ),
+                    ),
+                  ];
+                } else if (item is _ThirdPartyReceiptInflowItem) {
+                  final receipt = item.receipt;
+                  return [
+                    if (receipt.isHeld)
+                      const PopupMenuItem(
+                        value: 'use',
+                        child: Row(
+                          children: [
+                            Icon(Icons.credit_card_rounded, size: 18, color: AppColors.primary),
+                            SizedBox(width: 10),
+                            Expanded(child: Text('Usar na fatura')),
+                          ],
+                        ),
+                      )
+                    else
+                      const PopupMenuItem(
+                        value: 'reopen',
+                        child: Row(
+                          children: [
+                            Icon(Icons.undo_rounded, size: 18, color: AppColors.primary),
+                            SizedBox(width: 10),
+                            Expanded(child: Text('Devolver para caixinha')),
+                          ],
+                        ),
+                      ),
+                    const PopupMenuItem(
+                      value: 'delete',
+                      child: Row(
+                        children: [
+                          Icon(Icons.delete_outline_rounded, size: 18, color: AppColors.debtRed),
+                          SizedBox(width: 10),
+                          Expanded(child: Text('Excluir Repasse', style: TextStyle(color: AppColors.debtRed))),
+                        ],
+                      ),
+                    ),
+                  ];
+                }
+                return const [];
+              },
+            ),
+          ],
         ),
         onTap: () {
           if (item is _HouseInflowItem) {
@@ -1192,14 +1289,178 @@ class _HomePageContentState extends State<_HomePageContent> {
               editing: item.inflow,
             );
           } else if (item is _ThirdPartyReceiptInflowItem) {
-            showThirdPartyReceiptForm(
-              context,
-              context.read<FinanceCubit>(),
-              state,
-            );
+            if (item.receipt.isHeld) {
+              _showUseReceiptDialog(context, item.receipt, state);
+            } else {
+              _reopenReceipt(context, item.receipt);
+            }
           }
         },
       ),
+    );
+  }
+
+  Future<void> _confirmDeleteHouseInflow(BuildContext context, HouseInflow inflow) async {
+    final messenger = ScaffoldMessenger.of(context);
+    final cubit = context.read<FinanceCubit>();
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogCtx) => AlertDialog(
+        title: const Text('Excluir entrada?'),
+        content: Text('Os ${inflow.amount.formatted} de "${inflow.description}" saem do Caixa do ciclo.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(dialogCtx, false), child: const Text('Cancelar')),
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: AppColors.debtRed),
+            onPressed: () => Navigator.pop(dialogCtx, true),
+            child: const Text('Excluir'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+    final ok = await cubit.deleteHouseInflow(inflow.id);
+    showSaveFeedback(messenger, ok: ok, success: 'Entrada excluída.', failure: cubit.state.errorMessage);
+  }
+
+  Future<void> _confirmDeleteReceipt(BuildContext context, ThirdPartyReceipt receipt, FinanceState state) async {
+    final messenger = ScaffoldMessenger.of(context);
+    final cubit = context.read<FinanceCubit>();
+    final vaultName = state.savingsVaults.where((v) => v.id == receipt.vaultId).firstOrNull?.name ?? 'Caixinha';
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogCtx) => AlertDialog(
+        title: const Text('Excluir repasse?'),
+        content: Text(
+          'Os ${receipt.amount.formatted} de ${receipt.payerName} saem da caixinha "$vaultName". '
+          'Use quando o registro foi um engano ou o dinheiro foi devolvido.',
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(dialogCtx, false), child: const Text('Cancelar')),
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: AppColors.debtRed),
+            onPressed: () => Navigator.pop(dialogCtx, true),
+            child: const Text('Excluir'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+    final ok = await cubit.deleteThirdPartyReceipt(receipt.id);
+    showSaveFeedback(messenger, ok: ok, success: 'Repasse excluído.', failure: cubit.state.errorMessage);
+  }
+
+  Future<void> _reopenReceipt(BuildContext context, ThirdPartyReceipt receipt) async {
+    final messenger = ScaffoldMessenger.of(context);
+    final cubit = context.read<FinanceCubit>();
+    final ok = await cubit.reopenThirdPartyReceipt(receipt.id);
+    showSaveFeedback(
+      messenger,
+      ok: ok,
+      success: 'O repasse de ${receipt.payerName} voltou para a caixinha.',
+      failure: cubit.state.errorMessage,
+    );
+  }
+
+  Future<void> _showUseReceiptDialog(BuildContext context, ThirdPartyReceipt receipt, FinanceState state) async {
+    final cards = state.paymentMethods.where((p) => p.isCreditCard).toList();
+    String? cardId = cards.any((c) => c.id == receipt.paymentMethodId) ? receipt.paymentMethodId : null;
+    ThirdPartyReceiptUse? use;
+    final messenger = ScaffoldMessenger.of(context);
+    final cubit = context.read<FinanceCubit>();
+
+    ThirdPartyReceiptUse suggestedUse(String? id) {
+      final card = cards.where((c) => c.id == id).firstOrNull;
+      return card != null && card.ownerMemberId != null
+          ? ThirdPartyReceiptUse.passedToOwner
+          : ThirdPartyReceiptUse.housePaid;
+    }
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogCtx) => StatefulBuilder(
+        builder: (context, setDialogState) {
+          final chosenUse = use ?? suggestedUse(cardId);
+          final card = cards.where((c) => c.id == cardId).firstOrNull;
+          final owner = state.members
+              .where((m) => m.id == card?.ownerMemberId)
+              .firstOrNull;
+
+          return AlertDialog(
+            title: Text('Usar o repasse de ${receipt.payerName}'),
+            content: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  DropdownButtonFormField<String?>(
+                    key: const Key('use_receipt_card'),
+                    initialValue: cardId,
+                    decoration: const InputDecoration(labelText: 'Fatura do cartão'),
+                    items: [
+                      const DropdownMenuItem<String?>(value: null, child: Text('Outro pagamento')),
+                      for (final c in cards) ...[
+                        DropdownMenuItem<String?>(
+                          value: c.id,
+                          child: Text(
+                            c.ownerMemberId == null
+                                ? '${c.name} (da casa)'
+                                : '${c.name} (${state.members.where((m) => m.id == c.ownerMemberId).firstOrNull?.name.split(' ').first ?? ''})',
+                          ),
+                        ),
+                      ],
+                    ],
+                    onChanged: (value) => setDialogState(() {
+                      cardId = value;
+                      use = null;
+                    }),
+                  ),
+                  const SizedBox(height: 16),
+                  SegmentedButton<ThirdPartyReceiptUse>(
+                    segments: const [
+                      ButtonSegment(value: ThirdPartyReceiptUse.housePaid, label: Text('A Casa pagou')),
+                      ButtonSegment(value: ThirdPartyReceiptUse.passedToOwner, label: Text('Repassei')),
+                    ],
+                    selected: {chosenUse},
+                    onSelectionChanged: (s) => setDialogState(() => use = s.first),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    chosenUse == ThirdPartyReceiptUse.housePaid
+                        ? 'A conta da Casa pagou: os ${receipt.amount.formatted} saem da caixinha, sem voltar ao Caixa do ciclo.'
+                        : 'Os ${receipt.amount.formatted} saem da caixinha e vão para '
+                            '${owner?.name.split(' ').first ?? 'quem pagou a fatura'}.',
+                    style: const TextStyle(fontSize: 12),
+                  ),
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(onPressed: () => Navigator.pop(dialogCtx, false), child: const Text('Cancelar')),
+              FilledButton(
+                key: const Key('use_receipt_confirm'),
+                onPressed: () {
+                  use = chosenUse;
+                  Navigator.pop(dialogCtx, true);
+                },
+                child: const Text('Usar'),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+    if (confirmed != true) return;
+    final ok = await cubit.useThirdPartyReceipts(
+      receiptIds: [receipt.id],
+      use: use ?? suggestedUse(cardId),
+      paymentMethodId: cardId,
+    );
+    showSaveFeedback(
+      messenger,
+      ok: ok,
+      success: 'Repasse de ${receipt.payerName} usado: ${receipt.amount.formatted} saíram da caixinha.',
+      failure: cubit.state.errorMessage,
     );
   }
 

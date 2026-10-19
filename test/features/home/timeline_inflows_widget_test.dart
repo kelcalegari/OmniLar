@@ -89,5 +89,28 @@ void main() {
     expect(find.text('Roberta'), findsOneWidget);
     expect(find.text('Lucas Trabalho'), findsOneWidget);
     expect(find.text('Reembolso mercado'), findsOneWidget);
+
+    // Valida que o menu de opções está presente nos cards
+    final savedInflow = financeCubit.state.houseInflows.firstWhere((i) => i.description == 'Reembolso mercado');
+    final menuFinder = find.byKey(ValueKey('inflow_menu_${savedInflow.id}'));
+    expect(menuFinder, findsOneWidget);
+
+    await tester.ensureVisible(menuFinder);
+    await tester.pumpAndSettle();
+
+    // Abre o menu da entrada de fora e confere as opções de Editar e Excluir
+    await tester.tap(menuFinder);
+    await tester.pumpAndSettle();
+
+    expect(find.text('Editar Entrada'), findsOneWidget);
+    expect(find.text('Excluir Entrada'), findsOneWidget);
+
+    // Clica em Excluir Entrada e cancela
+    await tester.tap(find.text('Excluir Entrada'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Excluir entrada?'), findsOneWidget);
+    await tester.tap(find.text('Cancelar'));
+    await tester.pumpAndSettle();
   });
 }
