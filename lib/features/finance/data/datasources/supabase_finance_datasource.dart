@@ -1212,6 +1212,8 @@ class SupabaseFinanceDataSource implements FinanceDataSource {
           colorHex: r['color_hex'] as String? ?? '#10B981',
           createdAt: DateTime.parse(r['created_at'] as String).toLocal(),
           targetDate: r['target_date'] == null ? null : DateTime.parse(r['target_date'] as String),
+          monthlyGoal: (r['monthly_goal_cents'] as num?) == null ? null : Money((r['monthly_goal_cents'] as num).toInt()),
+          countsInQuota: r['counts_in_quota'] == true,
         );
       }).toList();
     } catch (e) {
@@ -1235,6 +1237,9 @@ class SupabaseFinanceDataSource implements FinanceDataSource {
             'icon': vault.icon,
             'color_hex': vault.colorHex,
             if (vault.targetDate != null) 'target_date': _dateOnly(vault.targetDate!),
+            // Só vão se a caixinha já nasce na cota: o banco só deixa administradores
+            if (vault.countsInQuota) 'counts_in_quota': true,
+            if (vault.monthlyGoal != null) 'monthly_goal_cents': vault.monthlyGoal!.cents,
           })
           .select('id')
           .single();
@@ -1286,15 +1291,28 @@ class SupabaseFinanceDataSource implements FinanceDataSource {
 
   @override
   Future<void> updateSavingsVault(SavingsVault vault) async {
+    final base = {
+      'name': vault.name.trim(),
+      // Caixinha sem meta: a coluna só aceita nulo ou valor positivo
+      'target_amount_cents': vault.targetAmount.cents > 0 ? vault.targetAmount.cents : null,
+      'target_date': vault.targetDate == null ? null : _dateOnly(vault.targetDate!),
+      'icon': vault.icon,
+      'color_hex': vault.colorHex,
+    };
     try {
-      await client.from('savings_vaults').update({
-        'name': vault.name.trim(),
-        // Caixinha sem meta: a coluna só aceita nulo ou valor positivo
-        'target_amount_cents': vault.targetAmount.cents > 0 ? vault.targetAmount.cents : null,
-        'target_date': vault.targetDate == null ? null : _dateOnly(vault.targetDate!),
-        'icon': vault.icon,
-        'color_hex': vault.colorHex,
-      }).eq('id', vault.id);
+      try {
+        // Meta na cota (0102): valores iguais aos gravados passam; só administradores mudam
+        await client.from('savings_vaults').update({
+          ...base,
+          'counts_in_quota': vault.countsInQuota,
+          'monthly_goal_cents':
+              vault.monthlyGoal != null && vault.monthlyGoal!.cents > 0 ? vault.monthlyGoal!.cents : null,
+        }).eq('id', vault.id);
+      } on PostgrestException catch (e) {
+        // Banco sem a 0102: grava o que ele já conhece
+        if (!e.message.contains('counts_in_quota') && !e.message.contains('monthly_goal_cents')) rethrow;
+        await client.from('savings_vaults').update(base).eq('id', vault.id);
+      }
     } catch (e) {
       throw ServerFailure('Erro ao salvar a caixinha: $e');
     }
@@ -1435,15 +1453,51 @@ class SupabaseFinanceDataSource implements FinanceDataSource {
   }
 
   @override
+  Future<Map<String, Money>> getMemberIncomes() async {
+    try {
+      // A policy de member_incomes só devolve o que a visibilidade da casa permite
+      final rows = await client
+          .from('member_incomes')
+          .select('user_id, monthly_income_cents')
+          .eq('house_id', _houseId);
+      return {
+        for (final r in rows)
+          r['user_id'] as String: Money((r['monthly_income_cents'] as num).toInt()),
+      };
+    } catch (_) {
+      // Banco sem a 0102: ninguém informou renda
+      return {};
+    }
+  }
+
+  @override
+  Future<void> setMyIncome(Money? income) async {
+    try {
+      if (income != null && income.cents <= 0) {
+        throw const ServerFailure('A renda deve ser maior que zero.');
+      }
+      await client.rpc('set_my_income', params: {
+        'p_house_id': _houseId,
+        'p_income_cents': income?.cents,
+      });
+    } on ServerFailure {
+      rethrow;
+    } catch (e) {
+      throw ServerFailure('Não foi possível salvar a renda: $e');
+    }
+  }
+
+  @override
   Future<HouseSettings> getHouseSettings() async {
     try {
       final row = await OfflineSnapshot.instance.row(
         'house_settings_$_houseId',
         () async {
-          // Da mais nova para a mais antiga: banco sem a 0101, a 0100, a 0099, a 0098, a 0097, a 0094 ou a 0092
+          // Da mais nova para a mais antiga: banco sem a 0102, a 0101, a 0100, a 0099, a 0098, a 0097, a 0094 ou a 0092
           // ainda lê as colunas que já tem
           const attempts = [
             HouseSettings.columns,
+            HouseSettings.columnsBefore0102,
             HouseSettings.columnsBefore0101,
             HouseSettings.columnsBefore0100,
             HouseSettings.columnsBefore0099,

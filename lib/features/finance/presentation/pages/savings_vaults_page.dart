@@ -63,6 +63,12 @@ class _SavingsVaultsPageState extends State<SavingsVaultsPage> {
     String selectedColor = existing?.colorHex ?? '#10B981';
     DateTime? targetDate = existing?.targetDate;
     String? nameError;
+    // Meta mensal dentro da cota (0102): só administradores e donos mudam
+    final currentUserId = sl<AuthRepository>().currentUser?.id;
+    final me = cubit.state.members.where((m) => m.id == currentUserId).firstOrNull;
+    final canEditQuota = me?.role == 'owner' || me?.role == 'admin';
+    bool countsInQuota = existing?.countsInQuota ?? false;
+    int monthlyGoalCents = existing?.monthlyGoal?.cents ?? 0;
 
     showDialog(
       context: context,
@@ -134,6 +140,30 @@ class _SavingsVaultsPageState extends State<SavingsVaultsPage> {
                         ),
                     ],
                   ),
+                  if (canEditQuota) ...[
+                    const SizedBox(height: 8),
+                    SwitchListTile(
+                      key: const ValueKey('vault_counts_in_quota'),
+                      contentPadding: EdgeInsets.zero,
+                      title: const Text('Somar à cota do mês', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
+                      subtitle: const Text(
+                        'A meta mensal desta caixinha entra no Planejamento de Aportes. Desligado, a caixinha não muda a cota.',
+                        style: TextStyle(fontSize: 12),
+                      ),
+                      value: countsInQuota,
+                      onChanged: (v) => setDialogState(() => countsInQuota = v),
+                    ),
+                    if (countsInQuota) ...[
+                      const Text('Meta mensal (vazio: guardar por mês até o prazo):', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.grey)),
+                      const SizedBox(height: 6),
+                      MoneyInputField(
+                        key: const ValueKey('vault_monthly_goal'),
+                        initialValue: Money(monthlyGoalCents),
+                        showKeypad: false,
+                        onChanged: (val) => setDialogState(() => monthlyGoalCents = val.cents),
+                      ),
+                    ],
+                  ],
                   const SizedBox(height: 16),
                   const Text('Ícone da Caixinha:', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.grey)),
                   const SizedBox(height: 8),
@@ -198,6 +228,10 @@ class _SavingsVaultsPageState extends State<SavingsVaultsPage> {
                       colorHex: selectedColor,
                       targetDate: deadline,
                       clearTargetDate: deadline == null,
+                      // Quem não é administrador não vê os campos: mantém o que já estava
+                      countsInQuota: canEditQuota ? countsInQuota : null,
+                      monthlyGoal: canEditQuota && monthlyGoalCents > 0 ? Money(monthlyGoalCents) : null,
+                      clearMonthlyGoal: canEditQuota && monthlyGoalCents <= 0,
                     ));
                   } else {
                     ok = await cubit.createSavingsVault(SavingsVault(
@@ -208,6 +242,8 @@ class _SavingsVaultsPageState extends State<SavingsVaultsPage> {
                       colorHex: selectedColor,
                       createdAt: DateTime.now(),
                       targetDate: deadline,
+                      countsInQuota: canEditQuota && countsInQuota,
+                      monthlyGoal: canEditQuota && monthlyGoalCents > 0 ? Money(monthlyGoalCents) : null,
                     ));
                   }
                   showSaveFeedback(
@@ -1012,6 +1048,24 @@ class _SavingsVaultsPageState extends State<SavingsVaultsPage> {
                                 ],
                               ),
                             ],
+                            if (vault.countsInQuota)
+                              Padding(
+                                padding: const EdgeInsets.only(top: 6),
+                                child: Row(
+                                  children: [
+                                    const Icon(Icons.pie_chart_outline_rounded, size: 14, color: Colors.grey),
+                                    const SizedBox(width: 4),
+                                    Expanded(
+                                      child: PrivacySensitiveText(
+                                        vault.quotaContribution(today).isZero
+                                            ? 'Dentro da cota do mês'
+                                            : 'Soma ${vault.quotaContribution(today).format()} à cota do mês',
+                                        style: const TextStyle(fontSize: 12, color: Colors.grey),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
                             const Divider(height: 24),
 
                             // Ações Guardar e Resgatar

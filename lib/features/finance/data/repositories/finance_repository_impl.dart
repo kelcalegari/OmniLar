@@ -135,6 +135,12 @@ class FinanceRepositoryImpl implements FinanceRepository {
       );
 
   @override
+  Future<Map<String, Money>> getMemberIncomes() => _dataSource.getMemberIncomes();
+
+  @override
+  Future<void> setMyIncome(Money? income) => _dataSource.setMyIncome(income);
+
+  @override
   Future<HouseSettings> getHouseSettings() => _dataSource.getHouseSettings();
 
   @override

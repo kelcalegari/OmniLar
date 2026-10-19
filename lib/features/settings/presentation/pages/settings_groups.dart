@@ -586,6 +586,7 @@ extension _SettingsGroupViews on _SettingsPageState {
         ],
       ),
       _newMemberSplitPanel(context, financeState),
+      _incomeSplitPanel(context, financeState),
       _planningPanel(context, financeState),
       _folegoParamsPanel(context, financeState),
       _budgetAlertPanel(context, financeState),
@@ -644,6 +645,186 @@ extension _SettingsGroupViews on _SettingsPageState {
           ),
         if (!isAdmin) _emptyLine('Só administradores mudam esta escolha.'),
       ],
+    );
+  }
+
+  /// Renda de cada morador e divisão padrão "proporcional à renda" (0102). A
+  /// renda é privada por padrão: só aparece a dos outros se a casa permitir, e
+  /// quem manda no que chega ao app é o banco (RLS), não esta tela.
+  Widget _incomeSplitPanel(BuildContext context, FinanceState financeState) {
+    final settings = financeState.houseSettings;
+    final currentUserId = sl<AuthRepository>().currentUser?.id;
+    final isAdmin = _isHouseAdmin(financeState);
+    final myIncome = financeState.memberIncomes[currentUserId];
+    final others = [
+      for (final m in financeState.members)
+        if (m.id != currentUserId && financeState.memberIncomes.containsKey(m.id)) m,
+    ];
+    return _panel(
+      context,
+      title: 'Renda e divisão',
+      actionLabel: isAdmin ? 'Alterar' : null,
+      onAction: isAdmin ? () => _showIncomeSplitDialog(context, financeState) : null,
+      children: [
+        _line(title: 'Divisão padrão', value: settings.splitBasis.label),
+        _line(title: 'Quem vê a renda', value: settings.incomeVisibility.label),
+        _line(title: 'Minha renda mensal', value: myIncome?.format() ?? 'Não informada'),
+        Align(
+          alignment: Alignment.centerLeft,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 8),
+            child: TextButton(
+              key: const Key('my_income_button'),
+              onPressed: () => _showMyIncomeDialog(context, myIncome),
+              child: Text(myIncome == null ? 'Informar minha renda' : 'Alterar minha renda'),
+            ),
+          ),
+        ),
+        for (final m in others) _line(title: 'Renda de ${m.name}', value: financeState.memberIncomes[m.id]!.format()),
+        if (others.isEmpty)
+          _emptyLine('A renda dos outros moradores é privada: só o percentual calculado aparece na divisão.'),
+        if (settings.splitBasis == SplitBasis.income)
+          _emptyLine(
+            'Enquanto algum morador não informar a renda, vale o rateio atual.',
+          ),
+      ],
+    );
+  }
+
+  void _showMyIncomeDialog(BuildContext context, Money? current) {
+    var cents = current?.cents ?? 0;
+    bool isSaving = false;
+    showDialog(
+      context: context,
+      builder: (dialogCtx) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: const Text('Minha renda mensal', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                const Text(
+                  'Usada só para calcular a divisão proporcional à renda. Quem pode ver este valor é escolha da casa.',
+                  style: TextStyle(fontSize: 12, color: Colors.grey),
+                ),
+                const SizedBox(height: 12),
+                MoneyInputField(
+                  key: const ValueKey('my_income_field'),
+                  initialValue: Money(cents),
+                  label: 'Renda mensal',
+                  onChanged: (v) => setDialogState(() => cents = v.cents),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            if (current != null)
+              TextButton(
+                onPressed: isSaving
+                    ? null
+                    : () async {
+                        setDialogState(() => isSaving = true);
+                        final messenger = ScaffoldMessenger.of(context);
+                        final navigator = Navigator.of(dialogCtx);
+                        final ok = await context.read<FinanceCubit>().setMyIncome(null);
+                        if (ok) navigator.pop();
+                        setDialogState(() => isSaving = false);
+                        showSaveFeedback(messenger, ok: ok, success: 'Renda removida.');
+                      },
+                child: const Text('Remover'),
+              ),
+            TextButton(onPressed: () => Navigator.pop(dialogCtx), child: const Text('Cancelar')),
+            FilledButton(
+              onPressed: isSaving || cents <= 0
+                  ? null
+                  : () async {
+                      setDialogState(() => isSaving = true);
+                      final messenger = ScaffoldMessenger.of(context);
+                      final navigator = Navigator.of(dialogCtx);
+                      final ok = await context.read<FinanceCubit>().setMyIncome(Money(cents));
+                      if (ok) navigator.pop();
+                      setDialogState(() => isSaving = false);
+                      showSaveFeedback(messenger, ok: ok, success: 'Renda atualizada.');
+                    },
+              style: FilledButton.styleFrom(backgroundColor: AppColors.primary),
+              child: const Text('Salvar'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _showIncomeSplitDialog(BuildContext context, FinanceState financeState) {
+    final saved = financeState.houseSettings;
+    var basis = saved.splitBasis;
+    var visibility = saved.incomeVisibility;
+    bool isSaving = false;
+    showDialog(
+      context: context,
+      builder: (dialogCtx) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: const Text('Renda e divisão', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                const Text('Divisão padrão', style: TextStyle(fontWeight: FontWeight.bold)),
+                for (final b in SplitBasis.values)
+                  ListTile(
+                    key: ValueKey('split_basis_${b.dbValue}'),
+                    contentPadding: EdgeInsets.zero,
+                    leading: Icon(
+                      basis == b ? Icons.radio_button_checked : Icons.radio_button_unchecked,
+                      color: basis == b ? AppColors.primary : Colors.grey,
+                    ),
+                    title: Text(b.label),
+                    onTap: () => setDialogState(() => basis = b),
+                  ),
+                const Divider(),
+                const Text('Quem vê a renda', style: TextStyle(fontWeight: FontWeight.bold)),
+                for (final v in IncomeVisibility.values)
+                  ListTile(
+                    key: ValueKey('income_visibility_${v.dbValue}'),
+                    contentPadding: EdgeInsets.zero,
+                    leading: Icon(
+                      visibility == v ? Icons.radio_button_checked : Icons.radio_button_unchecked,
+                      color: visibility == v ? AppColors.primary : Colors.grey,
+                    ),
+                    title: Text(v.label, style: const TextStyle(fontWeight: FontWeight.w600)),
+                    subtitle: Text(v.description, style: const TextStyle(fontSize: 12)),
+                    onTap: () => setDialogState(() => visibility = v),
+                  ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(dialogCtx), child: const Text('Cancelar')),
+            FilledButton(
+              onPressed: isSaving
+                  ? null
+                  : () async {
+                      setDialogState(() => isSaving = true);
+                      final messenger = ScaffoldMessenger.of(context);
+                      final navigator = Navigator.of(dialogCtx);
+                      final changed = basis != saved.splitBasis || visibility != saved.incomeVisibility;
+                      final ok = !changed ||
+                          await context.read<FinanceCubit>().updateHouseSettings(
+                                splitBasis: basis != saved.splitBasis ? basis : null,
+                                incomeVisibility: visibility != saved.incomeVisibility ? visibility : null,
+                              );
+                      if (ok) navigator.pop();
+                      setDialogState(() => isSaving = false);
+                      showSaveFeedback(messenger, ok: ok, success: 'Renda e divisão atualizadas.');
+                    },
+              style: FilledButton.styleFrom(backgroundColor: AppColors.primary),
+              child: const Text('Salvar'),
+            ),
+          ],
+        ),
+      ),
     );
   }
 
@@ -2650,6 +2831,9 @@ extension _SettingsSearch on _SettingsPageState {
       ]),
       option(_SettingsGroup.split, 'Modelos de Rateio', Icons.tune_rounded, const [
         'divisao', 'porcentagem', 'percentual', 'aportes fixos', 'balde', 'por categoria', 'dividir',
+      ]),
+      option(_SettingsGroup.split, 'Renda e divisão', Icons.account_balance_wallet_outlined, const [
+        'renda', 'salario', 'proporcional', 'divisao por renda', 'privacidade', 'quem ve',
       ]),
       option(_SettingsGroup.split, 'Padrões do fechamento', Icons.fact_check_outlined, const [
         'sobra', 'destino da sobra', 'excedente', 'balde', 'pagou menos', 'emprestimo', 'caixinha', 'fechamento',

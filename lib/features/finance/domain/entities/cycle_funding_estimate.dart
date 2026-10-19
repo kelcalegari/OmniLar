@@ -59,6 +59,8 @@ class CycleFundingEstimate {
   final Money fixedCommittedExpenses; // Contas do ciclo fora das variáveis (pagas e a vencer)
   final List<CategoryFundingEstimate>
   variableCategoryEstimates; // Mercado, etc.
+  /// Meta mensal das caixinhas marcadas para entrar na cota (0102); já está em [totalProjectedExpenses].
+  final Money vaultGoalsInQuota;
   final Money currentHouseBalance; // Saldo em caixa do ciclo anterior
   final Money totalProjectedExpenses; // Contas do ciclo + variáveis (o maior entre estimado e lançado)
   final Money netFundingRequired; // max(0, totalProjected - currentBalance)
@@ -69,6 +71,7 @@ class CycleFundingEstimate {
     required this.mode,
     required this.fixedCommittedExpenses,
     required this.variableCategoryEstimates,
+    this.vaultGoalsInQuota = const Money.zero(),
     required this.currentHouseBalance,
     required this.totalProjectedExpenses,
     required this.netFundingRequired,
