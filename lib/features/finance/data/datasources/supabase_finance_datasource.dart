@@ -280,6 +280,7 @@ class SupabaseFinanceDataSource implements FinanceDataSource {
             closingDay: (r['closing_day'] ?? r['card_closing_day'] as num?)?.toInt(),
             dueDay: (r['due_day'] ?? r['card_due_day'] as num?)?.toInt(),
             usualInvoicePayerId: r['usual_invoice_payer'] as String?,
+            cycleAssignment: CardCycleAssignment.fromDb(r['cycle_assignment']),
           );
         }).toList();
       }
@@ -330,15 +331,32 @@ class SupabaseFinanceDataSource implements FinanceDataSource {
             .order('due_date', ascending: false),
       );
 
-      final cardRows = await OfflineSnapshot.instance.rows(
-        'card_ids_$_houseId',
-        () async => await client
-            .from('payment_methods')
-            .select('id')
-            .eq('house_id', _houseId)
-            .eq('type', 'card'),
-      );
-      final cardIds = {for (final r in cardRows) r['id'] as String};
+      // Cartões e em qual ciclo cada um conta a compra (0104); banco sem a
+      // coluna lê só os ids e vale o vencimento da fatura
+      List<Map<String, dynamic>> cardRows;
+      try {
+        cardRows = await OfflineSnapshot.instance.rows(
+          'card_cycles_$_houseId',
+          () async => await client
+              .from('payment_methods')
+              .select('id, cycle_assignment')
+              .eq('house_id', _houseId)
+              .eq('type', 'card'),
+        );
+      } catch (_) {
+        cardRows = await OfflineSnapshot.instance.rows(
+          'card_ids_$_houseId',
+          () async => await client
+              .from('payment_methods')
+              .select('id')
+              .eq('house_id', _houseId)
+              .eq('type', 'card'),
+        );
+      }
+      final cardAssignments = {
+        for (final r in cardRows)
+          r['id'] as String: CardCycleAssignment.fromDb(r['cycle_assignment']),
+      };
 
       return rows
           .map((r) => _mapRowToHouseExpense(r))
@@ -346,7 +364,9 @@ class SupabaseFinanceDataSource implements FinanceDataSource {
             (e) => expenseBelongsToCycle(
               e,
               cycle,
-              isCardPayment: cardIds.contains(e.paymentMethodId),
+              isCardPayment: cardAssignments.containsKey(e.paymentMethodId),
+              cardCycleAssignment:
+                  cardAssignments[e.paymentMethodId] ?? CardCycleAssignment.invoiceDue,
             ),
           )
           .toList();
@@ -1125,12 +1145,20 @@ class SupabaseFinanceDataSource implements FinanceDataSource {
       if (paymentMethod.isCreditCard && _isUuid(paymentMethod.usualInvoicePayerId)) {
         payload['usual_invoice_payer'] = paymentMethod.usualInvoicePayerId;
       }
+      // Em qual ciclo a compra conta (0104): só quando foge do padrão
+      if (paymentMethod.isCreditCard &&
+          paymentMethod.cycleAssignment != CardCycleAssignment.invoiceDue) {
+        payload['cycle_assignment'] = paymentMethod.cycleAssignment.dbValue;
+      }
       try {
         await client.from('payment_methods').insert(payload);
       } catch (e) {
-        // Banco sem a 0100: cria sem a sugestão de quem paga a fatura
-        if (!payload.containsKey('usual_invoice_payer')) rethrow;
+        // Banco sem a 0100/0104: cria sem os parâmetros que ele não conhece
+        if (!payload.containsKey('usual_invoice_payer') && !payload.containsKey('cycle_assignment')) {
+          rethrow;
+        }
         payload.remove('usual_invoice_payer');
+        payload.remove('cycle_assignment');
         await client.from('payment_methods').insert(payload);
       }
     } catch (e) {
@@ -1162,12 +1190,17 @@ class SupabaseFinanceDataSource implements FinanceDataSource {
           paymentMethod.isCreditCard && _isUuid(paymentMethod.usualInvoicePayerId)
               ? paymentMethod.usualInvoicePayerId
               : null;
+      payload['cycle_assignment'] = paymentMethod.isCreditCard
+          ? paymentMethod.cycleAssignment.dbValue
+          : CardCycleAssignment.invoiceDue.dbValue;
       try {
         await save();
       } catch (e) {
-        // Banco sem a 0100: grava o resto e deixa a sugestão de fora
-        if (!e.toString().contains('usual_invoice_payer')) rethrow;
+        // Banco sem a 0100/0104: grava o resto e deixa os parâmetros de fora
+        final text = e.toString();
+        if (!text.contains('usual_invoice_payer') && !text.contains('cycle_assignment')) rethrow;
         payload.remove('usual_invoice_payer');
+        payload.remove('cycle_assignment');
         await save();
       }
     } catch (e) {
@@ -1493,10 +1526,11 @@ class SupabaseFinanceDataSource implements FinanceDataSource {
       final row = await OfflineSnapshot.instance.row(
         'house_settings_$_houseId',
         () async {
-          // Da mais nova para a mais antiga: banco sem a 0103, a 0102, a 0101, a 0100, a 0099, a 0098, a 0097, a 0094 ou a 0092
+          // Da mais nova para a mais antiga: banco sem a 0104, a 0103, a 0102, a 0101, a 0100, a 0099, a 0098, a 0097, a 0094 ou a 0092
           // ainda lê as colunas que já tem
           const attempts = [
             HouseSettings.columns,
+            HouseSettings.columnsBefore0104,
             HouseSettings.columnsBefore0103,
             HouseSettings.columnsBefore0102,
             HouseSettings.columnsBefore0101,

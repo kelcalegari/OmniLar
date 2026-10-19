@@ -194,6 +194,21 @@ class P2PCubit extends Cubit<P2PState> {
     }
   }
 
+  /// Aprova ou recusa o empréstimo que passou do limite de aprovação da casa (0104).
+  Future<bool> decideLoanApproval(String loanId, {required bool approve}) async {
+    try {
+      await _repository.decideLoanApproval(loanId, approve: approve);
+      await loadLoans();
+      return true;
+    } catch (e) {
+      emit(state.copyWith(
+        status: P2PStatus.failure,
+        errorMessage: 'Erro ao ${approve ? 'aprovar' : 'recusar'} o empréstimo: $e',
+      ));
+      return false;
+    }
+  }
+
   Future<bool> declineLoan(String loanId) async {
     try {
       await _repository.declineLoan(loanId);

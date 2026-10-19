@@ -1632,6 +1632,9 @@ class _SettingsPageState extends State<SettingsPage> {
     String? usualPayerId = members.any((m) => m.id == existingPm?.usualInvoicePayerId)
         ? existingPm?.usualInvoicePayerId
         : null;
+    // Em qual ciclo a compra conta (0104)
+    CardCycleAssignment cycleAssignment =
+        existingPm?.cycleAssignment ?? CardCycleAssignment.invoiceDue;
     int closingDay = existingPm?.closingDay ?? 25;
     int dueDay = existingPm?.dueDay ?? 5;
     final isEditing = existingPm != null;
@@ -1878,6 +1881,39 @@ class _SettingsPageState extends State<SettingsPage> {
                       ],
                       onChanged: (val) => setDialogState(() => usualPayerId = val),
                     ),
+                    const SizedBox(height: 14),
+                    const Text(
+                      'Em qual ciclo a compra conta:',
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.grey,
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    DropdownButtonFormField<CardCycleAssignment>(
+                      key: const ValueKey('card_cycle_assignment'),
+                      initialValue: cycleAssignment,
+                      isExpanded: true,
+                      decoration: InputDecoration(
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 10,
+                        ),
+                        helperText: cycleAssignment.description,
+                        helperMaxLines: 3,
+                      ),
+                      items: [
+                        for (final a in CardCycleAssignment.values)
+                          DropdownMenuItem(value: a, child: Text(a.label)),
+                      ],
+                      onChanged: (val) {
+                        if (val != null) setDialogState(() => cycleAssignment = val);
+                      },
+                    ),
                   ],
                 ],
               ),
@@ -1910,6 +1946,9 @@ class _SettingsPageState extends State<SettingsPage> {
                           selectedType == PaymentMethodType.card ? usualPayerId : null,
                       clearUsualInvoicePayer:
                           selectedType != PaymentMethodType.card || usualPayerId == null,
+                      cycleAssignment: selectedType == PaymentMethodType.card
+                          ? cycleAssignment
+                          : CardCycleAssignment.invoiceDue,
                     );
 
                     final messenger = ScaffoldMessenger.of(context);
@@ -1935,6 +1974,9 @@ class _SettingsPageState extends State<SettingsPage> {
                           : null,
                       usualInvoicePayerId:
                           selectedType == PaymentMethodType.card ? usualPayerId : null,
+                      cycleAssignment: selectedType == PaymentMethodType.card
+                          ? cycleAssignment
+                          : CardCycleAssignment.invoiceDue,
                     );
 
                     final messenger = ScaffoldMessenger.of(context);

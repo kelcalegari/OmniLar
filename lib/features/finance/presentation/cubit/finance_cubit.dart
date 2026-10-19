@@ -448,6 +448,8 @@ class FinanceCubit extends Cubit<FinanceState> {
     IncomeVisibility? incomeVisibility,
     SplitBasis? splitBasis,
     HousePermissions? permissions,
+    int? approvalThresholdCents,
+    bool clearApprovalThreshold = false,
     int? historyCycles,
     int? adjustPercent,
   }) async {
@@ -475,6 +477,11 @@ class FinanceCubit extends Cubit<FinanceState> {
       'split_basis': ?splitBasis?.dbValue,
       // Permissões por ação (0103), objeto inteiro
       'permissions': ?permissions?.toJson(),
+      // Aprovação acima de um valor (0104): nulo limpa e volta a não pedir aprovação
+      if (clearApprovalThreshold)
+        'approval_threshold_cents': null
+      else
+        'approval_threshold_cents': ?approvalThresholdCents,
       'planner_history_cycles': ?historyCycles,
       'planner_adjust_percent': ?adjustPercent,
     };

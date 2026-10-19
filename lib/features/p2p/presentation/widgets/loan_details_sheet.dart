@@ -12,6 +12,7 @@ import '../../domain/entities/p2p_payment_record.dart';
 import '../../domain/repositories/p2p_repository.dart';
 import '../../../auth/domain/repositories/auth_repository.dart';
 import '../../../finance/domain/entities/house_member.dart';
+import '../../../finance/domain/entities/house_permissions.dart';
 import '../../../finance/domain/entities/savings_vault.dart';
 import '../../../finance/presentation/cubit/finance_cubit.dart';
 import '../../../reconciliation/domain/repositories/import_repository.dart';
@@ -542,6 +543,10 @@ class LoanDetailsSheet extends StatelessWidget {
           ),
           const SizedBox(height: 16),
 
+          if (loan.awaitingApproval) ...[
+            _ApprovalBanner(loan: loan),
+            const SizedBox(height: 12),
+          ],
           if (loan.awaitingAcceptance) ...[
             _AcceptanceBanner(loan: loan, borrowerName: borrowerName),
             const SizedBox(height: 12),
@@ -912,6 +917,83 @@ class _PaymentHistoryState extends State<_PaymentHistory> {
             amount.format(),
             style: const TextStyle(fontWeight: FontWeight.w600, color: AppColors.creditGreen),
           ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Empréstimo acima do limite de aprovação da casa (migration 0104): quem tem
+/// a permissão de editar as configurações aprova ou recusa.
+class _ApprovalBanner extends StatelessWidget {
+  final P2PLoan loan;
+
+  const _ApprovalBanner({required this.loan});
+
+  bool _canDecide(BuildContext context) {
+    try {
+      final me = context.read<P2PCubit>().state.currentUserId;
+      return context.read<FinanceCubit>().state.canDo(HousePermissionAction.editConfigurations, me);
+    } catch (_) {
+      return false;
+    }
+  }
+
+  Future<void> _decide(BuildContext context, {required bool approve}) async {
+    final messenger = ScaffoldMessenger.of(context);
+    final navigator = Navigator.of(context);
+    final ok = await context.read<P2PCubit>().decideLoanApproval(loan.id, approve: approve);
+    if (ok) navigator.pop();
+    messenger.showSnackBar(SnackBar(
+      content: Text(ok
+          ? (approve ? 'Empréstimo aprovado.' : 'Empréstimo recusado.')
+          : 'Não foi possível concluir. Tente de novo.'),
+      backgroundColor: ok ? AppColors.creditGreen : AppColors.debtRed,
+    ));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final canDecide = _canDecide(context);
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.orange.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.orange.withValues(alpha: 0.3)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(
+            canDecide
+                ? 'Este empréstimo passou do limite de aprovação da casa. Aprove para ele entrar no fechamento do ciclo.'
+                : 'Aguardando a aprovação de um administrador (valor acima do limite da casa). Até lá, ele fica fora do fechamento do ciclo.',
+            style: const TextStyle(fontSize: 13),
+          ),
+          if (canDecide) ...[
+            const SizedBox(height: 10),
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton(
+                    key: const Key('loan_approval_reject'),
+                    onPressed: () => _decide(context, approve: false),
+                    style: OutlinedButton.styleFrom(foregroundColor: AppColors.debtRed),
+                    child: const Text('Recusar'),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: FilledButton(
+                    key: const Key('loan_approval_approve'),
+                    onPressed: () => _decide(context, approve: true),
+                    child: const Text('Aprovar'),
+                  ),
+                ),
+              ],
+            ),
+          ],
         ],
       ),
     );

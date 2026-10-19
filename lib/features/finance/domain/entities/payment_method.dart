@@ -10,6 +10,38 @@ enum PaymentMethodType {
   other,
 }
 
+/// Em qual ciclo a compra no cartão conta (coluna `payment_methods.cycle_assignment`, 0104).
+enum CardCycleAssignment {
+  /// Como sempre: no ciclo do vencimento da fatura (ou do pagamento dela).
+  invoiceDue('invoice_due'),
+
+  /// No ciclo da data da compra, pague a fatura quando pagar.
+  purchaseDate('purchase_date');
+
+  final String dbValue;
+  const CardCycleAssignment(this.dbValue);
+
+  /// Valor desconhecido ou ausente vale o de sempre (vencimento da fatura).
+  static CardCycleAssignment fromDb(Object? value) {
+    for (final a in values) {
+      if (a.dbValue == value) return a;
+    }
+    return invoiceDue;
+  }
+
+  String get label => switch (this) {
+        CardCycleAssignment.invoiceDue => 'No vencimento da fatura',
+        CardCycleAssignment.purchaseDate => 'Na data da compra',
+      };
+
+  String get description => switch (this) {
+        CardCycleAssignment.invoiceDue =>
+          'A compra pesa no ciclo em que a fatura vence (ou é paga).',
+        CardCycleAssignment.purchaseDate =>
+          'A compra pesa no ciclo em que foi feita, mesmo com a fatura em aberto.',
+      };
+}
+
 class PaymentMethod extends Equatable {
   final String id;
   final String name;
@@ -23,6 +55,9 @@ class PaymentMethod extends Equatable {
   /// escolha manual sempre vence.
   final String? usualInvoicePayerId;
 
+  /// Em qual ciclo as compras deste cartão contam (0104).
+  final CardCycleAssignment cycleAssignment;
+
   const PaymentMethod({
     required this.id,
     required this.name,
@@ -32,6 +67,7 @@ class PaymentMethod extends Equatable {
     this.dueDay,
     this.colorHex,
     this.usualInvoicePayerId,
+    this.cycleAssignment = CardCycleAssignment.invoiceDue,
   });
 
   bool get isBenefit => type == PaymentMethodType.vr || type == PaymentMethodType.va;
@@ -51,6 +87,7 @@ class PaymentMethod extends Equatable {
     bool clearColorHex = false,
     String? usualInvoicePayerId,
     bool clearUsualInvoicePayer = false,
+    CardCycleAssignment? cycleAssignment,
   }) {
     return PaymentMethod(
       id: id ?? this.id,
@@ -62,9 +99,10 @@ class PaymentMethod extends Equatable {
       colorHex: clearColorHex ? null : (colorHex ?? this.colorHex),
       usualInvoicePayerId:
           clearUsualInvoicePayer ? null : (usualInvoicePayerId ?? this.usualInvoicePayerId),
+      cycleAssignment: cycleAssignment ?? this.cycleAssignment,
     );
   }
 
   @override
-  List<Object?> get props => [id, name, type, ownerMemberId, closingDay, dueDay, colorHex, usualInvoicePayerId];
+  List<Object?> get props => [id, name, type, ownerMemberId, closingDay, dueDay, colorHex, usualInvoicePayerId, cycleAssignment];
 }

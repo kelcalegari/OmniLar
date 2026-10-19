@@ -83,6 +83,9 @@ Map<String, dynamic> taskItemToJson(TaskItem task) => {
   'costCents': task.cost?.cents,
   'createdByMemberId': task.createdByMemberId,
   'createdAt': task.createdAt.toIso8601String(),
+  if (task.isRecurring) 'recurrence': task.recurrence.dbValue,
+  if (task.rotationMemberIds.isNotEmpty) 'rotationMemberIds': task.rotationMemberIds,
+  if (task.nextAssigneeMemberId != null) 'nextAssigneeMemberId': task.nextAssigneeMemberId,
 };
 
 TaskItem taskItemFromJson(Map<String, dynamic> json) => TaskItem(
@@ -99,4 +102,7 @@ TaskItem taskItemFromJson(Map<String, dynamic> json) => TaskItem(
   cost: json['costCents'] != null ? Money((json['costCents'] as num).toInt()) : null,
   createdByMemberId: json['createdByMemberId'] as String,
   createdAt: DateTime.parse(json['createdAt'] as String),
+  recurrence: TaskRecurrence.fromDb(json['recurrence']),
+  rotationMemberIds: [for (final m in (json['rotationMemberIds'] as List?) ?? const []) m as String],
+  nextAssigneeMemberId: json['nextAssigneeMemberId'] as String?,
 );

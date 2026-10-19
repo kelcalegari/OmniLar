@@ -725,6 +725,7 @@ extension _SettingsGroupViews on _SettingsPageState {
       ),
       _newMemberSplitPanel(context, financeState),
       _incomeSplitPanel(context, financeState),
+      _approvalThresholdPanel(context, financeState),
       _planningPanel(context, financeState),
       _folegoParamsPanel(context, financeState),
       _budgetAlertPanel(context, financeState),
@@ -824,6 +825,100 @@ extension _SettingsGroupViews on _SettingsPageState {
             'Enquanto algum morador não informar a renda, vale o rateio atual.',
           ),
       ],
+    );
+  }
+
+  /// Valor a partir do qual um empréstimo precisa de aprovação (0104).
+  Widget _approvalThresholdPanel(BuildContext context, FinanceState financeState) {
+    final threshold = financeState.houseSettings.approvalThresholdCents;
+    final canEdit = _canDo(financeState, HousePermissionAction.editConfigurations);
+    return _panel(
+      context,
+      title: 'Aprovação por valor',
+      actionLabel: canEdit ? 'Alterar' : null,
+      onAction: canEdit ? () => _showApprovalThresholdDialog(context, financeState) : null,
+      children: [
+        _line(
+          title: 'Empréstimos acima de',
+          value: threshold == null ? 'Sem limite' : Money(threshold).format(),
+        ),
+        _emptyLine(
+          threshold == null
+              ? 'Hoje nenhum empréstimo pede aprovação por causa do valor.'
+              : 'Acima desse valor, o empréstimo fica fora do fechamento até um administrador aprovar.',
+        ),
+      ],
+    );
+  }
+
+  void _showApprovalThresholdDialog(BuildContext context, FinanceState financeState) {
+    final saved = financeState.houseSettings.approvalThresholdCents;
+    var cents = saved ?? 0;
+    bool isSaving = false;
+    showDialog(
+      context: context,
+      builder: (dialogCtx) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: const Text('Aprovação por valor', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                const Text(
+                  'Empréstimo acima deste valor só entra no fechamento do ciclo depois que um administrador aprova.',
+                  style: TextStyle(fontSize: 12, color: Colors.grey),
+                ),
+                const SizedBox(height: 12),
+                MoneyInputField(
+                  key: const ValueKey('approval_threshold_field'),
+                  initialValue: Money(cents),
+                  label: 'Valor limite',
+                  onChanged: (v) => setDialogState(() => cents = v.cents),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            if (saved != null)
+              TextButton(
+                key: const ValueKey('approval_threshold_clear'),
+                onPressed: isSaving
+                    ? null
+                    : () async {
+                        setDialogState(() => isSaving = true);
+                        final messenger = ScaffoldMessenger.of(context);
+                        final navigator = Navigator.of(dialogCtx);
+                        final ok = await context
+                            .read<FinanceCubit>()
+                            .updateHouseSettings(clearApprovalThreshold: true);
+                        if (ok) navigator.pop();
+                        setDialogState(() => isSaving = false);
+                        showSaveFeedback(messenger, ok: ok, success: 'Aprovação por valor desligada.');
+                      },
+                child: const Text('Sem limite'),
+              ),
+            TextButton(onPressed: () => Navigator.pop(dialogCtx), child: const Text('Cancelar')),
+            FilledButton(
+              onPressed: isSaving || cents <= 0
+                  ? null
+                  : () async {
+                      setDialogState(() => isSaving = true);
+                      final messenger = ScaffoldMessenger.of(context);
+                      final navigator = Navigator.of(dialogCtx);
+                      final ok = await context
+                          .read<FinanceCubit>()
+                          .updateHouseSettings(approvalThresholdCents: cents);
+                      if (ok) navigator.pop();
+                      setDialogState(() => isSaving = false);
+                      showSaveFeedback(messenger, ok: ok, success: 'Limite de aprovação atualizado.');
+                    },
+              style: FilledButton.styleFrom(backgroundColor: AppColors.primary),
+              child: const Text('Salvar'),
+            ),
+          ],
+        ),
+      ),
     );
   }
 

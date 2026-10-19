@@ -43,6 +43,10 @@ class DynamicP2PDataSource implements P2PDataSource {
   Future<void> declineLoan(String loanId) => _active.declineLoan(loanId);
 
   @override
+  Future<void> decideLoanApproval(String loanId, {required bool approve}) =>
+      _active.decideLoanApproval(loanId, approve: approve);
+
+  @override
   Future<List<P2PPaymentRecord>> getLoanPayments(String loanId) => _active.getLoanPayments(loanId);
 
   @override

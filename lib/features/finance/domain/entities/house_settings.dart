@@ -225,6 +225,13 @@ class HouseSettings extends Equatable {
   /// Quem pode fazer cada ação da casa (0103); vazio = só administradores.
   final HousePermissions permissions;
 
+  /// Valor (em centavos) a partir do qual um empréstimo precisa de aprovação
+  /// de quem administra a casa (0104). Nulo: não há aprovação por valor.
+  final int? approvalThresholdCents;
+
+  /// O [cents] pede aprovação: passa do limite da casa. Sem limite, nunca.
+  bool requiresApproval(int cents) => approvalThresholdCents != null && cents > approvalThresholdCents!;
+
   static const String defaultCashLabel = 'Caixa da Casa';
   static const List<String> defaultShoppingUnits = ['un', 'kg', 'g', 'l', 'ml', 'pct', 'cx', 'dz'];
 
@@ -252,6 +259,7 @@ class HouseSettings extends Equatable {
 
   const HouseSettings({
     this.permissions = const HousePermissions(),
+    this.approvalThresholdCents,
     this.cashLabel,
     this.shoppingUnits = defaultShoppingUnits,
     this.incomeVisibility = IncomeVisibility.self,
@@ -315,11 +323,18 @@ class HouseSettings extends Equatable {
       incomeVisibility: IncomeVisibility.fromDb(json['income_visibility']),
       splitBasis: SplitBasis.fromDb(json['split_basis']),
       permissions: HousePermissions.fromJson(json['permissions']),
+      approvalThresholdCents: switch (json['approval_threshold_cents']) {
+        final num n when n > 0 => n.toInt(),
+        _ => null,
+      },
     );
   }
 
   /// Colunas lidas de `houses`.
-  static const String columns = '$columnsBefore0103, permissions';
+  static const String columns = '$columnsBefore0104, approval_threshold_cents';
+
+  /// Colunas até a 0103, para o banco que ainda não tem a 0104.
+  static const String columnsBefore0104 = '$columnsBefore0103, permissions';
 
   /// Colunas até a 0102, para o banco que ainda não tem a 0103.
   static const String columnsBefore0103 = '$columnsBefore0102, income_visibility, split_basis';
@@ -373,9 +388,13 @@ class HouseSettings extends Equatable {
     IncomeVisibility? incomeVisibility,
     SplitBasis? splitBasis,
     HousePermissions? permissions,
+    int? approvalThresholdCents,
+    bool clearApprovalThreshold = false,
   }) =>
       HouseSettings(
         permissions: permissions ?? this.permissions,
+        approvalThresholdCents:
+            clearApprovalThreshold ? null : (approvalThresholdCents ?? this.approvalThresholdCents),
         cashLabel: clearCashLabel ? null : (cashLabel ?? this.cashLabel),
         shoppingUnits: shoppingUnits ?? this.shoppingUnits,
         incomeVisibility: incomeVisibility ?? this.incomeVisibility,
@@ -397,5 +416,5 @@ class HouseSettings extends Equatable {
 
   @override
   List<Object?> get props =>
-      [openingBalanceRule, historyCycles, plannerMode, adjustPercent, categoryOverrides, inflowRules, closingDefaults, newMemberSplitPolicy, folegoParams, budgetAlertStages, importMatching, importDefaults, cashLabel, shoppingUnits, incomeVisibility, splitBasis, permissions];
+      [openingBalanceRule, historyCycles, plannerMode, adjustPercent, categoryOverrides, inflowRules, closingDefaults, newMemberSplitPolicy, folegoParams, budgetAlertStages, importMatching, importDefaults, cashLabel, shoppingUnits, incomeVisibility, splitBasis, permissions, approvalThresholdCents];
 }

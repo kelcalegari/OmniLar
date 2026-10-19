@@ -425,6 +425,7 @@ class MockCalendarDataSource implements CalendarDataSource {
       completedAt: isDone ? DateTime.now() : null,
       completedByMemberId: isDone ? completedByMemberId : null,
     );
+    if (isDone) _spawnNextOccurrence(taskIndex);
     _notifyTasks();
   }
 
@@ -442,7 +443,19 @@ class MockCalendarDataSource implements CalendarDataSource {
       completedAt: completed ? (at ?? DateTime.now()) : null,
       completedByMemberId: completed ? completedByMemberId : null,
     );
+    if (completed) _spawnNextOccurrence(taskIndex);
     _notifyTasks();
+  }
+
+  /// Como o gatilho do banco (0104): concluir uma tarefa que se repete cria a
+  /// próxima ocorrência, com o próximo do rodízio, e a concluída deixa de se repetir.
+  void _spawnNextOccurrence(int index) {
+    final done = _tasks[index];
+    final now = DateTime.now();
+    final next = done.nextOccurrence(id: 'task_${now.microsecondsSinceEpoch}', now: now);
+    if (next == null) return;
+    _tasks[index] = done.copyWith(recurrence: TaskRecurrence.none);
+    _tasks.insert(0, next);
   }
 
   @override

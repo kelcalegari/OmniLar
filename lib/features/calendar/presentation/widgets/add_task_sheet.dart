@@ -52,6 +52,19 @@ class _AddTaskSheetState extends State<AddTaskSheet> {
 
   RecurrenceFrequency _recurrence = RecurrenceFrequency.none;
 
+  /// Moradores do rodízio, na ordem em que foram marcados (0104).
+  final List<String> _rotation = [];
+
+  /// Repetição com rodízio: uma tarefa só, que gera a próxima ao ser concluída.
+  TaskRecurrence? get _rotationRecurrence => switch (_recurrence) {
+        RecurrenceFrequency.daily => TaskRecurrence.daily,
+        RecurrenceFrequency.weekly => TaskRecurrence.weekly,
+        RecurrenceFrequency.monthly => TaskRecurrence.monthly,
+        _ => null,
+      };
+
+  bool get _usesRotation => _rotationRecurrence != null && _rotation.length >= 2;
+
   @override
   void initState() {
     super.initState();
@@ -233,6 +246,37 @@ class _AddTaskSheetState extends State<AddTaskSheet> {
     }
 
     final baseDueDate = _dueDate ?? now;
+
+    // Rodízio: uma única tarefa; o banco cria a próxima quando esta for concluída
+    if (_usesRotation) {
+      final first = _rotation.first;
+      final ok = await calendarCubit.addTask(
+        TaskItem(
+          id: 'task_${now.millisecondsSinceEpoch}',
+          title: _titleController.text.trim(),
+          description: _descriptionController.text.trim().isEmpty ? null : _descriptionController.text.trim(),
+          dueDate: baseDueDate,
+          priority: _priority,
+          assignedToMemberId: first,
+          assignedToMemberName: _members[first],
+          cost: cost,
+          createdByMemberId: widget.activeMemberId,
+          createdAt: now,
+          recurrence: _rotationRecurrence!,
+          rotationMemberIds: List.of(_rotation),
+          nextAssigneeMemberId: TaskItem.rotationAfter(_rotation, first),
+        ),
+      );
+      if (!mounted) return;
+      if (ok) Navigator.pop(context);
+      showSaveFeedback(
+        ScaffoldMessenger.of(context),
+        ok: ok,
+        success: 'Tarefa "${_titleController.text.trim()}" criada com rodízio (${_recurrence.shortLabel})!',
+        failure: calendarCubit.state.errorMessage,
+      );
+      return;
+    }
 
     // Se houver repetição, cria a primeira e as próximas ocorrências programadas
     int repeatCount = 1;
@@ -432,6 +476,44 @@ class _AddTaskSheetState extends State<AddTaskSheet> {
                   ),
                 ],
               ),
+              if (_rotationRecurrence != null) ...[
+                const SizedBox(height: 12),
+                const Text(
+                  'Rodízio entre moradores (opcional):',
+                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  _usesRotation
+                      ? 'Ao concluir, a próxima vai para o seguinte da ordem marcada.'
+                      : 'Marque 2 ou mais moradores para revezar a tarefa. Sem rodízio, vale a repetição de sempre.',
+                  style: const TextStyle(fontSize: 12, color: Colors.grey),
+                ),
+                const SizedBox(height: 8),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    for (final entry in _members.entries)
+                      FilterChip(
+                        key: ValueKey('rotation_${entry.key}'),
+                        label: Text(
+                          _rotation.contains(entry.key)
+                              ? '${_rotation.indexOf(entry.key) + 1}. ${entry.value}'
+                              : entry.value,
+                        ),
+                        selected: _rotation.contains(entry.key),
+                        onSelected: (val) => setState(() {
+                          if (val) {
+                            _rotation.add(entry.key);
+                          } else {
+                            _rotation.remove(entry.key);
+                          }
+                        }),
+                      ),
+                  ],
+                ),
+              ],
               const SizedBox(height: 16),
               ],
 

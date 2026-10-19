@@ -73,6 +73,7 @@ class P2PLoan extends Equatable {
     this.settleInCycle = true,
     this.repayToVaultId,
     this.awaitingAcceptance = false,
+    this.awaitingApproval = false,
     this.houseFunding,
     this.fundedOn,
   });
@@ -95,6 +96,10 @@ class P2PLoan extends Equatable {
   /// fica fora do Fechamento do Ciclo até o aceite.
   final bool awaitingAcceptance;
 
+  /// Passou do limite de aprovação da casa (0104) e ainda não foi aprovado por
+  /// quem administra: fica fora do Fechamento do Ciclo até a aprovação.
+  final bool awaitingApproval;
+
   /// Acordo com o Lar criado quando uma Caixinha cobriu quem pagou a menos:
   /// cada pagamento dele volta para essa Caixinha, e não para o Caixa.
   final String? repayToVaultId;
@@ -103,7 +108,7 @@ class P2PLoan extends Equatable {
   bool get isOpenEnded => repaymentMode == LoanRepaymentMode.openEnded;
 
   /// As parcelas deste empréstimo são cobradas no Fechamento do Ciclo.
-  bool get entersCycleSettlement => !isOpenEnded && settleInCycle && !awaitingAcceptance;
+  bool get entersCycleSettlement => !isOpenEnded && settleInCycle && !awaitingAcceptance && !awaitingApproval;
 
   /// Parcelas em aberto, da mais antiga para a mais nova (ordem de abatimento).
   List<P2PInstallment> get openInstallments {
@@ -174,6 +179,7 @@ class P2PLoan extends Equatable {
     bool? settleInCycle,
     String? repayToVaultId,
     bool? awaitingAcceptance,
+    bool? awaitingApproval,
     HouseLoanFunding? houseFunding,
     DateTime? fundedOn,
   }) {
@@ -194,6 +200,7 @@ class P2PLoan extends Equatable {
       settleInCycle: settleInCycle ?? this.settleInCycle,
       repayToVaultId: repayToVaultId ?? this.repayToVaultId,
       awaitingAcceptance: awaitingAcceptance ?? this.awaitingAcceptance,
+      awaitingApproval: awaitingApproval ?? this.awaitingApproval,
       houseFunding: houseFunding ?? this.houseFunding,
       fundedOn: fundedOn ?? this.fundedOn,
     );
@@ -217,6 +224,7 @@ class P2PLoan extends Equatable {
         settleInCycle,
         repayToVaultId,
         awaitingAcceptance,
+        awaitingApproval,
         houseFunding,
         fundedOn,
       ];
