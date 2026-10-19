@@ -10,6 +10,7 @@ import '../../../../core/widgets/responsive_container.dart';
 import '../../../../core/widgets/save_feedback.dart';
 import '../../../../core/widgets/theme_toggle_button.dart';
 import '../../../../core/di/service_locator.dart';
+import '../../../finance/presentation/pages/add_contribution_page.dart';
 import '../../../auth/domain/repositories/auth_repository.dart';
 import '../../../auth/presentation/cubit/auth_cubit.dart';
 import '../../../auth/presentation/cubit/auth_state.dart';
@@ -1079,7 +1080,12 @@ class _HomePageContentState extends State<_HomePageContent> {
       list.add(_ThirdPartyReceiptInflowItem(r, isInCurrentCycle: cycle.contains(r.receivedOn)));
     }
     for (final c in state.contributions) {
-      list.add(_ContributionInflowItem(c, isInCurrentCycle: cycle.contains(c.date)));
+      final member = state.members.where((m) => m.id == c.memberId).firstOrNull;
+      list.add(_ContributionInflowItem(
+        c,
+        memberName: member?.name,
+        isInCurrentCycle: cycle.contains(c.date),
+      ));
     }
     for (final i in state.houseInflows) {
       list.add(_HouseInflowItem(i, isInCurrentCycle: cycle.contains(i.receivedOn)));
@@ -1151,6 +1157,12 @@ class _HomePageContentState extends State<_HomePageContent> {
           } else if (val == 'delete') {
             _confirmDeleteReceipt(context, item.receipt, state);
           }
+        } else if (item is _ContributionInflowItem) {
+          if (val == 'edit') {
+            _editContribution(context, item.contribution);
+          } else if (val == 'delete') {
+            _confirmDeleteContribution(context, item.contribution);
+          }
         }
       },
       itemBuilder: (ctx) {
@@ -1213,6 +1225,29 @@ class _HomePageContentState extends State<_HomePageContent> {
               ),
             ),
           ];
+        } else if (item is _ContributionInflowItem) {
+          return [
+            const PopupMenuItem(
+              value: 'edit',
+              child: Row(
+                children: [
+                  Icon(Icons.edit_outlined, size: 18, color: AppColors.primary),
+                  SizedBox(width: 10),
+                  Expanded(child: Text('Editar Aporte')),
+                ],
+              ),
+            ),
+            const PopupMenuItem(
+              value: 'delete',
+              child: Row(
+                children: [
+                  Icon(Icons.delete_outline_rounded, size: 18, color: AppColors.debtRed),
+                  SizedBox(width: 10),
+                  Expanded(child: Text('Excluir Aporte', style: TextStyle(color: AppColors.debtRed))),
+                ],
+              ),
+            ),
+          ];
         }
         return const [];
       },
@@ -1245,6 +1280,8 @@ class _HomePageContentState extends State<_HomePageContent> {
             } else {
               _reopenReceipt(context, item.receipt);
             }
+          } else if (item is _ContributionInflowItem) {
+            _editContribution(context, item.contribution);
           }
         },
         child: LayoutBuilder(
@@ -1371,6 +1408,39 @@ class _HomePageContentState extends State<_HomePageContent> {
     if (confirmed != true) return;
     final ok = await cubit.deleteHouseInflow(inflow.id);
     showSaveFeedback(messenger, ok: ok, success: 'Entrada excluída.', failure: cubit.state.errorMessage);
+  }
+
+  void _editContribution(BuildContext context, Contribution contribution) {
+    showAdaptiveModal(
+      context: context,
+      maxWidth: 500,
+      child: AddContributionPage(
+        editing: contribution,
+      ),
+    );
+  }
+
+  Future<void> _confirmDeleteContribution(BuildContext context, Contribution contribution) async {
+    final messenger = ScaffoldMessenger.of(context);
+    final cubit = context.read<FinanceCubit>();
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogCtx) => AlertDialog(
+        title: const Text('Excluir aporte?'),
+        content: Text('Deseja excluir este aporte de ${contribution.amount.formatted}?'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(dialogCtx, false), child: const Text('Cancelar')),
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: AppColors.debtRed),
+            onPressed: () => Navigator.pop(dialogCtx, true),
+            child: const Text('Excluir'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+    final ok = await cubit.deleteContribution(contribution.id);
+    showSaveFeedback(messenger, ok: ok, success: 'Aporte excluído.', failure: cubit.state.errorMessage);
   }
 
   Future<void> _confirmDeleteReceipt(BuildContext context, ThirdPartyReceipt receipt, FinanceState state) async {
@@ -1692,15 +1762,22 @@ class _ThirdPartyReceiptInflowItem implements _UnifiedInflowItem {
 
 class _ContributionInflowItem implements _UnifiedInflowItem {
   final Contribution contribution;
+  final String? memberName;
   final bool isInCurrentCycle;
 
-  const _ContributionInflowItem(this.contribution, {required this.isInCurrentCycle});
+  const _ContributionInflowItem(
+    this.contribution, {
+    this.memberName,
+    required this.isInCurrentCycle,
+  });
 
   @override
   String get id => contribution.id;
 
   @override
-  String get title => 'Aporte no Caixa';
+  String get title => (memberName != null && memberName!.trim().isNotEmpty)
+      ? 'Aporte de $memberName'
+      : 'Aporte no Caixa';
 
   @override
   String get subtitle => isInCurrentCycle ? 'Depósito para custeio do ciclo' : 'Depósito • de ciclo anterior';

@@ -717,6 +717,19 @@ class MockFinanceDataSource implements FinanceDataSource {
   }
 
   @override
+  Future<void> updateContribution(Contribution contribution) async {
+    final index = _contributions.indexWhere((c) => c.id == contribution.id);
+    if (index >= 0) {
+      _contributions[index] = contribution;
+    }
+  }
+
+  @override
+  Future<void> deleteContribution(String contributionId) async {
+    _contributions.removeWhere((c) => c.id == contributionId);
+  }
+
+  @override
   Future<void> addCategory(ExpenseCategory category) async {
     _categories.add(category);
   }

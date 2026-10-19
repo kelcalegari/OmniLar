@@ -8,19 +8,28 @@ import '../cubit/finance_cubit.dart';
 import '../cubit/finance_state.dart';
 import '../../../../core/widgets/save_feedback.dart';
 
+import 'package:intl/intl.dart';
+
 class AddContributionPage extends StatefulWidget {
   final String? initialMemberId;
   final Money? initialAmount;
+  final Contribution? editing;
 
-  const AddContributionPage({super.key, this.initialMemberId, this.initialAmount});
+  const AddContributionPage({
+    super.key,
+    this.initialMemberId,
+    this.initialAmount,
+    this.editing,
+  });
 
   @override
   State<AddContributionPage> createState() => _AddContributionPageState();
 }
 
 class _AddContributionPageState extends State<AddContributionPage> {
-  late String? _selectedMemberId = widget.initialMemberId;
-  late int _cents = widget.initialAmount?.cents ?? 0;
+  late String? _selectedMemberId = widget.initialMemberId ?? widget.editing?.memberId;
+  late int _cents = widget.initialAmount?.cents ?? widget.editing?.amount.cents ?? 0;
+  late DateTime _date = widget.editing?.date ?? DateTime.now();
 
   Future<void> _submit() async {
     if (_cents <= 0) {
@@ -33,26 +42,107 @@ class _AddContributionPageState extends State<AddContributionPage> {
     final state = context.read<FinanceCubit>().state;
     final memberId = _selectedMemberId ?? (state.members.isNotEmpty ? state.members.first.id : '');
 
+    final cubit = context.read<FinanceCubit>();
+    final messenger = ScaffoldMessenger.of(context);
+
+    if (widget.editing != null) {
+      final updated = widget.editing!.copyWith(
+        memberId: memberId,
+        amount: Money(_cents),
+        date: _date,
+      );
+      final ok = await cubit.updateContribution(updated);
+      if (!mounted) return;
+      if (ok) {
+        Navigator.pop(context);
+        showSaveFeedback(
+          messenger,
+          ok: true,
+          success: 'Aporte atualizado com sucesso.',
+          failure: '',
+        );
+      } else {
+        showSaveFeedback(
+          messenger,
+          ok: false,
+          success: '',
+          failure: cubit.state.errorMessage,
+        );
+      }
+      return;
+    }
+
     final contribution = Contribution(
       id: 'contrib_${DateTime.now().millisecondsSinceEpoch}',
       memberId: memberId,
       amount: Money(_cents),
-      date: DateTime.now(),
+      date: _date,
     );
 
-    final cubit = context.read<FinanceCubit>();
     final ok = await cubit.addContribution(contribution);
     if (!mounted) return;
     if (ok) {
       Navigator.pop(context);
-    } else {
-      // Falhou: a tela fica aberta, com o valor digitado
       showSaveFeedback(
-        ScaffoldMessenger.of(context),
+        messenger,
+        ok: true,
+        success: 'Aporte registrado com sucesso.',
+        failure: '',
+      );
+    } else {
+      showSaveFeedback(
+        messenger,
         ok: false,
         success: '',
         failure: cubit.state.errorMessage,
       );
+    }
+  }
+
+  Future<void> _confirmDelete() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Excluir Aporte'),
+        content: Text('Deseja excluir este aporte de ${widget.editing!.amount.formatted}?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancelar'),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.debtRed,
+              foregroundColor: Colors.white,
+            ),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Excluir'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true && mounted) {
+      final cubit = context.read<FinanceCubit>();
+      final messenger = ScaffoldMessenger.of(context);
+      final ok = await cubit.deleteContribution(widget.editing!.id);
+      if (!mounted) return;
+      if (ok) {
+        Navigator.pop(context);
+        showSaveFeedback(
+          messenger,
+          ok: true,
+          success: 'Aporte excluído com sucesso.',
+          failure: '',
+        );
+      } else {
+        showSaveFeedback(
+          messenger,
+          ok: false,
+          success: '',
+          failure: cubit.state.errorMessage,
+        );
+      }
     }
   }
 
@@ -66,13 +156,23 @@ class _AddContributionPageState extends State<AddContributionPage> {
           _selectedMemberId = state.members.first.id;
         }
 
+        final isEditing = widget.editing != null;
+
         return Scaffold(
           appBar: AppBar(
-            title: const Text('Novo Aporte', style: TextStyle(fontWeight: FontWeight.bold)),
+            title: Text(isEditing ? 'Editar Aporte' : 'Novo Aporte', style: const TextStyle(fontWeight: FontWeight.bold)),
             leading: IconButton(
               icon: const Icon(Icons.close_rounded),
               onPressed: () => Navigator.pop(context),
             ),
+            actions: [
+              if (isEditing)
+                IconButton(
+                  tooltip: 'Excluir Aporte',
+                  icon: const Icon(Icons.delete_outline_rounded, color: AppColors.debtRed),
+                  onPressed: _confirmDelete,
+                ),
+            ],
           ),
           body: ListView(
             padding: const EdgeInsets.all(20),
@@ -125,6 +225,44 @@ class _AddContributionPageState extends State<AddContributionPage> {
                   );
                 }).toList(),
               ),
+              const SizedBox(height: 20),
+
+              // Data do Aporte
+              InkWell(
+                borderRadius: BorderRadius.circular(12),
+                onTap: () async {
+                  final picked = await showDatePicker(
+                    context: context,
+                    initialDate: _date,
+                    firstDate: DateTime(2020),
+                    lastDate: DateTime.now().add(const Duration(days: 365)),
+                  );
+                  if (picked != null) {
+                    setState(() {
+                      _date = picked;
+                    });
+                  }
+                },
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                  decoration: BoxDecoration(
+                    border: Border.all(color: theme.dividerColor),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.calendar_today_rounded, size: 18, color: AppColors.primary),
+                      const SizedBox(width: 10),
+                      Text('Data do aporte:', style: theme.textTheme.bodyMedium),
+                      const Spacer(),
+                      Text(
+                        DateFormat('dd/MM/yyyy').format(_date),
+                        style: const TextStyle(fontWeight: FontWeight.bold),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
               const SizedBox(height: 32),
 
               SizedBox(
@@ -137,12 +275,31 @@ class _AddContributionPageState extends State<AddContributionPage> {
                     elevation: 2,
                   ),
                   onPressed: _submit,
-                  child: const Text(
-                    'Confirmar Aporte',
-                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                  child: Text(
+                    isEditing ? 'Salvar Alterações' : 'Confirmar Aporte',
+                    style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
                   ),
                 ),
               ),
+              if (isEditing) ...[
+                const SizedBox(height: 12),
+                SizedBox(
+                  height: 48,
+                  child: OutlinedButton.icon(
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: AppColors.debtRed,
+                      side: const BorderSide(color: AppColors.debtRed),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                    ),
+                    icon: const Icon(Icons.delete_outline_rounded, size: 18),
+                    label: const Text(
+                      'Excluir Aporte',
+                      style: TextStyle(fontWeight: FontWeight.bold),
+                    ),
+                    onPressed: _confirmDelete,
+                  ),
+                ),
+              ],
             ],
           ),
         );

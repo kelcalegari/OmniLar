@@ -736,6 +736,34 @@ class FinanceCubit extends Cubit<FinanceState> {
     }
   }
 
+  Future<bool> updateContribution(Contribution contribution) async {
+    try {
+      await _repository.updateContribution(contribution);
+      await loadCycleData(cycle: state.currentCycle);
+      return true;
+    } catch (e) {
+      emit(state.copyWith(
+        status: FinanceStatus.failure,
+        errorMessage: 'Erro ao atualizar aporte: $e',
+      ));
+      return false;
+    }
+  }
+
+  Future<bool> deleteContribution(String contributionId) async {
+    try {
+      await _repository.deleteContribution(contributionId);
+      await loadCycleData(cycle: state.currentCycle);
+      return true;
+    } catch (e) {
+      emit(state.copyWith(
+        status: FinanceStatus.failure,
+        errorMessage: 'Erro ao excluir aporte: $e',
+      ));
+      return false;
+    }
+  }
+
   Future<bool> addCategory(ExpenseCategory category) async {
     try {
       await _repository.addCategory(category);

@@ -1021,6 +1021,29 @@ class SupabaseFinanceDataSource implements FinanceDataSource {
   }
 
   @override
+  Future<void> updateContribution(Contribution contribution) async {
+    try {
+      await client.from('contributions').update({
+        'member_id': contribution.memberId,
+        'amount_cents': contribution.amount.cents,
+        'cycle_start_date': contribution.date.toIso8601String().split('T')[0],
+        'paid_at': contribution.date.toUtc().toIso8601String(),
+      }).eq('id', contribution.id);
+    } catch (e) {
+      throw ServerFailure('Erro ao atualizar aporte: $e');
+    }
+  }
+
+  @override
+  Future<void> deleteContribution(String contributionId) async {
+    try {
+      await client.from('contributions').delete().eq('id', contributionId);
+    } catch (e) {
+      throw ServerFailure('Erro ao excluir aporte: $e');
+    }
+  }
+
+  @override
   Future<void> addCategory(ExpenseCategory category) async {
     try {
       await client.from('categories').insert({

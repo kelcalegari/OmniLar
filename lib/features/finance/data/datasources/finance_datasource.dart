@@ -66,6 +66,8 @@ abstract class FinanceDataSource {
   Future<List<HouseExpense>> getRecurringExpenses();
 
   Future<void> addContribution(Contribution contribution);
+  Future<void> updateContribution(Contribution contribution);
+  Future<void> deleteContribution(String contributionId);
   Future<void> addCategory(ExpenseCategory category);
   Future<void> updateCategory(ExpenseCategory category);
   /// Exclui a categoria. Com [moveToCategoryId], os lançamentos dela passam

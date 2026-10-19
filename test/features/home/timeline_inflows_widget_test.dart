@@ -112,5 +112,55 @@ void main() {
     expect(find.text('Excluir entrada?'), findsOneWidget);
     await tester.tap(find.text('Cancelar'));
     await tester.pumpAndSettle();
+
+    // Filtra por "Aportes" para validar a informação do morador e o botão ...
+    final aportesChip = find.widgetWithText(ChoiceChip, 'Aportes');
+    await tester.ensureVisible(aportesChip);
+    await tester.pumpAndSettle();
+    await tester.tap(aportesChip);
+    await tester.pumpAndSettle();
+
+    // Deve mostrar o nome do morador no título do aporte
+    final carlosAporte = find.text('Aporte de Carlos');
+    await tester.ensureVisible(carlosAporte);
+    await tester.pumpAndSettle();
+    expect(carlosAporte, findsOneWidget);
+    expect(find.text('Aporte de Marina'), findsOneWidget);
+
+    // Botão de opções ... no card do aporte
+    final contribMenuFinder = find.byKey(const ValueKey('inflow_menu_contrib_1'));
+    expect(contribMenuFinder, findsOneWidget);
+
+    await tester.ensureVisible(contribMenuFinder);
+    await tester.pumpAndSettle();
+
+    // Abre o menu ... do aporte e confere as opções
+    await tester.tap(contribMenuFinder);
+    await tester.pumpAndSettle();
+
+    expect(find.text('Editar Aporte'), findsOneWidget);
+    expect(find.text('Excluir Aporte'), findsOneWidget);
+
+    // Clica em Editar Aporte e valida que a tela de edição abre
+    await tester.tap(find.text('Editar Aporte'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Editar Aporte'), findsWidgets);
+    expect(find.text('Salvar Alterações'), findsOneWidget);
+
+    // Fecha a tela de edição
+    await tester.tap(find.byIcon(Icons.close_rounded));
+    await tester.pumpAndSettle();
+
+    // Abre novamente o menu do aporte para testar Excluir
+    await tester.tap(contribMenuFinder);
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Excluir Aporte'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Excluir aporte?'), findsOneWidget);
+    await tester.tap(find.text('Cancelar'));
+    await tester.pumpAndSettle();
   });
 }

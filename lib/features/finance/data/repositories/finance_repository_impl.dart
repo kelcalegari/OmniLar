@@ -93,6 +93,14 @@ class FinanceRepositoryImpl implements FinanceRepository {
       _dataSource.addContribution(contribution);
 
   @override
+  Future<void> updateContribution(Contribution contribution) =>
+      _dataSource.updateContribution(contribution);
+
+  @override
+  Future<void> deleteContribution(String contributionId) =>
+      _dataSource.deleteContribution(contributionId);
+
+  @override
   Future<void> addCategory(ExpenseCategory category) =>
       _dataSource.addCategory(category);
 

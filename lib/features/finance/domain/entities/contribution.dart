@@ -18,6 +18,24 @@ class Contribution extends Equatable {
     this.proofAttachmentId,
   });
 
+  Contribution copyWith({
+    String? id,
+    String? memberId,
+    Money? amount,
+    DateTime? date,
+    String? paymentMethodId,
+    String? proofAttachmentId,
+  }) {
+    return Contribution(
+      id: id ?? this.id,
+      memberId: memberId ?? this.memberId,
+      amount: amount ?? this.amount,
+      date: date ?? this.date,
+      paymentMethodId: paymentMethodId ?? this.paymentMethodId,
+      proofAttachmentId: proofAttachmentId ?? this.proofAttachmentId,
+    );
+  }
+
   @override
   List<Object?> get props => [id, memberId, amount, date, paymentMethodId, proofAttachmentId];
 }

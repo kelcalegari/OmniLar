@@ -53,6 +53,8 @@ abstract class FinanceRepository {
   });
   Future<List<HouseExpense>> getRecurringExpenses();
   Future<void> addContribution(Contribution contribution);
+  Future<void> updateContribution(Contribution contribution);
+  Future<void> deleteContribution(String contributionId);
   Future<void> addCategory(ExpenseCategory category);
   Future<void> updateCategory(ExpenseCategory category);
   /// Recusa (com a mensagem pronta para a tela) a categoria que já tem lançamentos.

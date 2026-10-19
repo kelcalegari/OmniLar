@@ -100,6 +100,14 @@ class DynamicFinanceDataSource implements FinanceDataSource {
       _active.addContribution(contribution);
 
   @override
+  Future<void> updateContribution(Contribution contribution) =>
+      _active.updateContribution(contribution);
+
+  @override
+  Future<void> deleteContribution(String contributionId) =>
+      _active.deleteContribution(contributionId);
+
+  @override
   Future<void> addCategory(ExpenseCategory category) =>
       _active.addCategory(category);
 
