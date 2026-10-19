@@ -212,6 +212,7 @@ class ReportsCubit extends Cubit<ReportsState> {
         loans: loans,
         members: finance.members,
         today: today,
+        cashLabel: finance.houseSettings.cashName,
       );
       // Saldo do Caixa: só no ciclo em andamento, que ainda não foi fechado
       final day = DateTime(today.year, today.month, today.day);
@@ -290,6 +291,7 @@ class ReportsCubit extends Cubit<ReportsState> {
         paymentMethods: finance.paymentMethods,
         invoiceCodes: finance.cardInvoiceCodes,
         today: today,
+        cashLabel: finance.houseSettings.cashName,
       );
       emit(state.copyWith(upcoming: upcoming, upcomingLoading: false));
     } catch (e) {

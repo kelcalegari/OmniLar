@@ -1,4 +1,5 @@
 import '../../../../core/domain/value_objects/money.dart';
+import '../../../finance/domain/entities/import_params.dart';
 import '../entities/shopping_item.dart';
 import '../entities/shopping_list.dart';
 import '../entities/shopping_trip.dart';
@@ -9,7 +10,7 @@ abstract class ShoppingRepository {
   Stream<List<ShoppingItem>> watchItems(String listId);
   Future<void> addItem(ShoppingItem item);
 
-  /// Altera nome, quantidade e se o item é pessoal.
+  /// Altera nome, quantidade, unidade e se o item é pessoal.
   Future<void> updateItem(ShoppingItem item);
   Future<void> toggleItemBought(String itemId);
 
@@ -18,6 +19,14 @@ abstract class ShoppingRepository {
   Future<bool> setItemBought(String itemId, {required bool bought});
   /// Retorna false quando ficou na fila offline para ser reenviada.
   Future<bool> deleteItem(String itemId);
+
+  /// Categoria e divisão da despesa criada ao fechar a compra desta lista
+  /// (0101). Categoria nula = a de mercado.
+  Future<void> updateListDefaults(
+    String listId, {
+    String? categoryId,
+    required ImportSplitMode splitMode,
+  });
   Future<ShoppingTrip> completeTrip({
     required String listId,
     required Money totalAmount,

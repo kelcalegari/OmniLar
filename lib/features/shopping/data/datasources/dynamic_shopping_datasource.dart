@@ -1,4 +1,5 @@
 import '../../../../core/domain/value_objects/money.dart';
+import '../../../finance/domain/entities/import_params.dart';
 import '../../domain/entities/shopping_item.dart';
 import '../../domain/entities/shopping_list.dart';
 import '../../domain/entities/shopping_trip.dart';
@@ -41,6 +42,10 @@ class DynamicShoppingDataSource implements ShoppingDataSource {
 
   @override
   Future<void> updateItem(ShoppingItem item) => _active.updateItem(item);
+
+  @override
+  Future<void> updateListDefaults(String listId, {String? categoryId, required ImportSplitMode splitMode}) =>
+      _active.updateListDefaults(listId, categoryId: categoryId, splitMode: splitMode);
 
   @override
   Future<ShoppingTrip> completeTrip({

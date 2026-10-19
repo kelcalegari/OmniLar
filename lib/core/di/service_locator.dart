@@ -486,7 +486,19 @@ Future<void> initServiceLocator() async {
     return mock;
   });
 
-  sl.registerLazySingleton<CsvMappingStore>(() => CsvMappingStore(sl<FlutterSecureStorage>()));
+  sl.registerLazySingleton<CsvMappingStore>(() {
+    final client = SupabaseConfig.client;
+    return CsvMappingStore(
+      sl<FlutterSecureStorage>(),
+      client == null
+          ? null
+          : SupabaseCsvMappingRemote(
+              client: client,
+              getCurrentHouseId: () => sl<AuthRepository>().currentHouse?.id,
+              isDemoMode: isDemoModeActive,
+            ),
+    );
+  });
   sl.registerLazySingleton<ImportDraftStore>(() => ImportDraftStore(sl<FlutterSecureStorage>()));
   sl.registerLazySingleton<ImportAiService>(() => ImportAiService(
         getClient: () => SupabaseConfig.client,

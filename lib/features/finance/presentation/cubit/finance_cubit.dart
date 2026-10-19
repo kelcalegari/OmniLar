@@ -430,6 +430,9 @@ class FinanceCubit extends Cubit<FinanceState> {
     BudgetAlertStages? budgetAlertStages,
     ImportMatching? importMatching,
     ImportDefaults? importDefaults,
+    String? cashLabel,
+    bool clearCashLabel = false,
+    List<String>? shoppingUnits,
     int? historyCycles,
     int? adjustPercent,
   }) async {
@@ -448,6 +451,10 @@ class FinanceCubit extends Cubit<FinanceState> {
       // Janelas do casamento e destino padrão da importação (0100), objetos inteiros
       'import_matching': ?importMatching?.toJson(),
       'import_defaults': ?importDefaults?.toJson(),
+      // Nome do Caixa (0101): nulo limpa e volta ao nome de sempre
+      if (clearCashLabel) 'cash_label': null else 'cash_label': ?cashLabel?.trim(),
+      // Unidades de compra (0101), lista inteira
+      'shopping_units': ?shoppingUnits,
       'planner_history_cycles': ?historyCycles,
       'planner_adjust_percent': ?adjustPercent,
     };
