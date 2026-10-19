@@ -1,4 +1,5 @@
 import '../../../../core/domain/value_objects/cycle_schedule.dart';
+import '../../../finance/domain/entities/house_permissions.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -188,18 +189,14 @@ class _SettlementHubContent extends StatelessWidget {
     );
   }
 
-  /// Só dono ou admin fecha e reabre o ciclo (o banco recusa os demais).
+  /// Fecha e reabre o ciclo quem tem a permissão (administradores sempre; o banco recusa os demais).
   /// Sem conseguir identificar o morador (ex: modo demo), nada é escondido.
   bool _canManageCycle(BuildContext context) {
     try {
       final userId = context.read<AuthCubit>().state.user?.id;
-      final me = context
-          .read<FinanceCubit>()
-          .state
-          .members
-          .where((m) => m.id == userId)
-          .firstOrNull;
-      return me == null || me.role == 'owner' || me.role == 'admin';
+      final state = context.read<FinanceCubit>().state;
+      final me = state.members.where((m) => m.id == userId).firstOrNull;
+      return me == null || state.canDo(HousePermissionAction.closeCycle, userId);
     } catch (_) {
       return true;
     }

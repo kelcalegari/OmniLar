@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../../finance/domain/entities/house_permissions.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:intl/intl.dart';
 import '../../../../core/theme/app_colors.dart';
@@ -54,12 +55,11 @@ class _CreateLoanPageState extends State<CreateLoanPage> {
 
   bool get _fromHouse => _lenderId == P2PLoan.houseLenderId;
 
-  /// Só administrador empresta dinheiro da Casa.
-  bool _canLendFromHouse(List<HouseMember> members) {
+  /// Empresta dinheiro da Casa quem tem a permissão (administradores sempre).
+  bool _canLendFromHouse(FinanceState state) {
     final auth = sl<AuthRepository>();
     final me = auth.isDemoMode ? 'member_carlos' : auth.currentUser?.id;
-    final role = members.where((m) => m.id == me).firstOrNull?.role;
-    return role == 'owner' || role == 'admin';
+    return state.canDo(HousePermissionAction.houseLoans, me);
   }
 
   /// Quanto o Caixa do ciclo ou a Caixinha escolhida tem para emprestar.
@@ -788,7 +788,7 @@ class _CreateLoanPageState extends State<CreateLoanPage> {
                   ? 'O Caixa da Casa'
                   : displayMembers.where((m) => m.id == _lenderId).firstOrNull?.name ??
                       (isDemo && _lenderId == 'member_carlos' ? 'Carlos' : 'Selecione');
-              final canLendFromHouse = _canLendFromHouse(members);
+              final canLendFromHouse = _canLendFromHouse(finState);
               final borrowerName = displayMembers.where((m) => m.id == _borrowerId).firstOrNull?.name ??
                   (isDemo && _borrowerId == 'member_marina' ? 'Marina' : 'Selecione');
               final hasSamePartyError = _lenderId.isNotEmpty && _lenderId == _borrowerId;

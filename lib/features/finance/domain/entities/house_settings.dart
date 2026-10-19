@@ -5,6 +5,7 @@ import 'budget_alert_stages.dart';
 import 'closing_defaults.dart';
 import 'cycle_funding_estimate.dart';
 import 'folego_params.dart';
+import 'house_permissions.dart';
 import 'import_params.dart';
 import 'income_split.dart';
 
@@ -221,6 +222,9 @@ class HouseSettings extends Equatable {
   /// Base do rateio padrão (0102): à mão ou proporcional à renda.
   final SplitBasis splitBasis;
 
+  /// Quem pode fazer cada ação da casa (0103); vazio = só administradores.
+  final HousePermissions permissions;
+
   static const String defaultCashLabel = 'Caixa da Casa';
   static const List<String> defaultShoppingUnits = ['un', 'kg', 'g', 'l', 'ml', 'pct', 'cx', 'dz'];
 
@@ -247,6 +251,7 @@ class HouseSettings extends Equatable {
   }
 
   const HouseSettings({
+    this.permissions = const HousePermissions(),
     this.cashLabel,
     this.shoppingUnits = defaultShoppingUnits,
     this.incomeVisibility = IncomeVisibility.self,
@@ -309,11 +314,15 @@ class HouseSettings extends Equatable {
       shoppingUnits: _unitsFromJson(json['shopping_units']),
       incomeVisibility: IncomeVisibility.fromDb(json['income_visibility']),
       splitBasis: SplitBasis.fromDb(json['split_basis']),
+      permissions: HousePermissions.fromJson(json['permissions']),
     );
   }
 
   /// Colunas lidas de `houses`.
-  static const String columns = '$columnsBefore0102, income_visibility, split_basis';
+  static const String columns = '$columnsBefore0103, permissions';
+
+  /// Colunas até a 0102, para o banco que ainda não tem a 0103.
+  static const String columnsBefore0103 = '$columnsBefore0102, income_visibility, split_basis';
 
   /// Colunas até a 0101, para o banco que ainda não tem a 0102.
   static const String columnsBefore0102 = '$columnsBefore0101, cash_label, shopping_units';
@@ -363,8 +372,10 @@ class HouseSettings extends Equatable {
     List<String>? shoppingUnits,
     IncomeVisibility? incomeVisibility,
     SplitBasis? splitBasis,
+    HousePermissions? permissions,
   }) =>
       HouseSettings(
+        permissions: permissions ?? this.permissions,
         cashLabel: clearCashLabel ? null : (cashLabel ?? this.cashLabel),
         shoppingUnits: shoppingUnits ?? this.shoppingUnits,
         incomeVisibility: incomeVisibility ?? this.incomeVisibility,
@@ -386,5 +397,5 @@ class HouseSettings extends Equatable {
 
   @override
   List<Object?> get props =>
-      [openingBalanceRule, historyCycles, plannerMode, adjustPercent, categoryOverrides, inflowRules, closingDefaults, newMemberSplitPolicy, folegoParams, budgetAlertStages, importMatching, importDefaults, cashLabel, shoppingUnits, incomeVisibility, splitBasis];
+      [openingBalanceRule, historyCycles, plannerMode, adjustPercent, categoryOverrides, inflowRules, closingDefaults, newMemberSplitPolicy, folegoParams, budgetAlertStages, importMatching, importDefaults, cashLabel, shoppingUnits, incomeVisibility, splitBasis, permissions];
 }

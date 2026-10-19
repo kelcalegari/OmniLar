@@ -24,6 +24,7 @@ import '../../domain/entities/budget_alert_stages.dart';
 import '../../domain/entities/folego_params.dart';
 import '../../domain/entities/import_params.dart';
 import '../../domain/entities/house_settings.dart';
+import '../../domain/entities/house_permissions.dart';
 import '../../domain/entities/income_split.dart';
 import '../../domain/entities/member_settings.dart';
 import '../../domain/repositories/member_settings_repository.dart';
@@ -446,6 +447,7 @@ class FinanceCubit extends Cubit<FinanceState> {
     List<String>? shoppingUnits,
     IncomeVisibility? incomeVisibility,
     SplitBasis? splitBasis,
+    HousePermissions? permissions,
     int? historyCycles,
     int? adjustPercent,
   }) async {
@@ -471,6 +473,8 @@ class FinanceCubit extends Cubit<FinanceState> {
       // Quem lê a renda e base do rateio padrão (0102)
       'income_visibility': ?incomeVisibility?.dbValue,
       'split_basis': ?splitBasis?.dbValue,
+      // Permissões por ação (0103), objeto inteiro
+      'permissions': ?permissions?.toJson(),
       'planner_history_cycles': ?historyCycles,
       'planner_adjust_percent': ?adjustPercent,
     };

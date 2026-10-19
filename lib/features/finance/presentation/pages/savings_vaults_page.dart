@@ -1,4 +1,5 @@
 import '../../domain/repositories/finance_repository.dart';
+import '../../../finance/domain/entities/house_permissions.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../../../core/theme/app_colors.dart';
@@ -63,10 +64,9 @@ class _SavingsVaultsPageState extends State<SavingsVaultsPage> {
     String selectedColor = existing?.colorHex ?? '#10B981';
     DateTime? targetDate = existing?.targetDate;
     String? nameError;
-    // Meta mensal dentro da cota (0102): só administradores e donos mudam
+    // Meta mensal dentro da cota (0102): quem tem a permissão (administradores sempre)
     final currentUserId = sl<AuthRepository>().currentUser?.id;
-    final me = cubit.state.members.where((m) => m.id == currentUserId).firstOrNull;
-    final canEditQuota = me?.role == 'owner' || me?.role == 'admin';
+    final canEditQuota = cubit.state.canDo(HousePermissionAction.adjustQuotas, currentUserId);
     bool countsInQuota = existing?.countsInQuota ?? false;
     int monthlyGoalCents = existing?.monthlyGoal?.cents ?? 0;
 

@@ -165,8 +165,10 @@ extension _SettingsGroupViews on _SettingsPageState {
       _panel(
         context,
         title: 'Ciclo Financeiro',
-        actionLabel: 'Alterar',
-        onAction: () => _showCycleDayDialog(context, cycleDay),
+        actionLabel: _canDo(financeState, HousePermissionAction.changeCycleDay) ? 'Alterar' : null,
+        onAction: _canDo(financeState, HousePermissionAction.changeCycleDay)
+            ? () => _showCycleDayDialog(context, cycleDay)
+            : null,
         children: [
           _line(title: 'Começa todo dia', value: '$cycleDay'),
           _line(title: 'Ciclo em andamento', value: financeState.currentCycle.label),
@@ -185,6 +187,7 @@ extension _SettingsGroupViews on _SettingsPageState {
             _emptyLine('Nenhuma chave cadastrada. É ela que recebe os aportes do Caixa da Casa.'),
         ],
       ),
+      _permissionsPanel(context, financeState),
       _houseLabelsPanel(context, financeState),
       _shoppingListsPanel(context, financeState),
     ];
@@ -196,11 +199,146 @@ extension _SettingsGroupViews on _SettingsPageState {
     return me?.role == 'owner' || me?.role == 'admin';
   }
 
+  /// Se o morador logado pode fazer [action] (permissões por ação da casa, 0103).
+  bool _canDo(FinanceState financeState, HousePermissionAction action) =>
+      financeState.canDo(action, sl<AuthRepository>().currentUser?.id);
+
+  /// Quem pode fazer cada ação da casa (0103). Só administradores veem e
+  /// mudam; administradores sempre podem tudo.
+  Widget _permissionsPanel(BuildContext context, FinanceState financeState) {
+    if (!_isHouseAdmin(financeState)) return const SizedBox.shrink();
+    final permissions = financeState.houseSettings.permissions;
+    return _panel(
+      context,
+      title: 'Permissões',
+      actionLabel: 'Alterar',
+      onAction: () => _showPermissionsDialog(context, financeState),
+      children: [
+        for (final action in HousePermissionAction.values)
+          _line(title: action.label, value: _permissionSummary(permissions.of(action), financeState)),
+      ],
+    );
+  }
+
+  String _permissionSummary(ActionPermission permission, FinanceState financeState) {
+    if (permission.level != PermissionLevel.chosen) return permission.level.label;
+    final names = [
+      for (final m in financeState.members)
+        if (permission.members.contains(m.id)) m.name,
+    ];
+    return names.isEmpty ? 'Só administradores' : 'Admins e ${names.join(', ')}';
+  }
+
+  void _showPermissionsDialog(BuildContext context, FinanceState financeState) {
+    var draft = financeState.houseSettings.permissions;
+    final saved = draft;
+    // Administradores já podem tudo: só os demais moradores são escolhidos
+    final choosable = [for (final m in financeState.members) if (m.role != 'owner' && m.role != 'admin') m];
+    bool isSaving = false;
+    showDialog(
+      context: context,
+      builder: (dialogCtx) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: const Text('Permissões', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+          content: SizedBox(
+            width: 460,
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'Administradores sempre podem tudo. Escolha quem mais pode fazer cada ação.',
+                    style: TextStyle(fontSize: 12),
+                  ),
+                  for (final action in HousePermissionAction.values) ...[
+                    const SizedBox(height: 14),
+                    Text(action.label, style: const TextStyle(fontWeight: FontWeight.w600)),
+                    Text(action.description, style: const TextStyle(fontSize: 11)),
+                    const SizedBox(height: 6),
+                    Wrap(
+                      spacing: 8,
+                      children: [
+                        for (final level in PermissionLevel.values)
+                          ChoiceChip(
+                            key: ValueKey('perm_${action.dbValue}_${level.dbValue}'),
+                            label: Text(level.label),
+                            selected: draft.of(action).level == level,
+                            onSelected: (_) => setDialogState(() {
+                              draft = draft.withAction(
+                                action,
+                                ActionPermission(level, members: level == PermissionLevel.chosen ? draft.of(action).members : const []),
+                              );
+                            }),
+                          ),
+                      ],
+                    ),
+                    if (draft.of(action).level == PermissionLevel.chosen) ...[
+                      const SizedBox(height: 6),
+                      if (choosable.isEmpty)
+                        const Text('Não há outros moradores além dos administradores.', style: TextStyle(fontSize: 12))
+                      else
+                        Wrap(
+                          spacing: 8,
+                          children: [
+                            for (final m in choosable)
+                              FilterChip(
+                                key: ValueKey('perm_${action.dbValue}_member_${m.id}'),
+                                label: Text(m.name),
+                                selected: draft.of(action).members.contains(m.id),
+                                onSelected: (on) => setDialogState(() {
+                                  final current = draft.of(action).members;
+                                  draft = draft.withAction(
+                                    action,
+                                    ActionPermission(PermissionLevel.chosen, members: [
+                                      for (final id in current)
+                                        if (id != m.id) id,
+                                      if (on) m.id,
+                                    ]),
+                                  );
+                                }),
+                              ),
+                          ],
+                        ),
+                    ],
+                  ],
+                ],
+              ),
+            ),
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(dialogCtx), child: const Text('Cancelar')),
+            FilledButton(
+              key: const Key('permissions_save'),
+              onPressed: isSaving
+                  ? null
+                  : () async {
+                      if (draft == saved) {
+                        Navigator.pop(dialogCtx);
+                        return;
+                      }
+                      setDialogState(() => isSaving = true);
+                      final messenger = ScaffoldMessenger.of(context);
+                      final navigator = Navigator.of(dialogCtx);
+                      final ok = await context.read<FinanceCubit>().updateHouseSettings(permissions: draft);
+                      if (ok) navigator.pop();
+                      setDialogState(() => isSaving = false);
+                      showSaveFeedback(messenger, ok: ok, success: 'Permissões atualizadas.');
+                    },
+              style: FilledButton.styleFrom(backgroundColor: AppColors.primary),
+              child: const Text('Salvar'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   /// Nome do Caixa nas telas e unidades de compra da casa (0101). Só
   /// administradores mudam.
   Widget _houseLabelsPanel(BuildContext context, FinanceState financeState) {
     final settings = financeState.houseSettings;
-    final isAdmin = _isHouseAdmin(financeState);
+    final isAdmin = _canDo(financeState, HousePermissionAction.editConfigurations);
     return _panel(
       context,
       title: 'Nomes e compras',
@@ -620,9 +758,7 @@ extension _SettingsGroupViews on _SettingsPageState {
   /// morador sem parte na divisão.
   Widget _newMemberSplitPanel(BuildContext context, FinanceState financeState) {
     final policy = financeState.houseSettings.newMemberSplitPolicy;
-    final currentUserId = sl<AuthRepository>().currentUser?.id;
-    final me = financeState.members.where((m) => m.id == currentUserId).firstOrNull;
-    final isAdmin = me?.role == 'owner' || me?.role == 'admin';
+    final isAdmin = _canDo(financeState, HousePermissionAction.editConfigurations);
     final withoutShare = financeState.members.length > 1
         ? financeState.members.where((m) => m.defaultSplitPercent <= 0).toList()
         : <HouseMember>[];
@@ -654,7 +790,7 @@ extension _SettingsGroupViews on _SettingsPageState {
   Widget _incomeSplitPanel(BuildContext context, FinanceState financeState) {
     final settings = financeState.houseSettings;
     final currentUserId = sl<AuthRepository>().currentUser?.id;
-    final isAdmin = _isHouseAdmin(financeState);
+    final isAdmin = _canDo(financeState, HousePermissionAction.editConfigurations);
     final myIncome = financeState.memberIncomes[currentUserId];
     final others = [
       for (final m in financeState.members)
@@ -891,9 +1027,7 @@ extension _SettingsGroupViews on _SettingsPageState {
   /// (0098). Só administradores mudam.
   Widget _folegoParamsPanel(BuildContext context, FinanceState financeState) {
     final params = financeState.houseSettings.folegoParams;
-    final currentUserId = sl<AuthRepository>().currentUser?.id;
-    final me = financeState.members.where((m) => m.id == currentUserId).firstOrNull;
-    final isAdmin = me?.role == 'owner' || me?.role == 'admin';
+    final isAdmin = _canDo(financeState, HousePermissionAction.editConfigurations);
     return _panel(
       context,
       title: 'Fôlego e Ciclo',
@@ -1012,9 +1146,7 @@ extension _SettingsGroupViews on _SettingsPageState {
   /// mudam; cada categoria pode ter os seus ao ser editada.
   Widget _budgetAlertPanel(BuildContext context, FinanceState financeState) {
     final stages = financeState.houseSettings.budgetAlertStages;
-    final currentUserId = sl<AuthRepository>().currentUser?.id;
-    final me = financeState.members.where((m) => m.id == currentUserId).firstOrNull;
-    final isAdmin = me?.role == 'owner' || me?.role == 'admin';
+    final isAdmin = _canDo(financeState, HousePermissionAction.editConfigurations);
     final custom = financeState.categories.where((c) => c.budgetAlertStages != null).length;
     return _panel(
       context,
@@ -1295,9 +1427,7 @@ extension _SettingsGroupViews on _SettingsPageState {
   Widget _closingDefaultsPanel(BuildContext context, FinanceState financeState) {
     final defaults = financeState.houseSettings.closingDefaults;
     final vaults = financeState.savingsVaults;
-    final currentUserId = sl<AuthRepository>().currentUser?.id;
-    final me = financeState.members.where((m) => m.id == currentUserId).firstOrNull;
-    final isAdmin = me?.role == 'owner' || me?.role == 'admin';
+    final isAdmin = _canDo(financeState, HousePermissionAction.editConfigurations);
     String? vaultName(String? id) => vaults.where((v) => v.id == id).firstOrNull?.name;
     final surplusAction = defaults.surplusAction ?? SurplusAction.toVault;
     final surplusVault = vaultName(defaults.surplusVaultId);
@@ -1483,9 +1613,7 @@ extension _SettingsGroupViews on _SettingsPageState {
   /// Dinheiro que a casa já tinha ao começar a usar o app (0093).
   Widget _initialBalancePanel(BuildContext context, FinanceState financeState) {
     final initial = financeState.initialBalance;
-    final currentUserId = sl<AuthRepository>().currentUser?.id;
-    final me = financeState.members.where((m) => m.id == currentUserId).firstOrNull;
-    final isAdmin = me?.role == 'owner' || me?.role == 'admin';
+    final isAdmin = _canDo(financeState, HousePermissionAction.initialBalance);
     final cashStart = initial.cashCycleStart;
     return _panel(
       context,
@@ -1595,9 +1723,7 @@ extension _SettingsGroupViews on _SettingsPageState {
 
   void _showPlanningSettingsDialog(BuildContext context, FinanceState financeState) {
     final settings = financeState.houseSettings;
-    final currentUserId = sl<AuthRepository>().currentUser?.id;
-    final me = financeState.members.where((m) => m.id == currentUserId).firstOrNull;
-    final isAdmin = me?.role == 'owner' || me?.role == 'admin';
+    final isAdmin = _canDo(financeState, HousePermissionAction.editConfigurations);
     final usesFixed = financeState.members.any((m) => (m.defaultFixedAmountCents ?? 0) > 0);
     // Cada tipo de entrada no Caixa com a sua regra (0092). Sem escolha
     // própria, sobra e empréstimo seguem a regra única de antes.
@@ -1969,9 +2095,7 @@ extension _SettingsGroupViews on _SettingsPageState {
     final settings = financeState.houseSettings;
     final matching = settings.importMatching;
     final defaults = settings.importDefaults;
-    final currentUserId = sl<AuthRepository>().currentUser?.id;
-    final me = financeState.members.where((m) => m.id == currentUserId).firstOrNull;
-    final isAdmin = me?.role == 'owner' || me?.role == 'admin';
+    final isAdmin = _canDo(financeState, HousePermissionAction.editConfigurations);
     final category = financeState.categories.where((c) => c.id == defaults.categoryId).firstOrNull;
     final source = financeState.paymentMethods.where((p) => p.id == defaults.paymentMethodId).firstOrNull;
     return _panel(
