@@ -68,12 +68,12 @@ drop policy if exists "contributions_update_member" on public.contributions;
 create policy "contributions_update_member" on public.contributions
   for update using (
     public.is_house_member(house_id)
-    and (created_by = auth.uid() or member_id = auth.uid() or public.is_house_admin(house_id))
+    and (created_by = (select auth.uid()) or member_id = (select auth.uid()) or public.is_house_admin(house_id))
     and not public.house_date_is_closed(house_id, cycle_start_date)
   )
   with check (
     public.is_house_member(house_id)
-    and (created_by = auth.uid() or member_id = auth.uid() or public.is_house_admin(house_id))
+    and (created_by = (select auth.uid()) or member_id = (select auth.uid()) or public.is_house_admin(house_id))
     and not public.house_date_is_closed(house_id, cycle_start_date)
   );
 
@@ -82,7 +82,7 @@ drop policy if exists "contributions_delete_member" on public.contributions;
 create policy "contributions_delete_member" on public.contributions
   for delete using (
     public.is_house_member(house_id)
-    and (created_by = auth.uid() or member_id = auth.uid() or public.is_house_admin(house_id))
+    and (created_by = (select auth.uid()) or member_id = (select auth.uid()) or public.is_house_admin(house_id))
     and not public.house_date_is_closed(house_id, cycle_start_date)
   );
 

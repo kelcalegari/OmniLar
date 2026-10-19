@@ -1022,24 +1022,40 @@ class SupabaseFinanceDataSource implements FinanceDataSource {
 
   @override
   Future<void> updateContribution(Contribution contribution) async {
+    List<dynamic> rows;
     try {
-      await client.from('contributions').update({
+      rows = await client.from('contributions').update({
         'member_id': contribution.memberId,
         'amount_cents': contribution.amount.cents,
         'cycle_start_date': contribution.date.toIso8601String().split('T')[0],
         'paid_at': contribution.date.toUtc().toIso8601String(),
-      }).eq('id', contribution.id);
+      }).eq('id', contribution.id).eq('house_id', _houseId).select('id');
     } catch (e) {
       throw ServerFailure('Erro ao atualizar aporte: $e');
+    }
+    if (rows.isEmpty) {
+      throw const ServerFailure(
+        'Só quem lançou ou um administrador altera este aporte, e só com o ciclo aberto.',
+      );
     }
   }
 
   @override
   Future<void> deleteContribution(String contributionId) async {
+    List<dynamic> rows;
     try {
-      await client.from('contributions').delete().eq('id', contributionId);
+      rows = await client.from('contributions')
+          .delete()
+          .eq('id', contributionId)
+          .eq('house_id', _houseId)
+          .select('id');
     } catch (e) {
       throw ServerFailure('Erro ao excluir aporte: $e');
+    }
+    if (rows.isEmpty) {
+      throw const ServerFailure(
+        'Só quem lançou ou um administrador exclui este aporte, e só com o ciclo aberto.',
+      );
     }
   }
 
