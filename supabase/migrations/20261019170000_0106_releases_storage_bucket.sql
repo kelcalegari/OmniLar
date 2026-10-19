@@ -14,17 +14,19 @@ on conflict (id) do update set
   public = true,
   file_size_limit = 100000000;
 
--- 1. Leitura pública (qualquer um pode baixar o APK pelo link)
+-- 1. Buckets públicos NÃO precisam de policy de SELECT no storage.objects.
+-- O Supabase CDN já serve os arquivos via /object/public/ diretamente.
+-- Remover essa policy elimina o warning "Clients can list all files in this bucket".
 drop policy if exists "Public read releases" on storage.objects;
-create policy "Public read releases" on storage.objects
-  for select using (bucket_id = 'releases');
+drop policy if exists "Public Access Releases" on storage.objects;
 
--- 2. Permite envio de novas releases pelo script
+-- 2. Permite envio de novas releases pelo script (apenas para o APK do OmniLar)
 drop policy if exists "Upload releases" on storage.objects;
 create policy "Upload releases" on storage.objects
-  for insert with check (bucket_id = 'releases');
+  for insert with check (bucket_id = 'releases' and name = 'OmniLar-arm64-release.apk');
 
--- 3. Permite substituir (upsert) o APK com versões mais novas
+-- 3. Permite substituir (upsert) o APK com novas versões
 drop policy if exists "Update releases" on storage.objects;
 create policy "Update releases" on storage.objects
-  for update using (bucket_id = 'releases') with check (bucket_id = 'releases');
+  for update using (bucket_id = 'releases' and name = 'OmniLar-arm64-release.apk')
+  with check (bucket_id = 'releases' and name = 'OmniLar-arm64-release.apk');
