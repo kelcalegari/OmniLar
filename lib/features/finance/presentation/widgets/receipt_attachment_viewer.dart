@@ -429,11 +429,6 @@ class _ReceiptViewerModalState extends State<ReceiptViewerModal> {
       },
     );
   }
-          ],
-        ),
-      ),
-    );
-  }
 }
 
 /// Card embutido nos painéis de detalhe e modal da despesa.
