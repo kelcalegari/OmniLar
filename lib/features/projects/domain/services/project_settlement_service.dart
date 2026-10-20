@@ -106,7 +106,19 @@ class ProjectSettlementService {
     }
 
     // 5. Algoritmo Greedy de Redução às Transferências Mínimas
-    final transfers = _computeMinimumTransfers(netCentsMap, nameMap, project.title);
+    final Map<String, String> pixKeyMap = {};
+    for (final p in activeParticipants) {
+      if (p.pixKey != null && p.pixKey!.isNotEmpty) {
+        pixKeyMap[p.id] = p.pixKey!;
+      }
+    }
+
+    final transfers = _computeMinimumTransfers(
+      netCentsMap,
+      nameMap,
+      project.title,
+      pixKeyMap: pixKeyMap,
+    );
 
     return ProjectSettlementSummary(
       project: project,
@@ -191,8 +203,9 @@ class ProjectSettlementService {
   static List<SuperPixTransfer> _computeMinimumTransfers(
     Map<String, int> netMap,
     Map<String, String> nameMap,
-    String projectTitle,
-  ) {
+    String projectTitle, {
+    Map<String, String> pixKeyMap = const {},
+  }) {
     final Map<String, int> remainingNet = Map.from(netMap);
     final List<SuperPixTransfer> transfers = [];
     int transferCounter = 1;
@@ -238,6 +251,7 @@ class ProjectSettlementService {
           amount: Money(transferCents),
           description: 'Acerto de Contas ($projectTitle): $fromName ➔ $toName',
           status: TransferStatus.pending,
+          pixKey: pixKeyMap[maxCreditorId],
         ),
       );
 

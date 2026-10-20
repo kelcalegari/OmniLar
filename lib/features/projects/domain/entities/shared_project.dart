@@ -28,6 +28,7 @@ class SharedProject extends Equatable {
   final DateTime? startDate;
   final DateTime? endDate;
   final String currency;
+  final String? vaultId; // ID da Caixinha / Cofre vinculada (SavingsVault)
   final List<ProjectParticipant> participants;
   final String createdBy;
   final DateTime createdAt;
@@ -44,6 +45,7 @@ class SharedProject extends Equatable {
     this.startDate,
     this.endDate,
     this.currency = 'BRL',
+    this.vaultId,
     this.participants = const [],
     required this.createdBy,
     required this.createdAt,
@@ -76,6 +78,8 @@ class SharedProject extends Equatable {
     DateTime? startDate,
     DateTime? endDate,
     String? currency,
+    String? vaultId,
+    bool clearVaultId = false,
     List<ProjectParticipant>? participants,
     String? createdBy,
     DateTime? createdAt,
@@ -92,6 +96,7 @@ class SharedProject extends Equatable {
       startDate: startDate ?? this.startDate,
       endDate: endDate ?? this.endDate,
       currency: currency ?? this.currency,
+      vaultId: clearVaultId ? null : (vaultId ?? this.vaultId),
       participants: participants ?? this.participants,
       createdBy: createdBy ?? this.createdBy,
       createdAt: createdAt ?? this.createdAt,
@@ -111,6 +116,7 @@ class SharedProject extends Equatable {
         startDate,
         endDate,
         currency,
+        vaultId,
         participants,
         createdBy,
         createdAt,

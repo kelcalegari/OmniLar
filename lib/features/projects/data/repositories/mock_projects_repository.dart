@@ -16,6 +16,7 @@ class MockProjectsRepository implements ProjectsRepository {
         description: 'Aluguel de casa, combustível, passeios de barco e comida',
         type: ProjectType.trip,
         targetBudget: const Money(450000), // R$ 4.500,00
+        vaultId: 'vault_viagem',
         status: ProjectStatus.active,
         startDate: now.subtract(const Duration(days: 2)),
         endDate: now.add(const Duration(days: 5)),

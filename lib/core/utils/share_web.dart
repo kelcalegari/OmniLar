@@ -30,9 +30,15 @@ Future<NativeShareResult> nativeShareText(String text) async {
   }
 }
 
-/// Abre o WhatsApp (app ou web) com [text] pronto para escolher o contato.
-bool openWhatsAppText(String text) {
-  final url = 'https://wa.me/?text=${Uri.encodeComponent(text)}';
+/// Abre o WhatsApp (app ou web) com [text] pronto para o contato [phone] ou para escolher.
+bool openWhatsAppText(String text, {String? phone}) {
+  final cleanPhone = phone?.replaceAll(RegExp(r'\D'), '') ?? '';
+  final path = cleanPhone.isNotEmpty
+      ? (cleanPhone.startsWith('55') || cleanPhone.length > 11 ? cleanPhone : '55$cleanPhone')
+      : '';
+  final url = cleanPhone.isNotEmpty
+      ? 'https://wa.me/$path?text=${Uri.encodeComponent(text)}'
+      : 'https://wa.me/?text=${Uri.encodeComponent(text)}';
   try {
     _window.callMethod<JSAny?>('open'.toJS, url.toJS, '_blank'.toJS);
     return true;

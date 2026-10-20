@@ -5,6 +5,6 @@ enum NativeShareResult { shared, cancelled, unsupported }
 Future<NativeShareResult> nativeShareText(String text) async =>
     NativeShareResult.unsupported;
 
-bool openWhatsAppText(String text) => false;
+bool openWhatsAppText(String text, {String? phone}) => false;
 
 const bool canOpenWhatsApp = false;

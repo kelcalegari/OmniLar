@@ -37,6 +37,7 @@ class HouseExpense extends Equatable {
   final String? attachmentContentType; // image/jpeg, image/png, application/pdf
   final int? attachmentSizeBytes; // Tamanho em bytes
   final DateTime? attachmentPurgedAt; // Data em que o anexo físico foi expurgado (Modelo A)
+  final String? paidByParticipantId; // Quando o pagador é um participante externo do projeto (project_participants)
 
   const HouseExpense({
     required this.id,
@@ -46,6 +47,7 @@ class HouseExpense extends Equatable {
     this.dueDate,
     required this.categoryId,
     required this.paidByMemberId,
+    this.paidByParticipantId,
     required this.paymentMethodId,
     required this.splitRule,
     this.status = ExpenseStatus.paid,
@@ -121,6 +123,8 @@ class HouseExpense extends Equatable {
     DateTime? dueDate,
     String? categoryId,
     String? paidByMemberId,
+    String? paidByParticipantId,
+    bool clearPaidByParticipantId = false,
     String? paymentMethodId,
     SplitRule? splitRule,
     ExpenseStatus? status,
@@ -155,6 +159,7 @@ class HouseExpense extends Equatable {
       dueDate: dueDate ?? this.dueDate,
       categoryId: categoryId ?? this.categoryId,
       paidByMemberId: paidByMemberId ?? this.paidByMemberId,
+      paidByParticipantId: clearPaidByParticipantId ? null : (paidByParticipantId ?? this.paidByParticipantId),
       paymentMethodId: paymentMethodId ?? this.paymentMethodId,
       splitRule: splitRule ?? this.splitRule,
       status: status ?? this.status,
@@ -188,6 +193,7 @@ class HouseExpense extends Equatable {
         dueDate,
         categoryId,
         paidByMemberId,
+        paidByParticipantId,
         paymentMethodId,
         splitRule,
         status,

@@ -1,4 +1,7 @@
+import '../../../finance/domain/entities/savings_vault.dart';
 import 'package:equatable/equatable.dart';
+import '../../../../core/domain/value_objects/money.dart';
+import '../../../finance/domain/entities/house_expense.dart';
 import '../../domain/entities/project_settlement_summary.dart';
 import '../../domain/entities/shared_project.dart';
 
@@ -21,27 +24,46 @@ class ProjectsLoaded extends ProjectsState {
   final List<SharedProject> projects;
   final SharedProject? selectedProject;
   final ProjectSettlementSummary? settlementSummary;
+  final List<HouseExpense>? selectedProjectExpenses;
+  final Map<String, Money> projectTotals;
+  final List<SavingsVault> vaults;
 
   const ProjectsLoaded({
     required this.projects,
     this.selectedProject,
     this.settlementSummary,
+    this.selectedProjectExpenses,
+    this.projectTotals = const {},
+    this.vaults = const [],
   });
 
   ProjectsLoaded copyWith({
     List<SharedProject>? projects,
     SharedProject? selectedProject,
     ProjectSettlementSummary? settlementSummary,
+    List<HouseExpense>? selectedProjectExpenses,
+    Map<String, Money>? projectTotals,
+    List<SavingsVault>? vaults,
   }) {
     return ProjectsLoaded(
       projects: projects ?? this.projects,
       selectedProject: selectedProject ?? this.selectedProject,
       settlementSummary: settlementSummary ?? this.settlementSummary,
+      selectedProjectExpenses: selectedProjectExpenses ?? this.selectedProjectExpenses,
+      projectTotals: projectTotals ?? this.projectTotals,
+      vaults: vaults ?? this.vaults,
     );
   }
 
   @override
-  List<Object?> get props => [projects, selectedProject, settlementSummary];
+  List<Object?> get props => [
+        projects,
+        selectedProject,
+        settlementSummary,
+        selectedProjectExpenses,
+        projectTotals,
+        vaults,
+      ];
 }
 
 class ProjectsError extends ProjectsState {

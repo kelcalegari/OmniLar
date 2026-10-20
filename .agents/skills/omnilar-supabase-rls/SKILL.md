@@ -22,10 +22,11 @@ Referência: `novoSite/arquitetura_tecnica.md` seções 3 a 7.
 1. Criar a migração: `supabase migration new <nome>` (arquivo em `supabase/migrations`).
 2. Criar a tabela com `house_id`, FKs, constraints (`check (amount_cents > 0)`), índices `(house_id, <data>)`.
 3. `alter table ... enable row level security;`
-4. Escrever políticas separadas por operação, usando `public.is_house_member(house_id)`.
-5. Adicionar triggers (`updated_at`, `audit_log` se for financeiro, bloqueio de UPDATE/DELETE se for ledger).
-6. Escrever testes de RLS (pgTAP ou script com 2 usuários de casas diferentes).
-7. Validar: `supabase db reset` local e rodar os testes.
+4. Conceder permissões para a Data API: `grant select, insert, update, delete on public.<tabela> to authenticated, service_role;`
+5. Escrever políticas separadas por operação, usando `public.is_house_member(house_id)`.
+6. Adicionar triggers (`updated_at`, `audit_log` se for financeiro, bloqueio de UPDATE/DELETE se for ledger).
+7. Escrever testes de RLS (pgTAP ou script com 2 usuários de casas diferentes).
+8. Validar: `supabase db reset` local e rodar os testes.
 
 ## Padrões
 Função base (fixar `search_path`):

@@ -52,11 +52,13 @@ class _DraftExpenseItem {
 class AddExpensePage extends StatefulWidget {
   final bool isRecurringDefault;
   final HouseExpense? expenseToEdit;
+  final String? initialProjectId;
 
   const AddExpensePage({
     super.key,
     this.isRecurringDefault = false,
     this.expenseToEdit,
+    this.initialProjectId,
   });
 
   @override
@@ -68,6 +70,7 @@ class _AddExpensePageState extends State<AddExpensePage> {
 
   String? _selectedCategoryId;
   String? _selectedPaidByMemberId;
+  String? _foreignCurrencyTag;
   String? _selectedPaymentMethodId;
   String? _selectedProjectId;
   // Gravação em andamento: evita lançar a mesma despesa duas vezes
@@ -120,6 +123,13 @@ class _AddExpensePageState extends State<AddExpensePage> {
     if (edit != null) {
       _titleController.text = edit.title;
       _cents = edit.amount.cents;
+      if (edit.notes != null && edit.notes!.contains('[Câmbio:')) {
+        final start = edit.notes!.indexOf('[Câmbio:');
+        final end = edit.notes!.indexOf(']', start);
+        if (end != -1) {
+          _foreignCurrencyTag = edit.notes!.substring(start, end + 1);
+        }
+      }
       _selectedCategoryId = edit.categoryId;
       _selectedPaidByMemberId = edit.paidByMemberId;
       _selectedPaymentMethodId = edit.paymentMethodId;
@@ -158,6 +168,7 @@ class _AddExpensePageState extends State<AddExpensePage> {
       if (_isRecurring) {
         _expenseStatus = ExpenseStatus.pending;
       }
+      _selectedProjectId = widget.initialProjectId;
     }
     _loadAvailableProjects();
   }
@@ -223,7 +234,13 @@ class _AddExpensePageState extends State<AddExpensePage> {
         final projects = await sl<ProjectsRepository>().getProjects(houseId: houseId);
         if (mounted) {
           setState(() {
-            _availableProjects = projects;
+            // Apenas projetos ativos ou em planejamento podem receber novas despesas.
+            // Se estiver editando despesa vinculada a projeto antigo, mantém na lista.
+            _availableProjects = projects.where((p) =>
+              p.status == ProjectStatus.active ||
+              p.status == ProjectStatus.planning ||
+              p.id == _selectedProjectId
+            ).toList();
           });
         }
       }
@@ -317,6 +334,9 @@ class _AddExpensePageState extends State<AddExpensePage> {
     final state = context.read<FinanceCubit>().state;
     final catId = _selectedCategoryId ?? state.categories.firstOrNull?.id ?? '';
     final paidById = _selectedPaidByMemberId ?? state.members.firstOrNull?.id ?? sl<AuthRepository>().currentUser?.id ?? '';
+    final selectedProj = _availableProjects.where((p) => p.id == _selectedProjectId).firstOrNull;
+    final guestPayer = selectedProj?.participants.where((p) => p.isExternal && p.id == paidById).firstOrNull;
+    final paidByParticipantId = guestPayer?.id;
     final pmId = _selectedPaymentMethodId ?? state.paymentMethods.firstOrNull?.id ?? '';
     final splitChoice = _splitChoiceApplies(state) ? _selectedSplitType : SplitType.percentage;
 
@@ -504,6 +524,8 @@ class _AddExpensePageState extends State<AddExpensePage> {
         dueDate: dueDate,
         categoryId: catId,
         paidByMemberId: paidById,
+        paidByParticipantId: paidByParticipantId,
+        clearPaidByParticipantId: paidByParticipantId == null,
         paymentMethodId: pmId,
         splitRule: splitRuleForEdit(oldExpense, catId, rule, newProjectId: _selectedProjectId),
         paidOutOfPocket: waitsForInvoice
@@ -524,6 +546,7 @@ class _AddExpensePageState extends State<AddExpensePage> {
         dueDay: _isRecurring ? _dueDay : null,
         items: items,
         projectId: _selectedProjectId,
+      notes: _foreignCurrencyTag,
         clearProjectId: _selectedProjectId == null,
         attachmentPath: uploadedPath ?? (_clearAttachment ? null : _existingAttachmentPath),
         clearAttachment: _clearAttachment,
@@ -605,6 +628,7 @@ class _AddExpensePageState extends State<AddExpensePage> {
       dueDate: dueDate,
       categoryId: catId,
       paidByMemberId: paidById,
+      paidByParticipantId: paidByParticipantId,
       paymentMethodId: pmId,
       splitRule: rule,
       paidOutOfPocket: waitsForInvoice ? false : paidOutOfPocket,
@@ -923,9 +947,11 @@ class _AddExpensePageState extends State<AddExpensePage> {
     return BlocBuilder<FinanceCubit, FinanceState>(
       builder: (context, state) {
         _applyLaunchDefaults(context, state);
+        final selectedProjForPayer = _availableProjects.where((p) => p.id == _selectedProjectId).firstOrNull;
+        final isSelectedPaidByGuest = selectedProjForPayer?.participants.any((p) => p.isExternal && p.id == _selectedPaidByMemberId) ?? false;
         if (state.members.isNotEmpty &&
             (_selectedPaidByMemberId == null ||
-                !state.members.any((m) => m.id == _selectedPaidByMemberId))) {
+                (!state.members.any((m) => m.id == _selectedPaidByMemberId) && !isSelectedPaidByGuest))) {
           _selectedPaidByMemberId = state.members.first.id;
         }
         if (state.categories.isNotEmpty &&
@@ -990,6 +1016,30 @@ class _AddExpensePageState extends State<AddExpensePage> {
                   });
                 },
               ),
+              if (_selectedProjectId != null || _foreignCurrencyTag != null) ...[
+                const SizedBox(height: 6),
+                Row(
+                  children: [
+                    if (_foreignCurrencyTag != null)
+                      Chip(
+                        avatar: const Icon(Icons.currency_exchange_rounded, size: 14),
+                        label: Text(_foreignCurrencyTag!, style: const TextStyle(fontSize: 11)),
+                        onDeleted: () {
+                          setState(() {
+                            _foreignCurrencyTag = null;
+                          });
+                        },
+                      )
+                    else
+                      TextButton.icon(
+                        onPressed: _showCurrencyConverterDialog,
+                        icon: const Icon(Icons.currency_exchange_rounded, size: 16),
+                        label: const Text('Converter Moeda Estrangeira (USD, EUR...)', style: TextStyle(fontSize: 12)),
+                        style: TextButton.styleFrom(visualDensity: VisualDensity.compact),
+                      ),
+                  ],
+                ),
+              ],
               const SizedBox(height: 20),
 
               // Input de Nome / Descrição
@@ -1403,6 +1453,35 @@ class _AddExpensePageState extends State<AddExpensePage> {
                     ],
                   ),
                 )
+              else if (selectedProjForPayer != null &&
+                  selectedProjForPayer.participants.any((p) => p.isExternal))
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    ...state.members.map((m) {
+                      final isSelected = m.id == _selectedPaidByMemberId;
+                      return ChoiceChip(
+                        label: Text(m.name),
+                        selected: isSelected,
+                        onSelected: (selected) {
+                          if (selected) setState(() => _selectedPaidByMemberId = m.id);
+                        },
+                      );
+                    }),
+                    ...selectedProjForPayer.participants.where((p) => p.isExternal).map((g) {
+                      final isSelected = g.id == _selectedPaidByMemberId;
+                      return ChoiceChip(
+                        avatar: const Icon(Icons.person_pin_rounded, size: 16),
+                        label: Text('${g.displayName} (convidado)'),
+                        selected: isSelected,
+                        onSelected: (selected) {
+                          if (selected) setState(() => _selectedPaidByMemberId = g.id);
+                        },
+                      );
+                    }),
+                  ],
+                )
               else
                 Row(
                   children: state.members.map((m) {
@@ -1439,44 +1518,52 @@ class _AddExpensePageState extends State<AddExpensePage> {
                 ),
               if (_splitChoiceApplies(state) && _selectedSplitType != SplitType.percentage)
                 _buildSplitDetails(theme, state),
-              const SizedBox(height: 20),
 
-              // Vincular a Projeto / Viagem (Opcional)
-              Text('Vincular a Projeto / Viagem (Opcional)', style: theme.textTheme.titleSmall),
-              const SizedBox(height: 8),
-              DropdownButtonFormField<String?>(
-                key: const Key('add_expense_project_dropdown'),
-                initialValue: _selectedProjectId,
-                isExpanded: true,
-                decoration: InputDecoration(
-                  hintText: 'Nenhum projeto (Gasto Geral da Casa)',
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                  prefixIcon: const Icon(Icons.flight_takeoff_rounded),
-                ),
-                items: [
-                  const DropdownMenuItem<String?>(
-                    value: null,
-                    child: Text('Nenhum projeto (Gasto Geral da Casa)', overflow: TextOverflow.ellipsis),
+              if (_availableProjects.isNotEmpty || _selectedProjectId != null) ...[
+                const SizedBox(height: 20),
+                // Vincular a Projeto / Viagem (Opcional)
+                Text('Vincular a Projeto / Viagem (Opcional)', style: theme.textTheme.titleSmall),
+                const SizedBox(height: 8),
+                DropdownButtonFormField<String?>(
+                  key: const Key('add_expense_project_dropdown'),
+                  initialValue: _selectedProjectId,
+                  isExpanded: true,
+                  decoration: InputDecoration(
+                    hintText: 'Nenhum projeto (Gasto Geral da Casa)',
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                    prefixIcon: const Icon(Icons.flight_takeoff_rounded),
                   ),
-                  if (_selectedProjectId != null && !_availableProjects.any((p) => p.id == _selectedProjectId))
-                    DropdownMenuItem<String?>(
-                      value: _selectedProjectId,
-                      child: Text('Projeto Selecionado ($_selectedProjectId)', overflow: TextOverflow.ellipsis),
+                  items: [
+                    const DropdownMenuItem<String?>(
+                      value: null,
+                      child: Text('Nenhum projeto (Gasto Geral da Casa)', overflow: TextOverflow.ellipsis),
                     ),
-                  ..._availableProjects.map((p) {
-                    final tag = p.type == ProjectType.trip ? '🏖️ (Viagem)' : '🛠️ (Projeto)';
-                    return DropdownMenuItem<String?>(
-                      value: p.id,
-                      child: Text('${p.title} $tag', overflow: TextOverflow.ellipsis),
-                    );
-                  }),
-                ],
-                onChanged: (val) {
-                  setState(() {
-                    _selectedProjectId = val;
-                  });
-                },
-              ),
+                    if (_selectedProjectId != null && !_availableProjects.any((p) => p.id == _selectedProjectId))
+                      DropdownMenuItem<String?>(
+                        value: _selectedProjectId,
+                        child: Text('Projeto Selecionado ($_selectedProjectId)', overflow: TextOverflow.ellipsis),
+                      ),
+                    ..._availableProjects.map((p) {
+                      final tag = p.type == ProjectType.trip ? '🏖️ (Viagem)' : '🛠️ (Projeto)';
+                      return DropdownMenuItem<String?>(
+                        value: p.id,
+                        child: Text('${p.title} $tag', overflow: TextOverflow.ellipsis),
+                      );
+                    }),
+                  ],
+                  onChanged: (val) {
+                    setState(() {
+                      _selectedProjectId = val;
+                      final proj = _availableProjects.where((p) => p.id == val).firstOrNull;
+                      final isGuest = proj?.participants.any((p) => p.isExternal && p.id == _selectedPaidByMemberId) ?? false;
+                      final isMember = state.members.any((m) => m.id == _selectedPaidByMemberId);
+                      if (!isMember && !isGuest) {
+                        _selectedPaidByMemberId = state.members.firstOrNull?.id;
+                      }
+                    });
+                  },
+                ),
+              ],
               const SizedBox(height: 20),
 
               // Forma de Pagamento
@@ -2180,6 +2267,120 @@ class _AddExpensePageState extends State<AddExpensePage> {
             label: Text(isPremium ? 'Anexar' : 'Saiba mais', style: const TextStyle(fontSize: 12)),
           ),
         ],
+      ),
+    );
+  }
+
+  void _showCurrencyConverterDialog() {
+    String selectedCurrency = 'USD';
+    final amountCtrl = TextEditingController();
+    final rateCtrl = TextEditingController(text: '5.65');
+
+    showDialog<void>(
+      context: context,
+      builder: (dialogCtx) => StatefulBuilder(
+        builder: (dialogCtx, setDialogState) {
+          final foreignAmount = double.tryParse(amountCtrl.text.replaceAll(',', '.')) ?? 0.0;
+          final rate = double.tryParse(rateCtrl.text.replaceAll(',', '.')) ?? 0.0;
+          final totalBrlCents = (foreignAmount * rate * 100).round();
+          final totalBrl = Money(totalBrlCents);
+
+          return AlertDialog(
+            title: const Row(
+              children: [
+                Icon(Icons.currency_exchange_rounded, color: AppColors.primary),
+                SizedBox(width: 8),
+                Text('Converter Moeda', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+              ],
+            ),
+            content: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  DropdownButtonFormField<String>(
+                    initialValue: selectedCurrency,
+                    decoration: const InputDecoration(labelText: 'Moeda Estrangeira', isDense: true),
+                    items: const [
+                      DropdownMenuItem(value: 'USD', child: Text('USD - Dólar Americano (\$)')),
+                      DropdownMenuItem(value: 'EUR', child: Text('EUR - Euro (€)')),
+                      DropdownMenuItem(value: 'GBP', child: Text('GBP - Libra Esterlina (£)')),
+                      DropdownMenuItem(value: 'ARS', child: Text('ARS - Peso Argentino (\$)')),
+                      DropdownMenuItem(value: 'CLP', child: Text('CLP - Peso Chileno (\$)')),
+                      DropdownMenuItem(value: 'UYU', child: Text('UYU - Peso Uruguaio (\$)')),
+                      DropdownMenuItem(value: 'CAD', child: Text('CAD - Dólar Canadense (\$)')),
+                    ],
+                    onChanged: (val) {
+                      if (val != null) setDialogState(() => selectedCurrency = val);
+                    },
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: amountCtrl,
+                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                    decoration: InputDecoration(
+                      labelText: 'Valor em $selectedCurrency',
+                      hintText: 'Ex: 150.00',
+                      isDense: true,
+                    ),
+                    onChanged: (_) => setDialogState(() {}),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: rateCtrl,
+                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                    decoration: const InputDecoration(
+                      labelText: r'Cotação / Taxa de Câmbio (R$)',
+                      hintText: 'Ex: 5.65',
+                      prefixText: r'R$ ',
+                      isDense: true,
+                    ),
+                    onChanged: (_) => setDialogState(() {}),
+                  ),
+                  const SizedBox(height: 16),
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: AppColors.primary.withValues(alpha: 0.08),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: AppColors.primary.withValues(alpha: 0.2)),
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        const Text('Convertido em Reais:', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
+                        Text(
+                          totalBrl.formatted,
+                          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: AppColors.primary),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(dialogCtx),
+                child: const Text('Cancelar'),
+              ),
+              FilledButton(
+                onPressed: totalBrlCents <= 0
+                    ? null
+                    : () {
+                        Navigator.pop(dialogCtx);
+                        setState(() {
+                          _cents = totalBrlCents;
+                          _amountFieldVersion++;
+                          _foreignCurrencyTag =
+                              '[Câmbio: $selectedCurrency ${foreignAmount.toStringAsFixed(2)} @ R\$ ${rate.toStringAsFixed(2)}]';
+                        });
+                      },
+                child: const Text('Aplicar em R\$'),
+              ),
+            ],
+          );
+        },
       ),
     );
   }

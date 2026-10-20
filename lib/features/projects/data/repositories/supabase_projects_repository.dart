@@ -10,7 +10,8 @@ class SupabaseProjectsRepository implements ProjectsRepository {
 
   SupabaseProjectsRepository(this.client);
 
-  bool _isUuid(String id) {
+  bool _isUuid(String? id) {
+    if (id == null) return false;
     final uuidRegex = RegExp(
       r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$',
     );
@@ -83,6 +84,8 @@ class SupabaseProjectsRepository implements ProjectsRepository {
         userId: pMap['user_id'] as String?,
         externalName: pMap['external_name'] as String?,
         defaultSplitPercent: (pMap['default_split_percent'] as num?)?.toDouble(),
+        pixKey: pMap['pix_key'] as String?,
+        phone: pMap['phone'] as String?,
         createdAt: DateTime.parse(pMap['created_at'] as String).toLocal(),
       );
     }).toList();
@@ -100,6 +103,7 @@ class SupabaseProjectsRepository implements ProjectsRepository {
       startDate: r['start_date'] != null ? DateTime.tryParse(r['start_date'] as String) : null,
       endDate: r['end_date'] != null ? DateTime.tryParse(r['end_date'] as String) : null,
       currency: r['currency'] as String? ?? 'BRL',
+      vaultId: r['vault_id'] as String?,
       participants: participants,
       createdBy: r['created_by'] as String? ?? '',
       createdAt: DateTime.parse(r['created_at'] as String).toLocal(),
@@ -154,6 +158,7 @@ class SupabaseProjectsRepository implements ProjectsRepository {
         'start_date': project.startDate?.toIso8601String().split('T')[0],
         'end_date': project.endDate?.toIso8601String().split('T')[0],
         'currency': project.currency,
+        if (_isUuid(project.vaultId)) 'vault_id': project.vaultId,
         'created_by': currentUserId ?? project.createdBy,
       };
 
@@ -173,6 +178,8 @@ class SupabaseProjectsRepository implements ProjectsRepository {
             'user_id': p.userId,
             'external_name': p.externalName,
             'default_split_percent': p.defaultSplitPercent,
+            'pix_key': p.pixKey,
+            'phone': p.phone,
           };
         }).toList();
 
@@ -195,6 +202,7 @@ class SupabaseProjectsRepository implements ProjectsRepository {
         'start_date': project.startDate?.toIso8601String().split('T')[0],
         'end_date': project.endDate?.toIso8601String().split('T')[0],
         'currency': project.currency,
+        'vault_id': _isUuid(project.vaultId) ? project.vaultId : null,
       }).eq('id', project.id);
     } catch (e) {
       throw ServerFailure('Erro ao atualizar projeto compartilhado: $e');
@@ -213,6 +221,8 @@ class SupabaseProjectsRepository implements ProjectsRepository {
               if (_isUuid(p.userId ?? '')) 'user_id': p.userId,
               'external_name': p.externalName,
               'default_split_percent': p.defaultSplitPercent,
+              if (p.pixKey != null) 'pix_key': p.pixKey,
+              if (p.phone != null) 'phone': p.phone,
             },
         ],
       });

@@ -41,6 +41,7 @@ Map<String, dynamic> houseExpenseToJson(HouseExpense expense) => {
   'dueDate': expense.dueDate?.toIso8601String(),
   'categoryId': expense.categoryId,
   'paidByMemberId': expense.paidByMemberId,
+  'paidByParticipantId': expense.paidByParticipantId,
   'paymentMethodId': expense.paymentMethodId,
   'splitRule': _splitRuleToJson(expense.splitRule),
   'status': expense.status.name,
@@ -83,6 +84,7 @@ HouseExpense houseExpenseFromJson(Map<String, dynamic> json) => HouseExpense(
   dueDate: json['dueDate'] != null ? DateTime.parse(json['dueDate'] as String) : null,
   categoryId: json['categoryId'] as String,
   paidByMemberId: json['paidByMemberId'] as String,
+  paidByParticipantId: json['paidByParticipantId'] as String?,
   paymentMethodId: json['paymentMethodId'] as String,
   splitRule:
       _splitRuleFromJson((json['splitRule'] as Map?)?.cast<String, dynamic>()) ??

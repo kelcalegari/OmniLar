@@ -114,6 +114,10 @@ class _FakeFinanceRepository implements FinanceRepository {
   @override
   Future<void> addContribution(Contribution contribution) async {}
   @override
+  Future<void> updateContribution(Contribution contribution) async {}
+  @override
+  Future<void> deleteContribution(String contributionId) async {}
+  @override
   Future<void> addCategory(ExpenseCategory category) async {}
   @override
   Future<void> addPaymentMethod(PaymentMethod paymentMethod) async {}

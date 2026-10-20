@@ -93,6 +93,8 @@ O motor `ProjectSettlementService` calcula o saldo líquido de cada participante
 
 ---
 
-## 8. Fora do Escopo
-- Conversão de moedas estrangeiras em tempo real (versão atual armazena em BRL).
-- Integração bancária direta de Pix de terceiros (o app gera a proposta de transferência e chave Pix; a execução é manual no banco).
+## 8. Funcionalidades Avançadas Entregues (Outubro/2026)
+- **Vínculo com Caixinhas / Cofres (SavingsVault):** Projetos podem ser atrelados a um cofre de poupança (ex.: Viagem de Férias), exibindo o saldo acumulado diretamente no Hub e na prestação de contas.
+- **Exportação Profissional (PDF e CSV):** Geração de relatório completo em PDF (ProjectReportExport) e planilha CSV formatada com acentos para Excel (UTF-8 BOM), contendo balanço por participante, transferências mínimas Super Pix e lista discriminada de despesas.
+- **Conversão de Moedas Estrangeiras (Viagens Internacionais):** Suporte nativo ao lançamento em moedas estrangeiras (USD, EUR, GBP, ARS, CLP, UYU, CAD) com taxa de câmbio informada, convertendo para centavos de BRL e mantendo rastreabilidade do valor original.
+- **Participantes Externos Completos:** Suporte a WhatsApp direto (wa.me/55...), chave Pix e seleção como pagador de despesa via paid_by_participant_id.

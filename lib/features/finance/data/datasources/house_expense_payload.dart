@@ -65,9 +65,13 @@ Map<String, dynamic> houseExpensePayload(
     'amount_cents': expense.amount.cents,
     if (isUuid(expense.categoryId)) 'category_id': expense.categoryId,
     if (isUuid(expense.paymentMethodId)) 'payment_method_id': expense.paymentMethodId,
-    'paid_by_id': isUuid(expense.paidByMemberId)
-        ? expense.paidByMemberId
-        : (currentUserId ?? expense.paidByMemberId),
+    if (expense.paidByParticipantId != null && isUuid(expense.paidByParticipantId))
+      'paid_by_participant_id': expense.paidByParticipantId,
+    'paid_by_id': expense.paidByParticipantId != null
+        ? (currentUserId ?? expense.paidByMemberId)
+        : (isUuid(expense.paidByMemberId)
+            ? expense.paidByMemberId
+            : (currentUserId ?? expense.paidByMemberId)),
     'paid_out_of_pocket': expense.paidOutOfPocket,
     'due_date': (dueDate ?? expense.dueDate ?? expense.date).toIso8601String().split('T')[0],
     'date': expense.date.toUtc().toIso8601String(),

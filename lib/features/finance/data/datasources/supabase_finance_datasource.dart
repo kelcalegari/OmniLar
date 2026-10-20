@@ -773,9 +773,15 @@ class SupabaseFinanceDataSource implements FinanceDataSource {
         'amount_cents': expense.amount.cents,
         if (_isUuid(expense.categoryId)) 'category_id': expense.categoryId,
         if (_isUuid(expense.paymentMethodId)) 'payment_method_id': expense.paymentMethodId,
-        'paid_by_id': _isUuid(expense.paidByMemberId)
-            ? expense.paidByMemberId
-            : (client.auth.currentUser?.id ?? expense.paidByMemberId),
+        if (expense.paidByParticipantId != null && _isUuid(expense.paidByParticipantId))
+          'paid_by_participant_id': expense.paidByParticipantId
+        else if (expense.paidByParticipantId == null)
+          'paid_by_participant_id': null,
+        'paid_by_id': expense.paidByParticipantId != null
+            ? (client.auth.currentUser?.id ?? expense.paidByMemberId)
+            : (_isUuid(expense.paidByMemberId)
+                ? expense.paidByMemberId
+                : (client.auth.currentUser?.id ?? expense.paidByMemberId)),
         'paid_out_of_pocket': expense.paidOutOfPocket,
         'due_date': dueDateStr,
         'date': expense.date.toUtc().toIso8601String(),
@@ -1712,7 +1718,8 @@ class SupabaseFinanceDataSource implements FinanceDataSource {
       date: DateTime.parse(r['date'] as String? ?? r['created_at'] as String).toLocal(),
       dueDate: r['due_date'] != null ? DateTime.tryParse(r['due_date'] as String) : null,
       categoryId: r['category_id'] as String? ?? 'cat_geral',
-      paidByMemberId: r['paid_by_id'] as String,
+      paidByMemberId: (r['paid_by_participant_id'] as String?) ?? (r['paid_by_id'] as String),
+      paidByParticipantId: r['paid_by_participant_id'] as String?,
       paymentMethodId: r['payment_method_id'] as String? ?? 'pm_pix',
       splitRule: splitRule,
       status: status,
