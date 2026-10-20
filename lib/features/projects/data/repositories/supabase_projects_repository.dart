@@ -234,10 +234,23 @@ class SupabaseProjectsRepository implements ProjectsRepository {
   @override
   Future<void> deleteProject(String id) async {
     try {
-      await client
-          .from('shared_projects')
-          .update({'deleted_at': DateTime.now().toUtc().toIso8601String()})
-          .eq('id', id);
+      if (_isUuid(id)) {
+        try {
+          await client.rpc('delete_shared_project', params: {'p_project_id': id});
+          return;
+        } catch (_) {
+          // Se a RPC ainda nao estiver disponivel no banco, tenta os fallbacks
+        }
+      }
+      try {
+        await client
+            .from('shared_projects')
+            .update({'deleted_at': DateTime.now().toUtc().toIso8601String()})
+            .eq('id', id);
+      } catch (_) {
+        // Fallback final: hard-delete via RLS policy shared_projects_delete_member
+        await client.from('shared_projects').delete().eq('id', id);
+      }
     } catch (e) {
       throw ServerFailure('Erro ao excluir projeto compartilhado: $e');
     }

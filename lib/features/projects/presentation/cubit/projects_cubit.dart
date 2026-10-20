@@ -58,7 +58,8 @@ class ProjectsCubit extends BlocBase<ProjectsState> {
         projectTotals: totals,
         vaults: vaults,
       ));
-    } catch (e) {
+    } catch (e, stackTrace) {
+      addError(e, stackTrace);
       emit(ProjectsError('Falha ao carregar projetos: $e'));
     }
   }
@@ -164,7 +165,8 @@ class ProjectsCubit extends BlocBase<ProjectsState> {
           await selectProject(updated);
         }
       }
-    } catch (e) {
+    } catch (e, stackTrace) {
+      addError(e, stackTrace);
       emit(ProjectsError('Falha ao atualizar projeto: $e'));
     }
   }
@@ -183,7 +185,8 @@ class ProjectsCubit extends BlocBase<ProjectsState> {
     try {
       await projectsRepository.deleteProject(project.id);
       await loadProjects(houseId: project.houseId);
-    } catch (e) {
+    } catch (e, stackTrace) {
+      addError(e, stackTrace);
       emit(ProjectsError('Falha ao excluir projeto: $e'));
     }
   }
@@ -199,7 +202,8 @@ class ProjectsCubit extends BlocBase<ProjectsState> {
         if (updated != null) await selectProject(updated);
       }
       return true;
-    } catch (e) {
+    } catch (e, stackTrace) {
+      addError(e, stackTrace);
       emit(ProjectsError('Falha ao atualizar participantes: $e'));
       return false;
     }
@@ -209,7 +213,8 @@ class ProjectsCubit extends BlocBase<ProjectsState> {
     try {
       await projectsRepository.createProject(project);
       await loadProjects(houseId: project.houseId);
-    } catch (e) {
+    } catch (e, stackTrace) {
+      addError(e, stackTrace);
       emit(ProjectsError('Falha ao criar projeto: $e'));
     }
   }

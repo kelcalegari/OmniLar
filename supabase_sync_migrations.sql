@@ -123,7 +123,9 @@ VALUES
     ('20261019170000', '0106_releases_storage_bucket'),
     ('20261019190000', '0107_receipt_attachments'),
     ('20261019203000', '0108_fix_receipt_storage_permissions'),
-    ('20261019213000', '0109_releases_storage_policy')
+    ('20261019213000', '0109_releases_storage_policy'),
+    ('20261020080000', '0110_project_participant_contact_and_pix'),
+    ('20261020093000', '0111_delete_shared_project_rpc')
 ON CONFLICT (version) DO UPDATE SET name = EXCLUDED.name;
 
 SELECT count(*) as total_migracoes_registradas FROM supabase_migrations.schema_migrations;

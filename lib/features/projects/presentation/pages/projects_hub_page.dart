@@ -510,7 +510,7 @@ class _ProjectsHubPageState extends State<ProjectsHubPage> {
             onPressed: () async {
               Navigator.pop(dialogCtx);
               await cubit.deleteProject(project);
-              if (context.mounted) {
+              if (context.mounted && cubit.state is! ProjectsError) {
                 ScaffoldMessenger.of(context).showSnackBar(
                   const SnackBar(content: Text('Projeto excluído.')),
                 );

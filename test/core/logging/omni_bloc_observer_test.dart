@@ -10,6 +10,23 @@ class _TestCubit extends Cubit<int> {
   }
 }
 
+abstract class _DummyState {}
+
+class _DummyInitial extends _DummyState {}
+
+class _DummyError extends _DummyState {
+  final String message;
+  _DummyError(this.message);
+}
+
+class _DummyErrorCubit extends Cubit<_DummyState> {
+  _DummyErrorCubit() : super(_DummyInitial());
+
+  void emitError() {
+    emit(_DummyError('Falha simulada'));
+  }
+}
+
 void main() {
   test('OmniBlocObserver intercepta erros de Cubit sem lançar exceção', () {
     final observer = OmniBlocObserver();
@@ -17,6 +34,16 @@ void main() {
 
     final cubit = _TestCubit();
     expect(() => cubit.triggerError(), returnsNormally);
+    cubit.close();
+  });
+
+  test('OmniBlocObserver intercepta transição para estado de erro no onChange', () {
+    final observer = OmniBlocObserver();
+    Bloc.observer = observer;
+
+    final cubit = _DummyErrorCubit();
+    expect(() => cubit.emitError(), returnsNormally);
+    expect(cubit.state, isA<_DummyError>());
     cubit.close();
   });
 }
