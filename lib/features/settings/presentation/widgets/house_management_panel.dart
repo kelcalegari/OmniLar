@@ -408,10 +408,11 @@ class _DeleteHouseModalState extends State<DeleteHouseModal> {
   Widget build(BuildContext context) {
     final expectedText = widget.house.name.trim();
     final isMatch = _confirmController.text.trim().toLowerCase() == expectedText.toLowerCase();
+    final bottomInset = MediaQuery.viewInsetsOf(context).bottom;
 
     return SingleChildScrollView(
       child: Padding(
-        padding: const EdgeInsets.all(24),
+        padding: EdgeInsets.fromLTRB(24, 24, 24, bottomInset + 24),
         child: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.stretch,
