@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:go_router/go_router.dart';
 import '../../../../core/domain/value_objects/money.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/widgets/money_input_field.dart';
@@ -22,6 +23,7 @@ class HouseOnboardingPage extends StatefulWidget {
 
 class _HouseOnboardingPageState extends State<HouseOnboardingPage> {
   late int _selectedTab;
+  bool _isSubmitting = false;
 
   // Criar Casa
   final _createFormKey = GlobalKey<FormState>();
@@ -52,6 +54,7 @@ class _HouseOnboardingPageState extends State<HouseOnboardingPage> {
 
   void _submitCreate() {
     if (!_createFormKey.currentState!.validate()) return;
+    setState(() => _isSubmitting = true);
     context.read<AuthCubit>().createHouse(
       name: _houseNameController.text,
       cycleStartDay: _cycleStartDay,
@@ -134,6 +137,7 @@ class _HouseOnboardingPageState extends State<HouseOnboardingPage> {
 
   void _submitJoin() {
     if (!_joinFormKey.currentState!.validate()) return;
+    setState(() => _isSubmitting = true);
     context.read<AuthCubit>().joinHouseWithInvite(_inviteCodeController.text);
   }
 
@@ -165,17 +169,24 @@ class _HouseOnboardingPageState extends State<HouseOnboardingPage> {
       ),
       body: BlocConsumer<AuthCubit, AuthState>(
         listener: (context, state) {
-          if (state.status == AuthStatus.failure &&
-              state.errorMessage != null) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text(state.errorMessage!),
-                backgroundColor: AppColors.debtRed,
-              ),
-            );
-          } else if (state.status == AuthStatus.authenticatedWithHouse && widget.allowBack) {
-            if (Navigator.of(context).canPop()) {
-              Navigator.of(context).pop();
+          if (state.status == AuthStatus.failure) {
+            setState(() => _isSubmitting = false);
+            if (state.errorMessage != null) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text(state.errorMessage!),
+                  backgroundColor: AppColors.debtRed,
+                ),
+              );
+            }
+          } else if (state.status == AuthStatus.authenticatedWithHouse && _isSubmitting) {
+            setState(() => _isSubmitting = false);
+            try {
+              context.go('/casa');
+            } catch (_) {
+              if (Navigator.of(context).canPop()) {
+                Navigator.of(context).pop();
+              }
             }
           }
         },
