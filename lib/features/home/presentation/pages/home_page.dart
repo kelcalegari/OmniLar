@@ -9,6 +9,7 @@ import '../../../../core/widgets/privacy_toggle.dart';
 import '../../../../core/widgets/responsive_container.dart';
 import '../../../../core/widgets/save_feedback.dart';
 import '../../../../core/widgets/theme_toggle_button.dart';
+import '../../../../core/widgets/house_switcher_sheet.dart';
 import '../../../../core/di/service_locator.dart';
 import '../../../finance/presentation/pages/add_contribution_page.dart';
 import '../../../auth/domain/repositories/auth_repository.dart';
@@ -129,21 +130,43 @@ class _HomePageContentState extends State<_HomePageContent> {
                       ? user!.fullName
                       : 'Minha Casa');
 
-            return Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  houseName,
-                  style: const TextStyle(
-                    fontWeight: FontWeight.bold,
-                    fontSize: 18,
-                  ),
+            return InkWell(
+              borderRadius: BorderRadius.circular(8),
+              onTap: () => HouseSwitcherSheet.show(context),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 2, horizontal: 4),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Flexible(
+                          child: Text(
+                            houseName,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              fontWeight: FontWeight.bold,
+                              fontSize: 18,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 4),
+                        const Icon(
+                          Icons.keyboard_arrow_down_rounded,
+                          size: 20,
+                          color: Colors.grey,
+                        ),
+                      ],
+                    ),
+                    Text(
+                      subtitle,
+                      style: const TextStyle(fontSize: 12, color: Colors.grey),
+                    ),
+                  ],
                 ),
-                Text(
-                  subtitle,
-                  style: const TextStyle(fontSize: 12, color: Colors.grey),
-                ),
-              ],
+              ),
             );
           },
         ),

@@ -249,6 +249,16 @@ class AppRouter {
         builder: (context, state) => const HouseOnboardingPage(),
       ),
       GoRoute(
+        path: '/casas/nova',
+        name: 'house_create_or_join',
+        parentNavigatorKey: _rootNavigatorKey,
+        builder: (context, state) {
+          final tabParam = state.uri.queryParameters['tab'];
+          final initialTab = tabParam == 'invite' ? 1 : 0;
+          return HouseOnboardingPage(allowBack: true, initialTab: initialTab);
+        },
+      ),
+      GoRoute(
         path: '/notificacoes',
         name: 'notifications',
         parentNavigatorKey: _rootNavigatorKey,

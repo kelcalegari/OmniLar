@@ -19,6 +19,7 @@ import '../../../../core/theme/app_colors.dart';
 import '../../../../core/utils/clipboard_helper.dart';
 import '../../../../core/utils/responsive.dart';
 import '../../../../core/widgets/responsive_container.dart';
+import '../../../../core/widgets/house_switcher_sheet.dart';
 import '../../../auth/domain/repositories/auth_repository.dart';
 import '../../../auth/domain/entities/user_profile.dart';
 import '../../../auth/domain/entities/house.dart';
@@ -2267,7 +2268,14 @@ class _SettingsPageState extends State<SettingsPage> {
           'Ajustes da Casa',
           style: TextStyle(fontWeight: FontWeight.bold),
         ),
-        actions: const [ThemeToggleButton()],
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.home_work_outlined),
+            tooltip: 'Alternar Casa',
+            onPressed: () => HouseSwitcherSheet.show(context),
+          ),
+          const ThemeToggleButton(),
+        ],
       ),
       body: BlocBuilder<AuthCubit, AuthState>(
         builder: (context, authState) {
@@ -2534,6 +2542,14 @@ class _SettingsPageState extends State<SettingsPage> {
                                     ),
                                   ],
                                 ),
+                              ),
+                              IconButton(
+                                icon: const Icon(
+                                  Icons.swap_horiz_rounded,
+                                  color: AppColors.primary,
+                                ),
+                                tooltip: 'Alternar Casa',
+                                onPressed: () => HouseSwitcherSheet.show(context),
                               ),
                               IconButton(
                                 icon: const Icon(

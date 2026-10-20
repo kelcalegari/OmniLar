@@ -18,34 +18,46 @@ class AuthCubit extends Cubit<AuthState> {
     : super(const AuthState(status: AuthStatus.initial)) {
     // Dá um tempo mínimo para a splash renderizar a identidade visual e carregar a sessão do Supabase/Cache
     Future.microtask(() => checkAuthStatus());
-    _authSubscription = _repository.authStateChanges.listen((user) {
-      if (_repository.isRestoringSession) return;
+    _authSubscription = _repository.authStateChanges.listen((user) async {
+      if (isClosed || _repository.isRestoringSession) return;
       if (user == null) {
-        emit(const AuthState(status: AuthStatus.unauthenticated));
+        if (!isClosed) emit(const AuthState(status: AuthStatus.unauthenticated));
       } else {
         final house = _repository.currentHouse;
+        List<House> houses = const [];
+        try {
+          houses = await _repository.getUserHouses();
+        } catch (_) {}
+        if (isClosed) return;
         if (house == null) {
-          emit(AuthState(status: AuthStatus.authenticatedNoHouse, user: user));
+          emit(AuthState(status: AuthStatus.authenticatedNoHouse, user: user, userHouses: houses));
         } else {
           emit(
             AuthState(
               status: AuthStatus.authenticatedWithHouse,
               user: user,
               house: house,
+              userHouses: houses,
             ),
           );
         }
       }
     });
 
-    _houseSubscription = _repository.houseChanges.listen((house) {
-      if (_repository.isRestoringSession) return;
+    _houseSubscription = _repository.houseChanges.listen((house) async {
+      if (isClosed || _repository.isRestoringSession) return;
       if (state.user != null) {
+        List<House> houses = state.userHouses;
+        try {
+          houses = await _repository.getUserHouses();
+        } catch (_) {}
+        if (isClosed) return;
         if (house == null) {
           emit(
             AuthState(
               status: AuthStatus.authenticatedNoHouse,
               user: state.user,
+              userHouses: houses,
             ),
           );
         } else {
@@ -54,6 +66,7 @@ class AuthCubit extends Cubit<AuthState> {
               status: AuthStatus.authenticatedWithHouse,
               user: state.user,
               house: house,
+              userHouses: houses,
             ),
           );
         }
@@ -61,25 +74,41 @@ class AuthCubit extends Cubit<AuthState> {
     });
   }
 
-  void checkAuthStatus() {
+  Future<void> checkAuthStatus() async {
     // Sessão salva ainda carregando: mantém o estado inicial em vez de concluir "deslogado"
-    if (_repository.isRestoringSession) return;
+    if (isClosed || _repository.isRestoringSession) return;
 
     final user = _repository.currentUser;
     final house = _repository.currentHouse;
+    List<House> houses = const [];
+    if (user != null) {
+      try {
+        houses = await _repository.getUserHouses();
+      } catch (_) {}
+    }
+    if (isClosed) return;
 
     if (user == null) {
       emit(const AuthState(status: AuthStatus.unauthenticated));
     } else if (house == null) {
-      emit(AuthState(status: AuthStatus.authenticatedNoHouse, user: user));
+      emit(AuthState(status: AuthStatus.authenticatedNoHouse, user: user, userHouses: houses));
     } else {
       emit(
         AuthState(
           status: AuthStatus.authenticatedWithHouse,
           user: user,
           house: house,
+          userHouses: houses,
         ),
       );
+    }
+  }
+
+  Future<List<House>> _fetchUserHouses() async {
+    try {
+      return await _repository.getUserHouses();
+    } catch (_) {
+      return state.userHouses;
     }
   }
 
@@ -88,6 +117,7 @@ class AuthCubit extends Cubit<AuthState> {
     try {
       final user = await _repository.signInWithEmailPassword(email, password);
       final house = _repository.currentHouse;
+      final houses = await _fetchUserHouses();
       emit(
         AuthState(
           status: house != null
@@ -95,6 +125,7 @@ class AuthCubit extends Cubit<AuthState> {
               : AuthStatus.authenticatedNoHouse,
           user: user,
           house: house,
+          userHouses: houses,
         ),
       );
     } on EmailNotConfirmedFailure catch (e) {
@@ -155,6 +186,7 @@ class AuthCubit extends Cubit<AuthState> {
     try {
       final user = await _repository.verifySignUpCode(email: email, code: code);
       final house = _repository.currentHouse;
+      final houses = await _fetchUserHouses();
       emit(
         AuthState(
           status: house != null
@@ -162,6 +194,7 @@ class AuthCubit extends Cubit<AuthState> {
               : AuthStatus.authenticatedNoHouse,
           user: user,
           house: house,
+          userHouses: houses,
         ),
       );
     } catch (e) {
@@ -210,6 +243,7 @@ class AuthCubit extends Cubit<AuthState> {
       newPassword: newPassword,
     );
     final house = _repository.currentHouse;
+    final houses = await _fetchUserHouses();
     emit(
       AuthState(
         status: house != null
@@ -217,6 +251,7 @@ class AuthCubit extends Cubit<AuthState> {
             : AuthStatus.authenticatedNoHouse,
         user: user,
         house: house,
+        userHouses: houses,
       ),
     );
   }
@@ -286,6 +321,7 @@ class AuthCubit extends Cubit<AuthState> {
         return;
       }
       final house = _repository.currentHouse;
+      final houses = await _fetchUserHouses();
       emit(
         AuthState(
           status: house != null
@@ -293,6 +329,7 @@ class AuthCubit extends Cubit<AuthState> {
               : AuthStatus.authenticatedNoHouse,
           user: user,
           house: house,
+          userHouses: houses,
         ),
       );
     } catch (e) {
@@ -308,11 +345,13 @@ class AuthCubit extends Cubit<AuthState> {
       await _repository.signInDemo(memberId: memberId);
       final user = _repository.currentUser;
       final house = _repository.currentHouse;
+      final houses = await _fetchUserHouses();
       emit(
         AuthState(
           status: AuthStatus.authenticatedWithHouse,
           user: user,
           house: house,
+          userHouses: houses,
         ),
       );
     } catch (e) {
@@ -338,11 +377,13 @@ class AuthCubit extends Cubit<AuthState> {
         initialReserveCents: initialReserveCents,
         initialCashCents: initialCashCents,
       );
+      final houses = await _fetchUserHouses();
       emit(
         AuthState(
           status: AuthStatus.authenticatedWithHouse,
           user: state.user,
           house: house,
+          userHouses: houses,
         ),
       );
     } catch (e) {
@@ -356,11 +397,13 @@ class AuthCubit extends Cubit<AuthState> {
     emit(state.copyWith(status: AuthStatus.loading, errorMessage: null));
     try {
       final house = await _repository.joinHouseWithInvite(inviteCode);
+      final houses = await _fetchUserHouses();
       emit(
         AuthState(
           status: AuthStatus.authenticatedWithHouse,
           user: state.user,
           house: house,
+          userHouses: houses,
         ),
       );
     } catch (e) {
@@ -368,6 +411,39 @@ class AuthCubit extends Cubit<AuthState> {
         state.copyWith(status: AuthStatus.failure, errorMessage: e.toString()),
       );
     }
+  }
+
+  /// Alterna a casa ativa para o morador e emite o novo estado.
+  Future<void> switchHouse(String houseId) async {
+    if (state.house?.id == houseId) return;
+    emit(state.copyWith(status: AuthStatus.loading, errorMessage: null));
+    try {
+      await _repository.selectHouse(houseId);
+      final houses = await _fetchUserHouses();
+      final house = _repository.currentHouse;
+      if (house != null) {
+        emit(
+          AuthState(
+            status: AuthStatus.authenticatedWithHouse,
+            user: state.user,
+            house: house,
+            userHouses: houses,
+          ),
+        );
+      } else {
+        emit(state.copyWith(status: AuthStatus.authenticatedWithHouse));
+      }
+    } catch (e) {
+      emit(
+        state.copyWith(status: AuthStatus.failure, errorMessage: e.toString()),
+      );
+    }
+  }
+
+  /// Recarrega a lista de casas do morador no estado atual.
+  Future<void> loadUserHouses() async {
+    final houses = await _fetchUserHouses();
+    emit(state.copyWith(userHouses: houses));
   }
 
   Future<void> signOut() async {
@@ -396,10 +472,11 @@ class AuthCubit extends Cubit<AuthState> {
         email: email,
         pixKey: pixKey,
       );
+      if (isClosed) return updatedUser;
       emit(state.copyWith(user: updatedUser, errorMessage: null));
       return updatedUser;
     } catch (e) {
-      emit(state.copyWith(errorMessage: e.toString()));
+      if (!isClosed) emit(state.copyWith(errorMessage: e.toString()));
       rethrow;
     }
   }

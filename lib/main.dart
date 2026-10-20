@@ -12,6 +12,7 @@ import 'core/router/app_router.dart';
 import 'core/theme/app_theme.dart';
 import 'core/theme/theme_cubit.dart';
 import 'features/auth/presentation/cubit/auth_cubit.dart';
+import 'features/auth/presentation/cubit/auth_state.dart';
 import 'features/finance/presentation/cubit/finance_cubit.dart';
 import 'features/p2p/presentation/cubit/p2p_cubit.dart';
 import 'features/shopping/presentation/cubit/shopping_cubit.dart';
@@ -128,29 +129,45 @@ class OmniLarApp extends StatelessWidget {
           create: (_) => sl<NotificationsCubit>()..load(),
         ),
       ],
-      child: BlocBuilder<ThemeCubit, ThemeMode>(
-        builder: (context, themeMode) {
-          return MaterialApp.router(
-            title: 'Omni Lar',
-            debugShowCheckedModeBanner: false,
-            theme: AppTheme.lightTheme,
-            darkTheme: AppTheme.darkTheme,
-            themeMode: themeMode,
-            localizationsDelegates: const [
-              GlobalMaterialLocalizations.delegate,
-              GlobalWidgetsLocalizations.delegate,
-              GlobalCupertinoLocalizations.delegate,
-            ],
-            supportedLocales: const [
-              Locale('pt', 'BR'),
-            ],
-            locale: const Locale('pt', 'BR'),
-            routerConfig: AppRouter.router,
-            builder: (context, child) => SearchShortcut.listener(
-              child: OfflineBanner(child: child ?? const SizedBox.shrink()),
-            ),
-          );
+      child: BlocListener<AuthCubit, AuthState>(
+        listenWhen: (previous, current) =>
+            previous.house?.id != current.house?.id && current.house != null,
+        listener: (context, state) {
+          context.read<FinanceCubit>().resetState();
+          context.read<FinanceCubit>().loadCycleData();
+          context.read<P2PCubit>().resetState();
+          context.read<P2PCubit>().loadLoans();
+          context.read<ShoppingCubit>().resetState();
+          context.read<ShoppingCubit>().loadShoppingData();
+          context.read<CalendarCubit>().resetState();
+          context.read<CalendarCubit>().loadCalendarData();
+          context.read<NotificationsCubit>().resetState();
+          context.read<NotificationsCubit>().load();
         },
+        child: BlocBuilder<ThemeCubit, ThemeMode>(
+          builder: (context, themeMode) {
+            return MaterialApp.router(
+              title: 'Omni Lar',
+              debugShowCheckedModeBanner: false,
+              theme: AppTheme.lightTheme,
+              darkTheme: AppTheme.darkTheme,
+              themeMode: themeMode,
+              localizationsDelegates: const [
+                GlobalMaterialLocalizations.delegate,
+                GlobalWidgetsLocalizations.delegate,
+                GlobalCupertinoLocalizations.delegate,
+              ],
+              supportedLocales: const [
+                Locale('pt', 'BR'),
+              ],
+              locale: const Locale('pt', 'BR'),
+              routerConfig: AppRouter.router,
+              builder: (context, child) => SearchShortcut.listener(
+                child: OfflineBanner(child: child ?? const SizedBox.shrink()),
+              ),
+            );
+          },
+        ),
       ),
     );
   }

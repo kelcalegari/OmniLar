@@ -16,6 +16,7 @@ class AuthState extends Equatable {
   final AuthStatus status;
   final UserProfile? user;
   final House? house;
+  final List<House> userHouses;
   final String? errorMessage;
 
   /// E-mail de um cadastro que ainda espera o código de confirmação. Fica
@@ -26,6 +27,7 @@ class AuthState extends Equatable {
     this.status = AuthStatus.initial,
     this.user,
     this.house,
+    this.userHouses = const [],
     this.errorMessage,
     this.pendingEmail,
   });
@@ -38,17 +40,19 @@ class AuthState extends Equatable {
     AuthStatus? status,
     UserProfile? user,
     House? house,
+    List<House>? userHouses,
     String? errorMessage,
   }) {
     return AuthState(
       status: status ?? this.status,
       user: user ?? this.user,
       house: house ?? this.house,
+      userHouses: userHouses ?? this.userHouses,
       errorMessage: errorMessage,
       pendingEmail: pendingEmail,
     );
   }
 
   @override
-  List<Object?> get props => [status, user, house, errorMessage, pendingEmail];
+  List<Object?> get props => [status, user, house, userHouses, errorMessage, pendingEmail];
 }

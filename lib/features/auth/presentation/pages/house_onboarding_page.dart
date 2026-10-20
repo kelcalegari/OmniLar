@@ -7,14 +7,21 @@ import '../cubit/auth_cubit.dart';
 import '../cubit/auth_state.dart';
 
 class HouseOnboardingPage extends StatefulWidget {
-  const HouseOnboardingPage({super.key});
+  final bool allowBack;
+  final int initialTab;
+
+  const HouseOnboardingPage({
+    super.key,
+    this.allowBack = false,
+    this.initialTab = 0,
+  });
 
   @override
   State<HouseOnboardingPage> createState() => _HouseOnboardingPageState();
 }
 
 class _HouseOnboardingPageState extends State<HouseOnboardingPage> {
-  int _selectedTab = 0; // 0: Criar Casa, 1: Entrar com Convite
+  late int _selectedTab;
 
   // Criar Casa
   final _createFormKey = GlobalKey<FormState>();
@@ -29,6 +36,12 @@ class _HouseOnboardingPageState extends State<HouseOnboardingPage> {
   // Entrar com Convite
   final _joinFormKey = GlobalKey<FormState>();
   final _inviteCodeController = TextEditingController();
+
+  @override
+  void initState() {
+    super.initState();
+    _selectedTab = widget.initialTab;
+  }
 
   @override
   void dispose() {
@@ -130,17 +143,24 @@ class _HouseOnboardingPageState extends State<HouseOnboardingPage> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text(
-          'Configuração da Casa',
-          style: TextStyle(fontWeight: FontWeight.bold),
+        leading: widget.allowBack
+            ? IconButton(
+                icon: const Icon(Icons.arrow_back_rounded),
+                onPressed: () => Navigator.of(context).pop(),
+              )
+            : null,
+        title: Text(
+          widget.allowBack ? 'Nova Casa' : 'Configuração da Casa',
+          style: const TextStyle(fontWeight: FontWeight.bold),
         ),
         actions: [
-          TextButton.icon(
-            onPressed: () => context.read<AuthCubit>().signOut(),
-            icon: const Icon(Icons.logout_rounded, size: 18),
-            label: const Text('Sair'),
-            style: TextButton.styleFrom(foregroundColor: AppColors.debtRed),
-          ),
+          if (!widget.allowBack)
+            TextButton.icon(
+              onPressed: () => context.read<AuthCubit>().signOut(),
+              icon: const Icon(Icons.logout_rounded, size: 18),
+              label: const Text('Sair'),
+              style: TextButton.styleFrom(foregroundColor: AppColors.debtRed),
+            ),
         ],
       ),
       body: BlocConsumer<AuthCubit, AuthState>(
@@ -153,6 +173,10 @@ class _HouseOnboardingPageState extends State<HouseOnboardingPage> {
                 backgroundColor: AppColors.debtRed,
               ),
             );
+          } else if (state.status == AuthStatus.authenticatedWithHouse && widget.allowBack) {
+            if (Navigator.of(context).canPop()) {
+              Navigator.of(context).pop();
+            }
           }
         },
         builder: (context, state) {

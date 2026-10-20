@@ -36,6 +36,18 @@ class MockAuthDataSource implements AuthDataSource {
     'marina@omnilar.com': '123456',
   };
 
+  final Map<String, String> _lastSelectedHouseIdByUser = {};
+
+  House? _resolveActiveHouse(List<House> houses, String userId) {
+    if (houses.isEmpty) return null;
+    final savedId = _lastSelectedHouseIdByUser[userId];
+    if (savedId != null) {
+      final match = houses.where((h) => h.id == savedId).firstOrNull;
+      if (match != null) return match;
+    }
+    return houses.first;
+  }
+
   // Casas cadastradas
   final Map<String, House> _houses = {
     'house_nossa_casa': const House(
@@ -141,15 +153,10 @@ class MockAuthDataSource implements AuthDataSource {
     _currentUser = user;
     _authStateController.add(_currentUser);
 
-    // Seleciona primeira casa encontrada
+    // Seleciona casa ativa salva ou primeira encontrada
     final userHouses = await getUserHouses();
-    if (userHouses.isNotEmpty) {
-      _currentHouse = userHouses.first;
-      _houseStateController.add(_currentHouse);
-    } else {
-      _currentHouse = null;
-      _houseStateController.add(null);
-    }
+    _currentHouse = _resolveActiveHouse(userHouses, user.id);
+    _houseStateController.add(_currentHouse);
 
     return user;
   }
@@ -239,7 +246,7 @@ class MockAuthDataSource implements AuthDataSource {
     _currentUser = user;
     _authStateController.add(_currentUser);
     final userHouses = await getUserHouses();
-    _currentHouse = userHouses.isNotEmpty ? userHouses.first : null;
+    _currentHouse = _resolveActiveHouse(userHouses, user.id);
     _houseStateController.add(_currentHouse);
     return user;
   }
@@ -482,6 +489,7 @@ class MockAuthDataSource implements AuthDataSource {
     _invites[inviteCode] = houseId;
 
     _currentHouse = newHouse;
+    _lastSelectedHouseIdByUser[_currentUser!.id] = newHouse.id;
     _houseStateController.add(_currentHouse);
 
     return newHouse;
@@ -558,6 +566,7 @@ class MockAuthDataSource implements AuthDataSource {
     }
 
     _currentHouse = house;
+    _lastSelectedHouseIdByUser[_currentUser!.id] = house.id;
     _houseStateController.add(_currentHouse);
 
     return house;
@@ -568,6 +577,9 @@ class MockAuthDataSource implements AuthDataSource {
     final house = _houses[houseId];
     if (house == null) throw const NotFoundFailure('Casa não encontrada.');
     _currentHouse = house;
+    if (_currentUser != null) {
+      _lastSelectedHouseIdByUser[_currentUser!.id] = houseId;
+    }
     _houseStateController.add(_currentHouse);
   }
 

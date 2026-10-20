@@ -13,11 +13,13 @@ import '../../domain/entities/house.dart';
 import '../../domain/entities/house_member_info.dart';
 import 'auth_datasource.dart';
 import 'auth_error_messages.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import '../../../../core/offline/offline_snapshot.dart';
 import '../../../legal/legal_texts.dart';
 
 class SupabaseAuthDataSource implements AuthDataSource {
   final SupabaseClient _client;
+  final FlutterSecureStorage _storage;
   final _authStateController = StreamController<UserProfile?>.broadcast();
   final _houseStateController = StreamController<House?>.broadcast();
 
@@ -32,7 +34,10 @@ class SupabaseAuthDataSource implements AuthDataSource {
   /// perfil e casa.
   bool _holdAuthEvents = false;
 
-  SupabaseAuthDataSource(this._client) {
+  SupabaseAuthDataSource(
+    this._client, {
+    FlutterSecureStorage? storage,
+  }) : _storage = storage ?? const FlutterSecureStorage() {
     _initAuthStateListener();
   }
 
@@ -106,7 +111,7 @@ class SupabaseAuthDataSource implements AuthDataSource {
 
       final houses = await getUserHouses();
       if (houses.isNotEmpty) {
-        _currentHouse = houses.first;
+        _currentHouse = await _resolveActiveHouse(houses, user.id);
         _houseStateController.add(_currentHouse);
       } else {
         _currentHouse = null;
@@ -123,6 +128,18 @@ class SupabaseAuthDataSource implements AuthDataSource {
       );
       _authStateController.add(_currentUser);
     }
+  }
+
+  Future<House?> _resolveActiveHouse(List<House> houses, String userId) async {
+    if (houses.isEmpty) return null;
+    try {
+      final savedId = await _storage.read(key: 'last_selected_house_id_$userId');
+      if (savedId != null) {
+        final match = houses.where((h) => h.id == savedId).firstOrNull;
+        if (match != null) return match;
+      }
+    } catch (_) {}
+    return houses.first;
   }
 
   @override
@@ -850,6 +867,7 @@ class SupabaseAuthDataSource implements AuthDataSource {
           // O saldo inicial é gravado antes de a casa aparecer no app
           await _saveInitialBalance(house, initialReserveCents, initialCashCents);
           _currentHouse = house;
+          await _saveLastSelectedHouse(userId, house.id);
           _houseStateController.add(_currentHouse);
           return house;
         }
@@ -1030,11 +1048,18 @@ class SupabaseAuthDataSource implements AuthDataSource {
 
       await _saveInitialBalance(house, initialReserveCents, initialCashCents);
       _currentHouse = house;
+      await _saveLastSelectedHouse(userId, house.id);
       _houseStateController.add(_currentHouse);
       return house;
     } catch (e) {
       throw ServerFailure('Erro ao criar casa: $e');
     }
+  }
+
+  Future<void> _saveLastSelectedHouse(String userId, String houseId) async {
+    try {
+      await _storage.write(key: 'last_selected_house_id_$userId', value: houseId);
+    } catch (_) {}
   }
 
   /// Dinheiro que a casa já tinha ao nascer (0093): a reserva entra na Reserva
@@ -1094,6 +1119,7 @@ class SupabaseAuthDataSource implements AuthDataSource {
       );
 
       _currentHouse = house;
+      await _saveLastSelectedHouse(userId, house.id);
       _houseStateController.add(_currentHouse);
       return house;
     } catch (e) {
@@ -1108,6 +1134,10 @@ class SupabaseAuthDataSource implements AuthDataSource {
     final match = houses.where((h) => h.id == houseId).firstOrNull;
     if (match != null) {
       _currentHouse = match;
+      final userId = _currentUser?.id ?? _client.auth.currentUser?.id;
+      if (userId != null) {
+        await _saveLastSelectedHouse(userId, match.id);
+      }
       _houseStateController.add(_currentHouse);
     }
   }
