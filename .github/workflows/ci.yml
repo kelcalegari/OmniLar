@@ -55,15 +55,17 @@ jobs:
         with:
           version: latest
 
-      - name: Push Migrations to Supabase
-        if: ${{ secrets.SUPABASE_ACCESS_TOKEN != '' && secrets.SUPABASE_DB_PASSWORD != '' }}
+      - name: Sync Migrations to Supabase
         run: |
-          supabase link --project-ref ${{ secrets.SUPABASE_PROJECT_REF || 'rygxmpwzofgieodvhpcy' }} --password "${{ secrets.SUPABASE_DB_PASSWORD }}"
-          supabase db push --password "${{ secrets.SUPABASE_DB_PASSWORD }}"
+          if [ -n "$SUPABASE_ACCESS_TOKEN" ] && [ -n "$SUPABASE_DB_PASSWORD" ]; then
+            echo "Chaves encontradas. Vinculando projeto e aplicando migracoes pendentes..."
+            supabase link --project-ref "$PROJECT_REF" --password "$SUPABASE_DB_PASSWORD"
+            supabase db push --password "$SUPABASE_DB_PASSWORD"
+            echo "Migracoes aplicadas com sucesso no Supabase!"
+          else
+            echo "::warning title=Supabase Secrets Ausentes::Para ativar a sincronizacao automatica de banco, adicione SUPABASE_ACCESS_TOKEN e SUPABASE_DB_PASSWORD em Settings > Secrets and variables > Actions no GitHub."
+          fi
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
-
-      - name: Warning if Secrets are Missing
-        if: ${{ secrets.SUPABASE_ACCESS_TOKEN == '' || secrets.SUPABASE_DB_PASSWORD == '' }}
-        run: |
-          echo "::warning title=Supabase Secrets Ausentes::Para ativar a sincronizacao automatica de banco, adicione SUPABASE_ACCESS_TOKEN e SUPABASE_DB_PASSWORD em Settings > Secrets and variables > Actions no GitHub."
+          SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+          PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF || 'rygxmpwzofgieodvhpcy' }}
