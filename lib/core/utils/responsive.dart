@@ -36,7 +36,14 @@ Future<T?> showAdaptiveModal<T>({
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
-      builder: (_) => child,
+      builder: (sheetCtx) => AnimatedPadding(
+        padding: EdgeInsets.only(
+          bottom: MediaQuery.viewInsetsOf(sheetCtx).bottom,
+        ),
+        duration: const Duration(milliseconds: 150),
+        curve: Curves.easeOut,
+        child: child,
+      ),
     );
   } else {
     return showDialog<T>(

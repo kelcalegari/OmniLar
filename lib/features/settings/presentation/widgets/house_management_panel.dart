@@ -405,9 +405,10 @@ class _DeleteHouseModalState extends State<DeleteHouseModal> {
     final expectedText = widget.house.name.trim();
     final isMatch = _confirmController.text.trim().toLowerCase() == expectedText.toLowerCase();
 
-    return Padding(
-      padding: const EdgeInsets.all(24),
-      child: Column(
+    return SingleChildScrollView(
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -557,6 +558,7 @@ class _DeleteHouseModalState extends State<DeleteHouseModal> {
           ),
         ],
       ),
+    ),
     );
   }
 }

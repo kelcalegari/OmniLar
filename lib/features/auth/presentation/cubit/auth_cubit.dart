@@ -482,6 +482,7 @@ class AuthCubit extends Cubit<AuthState> {
       }
     } catch (e) {
       emit(state.copyWith(status: AuthStatus.failure, errorMessage: e.toString()));
+      rethrow;
     }
   }
 
@@ -498,6 +499,7 @@ class AuthCubit extends Cubit<AuthState> {
       ));
     } catch (e) {
       emit(state.copyWith(status: AuthStatus.failure, errorMessage: e.toString()));
+      rethrow;
     }
   }
 
@@ -505,11 +507,12 @@ class AuthCubit extends Cubit<AuthState> {
   Future<void> deleteHouse(String houseId) async {
     final activeHouses = state.userHouses.where((h) => !h.isArchived).toList();
     if (activeHouses.length <= 1) {
+      const msg = 'Você precisa ter pelo menos uma casa ativa no Omni Lar.';
       emit(state.copyWith(
         status: AuthStatus.failure,
-        errorMessage: 'Você precisa ter pelo menos uma casa ativa no Omni Lar.',
+        errorMessage: msg,
       ));
-      return;
+      throw AuthFailure(msg);
     }
 
     emit(state.copyWith(status: AuthStatus.loading, errorMessage: null));
@@ -543,6 +546,7 @@ class AuthCubit extends Cubit<AuthState> {
       }
     } catch (e) {
       emit(state.copyWith(status: AuthStatus.failure, errorMessage: e.toString()));
+      rethrow;
     }
   }
 
@@ -550,11 +554,12 @@ class AuthCubit extends Cubit<AuthState> {
   Future<void> leaveHouse(String houseId) async {
     final activeHouses = state.userHouses.where((h) => !h.isArchived).toList();
     if (activeHouses.length <= 1) {
+      const msg = 'Você precisa ter pelo menos uma casa ativa no Omni Lar.';
       emit(state.copyWith(
         status: AuthStatus.failure,
-        errorMessage: 'Você precisa ter pelo menos uma casa ativa no Omni Lar.',
+        errorMessage: msg,
       ));
-      return;
+      throw AuthFailure(msg);
     }
 
     emit(state.copyWith(status: AuthStatus.loading, errorMessage: null));
@@ -588,6 +593,7 @@ class AuthCubit extends Cubit<AuthState> {
       }
     } catch (e) {
       emit(state.copyWith(status: AuthStatus.failure, errorMessage: e.toString()));
+      rethrow;
     }
   }
 
