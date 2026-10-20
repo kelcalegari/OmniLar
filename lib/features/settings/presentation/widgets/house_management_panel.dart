@@ -76,10 +76,16 @@ class HouseManagementPanel extends StatelessWidget {
   }
 
   void _openDeleteDialog(BuildContext context, House house) {
-    showAdaptiveModal(
+    showDialog<void>(
       context: context,
-      maxWidth: 480,
-      child: DeleteHouseModal(house: house),
+      builder: (ctx) => Dialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        clipBehavior: Clip.antiAlias,
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 440),
+          child: DeleteHouseModal(house: house),
+        ),
+      ),
     );
   }
 
@@ -470,15 +476,28 @@ class _DeleteHouseModalState extends State<DeleteHouseModal> {
           ),
           const SizedBox(height: 8),
           Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
             decoration: BoxDecoration(
               color: Colors.grey.shade100,
               borderRadius: BorderRadius.circular(8),
               border: Border.all(color: Colors.grey.shade300),
             ),
-            child: Text(
-              expectedText,
-              style: const TextStyle(fontWeight: FontWeight.bold, letterSpacing: 0.5),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  expectedText,
+                  style: const TextStyle(fontWeight: FontWeight.bold, letterSpacing: 0.5),
+                ),
+                TextButton.icon(
+                  onPressed: () {
+                    _confirmController.text = expectedText;
+                    setState(() {});
+                  },
+                  icon: const Icon(Icons.copy_rounded, size: 14),
+                  label: const Text('Preencher', style: TextStyle(fontSize: 12)),
+                ),
+              ],
             ),
           ),
           const SizedBox(height: 12),

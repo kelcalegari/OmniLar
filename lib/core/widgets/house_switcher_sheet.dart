@@ -175,10 +175,16 @@ class HouseSwitcherSheet extends StatelessWidget {
       return;
     }
 
-    showAdaptiveModal(
+    showDialog<void>(
       context: context,
-      maxWidth: 480,
-      child: DeleteHouseModal(house: house),
+      builder: (ctx) => Dialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        clipBehavior: Clip.antiAlias,
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 440),
+          child: DeleteHouseModal(house: house),
+        ),
+      ),
     );
   }
 
