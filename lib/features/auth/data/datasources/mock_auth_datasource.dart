@@ -444,7 +444,11 @@ class MockAuthDataSource implements AuthDataSource {
       }
     }
 
-    return userHouseIds.map((id) => _houses[id]!).toList();
+    return userHouseIds
+        .map((id) => _houses[id])
+        .whereType<House>()
+        .where((h) => !h.isArchived)
+        .toList();
   }
 
   @override
@@ -597,6 +601,107 @@ class MockAuthDataSource implements AuthDataSource {
     final code = 'LAR${(100 + _invites.length).toString()}';
     _invites[code] = houseId;
     return code;
+  }
+
+  @override
+  Future<void> archiveHouse(String houseId) async {
+    if (_currentUser == null) throw const AuthFailure('Usuário não autenticado.');
+    final house = _houses[houseId];
+    if (house == null) throw const NotFoundFailure('Casa não encontrada.');
+    if (house.createdBy != _currentUser!.id) {
+      throw const AuthFailure('Apenas o proprietário da casa pode arquivá-la.');
+    }
+    final activeHouses = (await getUserHouses()).where((h) => h.id != houseId).toList();
+    if (activeHouses.isEmpty) {
+      throw const AuthFailure('Você precisa ter pelo menos uma casa ativa no Omni Lar.');
+    }
+
+    _houses[houseId] = house.copyWith(archivedAt: DateTime.now());
+    if (_currentHouse?.id == houseId) {
+      _currentHouse = activeHouses.first;
+      _lastSelectedHouseIdByUser[_currentUser!.id] = _currentHouse!.id;
+      _houseStateController.add(_currentHouse);
+    }
+  }
+
+  @override
+  Future<void> unarchiveHouse(String houseId) async {
+    if (_currentUser == null) throw const AuthFailure('Usuário não autenticado.');
+    final house = _houses[houseId];
+    if (house == null) throw const NotFoundFailure('Casa não encontrada.');
+    if (house.createdBy != _currentUser!.id) {
+      throw const AuthFailure('Apenas o proprietário pode desarquivar a casa.');
+    }
+    _houses[houseId] = house.copyWith(clearArchivedAt: true);
+  }
+
+  @override
+  Future<void> deleteHouse(String houseId) async {
+    if (_currentUser == null) throw const AuthFailure('Usuário não autenticado.');
+    final house = _houses[houseId];
+    if (house == null) throw const NotFoundFailure('Casa não encontrada.');
+    if (house.createdBy != _currentUser!.id) {
+      throw const AuthFailure('Apenas o proprietário pode excluir permanentemente a casa.');
+    }
+    final activeHouses = (await getUserHouses()).where((h) => h.id != houseId).toList();
+    if (activeHouses.isEmpty) {
+      throw const AuthFailure('Você precisa ter pelo menos uma casa ativa no Omni Lar.');
+    }
+
+    _houses.remove(houseId);
+    _houseMembers.remove(houseId);
+    if (_currentHouse?.id == houseId) {
+      _currentHouse = activeHouses.first;
+      _lastSelectedHouseIdByUser[_currentUser!.id] = _currentHouse!.id;
+      _houseStateController.add(_currentHouse);
+    }
+  }
+
+  @override
+  Future<void> leaveHouse(String houseId) async {
+    if (_currentUser == null) throw const AuthFailure('Usuário não autenticado.');
+    final house = _houses[houseId];
+    if (house == null) throw const NotFoundFailure('Casa não encontrada.');
+
+    final activeHouses = (await getUserHouses()).where((h) => h.id != houseId).toList();
+    if (activeHouses.isEmpty) {
+      throw const AuthFailure('Você precisa ter pelo menos uma casa ativa no Omni Lar.');
+    }
+
+    final members = _houseMembers[houseId] ?? [];
+    final currentMember = members.where((m) => m.userId == _currentUser!.id).firstOrNull;
+    if (currentMember == null) {
+      throw const AuthFailure('Você não faz parte desta casa ou já saiu.');
+    }
+
+    if (currentMember.role == 'owner') {
+      final others = members.where((m) => m.userId != _currentUser!.id).toList();
+      if (others.isEmpty) {
+        throw const AuthFailure('Como único morador e proprietário, arquive ou exclua a casa em vez de sair.');
+      }
+      final heir = others.first;
+      _houseMembers[houseId] = [
+        ...others.map((m) => m.userId == heir.userId
+            ? HouseMemberInfo(
+                id: m.id,
+                houseId: m.houseId,
+                userId: m.userId,
+                role: 'owner',
+                joinedAt: m.joinedAt,
+                profile: m.profile,
+              )
+            : m),
+      ];
+      _houses[houseId] = house.copyWith(createdBy: heir.userId);
+    } else {
+      _houseMembers[houseId] = members.where((m) => m.userId != _currentUser!.id).toList();
+    }
+
+    if (_currentHouse?.id == houseId) {
+      _currentHouse = activeHouses.first;
+      _lastSelectedHouseIdByUser[_currentUser!.id] = _currentHouse!.id;
+      _houseStateController.add(_currentHouse);
+    }
   }
 
   void dispose() {

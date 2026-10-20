@@ -17,6 +17,7 @@ class House extends Equatable {
   final String? pixKeyType;
   final String? pixKeyHolderName;
   final String? pixKeyBank;
+  final DateTime? archivedAt;
 
   const House({
     required this.id,
@@ -30,7 +31,10 @@ class House extends Equatable {
     this.pixKeyType,
     this.pixKeyHolderName,
     this.pixKeyBank,
+    this.archivedAt,
   });
+
+  bool get isArchived => archivedAt != null;
 
   /// Calendário de ciclos da casa, já com as trocas de dia.
   CycleSchedule get cycleSchedule => CycleSchedule(cycleStartDay, cycleDayChanges, transitionMinDays);
@@ -48,6 +52,8 @@ class House extends Equatable {
     String? pixKeyHolderName,
     String? pixKeyBank,
     bool clearPixKey = false,
+    DateTime? archivedAt,
+    bool clearArchivedAt = false,
   }) {
     return House(
       id: id ?? this.id,
@@ -61,6 +67,7 @@ class House extends Equatable {
       pixKeyType: clearPixKey ? null : (pixKeyType ?? this.pixKeyType),
       pixKeyHolderName: clearPixKey ? null : (pixKeyHolderName ?? this.pixKeyHolderName),
       pixKeyBank: clearPixKey ? null : (pixKeyBank ?? this.pixKeyBank),
+      archivedAt: clearArchivedAt ? null : (archivedAt ?? this.archivedAt),
     );
   }
 
@@ -77,5 +84,6 @@ class House extends Equatable {
         pixKeyType,
         pixKeyHolderName,
         pixKeyBank,
+        archivedAt,
       ];
 }

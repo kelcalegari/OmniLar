@@ -109,4 +109,16 @@ abstract class AuthDataSource {
   Future<void> selectHouse(String houseId);
   Future<List<HouseMemberInfo>> getHouseMembers(String houseId);
   Future<String> createHouseInvite(String houseId);
+
+  /// Arquiva a casa (soft-delete, mantém dados e histórico).
+  Future<void> archiveHouse(String houseId);
+
+  /// Desarquiva uma casa anteriormente arquivada.
+  Future<void> unarchiveHouse(String houseId);
+
+  /// Exclui permanentemente a casa e seus dados associados em cascata.
+  Future<void> deleteHouse(String houseId);
+
+  /// Sai da casa (membro deixa a residência).
+  Future<void> leaveHouse(String houseId);
 }

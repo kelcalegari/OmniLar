@@ -49,6 +49,7 @@ import '../../../../core/theme/theme_cubit.dart';
 import '../../../../core/widgets/theme_toggle_button.dart';
 import '../widgets/ai_key_config_sheet.dart';
 import '../widgets/account_security_panel.dart';
+import '../widgets/house_management_panel.dart';
 import '../../../../core/widgets/money_input_field.dart';
 import '../../../../core/widgets/save_feedback.dart';
 import '../../../../core/widgets/search_shortcut.dart';

@@ -78,6 +78,26 @@ class AuthRepositoryImpl implements AuthRepository {
   }
 
   @override
+  Future<void> archiveHouse(String houseId) {
+    return _dataSource.archiveHouse(houseId);
+  }
+
+  @override
+  Future<void> unarchiveHouse(String houseId) {
+    return _dataSource.unarchiveHouse(houseId);
+  }
+
+  @override
+  Future<void> deleteHouse(String houseId) {
+    return _dataSource.deleteHouse(houseId);
+  }
+
+  @override
+  Future<void> leaveHouse(String houseId) {
+    return _dataSource.leaveHouse(houseId);
+  }
+
+  @override
   String? get pendingEmailChange => _dataSource.pendingEmailChange;
 
   @override

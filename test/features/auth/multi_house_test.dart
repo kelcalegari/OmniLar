@@ -79,5 +79,78 @@ void main() {
       expect(cubit.state.house?.id, equals(sitioId));
       expect(cubit.state.house?.name, equals('Sítio Recanto'));
     });
+
+    test('Não permite arquivar, excluir ou sair se o usuário tiver apenas uma casa ativa', () async {
+      await cubit.signInWithEmailPassword('carlos@omnilar.com', '123456');
+      await Future<void>.delayed(const Duration(milliseconds: 50));
+      expect(cubit.state.userHouses.length, equals(1));
+      final soleHouseId = cubit.state.house!.id;
+
+      // 1. Tentar arquivar a única casa
+      await cubit.archiveHouse(soleHouseId);
+      expect(cubit.state.status, equals(AuthStatus.failure));
+      expect(cubit.state.errorMessage, contains('Você precisa ter pelo menos uma casa ativa'));
+      expect(cubit.state.house?.id, equals(soleHouseId));
+
+      // 2. Tentar excluir a única casa
+      await cubit.deleteHouse(soleHouseId);
+      expect(cubit.state.status, equals(AuthStatus.failure));
+      expect(cubit.state.errorMessage, contains('Você precisa ter pelo menos uma casa ativa'));
+      expect(cubit.state.house?.id, equals(soleHouseId));
+
+      // 3. Tentar sair da única casa
+      await cubit.leaveHouse(soleHouseId);
+      expect(cubit.state.status, equals(AuthStatus.failure));
+      expect(cubit.state.errorMessage, contains('Você precisa ter pelo menos uma casa ativa'));
+      expect(cubit.state.house?.id, equals(soleHouseId));
+    });
+
+    test('Arquivar casa secundária oculta ela da lista e mantém a casa ativa atual', () async {
+      await cubit.signInWithEmailPassword('carlos@omnilar.com', '123456');
+      final mainHouseId = cubit.state.house!.id;
+
+      await cubit.createHouse(name: 'Casa Temporária', cycleStartDay: 5);
+      final tempHouseId = cubit.state.house!.id;
+
+      // Alterna de volta para a principal
+      await cubit.switchHouse(mainHouseId);
+      expect(cubit.state.userHouses.length, equals(2));
+
+      // Arquiva a casa secundária
+      await cubit.archiveHouse(tempHouseId);
+      expect(cubit.state.status, equals(AuthStatus.authenticatedWithHouse));
+      expect(cubit.state.house?.id, equals(mainHouseId));
+      expect(cubit.state.userHouses.length, equals(1));
+      expect(cubit.state.userHouses.any((h) => h.id == tempHouseId), isFalse);
+    });
+
+    test('Arquivar a casa ativa atual seleciona automaticamente a próxima casa ativa', () async {
+      await cubit.signInWithEmailPassword('carlos@omnilar.com', '123456');
+      final firstHouseId = cubit.state.house!.id;
+
+      await cubit.createHouse(name: 'Casa Montanha', cycleStartDay: 10);
+      final secondHouseId = cubit.state.house!.id;
+
+      // Arquiva a casa ativa atual (Casa Montanha)
+      await cubit.archiveHouse(secondHouseId);
+      expect(cubit.state.status, equals(AuthStatus.authenticatedWithHouse));
+      expect(cubit.state.house?.id, equals(firstHouseId));
+      expect(cubit.state.house?.name, equals('Nossa Casa'));
+      expect(cubit.state.userHouses.length, equals(1));
+    });
+
+    test('Excluir permanentemente a casa ativa remove-a e seleciona a próxima casa', () async {
+      await cubit.signInWithEmailPassword('carlos@omnilar.com', '123456');
+      final firstHouseId = cubit.state.house!.id;
+
+      await cubit.createHouse(name: 'Casa para Exclusão', cycleStartDay: 10);
+      final toDeleteId = cubit.state.house!.id;
+
+      // Exclui a casa
+      await cubit.deleteHouse(toDeleteId);
+      expect(cubit.state.status, equals(AuthStatus.authenticatedWithHouse));
+      expect(cubit.state.house?.id, equals(firstHouseId));
+      expect(cubit.state.userHouses.any((h) => h.id == toDeleteId), isFalse);
+    });
   });
 }

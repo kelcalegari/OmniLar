@@ -8,6 +8,7 @@ import '../../features/auth/presentation/cubit/auth_state.dart';
 import '../di/service_locator.dart';
 import '../theme/app_colors.dart';
 import '../utils/responsive.dart';
+import '../../features/settings/presentation/widgets/house_management_panel.dart';
 
 /// Seletor de Casas para contas que participam ou gerenciam múltiplos lares.
 /// Adapta-se como BottomSheet no celular e Dialog no Desktop/Web.
@@ -100,6 +101,127 @@ class HouseSwitcherSheet extends StatelessWidget {
   void _handleJoinHouse(BuildContext context) {
     Navigator.of(context).pop();
     context.push('/casas/nova?tab=invite');
+  }
+
+  void _showMinimumHouseDialog(BuildContext context, String actionLabel) {
+    showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        icon: const Icon(Icons.info_outline_rounded, color: AppColors.primary, size: 36),
+        title: const Text('Mínimo de 1 Casa Ativa', textAlign: TextAlign.center),
+        content: Text(
+          'Você precisa ter pelo menos uma casa ativa no Omni Lar.\n\n'
+          'Para $actionLabel esta residência, crie uma nova casa ou entre em outra residência primeiro.',
+          textAlign: TextAlign.center,
+        ),
+        actionsAlignment: MainAxisAlignment.center,
+        actions: [
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Entendido'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _handleArchive(BuildContext context, House house, int totalHouses) {
+    if (totalHouses <= 1) {
+      _showMinimumHouseDialog(context, 'arquivar');
+      return;
+    }
+
+    showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        icon: const Icon(Icons.archive_outlined, color: Colors.amber, size: 36),
+        title: Text('Arquivar "${house.name}"?'),
+        content: const Text(
+          'A casa será ocultada da sua lista do dia a dia, mas todo o histórico financeiro '
+          'e lançamentos continuarão preservados com segurança.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancelar'),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: Colors.amber.shade800),
+            onPressed: () async {
+              Navigator.pop(ctx);
+              final messenger = ScaffoldMessenger.of(context);
+              try {
+                await context.read<AuthCubit>().archiveHouse(house.id);
+                messenger.showSnackBar(
+                  SnackBar(content: Text('A casa "${house.name}" foi arquivada. 📦')),
+                );
+              } catch (e) {
+                messenger.showSnackBar(
+                  SnackBar(backgroundColor: AppColors.debtRed, content: Text('$e')),
+                );
+              }
+            },
+            child: const Text('Arquivar'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _handleDelete(BuildContext context, House house, int totalHouses) {
+    if (totalHouses <= 1) {
+      _showMinimumHouseDialog(context, 'excluir');
+      return;
+    }
+
+    showAdaptiveModal(
+      context: context,
+      maxWidth: 480,
+      child: DeleteHouseModal(house: house),
+    );
+  }
+
+  void _handleLeave(BuildContext context, House house, int totalHouses) {
+    if (totalHouses <= 1) {
+      _showMinimumHouseDialog(context, 'sair de');
+      return;
+    }
+
+    showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        icon: const Icon(Icons.exit_to_app_rounded, color: AppColors.debtRed, size: 36),
+        title: Text('Sair de "${house.name}"?'),
+        content: const Text(
+          'Deseja realmente deixar de morar nesta casa?\n\n'
+          'Seu histórico financeiro permanece preservado para os outros moradores.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancelar'),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: AppColors.debtRed),
+            onPressed: () async {
+              Navigator.pop(ctx);
+              final messenger = ScaffoldMessenger.of(context);
+              try {
+                await context.read<AuthCubit>().leaveHouse(house.id);
+                messenger.showSnackBar(
+                  SnackBar(content: Text('Você saiu da casa "${house.name}".')),
+                );
+              } catch (e) {
+                messenger.showSnackBar(
+                  SnackBar(backgroundColor: AppColors.debtRed, content: Text('$e')),
+                );
+              }
+            },
+            child: const Text('Sair da Casa'),
+          ),
+        ],
+      ),
+    );
   }
 
   @override
@@ -301,17 +423,74 @@ class HouseSwitcherSheet extends StatelessWidget {
                                     ),
                                   ),
                                   if (isActive)
-                                    const Icon(
-                                      Icons.check_circle_rounded,
-                                      color: AppColors.primary,
-                                      size: 22,
-                                    )
-                                  else
-                                    const Icon(
-                                      Icons.arrow_forward_ios_rounded,
-                                      size: 14,
+                                    const Padding(
+                                      padding: EdgeInsets.only(right: 4),
+                                      child: Icon(
+                                        Icons.check_circle_rounded,
+                                        color: AppColors.primary,
+                                        size: 20,
+                                      ),
+                                    ),
+                                  PopupMenuButton<String>(
+                                    icon: const Icon(
+                                      Icons.more_vert_rounded,
+                                      size: 20,
                                       color: Colors.grey,
                                     ),
+                                    padding: EdgeInsets.zero,
+                                    constraints: const BoxConstraints(),
+                                    tooltip: 'Opções da casa',
+                                    onSelected: (val) {
+                                      if (val == 'archive') {
+                                        _handleArchive(context, house, houses.length);
+                                      } else if (val == 'delete') {
+                                        _handleDelete(context, house, houses.length);
+                                      } else if (val == 'leave') {
+                                        _handleLeave(context, house, houses.length);
+                                      }
+                                    },
+                                    itemBuilder: (ctx) => [
+                                      if (isOwner) ...[
+                                        const PopupMenuItem(
+                                          value: 'archive',
+                                          child: Row(
+                                            children: [
+                                              Icon(Icons.archive_outlined, size: 18, color: Colors.amber),
+                                              SizedBox(width: 8),
+                                              Text('Arquivar casa'),
+                                            ],
+                                          ),
+                                        ),
+                                        const PopupMenuItem(
+                                          value: 'delete',
+                                          child: Row(
+                                            children: [
+                                              Icon(Icons.delete_forever_rounded, size: 18, color: AppColors.debtRed),
+                                              SizedBox(width: 8),
+                                              Text(
+                                                'Excluir permanentemente',
+                                                style: TextStyle(color: AppColors.debtRed),
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                      ] else ...[
+                                        const PopupMenuItem(
+                                          value: 'leave',
+                                          child: Row(
+                                            children: [
+                                              Icon(Icons.exit_to_app_rounded, size: 18, color: AppColors.debtRed),
+                                              SizedBox(width: 8),
+                                              Text(
+                                                'Sair da casa',
+                                                style: TextStyle(color: AppColors.debtRed),
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                      ],
+                                    ],
+                                  ),
                                 ],
                               ),
                             ),

@@ -440,6 +440,157 @@ class AuthCubit extends Cubit<AuthState> {
     }
   }
 
+  /// Arquiva a casa. O usuário deve manter pelo menos uma casa ativa.
+  Future<void> archiveHouse(String houseId) async {
+    final activeHouses = state.userHouses.where((h) => !h.isArchived).toList();
+    if (activeHouses.length <= 1) {
+      emit(state.copyWith(
+        status: AuthStatus.failure,
+        errorMessage: 'Você precisa ter pelo menos uma casa ativa no Omni Lar.',
+      ));
+      return;
+    }
+
+    emit(state.copyWith(status: AuthStatus.loading, errorMessage: null));
+    try {
+      await _repository.archiveHouse(houseId);
+      final remainingHouses = await _fetchUserHouses();
+      if (state.house?.id == houseId) {
+        final next = remainingHouses.where((h) => !h.isArchived).firstOrNull;
+        if (next != null) {
+          await _repository.selectHouse(next.id);
+          final activeHouse = _repository.currentHouse ?? next;
+          emit(AuthState(
+            status: AuthStatus.authenticatedWithHouse,
+            user: state.user,
+            house: activeHouse,
+            userHouses: remainingHouses,
+          ));
+        } else {
+          emit(AuthState(
+            status: AuthStatus.authenticatedNoHouse,
+            user: state.user,
+            userHouses: remainingHouses,
+          ));
+        }
+      } else {
+        emit(state.copyWith(
+          status: AuthStatus.authenticatedWithHouse,
+          userHouses: remainingHouses,
+          errorMessage: null,
+        ));
+      }
+    } catch (e) {
+      emit(state.copyWith(status: AuthStatus.failure, errorMessage: e.toString()));
+    }
+  }
+
+  /// Desarquiva uma casa.
+  Future<void> unarchiveHouse(String houseId) async {
+    emit(state.copyWith(status: AuthStatus.loading, errorMessage: null));
+    try {
+      await _repository.unarchiveHouse(houseId);
+      final houses = await _fetchUserHouses();
+      emit(state.copyWith(
+        status: AuthStatus.authenticatedWithHouse,
+        userHouses: houses,
+        errorMessage: null,
+      ));
+    } catch (e) {
+      emit(state.copyWith(status: AuthStatus.failure, errorMessage: e.toString()));
+    }
+  }
+
+  /// Exclui permanentemente a casa e seus registros. O usuário deve manter pelo menos uma casa ativa.
+  Future<void> deleteHouse(String houseId) async {
+    final activeHouses = state.userHouses.where((h) => !h.isArchived).toList();
+    if (activeHouses.length <= 1) {
+      emit(state.copyWith(
+        status: AuthStatus.failure,
+        errorMessage: 'Você precisa ter pelo menos uma casa ativa no Omni Lar.',
+      ));
+      return;
+    }
+
+    emit(state.copyWith(status: AuthStatus.loading, errorMessage: null));
+    try {
+      await _repository.deleteHouse(houseId);
+      final remainingHouses = await _fetchUserHouses();
+      if (state.house?.id == houseId) {
+        final next = remainingHouses.where((h) => !h.isArchived).firstOrNull;
+        if (next != null) {
+          await _repository.selectHouse(next.id);
+          final activeHouse = _repository.currentHouse ?? next;
+          emit(AuthState(
+            status: AuthStatus.authenticatedWithHouse,
+            user: state.user,
+            house: activeHouse,
+            userHouses: remainingHouses,
+          ));
+        } else {
+          emit(AuthState(
+            status: AuthStatus.authenticatedNoHouse,
+            user: state.user,
+            userHouses: remainingHouses,
+          ));
+        }
+      } else {
+        emit(state.copyWith(
+          status: AuthStatus.authenticatedWithHouse,
+          userHouses: remainingHouses,
+          errorMessage: null,
+        ));
+      }
+    } catch (e) {
+      emit(state.copyWith(status: AuthStatus.failure, errorMessage: e.toString()));
+    }
+  }
+
+  /// Sai da casa. O usuário deve manter pelo menos uma casa ativa.
+  Future<void> leaveHouse(String houseId) async {
+    final activeHouses = state.userHouses.where((h) => !h.isArchived).toList();
+    if (activeHouses.length <= 1) {
+      emit(state.copyWith(
+        status: AuthStatus.failure,
+        errorMessage: 'Você precisa ter pelo menos uma casa ativa no Omni Lar.',
+      ));
+      return;
+    }
+
+    emit(state.copyWith(status: AuthStatus.loading, errorMessage: null));
+    try {
+      await _repository.leaveHouse(houseId);
+      final remainingHouses = await _fetchUserHouses();
+      if (state.house?.id == houseId) {
+        final next = remainingHouses.where((h) => !h.isArchived).firstOrNull;
+        if (next != null) {
+          await _repository.selectHouse(next.id);
+          final activeHouse = _repository.currentHouse ?? next;
+          emit(AuthState(
+            status: AuthStatus.authenticatedWithHouse,
+            user: state.user,
+            house: activeHouse,
+            userHouses: remainingHouses,
+          ));
+        } else {
+          emit(AuthState(
+            status: AuthStatus.authenticatedNoHouse,
+            user: state.user,
+            userHouses: remainingHouses,
+          ));
+        }
+      } else {
+        emit(state.copyWith(
+          status: AuthStatus.authenticatedWithHouse,
+          userHouses: remainingHouses,
+          errorMessage: null,
+        ));
+      }
+    } catch (e) {
+      emit(state.copyWith(status: AuthStatus.failure, errorMessage: e.toString()));
+    }
+  }
+
   /// Recarrega a lista de casas do morador no estado atual.
   Future<void> loadUserHouses() async {
     final houses = await _fetchUserHouses();

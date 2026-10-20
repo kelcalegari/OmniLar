@@ -737,6 +737,7 @@ class SupabaseAuthDataSource implements AuthDataSource {
       for (final r in rows) {
         final h = r['house'] as Map<String, dynamic>?;
         if (h != null) {
+          final archivedAtRaw = h['archived_at'] as String?;
           houses.add(
             House(
               id: h['id'] as String,
@@ -750,11 +751,12 @@ class SupabaseAuthDataSource implements AuthDataSource {
               pixKeyType: h['pix_key_type'] as String?,
               pixKeyHolderName: h['pix_key_holder_name'] as String?,
               pixKeyBank: h['pix_key_bank'] as String?,
+              archivedAt: archivedAtRaw != null ? DateTime.tryParse(archivedAtRaw)?.toLocal() : null,
             ),
           );
         }
       }
-      return houses;
+      return houses.where((h) => !h.isArchived).toList();
     } catch (_) {
       return [];
     }
@@ -1230,6 +1232,50 @@ class SupabaseAuthDataSource implements AuthDataSource {
       return code;
     } catch (e) {
       throw ServerFailure('Erro ao gerar convite: $e');
+    }
+  }
+
+  @override
+  Future<void> archiveHouse(String houseId) async {
+    try {
+      await _client.rpc('archive_house', params: {'p_house_id': houseId});
+    } on PostgrestException catch (e) {
+      throw AuthFailure(e.message);
+    } catch (e) {
+      throw AuthFailure('Não foi possível arquivar a casa: $e');
+    }
+  }
+
+  @override
+  Future<void> unarchiveHouse(String houseId) async {
+    try {
+      await _client.rpc('unarchive_house', params: {'p_house_id': houseId});
+    } on PostgrestException catch (e) {
+      throw AuthFailure(e.message);
+    } catch (e) {
+      throw AuthFailure('Não foi possível desarquivar a casa: $e');
+    }
+  }
+
+  @override
+  Future<void> deleteHouse(String houseId) async {
+    try {
+      await _client.rpc('delete_house', params: {'p_house_id': houseId});
+    } on PostgrestException catch (e) {
+      throw AuthFailure(e.message);
+    } catch (e) {
+      throw AuthFailure('Não foi possível excluir a casa: $e');
+    }
+  }
+
+  @override
+  Future<void> leaveHouse(String houseId) async {
+    try {
+      await _client.rpc('leave_house', params: {'p_house_id': houseId});
+    } on PostgrestException catch (e) {
+      throw AuthFailure(e.message);
+    } catch (e) {
+      throw AuthFailure('Não foi possível sair da casa: $e');
     }
   }
 

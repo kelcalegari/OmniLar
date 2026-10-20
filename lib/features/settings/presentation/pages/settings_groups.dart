@@ -239,6 +239,7 @@ extension _SettingsGroupViews on _SettingsPageState {
       _PermissionsBlock(financeState: financeState),
       _HouseLabelsBlock(financeState: financeState),
       _shoppingListsPanel(context, financeState),
+      HouseManagementPanel(house: house),
     ];
   }
 
