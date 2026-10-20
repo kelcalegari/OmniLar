@@ -183,6 +183,17 @@ class ProjectsCubit extends BlocBase<ProjectsState> {
   /// Exclui um projeto.
   Future<void> deleteProject(SharedProject project) async {
     try {
+      final current = state;
+      if (current is ProjectsLoaded) {
+        // Remove imediatamente da memória local para a tela atualizar sem esperar a rede
+        final updatedList = current.projects.where((p) => p.id != project.id).toList();
+        final updatedTotals = Map<String, Money>.from(current.projectTotals)..remove(project.id);
+        emit(current.copyWith(
+          projects: updatedList,
+          projectTotals: updatedTotals,
+          clearSelectedProject: current.selectedProject?.id == project.id,
+        ));
+      }
       await projectsRepository.deleteProject(project.id);
       await loadProjects(houseId: project.houseId);
     } catch (e, stackTrace) {

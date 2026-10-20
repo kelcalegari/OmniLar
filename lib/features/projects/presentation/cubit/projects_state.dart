@@ -40,6 +40,7 @@ class ProjectsLoaded extends ProjectsState {
   ProjectsLoaded copyWith({
     List<SharedProject>? projects,
     SharedProject? selectedProject,
+    bool clearSelectedProject = false,
     ProjectSettlementSummary? settlementSummary,
     List<HouseExpense>? selectedProjectExpenses,
     Map<String, Money>? projectTotals,
@@ -47,9 +48,9 @@ class ProjectsLoaded extends ProjectsState {
   }) {
     return ProjectsLoaded(
       projects: projects ?? this.projects,
-      selectedProject: selectedProject ?? this.selectedProject,
-      settlementSummary: settlementSummary ?? this.settlementSummary,
-      selectedProjectExpenses: selectedProjectExpenses ?? this.selectedProjectExpenses,
+      selectedProject: clearSelectedProject ? null : (selectedProject ?? this.selectedProject),
+      settlementSummary: clearSelectedProject ? null : (settlementSummary ?? this.settlementSummary),
+      selectedProjectExpenses: clearSelectedProject ? null : (selectedProjectExpenses ?? this.selectedProjectExpenses),
       projectTotals: projectTotals ?? this.projectTotals,
       vaults: vaults ?? this.vaults,
     );
