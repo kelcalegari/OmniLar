@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../../../core/theme/app_colors.dart';
+import '../../../../core/utils/responsive.dart';
 import '../../../auth/domain/entities/house.dart';
 import '../../../auth/presentation/cubit/auth_cubit.dart';
 import '../../../auth/presentation/cubit/auth_state.dart';
@@ -76,16 +77,10 @@ class HouseManagementPanel extends StatelessWidget {
   }
 
   void _openDeleteDialog(BuildContext context, House house) {
-    showDialog<void>(
+    showAdaptiveModal(
       context: context,
-      builder: (ctx) => Dialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        clipBehavior: Clip.antiAlias,
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 440),
-          child: DeleteHouseModal(house: house),
-        ),
-      ),
+      maxWidth: 480,
+      child: DeleteHouseModal(house: house),
     );
   }
 
