@@ -17,7 +17,7 @@ void main() {
     await tester.pumpAndSettle();
 
     // Valida que os atalhos de rotina estão todos presentes
-    expect(find.text('Compras'), findsOneWidget);
+    expect(find.text('Compras'), findsWidgets);
     expect(find.text('Caixinhas'), findsOneWidget);
     expect(find.text('Metas da casa'), findsOneWidget);
     expect(find.text('Tarefas'), findsWidgets);

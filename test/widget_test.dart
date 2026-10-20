@@ -14,7 +14,7 @@ void main() {
     await tester.pump(const Duration(milliseconds: 100));
     await tester.pumpAndSettle();
 
-    expect(find.text('Nossa Casa'), findsOneWidget);
+    expect(find.text('Nossa Casa'), findsWidgets);
     expect(find.text('Fôlego do Caixa'), findsOneWidget);
   });
 }

@@ -1248,7 +1248,11 @@ class _TasksAndShoppingPageState extends State<TasksAndShoppingPage> with Single
   }
 
   void _showFinishTripDialog(BuildContext context, ShoppingState state) {
-    final financeState = context.read<FinanceCubit>().state;
+    final shoppingCubit = context.read<ShoppingCubit>();
+    final financeCubit = context.read<FinanceCubit>();
+    final p2pCubit = context.read<P2PCubit>();
+    final messenger = ScaffoldMessenger.of(context);
+    final financeState = financeCubit.state;
     final paymentMethods = financeState.paymentMethods;
     final members = financeState.members;
 
@@ -1314,8 +1318,10 @@ class _TasksAndShoppingPageState extends State<TasksAndShoppingPage> with Single
                                 : Colors.grey.withValues(alpha: 0.25),
                           ),
                         ),
-                        child: CheckboxListTile(
-                          contentPadding: const EdgeInsets.symmetric(horizontal: 10),
+                        child: Material(
+                          color: Colors.transparent,
+                          child: CheckboxListTile(
+                            contentPadding: const EdgeInsets.symmetric(horizontal: 10),
                           dense: true,
                           title: const Text(
                             'Apenas dar baixa na lista',
@@ -1334,6 +1340,7 @@ class _TasksAndShoppingPageState extends State<TasksAndShoppingPage> with Single
                           },
                         ),
                       ),
+                    ),
                       if (withoutExpense) ...[
                         const SizedBox(height: 12),
                         Container(
@@ -1489,8 +1496,6 @@ class _TasksAndShoppingPageState extends State<TasksAndShoppingPage> with Single
                     }
 
                     Navigator.pop(dialogCtx);
-                    final shoppingCubit = context.read<ShoppingCubit>();
-                    final messenger = ScaffoldMessenger.of(context);
 
                     shoppingCubit
                         .completeTrip(
@@ -1501,9 +1506,9 @@ class _TasksAndShoppingPageState extends State<TasksAndShoppingPage> with Single
                           personalDebtorMemberId: withoutExpense ? null : selectedDebtorId,
                         )
                         .then((ok) {
-                      if (ok && context.mounted && !withoutExpense) {
-                        context.read<FinanceCubit>().loadCycleData();
-                        context.read<P2PCubit>().loadLoans();
+                      if (ok && !withoutExpense) {
+                        financeCubit.loadCycleData();
+                        p2pCubit.loadLoans();
                       }
                       showSaveFeedback(
                         messenger,

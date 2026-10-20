@@ -118,7 +118,7 @@ void main() {
       tester.view.devicePixelRatio = 1.0;
       addTearDown(tester.view.resetPhysicalSize);
 
-      await tester.pumpWidget(buildTasksAndShoppingPage());
+      await tester.pumpWidget(buildTasksAndShoppingPage(initialTab: 1));
       await tester.pumpAndSettle();
 
       // Item 1: Pendentes deve estar selecionado por padrão

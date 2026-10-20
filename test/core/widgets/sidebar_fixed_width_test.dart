@@ -45,8 +45,8 @@ void main() {
     expect(railWidthHome, equals(152.0));
     expect(buttonWidthHome, equals(132.0));
 
-    // 2. Navega para Tarefas
-    await tester.tap(find.descendant(of: find.byType(NavigationRail), matching: find.text('Tarefas')));
+    // 2. Navega para Compras
+    await tester.tap(find.descendant(of: find.byType(NavigationRail), matching: find.text('Compras')));
     await tester.pumpAndSettle();
     expect(getRailWidth(), equals(railWidthHome));
     expect(getButtonWidth(), equals(buttonWidthHome));
