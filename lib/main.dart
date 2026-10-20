@@ -70,7 +70,9 @@ void main() async {
   // Observador de cubits/blocs para capturar exceções não tratadas
   Bloc.observer = OmniBlocObserver();
 
-  const sentryDsn = String.fromEnvironment('SENTRY_DSN');
+  const defaultSentryDsn = 'https://12b32d1db8bdf0ed9578cdd02e18d9e4@o4512285777657856.ingest.us.sentry.io/4512285825433600';
+  const envSentryDsn = String.fromEnvironment('SENTRY_DSN');
+  final sentryDsn = envSentryDsn.isNotEmpty ? envSentryDsn : defaultSentryDsn;
 
   if (sentryDsn.isEmpty) {
     // Ambiente local ou sem DSN: executa sem enviar telemetria para a nuvem
