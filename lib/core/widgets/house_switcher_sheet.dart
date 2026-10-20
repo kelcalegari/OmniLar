@@ -150,13 +150,14 @@ class HouseSwitcherSheet extends StatelessWidget {
             onPressed: () async {
               Navigator.pop(ctx);
               final messenger = ScaffoldMessenger.of(context);
-              final ok = await context.read<AuthCubit>().archiveHouse(house.id);
+              final authCubit = context.read<AuthCubit>();
+              final ok = await authCubit.archiveHouse(house.id);
               if (ok) {
                 messenger.showSnackBar(
                   SnackBar(content: Text('A casa "${house.name}" foi arquivada. 📦')),
                 );
               } else {
-                final err = context.read<AuthCubit>().state.errorMessage ?? 'Não foi possível arquivar a casa.';
+                final err = authCubit.state.errorMessage ?? 'Não foi possível arquivar a casa.';
                 messenger.showSnackBar(
                   SnackBar(backgroundColor: AppColors.debtRed, content: Text(err)),
                 );
@@ -213,13 +214,14 @@ class HouseSwitcherSheet extends StatelessWidget {
             onPressed: () async {
               Navigator.pop(ctx);
               final messenger = ScaffoldMessenger.of(context);
-              final ok = await context.read<AuthCubit>().leaveHouse(house.id);
+              final authCubit = context.read<AuthCubit>();
+              final ok = await authCubit.leaveHouse(house.id);
               if (ok) {
                 messenger.showSnackBar(
                   SnackBar(content: Text('Você saiu da casa "${house.name}".')),
                 );
               } else {
-                final err = context.read<AuthCubit>().state.errorMessage ?? 'Não foi possível sair da casa.';
+                final err = authCubit.state.errorMessage ?? 'Não foi possível sair da casa.';
                 messenger.showSnackBar(
                   SnackBar(backgroundColor: AppColors.debtRed, content: Text(err)),
                 );

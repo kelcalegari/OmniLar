@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../../../core/theme/app_colors.dart';
-import '../../../../core/utils/responsive.dart';
 import '../../../auth/domain/entities/house.dart';
 import '../../../auth/presentation/cubit/auth_cubit.dart';
 import '../../../auth/presentation/cubit/auth_state.dart';
@@ -56,13 +55,14 @@ class HouseManagementPanel extends StatelessWidget {
             onPressed: () async {
               Navigator.pop(ctx);
               final messenger = ScaffoldMessenger.of(context);
-              final ok = await context.read<AuthCubit>().archiveHouse(house.id);
+              final authCubit = context.read<AuthCubit>();
+              final ok = await authCubit.archiveHouse(house.id);
               if (ok) {
                 messenger.showSnackBar(
                   SnackBar(content: Text('A casa "${house.name}" foi arquivada com sucesso. 📦')),
                 );
               } else {
-                final err = context.read<AuthCubit>().state.errorMessage ?? 'Não foi possível arquivar a casa.';
+                final err = authCubit.state.errorMessage ?? 'Não foi possível arquivar a casa.';
                 messenger.showSnackBar(
                   SnackBar(backgroundColor: AppColors.debtRed, content: Text(err)),
                 );
@@ -110,13 +110,14 @@ class HouseManagementPanel extends StatelessWidget {
             onPressed: () async {
               Navigator.pop(ctx);
               final messenger = ScaffoldMessenger.of(context);
-              final ok = await context.read<AuthCubit>().leaveHouse(house.id);
+              final authCubit = context.read<AuthCubit>();
+              final ok = await authCubit.leaveHouse(house.id);
               if (ok) {
                 messenger.showSnackBar(
                   SnackBar(content: Text('Você saiu da casa "${house.name}".')),
                 );
               } else {
-                final err = context.read<AuthCubit>().state.errorMessage ?? 'Não foi possível sair da casa.';
+                final err = authCubit.state.errorMessage ?? 'Não foi possível sair da casa.';
                 messenger.showSnackBar(
                   SnackBar(backgroundColor: AppColors.debtRed, content: Text(err)),
                 );
@@ -535,7 +536,8 @@ class _DeleteHouseModalState extends State<DeleteHouseModal> {
                           setState(() => _isSubmitting = true);
                           final messenger = ScaffoldMessenger.of(context);
                           final navigator = Navigator.of(context);
-                          final ok = await context.read<AuthCubit>().deleteHouse(widget.house.id);
+                          final authCubit = context.read<AuthCubit>();
+                          final ok = await authCubit.deleteHouse(widget.house.id);
                           if (!mounted) return;
                           if (ok) {
                             navigator.pop();
@@ -546,7 +548,7 @@ class _DeleteHouseModalState extends State<DeleteHouseModal> {
                             );
                           } else {
                             setState(() => _isSubmitting = false);
-                            final err = context.read<AuthCubit>().state.errorMessage ?? 'Não foi possível excluir a casa.';
+                            final err = authCubit.state.errorMessage ?? 'Não foi possível excluir a casa.';
                             messenger.showSnackBar(
                               SnackBar(
                                 backgroundColor: AppColors.debtRed,
