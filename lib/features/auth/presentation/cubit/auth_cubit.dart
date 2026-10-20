@@ -441,14 +441,14 @@ class AuthCubit extends Cubit<AuthState> {
   }
 
   /// Arquiva a casa. O usuário deve manter pelo menos uma casa ativa.
-  Future<void> archiveHouse(String houseId) async {
+  Future<bool> archiveHouse(String houseId) async {
     final activeHouses = state.userHouses.where((h) => !h.isArchived).toList();
     if (activeHouses.length <= 1) {
       emit(state.copyWith(
         status: AuthStatus.failure,
         errorMessage: 'Você precisa ter pelo menos uma casa ativa no Omni Lar.',
       ));
-      return;
+      return false;
     }
 
     emit(state.copyWith(status: AuthStatus.loading, errorMessage: null));
@@ -480,14 +480,15 @@ class AuthCubit extends Cubit<AuthState> {
           errorMessage: null,
         ));
       }
+      return true;
     } catch (e) {
       emit(state.copyWith(status: AuthStatus.failure, errorMessage: e.toString()));
-      rethrow;
+      return false;
     }
   }
 
   /// Desarquiva uma casa.
-  Future<void> unarchiveHouse(String houseId) async {
+  Future<bool> unarchiveHouse(String houseId) async {
     emit(state.copyWith(status: AuthStatus.loading, errorMessage: null));
     try {
       await _repository.unarchiveHouse(houseId);
@@ -497,22 +498,22 @@ class AuthCubit extends Cubit<AuthState> {
         userHouses: houses,
         errorMessage: null,
       ));
+      return true;
     } catch (e) {
       emit(state.copyWith(status: AuthStatus.failure, errorMessage: e.toString()));
-      rethrow;
+      return false;
     }
   }
 
   /// Exclui permanentemente a casa e seus registros. O usuário deve manter pelo menos uma casa ativa.
-  Future<void> deleteHouse(String houseId) async {
+  Future<bool> deleteHouse(String houseId) async {
     final activeHouses = state.userHouses.where((h) => !h.isArchived).toList();
     if (activeHouses.length <= 1) {
-      const msg = 'Você precisa ter pelo menos uma casa ativa no Omni Lar.';
       emit(state.copyWith(
         status: AuthStatus.failure,
-        errorMessage: msg,
+        errorMessage: 'Você precisa ter pelo menos uma casa ativa no Omni Lar.',
       ));
-      throw AuthFailure(msg);
+      return false;
     }
 
     emit(state.copyWith(status: AuthStatus.loading, errorMessage: null));
@@ -544,22 +545,22 @@ class AuthCubit extends Cubit<AuthState> {
           errorMessage: null,
         ));
       }
+      return true;
     } catch (e) {
       emit(state.copyWith(status: AuthStatus.failure, errorMessage: e.toString()));
-      rethrow;
+      return false;
     }
   }
 
   /// Sai da casa. O usuário deve manter pelo menos uma casa ativa.
-  Future<void> leaveHouse(String houseId) async {
+  Future<bool> leaveHouse(String houseId) async {
     final activeHouses = state.userHouses.where((h) => !h.isArchived).toList();
     if (activeHouses.length <= 1) {
-      const msg = 'Você precisa ter pelo menos uma casa ativa no Omni Lar.';
       emit(state.copyWith(
         status: AuthStatus.failure,
-        errorMessage: msg,
+        errorMessage: 'Você precisa ter pelo menos uma casa ativa no Omni Lar.',
       ));
-      throw AuthFailure(msg);
+      return false;
     }
 
     emit(state.copyWith(status: AuthStatus.loading, errorMessage: null));
@@ -591,9 +592,10 @@ class AuthCubit extends Cubit<AuthState> {
           errorMessage: null,
         ));
       }
+      return true;
     } catch (e) {
       emit(state.copyWith(status: AuthStatus.failure, errorMessage: e.toString()));
-      rethrow;
+      return false;
     }
   }
 

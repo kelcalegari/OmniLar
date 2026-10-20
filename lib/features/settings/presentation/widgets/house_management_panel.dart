@@ -56,14 +56,15 @@ class HouseManagementPanel extends StatelessWidget {
             onPressed: () async {
               Navigator.pop(ctx);
               final messenger = ScaffoldMessenger.of(context);
-              try {
-                await context.read<AuthCubit>().archiveHouse(house.id);
+              final ok = await context.read<AuthCubit>().archiveHouse(house.id);
+              if (ok) {
                 messenger.showSnackBar(
                   SnackBar(content: Text('A casa "${house.name}" foi arquivada com sucesso. 📦')),
                 );
-              } catch (e) {
+              } else {
+                final err = context.read<AuthCubit>().state.errorMessage ?? 'Não foi possível arquivar a casa.';
                 messenger.showSnackBar(
-                  SnackBar(backgroundColor: AppColors.debtRed, content: Text('$e')),
+                  SnackBar(backgroundColor: AppColors.debtRed, content: Text(err)),
                 );
               }
             },
@@ -103,14 +104,15 @@ class HouseManagementPanel extends StatelessWidget {
             onPressed: () async {
               Navigator.pop(ctx);
               final messenger = ScaffoldMessenger.of(context);
-              try {
-                await context.read<AuthCubit>().leaveHouse(house.id);
+              final ok = await context.read<AuthCubit>().leaveHouse(house.id);
+              if (ok) {
                 messenger.showSnackBar(
                   SnackBar(content: Text('Você saiu da casa "${house.name}".')),
                 );
-              } catch (e) {
+              } else {
+                final err = context.read<AuthCubit>().state.errorMessage ?? 'Não foi possível sair da casa.';
                 messenger.showSnackBar(
-                  SnackBar(backgroundColor: AppColors.debtRed, content: Text('$e')),
+                  SnackBar(backgroundColor: AppColors.debtRed, content: Text(err)),
                 );
               }
             },
@@ -514,20 +516,22 @@ class _DeleteHouseModalState extends State<DeleteHouseModal> {
                           setState(() => _isSubmitting = true);
                           final messenger = ScaffoldMessenger.of(context);
                           final navigator = Navigator.of(context);
-                          try {
-                            await context.read<AuthCubit>().deleteHouse(widget.house.id);
+                          final ok = await context.read<AuthCubit>().deleteHouse(widget.house.id);
+                          if (!mounted) return;
+                          if (ok) {
                             navigator.pop();
                             messenger.showSnackBar(
                               SnackBar(
                                 content: Text('A casa "${widget.house.name}" foi excluída permanentemente.'),
                               ),
                             );
-                          } catch (e) {
+                          } else {
                             setState(() => _isSubmitting = false);
+                            final err = context.read<AuthCubit>().state.errorMessage ?? 'Não foi possível excluir a casa.';
                             messenger.showSnackBar(
                               SnackBar(
                                 backgroundColor: AppColors.debtRed,
-                                content: Text('$e'),
+                                content: Text(err),
                               ),
                             );
                           }
