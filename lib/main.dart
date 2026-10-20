@@ -1,10 +1,13 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'package:flutter_web_plugins/url_strategy.dart';
+import 'package:sentry_flutter/sentry_flutter.dart';
 import 'core/config/firebase_config.dart';
 import 'core/di/service_locator.dart';
+import 'core/logging/omni_bloc_observer.dart';
 import 'core/router/app_router.dart';
 import 'core/theme/app_theme.dart';
 import 'core/theme/theme_cubit.dart';
@@ -19,9 +22,7 @@ import 'features/notifications/presentation/cubit/notifications_cubit.dart';
 import 'core/offline/offline_banner.dart';
 import 'core/widgets/search_shortcut.dart';
 
-void main() async {
-  WidgetsFlutterBinding.ensureInitialized();
-
+Future<void> _bootstrapApp() async {
   // Configura URLs limpas (sem #) na Web
   usePathUrlStrategy();
 
@@ -37,9 +38,65 @@ void main() async {
   // Push: registra o aparelho de quem já permitiu; toque no aviso abre o item
   final push = sl<PushService>();
   push.onOpenDeeplink = AppRouter.router.go;
-  push.start(sl<AuthRepository>().authStateChanges);
+  final authRepo = sl<AuthRepository>();
+  push.start(authRepo.authStateChanges);
 
-  runApp(const OmniLarApp());
+  // Vincula o usuário e a casa ao escopo do Sentry (anonimizando por ID para LGPD)
+  authRepo.authStateChanges.listen((user) {
+    if (user != null) {
+      Sentry.configureScope((scope) => scope.setUser(SentryUser(id: user.id)));
+    } else {
+      Sentry.configureScope((scope) {
+        scope.setUser(null);
+        scope.removeTag('house_id');
+      });
+    }
+  });
+  authRepo.houseChanges.listen((house) {
+    Sentry.configureScope((scope) {
+      if (house != null) {
+        scope.setTag('house_id', house.id);
+      } else {
+        scope.removeTag('house_id');
+      }
+    });
+  });
+}
+
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+
+  // Observador de cubits/blocs para capturar exceções não tratadas
+  Bloc.observer = OmniBlocObserver();
+
+  const sentryDsn = String.fromEnvironment('SENTRY_DSN');
+
+  if (sentryDsn.isEmpty) {
+    // Ambiente local ou sem DSN: executa sem enviar telemetria para a nuvem
+    await _bootstrapApp();
+    runApp(const OmniLarApp());
+  } else {
+    // Produção: envelope seguro do Sentry com sanitização e LGPD
+    await SentryFlutter.init(
+      (options) {
+        options.dsn = sentryDsn;
+        options.tracesSampleRate = 0.2;
+        options.attachScreenshot = false; // Não capturar tela para proteger dados financeiros
+        options.sendDefaultPii = false;   // Não enviar IP ou dados pessoais brutos
+        options.environment = kReleaseMode ? 'production' : 'development';
+        options.beforeSend = (event, hint) {
+          // Remove cabeçalhos de autorização que possam conter tokens JWT
+          event.request?.headers.remove('Authorization');
+          event.request?.headers.remove('apikey');
+          return event;
+        };
+      },
+      appRunner: () async {
+        await _bootstrapApp();
+        runApp(const OmniLarApp());
+      },
+    );
+  }
 }
 
 class OmniLarApp extends StatelessWidget {

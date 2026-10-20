@@ -7,7 +7,8 @@
       "type": "dart",
       "toolArgs": [
         "--dart-define=SUPABASE_URL=https://rygxmpwzofgieodvhpcy.supabase.co",
-        "--dart-define=SUPABASE_ANON_KEY=sb_publishable_GshamuXeZLHEPF1bch5SgQ_eVXv_ckW"
+        "--dart-define=SUPABASE_ANON_KEY=sb_publishable_GshamuXeZLHEPF1bch5SgQ_eVXv_ckW",
+        "--dart-define=SENTRY_DSN=https://12b32d1db8bdf0ed9578cdd02e18d9e4@o4512285777657856.ingest.us.sentry.io/4512285825433600"
       ]
     },
     {
@@ -22,7 +23,8 @@
       "args": ["-d", "chrome"],
       "toolArgs": [
         "--dart-define=SUPABASE_URL=https://rygxmpwzofgieodvhpcy.supabase.co",
-        "--dart-define=SUPABASE_ANON_KEY=sb_publishable_GshamuXeZLHEPF1bch5SgQ_eVXv_ckW"
+        "--dart-define=SUPABASE_ANON_KEY=sb_publishable_GshamuXeZLHEPF1bch5SgQ_eVXv_ckW",
+        "--dart-define=SENTRY_DSN=https://12b32d1db8bdf0ed9578cdd02e18d9e4@o4512285777657856.ingest.us.sentry.io/4512285825433600"
       ]
     },
     {

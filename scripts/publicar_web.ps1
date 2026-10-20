@@ -11,7 +11,7 @@ Write-Host "Executando flutter test..." -ForegroundColor Cyan
 flutter test
 
 Write-Host "Gerando build de producao web..." -ForegroundColor Cyan
-flutter build web --release
+flutter build web --release --dart-define=SENTRY_DSN=https://12b32d1db8bdf0ed9578cdd02e18d9e4@o4512285777657856.ingest.us.sentry.io/4512285825433600
 
 Write-Host "Fazendo deploy no Firebase Hosting..." -ForegroundColor Cyan
 firebase deploy --only hosting --project omnilar-ef002

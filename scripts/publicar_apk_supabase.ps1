@@ -16,7 +16,7 @@ $TargetFileName = "OmniLar-arm64-release.apk"
 # 1. Compila se solicitado ou se o APK nao existir
 if ($Build -or !(Test-Path $ApkPath)) {
   Write-Host "Compilando novo APK Release (--split-per-abi)..." -ForegroundColor Cyan
-  flutter build apk --release --split-per-abi
+  flutter build apk --release --split-per-abi --dart-define=SENTRY_DSN=https://12b32d1db8bdf0ed9578cdd02e18d9e4@o4512285777657856.ingest.us.sentry.io/4512285825433600
   if ($LASTEXITCODE -ne 0) {
     Write-Error "Falha ao compilar o APK."
     exit 1

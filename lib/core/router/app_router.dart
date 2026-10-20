@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
+import 'package:sentry_flutter/sentry_flutter.dart';
 
 import '../di/service_locator.dart';
 import '../utils/app_download.dart';
@@ -60,6 +61,9 @@ class AppRouter {
   static final GoRouter router = GoRouter(
     navigatorKey: _rootNavigatorKey,
     initialLocation: kIsWeb ? '/landing' : '/splash',
+    observers: [
+      SentryNavigatorObserver(),
+    ],
     refreshListenable: Listenable.merge([
       GoRouterRefreshStream(sl<AuthCubit>().stream),
       // Conta aprovada, recusada ou suspensa muda a rota na hora

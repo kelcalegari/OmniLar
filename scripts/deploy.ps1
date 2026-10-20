@@ -21,7 +21,8 @@ flutter analyze --no-fatal-infos
 
 # 2. Compilacao do APK
 Write-Host "`n[2/5] Compilando APK Release Android (--split-per-abi)..." -ForegroundColor Cyan
-flutter build apk --release --split-per-abi
+$SentryDsn = "https://12b32d1db8bdf0ed9578cdd02e18d9e4@o4512285777657856.ingest.us.sentry.io/4512285825433600"
+flutter build apk --release --split-per-abi --dart-define=SENTRY_DSN=$SentryDsn
 
 $ApkSource = "build\app\outputs\flutter-apk\app-arm64-v8a-release.apk"
 if (!(Test-Path $ApkSource)) {
@@ -65,7 +66,7 @@ if ($HttpCode -eq "200" -or $HttpCode -eq "201") {
 
 # 4. Compilacao Web
 Write-Host "`n[4/5] Compilando versao Web..." -ForegroundColor Cyan
-flutter build web --release
+flutter build web --release --dart-define=SENTRY_DSN=$SentryDsn
 
 # 5. Deploy Firebase Hosting
 Write-Host "`n[5/5] Publicando no Firebase Hosting..." -ForegroundColor Cyan
