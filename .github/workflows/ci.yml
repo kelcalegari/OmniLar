@@ -61,10 +61,10 @@ jobs:
             echo "Chaves encontradas. Vinculando projeto..."
             supabase link --project-ref "$PROJECT_REF" --password "$SUPABASE_DB_PASSWORD"
             echo "Sincronizando historico de migracoes e aplicando pendentes..."
-            supabase db push --password "$SUPABASE_DB_PASSWORD" || {
+            supabase db push --include-all --password "$SUPABASE_DB_PASSWORD" || {
               echo "Reparando historico remoto de migracoes legadas..."
               supabase migration repair --status reverted 20261012202228 20261012210421 20261012212321 20261012215810 20261012222356 20261012234222 20261013004034 20261013091033 20261013094226 20261013095006 20261013102609 20261013105349 20261013111018 20261013120710 20261013141231 20261013143855 20261013144536 20261013145752 20261013150906 20261013152611 20261013152731 20261013155541 20261013155544 20261013161424 20261013171440 20261013204828 20261013211856 20261013213954 20261014005329 20261014010237 20261014085452 20261014092439 20261014111613 20261014224418 20261015011541 20261015083519 20261015083544 20261015083547 20261016113619 20261016123250 20261016150343 20261016150443 20261016150503 20261016155220 20261016165512 20261016173022 20261016185538 20261016223410 20261017134059 20261017134144 20261017134147 20261017134150 20261017163105 20261017163156 20261017163159 20261017163224 20261017163244 20261017163315 20261017163341 20261017185234 20261017193635 20261017205634 20261017234927 20261018004634 20261018025020 20261018025156 20261018153625 20261018201216 20261018204320 --password "$SUPABASE_DB_PASSWORD"
-              supabase db push --password "$SUPABASE_DB_PASSWORD"
+              supabase db push --include-all --password "$SUPABASE_DB_PASSWORD"
             }
             echo "Migracoes aplicadas com sucesso no Supabase!"
           else
@@ -124,19 +124,26 @@ jobs:
         run: flutter pub get
 
       - name: Build APK Release
-        run: flutter build apk --release --split-per-abi --dart-define=SENTRY_DSN=https://12b32d1db8bdf0ed9578cdd02e18d9e4@o4512285777657856.ingest.us.sentry.io/4512285825433600
+        run: flutter build apk --release --dart-define=SENTRY_DSN=https://12b32d1db8bdf0ed9578cdd02e18d9e4@o4512285777657856.ingest.us.sentry.io/4512285825433600
 
       - name: Upload APK to Supabase Storage
         run: |
+          curl -s -X POST "https://rygxmpwzofgieodvhpcy.supabase.co/storage/v1/object/releases/OmniLar-release.apk" \
+            -H "apikey: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY || 'sb_publishable_GshamuXeZLHEPF1bch5SgQ_eVXv_ckW' }}" \
+            -H "Authorization: Bearer ${{ secrets.SUPABASE_SERVICE_ROLE_KEY || 'sb_publishable_GshamuXeZLHEPF1bch5SgQ_eVXv_ckW' }}" \
+            -H "x-upsert: true" \
+            -H "Content-Type: application/vnd.android.package-archive" \
+            --data-binary "@build/app/outputs/flutter-apk/app-release.apk"
+
           curl -s -X POST "https://rygxmpwzofgieodvhpcy.supabase.co/storage/v1/object/releases/OmniLar-arm64-release.apk" \
             -H "apikey: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY || 'sb_publishable_GshamuXeZLHEPF1bch5SgQ_eVXv_ckW' }}" \
             -H "Authorization: Bearer ${{ secrets.SUPABASE_SERVICE_ROLE_KEY || 'sb_publishable_GshamuXeZLHEPF1bch5SgQ_eVXv_ckW' }}" \
             -H "x-upsert: true" \
             -H "Content-Type: application/vnd.android.package-archive" \
-            --data-binary "@build/app/outputs/flutter-apk/app-arm64-v8a-release.apk"
+            --data-binary "@build/app/outputs/flutter-apk/app-release.apk"
 
       - name: Upload APK Artifact to GitHub
         uses: actions/upload-artifact@v4
         with:
           name: OmniLar-Android-release-APK
-          path: build/app/outputs/flutter-apk/app-arm64-v8a-release.apk
+          path: build/app/outputs/flutter-apk/app-release.apk
