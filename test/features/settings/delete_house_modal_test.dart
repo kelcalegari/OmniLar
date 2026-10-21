@@ -61,5 +61,23 @@ void main() {
       );
       expect(paddingFinder, findsOneWidget);
     });
+
+    testWidgets('DeleteHouseModal renders nicely in Dark Mode without blinding light container', (tester) async {
+      const house = House(id: 'h1', name: 'Casa Dark Mode', createdBy: 'u1');
+
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: ThemeData.dark(),
+          home: const Scaffold(
+            body: DeleteHouseModal(house: house),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('Excluir Casa Definitivamente'), findsOneWidget);
+      expect(find.text('Casa Dark Mode'), findsWidgets);
+      expect(find.text('Preencher'), findsOneWidget);
+    });
   });
 }

@@ -135,6 +135,7 @@ class HouseManagementPanel extends StatelessWidget {
         final isOwner = house!.createdBy == currentUserId;
         final activeHousesCount = authState.userHouses.where((h) => !h.isArchived).length;
         final canRemove = activeHousesCount > 1;
+        final isDark = Theme.of(context).brightness == Brightness.dark;
 
         return Card(
           margin: EdgeInsets.zero,
@@ -183,7 +184,7 @@ class HouseManagementPanel extends StatelessWidget {
                                 : 'Opções de morador para esta casa',
                             style: TextStyle(
                               fontSize: 12,
-                              color: Colors.grey.shade600,
+                              color: isDark ? Colors.grey.shade400 : Colors.grey.shade600,
                             ),
                           ),
                         ],
@@ -215,7 +216,7 @@ class HouseManagementPanel extends StatelessWidget {
                             'Esta é a sua única casa ativa. O Omni Lar exige pelo menos uma casa associada à sua conta.',
                             style: TextStyle(
                               fontSize: 12,
-                              color: Colors.grey.shade800,
+                              color: isDark ? Colors.grey.shade200 : Colors.grey.shade800,
                               fontWeight: FontWeight.w500,
                             ),
                           ),
@@ -321,6 +322,8 @@ class _ActionTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -359,7 +362,10 @@ class _ActionTile extends StatelessWidget {
         const SizedBox(height: 4),
         Text(
           subtitle,
-          style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+          style: TextStyle(
+            fontSize: 12,
+            color: isDark ? Colors.grey.shade400 : Colors.grey.shade600,
+          ),
         ),
         const SizedBox(height: 10),
         Align(
@@ -409,6 +415,7 @@ class _DeleteHouseModalState extends State<DeleteHouseModal> {
     final expectedText = widget.house.name.trim();
     final isMatch = _confirmController.text.trim().toLowerCase() == expectedText.toLowerCase();
     final bottomInset = MediaQuery.viewInsetsOf(context).bottom;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return SingleChildScrollView(
       child: Padding(
@@ -468,23 +475,29 @@ class _DeleteHouseModalState extends State<DeleteHouseModal> {
             style: TextStyle(
               fontSize: 13,
               fontWeight: FontWeight.bold,
-              color: Colors.grey.shade800,
+              color: isDark ? Colors.grey.shade300 : Colors.grey.shade800,
             ),
           ),
           const SizedBox(height: 8),
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
             decoration: BoxDecoration(
-              color: Colors.grey.shade100,
+              color: isDark ? Colors.white.withValues(alpha: 0.08) : Colors.grey.shade100,
               borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: Colors.grey.shade300),
+              border: Border.all(
+                color: isDark ? Colors.white.withValues(alpha: 0.16) : Colors.grey.shade300,
+              ),
             ),
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Text(
                   expectedText,
-                  style: const TextStyle(fontWeight: FontWeight.bold, letterSpacing: 0.5),
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    letterSpacing: 0.5,
+                    color: isDark ? Colors.white : Colors.black87,
+                  ),
                 ),
                 TextButton.icon(
                   onPressed: () {
