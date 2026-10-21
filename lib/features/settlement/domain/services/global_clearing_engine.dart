@@ -7,6 +7,8 @@ import '../../../finance/domain/entities/house_expense.dart';
 import '../../../finance/domain/entities/house_member.dart';
 import '../../../finance/domain/entities/house_settings.dart';
 import '../../../finance/domain/entities/opening_inflows.dart';
+import '../../../finance/domain/entities/category.dart';
+import '../../../finance/domain/entities/payment_method.dart';
 import '../../../finance/domain/entities/split_rule.dart';
 import '../../../p2p/domain/entities/p2p_loan.dart';
 import '../entities/member_audit_trail.dart';
@@ -49,6 +51,8 @@ class GlobalClearingEngine {
     OpeningBalanceRule? openingBalanceRule,
     OpeningInflows? openingInflows,
     OpeningInflowRules openingInflowRules = const OpeningInflowRules(),
+    List<ExpenseCategory>? categories,
+    List<PaymentMethod>? paymentMethods,
   }) {
     // 0. Despesas de projetos compartilhados são liquidadas apenas no próprio projeto
     // (ProjectSettlementService). Filtramos aqui por defesa em profundidade para
@@ -69,6 +73,10 @@ class GlobalClearingEngine {
       (acc, c) => acc + c.amount.cents,
     );
     final totalContributions = Money(totalContributionsCents);
+
+    final categoryMap = {for (final c in categories ?? const <ExpenseCategory>[]) c.id: c};
+    final memberMap = {for (final m in members) m.id: m};
+    final methodMap = {for (final p in paymentMethods ?? const <PaymentMethod>[]) p.id: p};
 
     // 3. Calcular meta de aporte por membro e auditar a partição de cada despesa:
     // Se não for fornecida meta customizada, reparte as despesas da casa considerando
@@ -190,6 +198,10 @@ class GlobalClearingEngine {
                     : 'Item pessoal exclusivo',
                 date: expense.date,
                 isPersonal: true,
+                categoryName: categoryMap[expense.categoryId]?.name,
+                paidByMemberId: expense.paidByMemberId,
+                paidByMemberName: memberMap[expense.paidByMemberId]?.name,
+                paymentMethodName: methodMap[expense.paymentMethodId]?.name,
               ),
             );
           }
@@ -220,6 +232,10 @@ class GlobalClearingEngine {
             ruleDescription: 'Responsável exclusivo pela despesa',
             date: expense.date,
             isPersonal: true,
+            categoryName: categoryMap[expense.categoryId]?.name,
+            paidByMemberId: expense.paidByMemberId,
+            paidByMemberName: memberMap[expense.paidByMemberId]?.name,
+            paymentMethodName: methodMap[expense.paymentMethodId]?.name,
           ),
         );
       }
@@ -345,6 +361,10 @@ class GlobalClearingEngine {
                     ruleDescription: ruleDesc,
                     date: expense.date,
                     isPersonal: isPersonalItem,
+                    categoryName: categoryMap[expense.categoryId]?.name,
+                    paidByMemberId: expense.paidByMemberId,
+                    paidByMemberName: memberMap[expense.paidByMemberId]?.name,
+                    paymentMethodName: methodMap[expense.paymentMethodId]?.name,
                   ),
                 );
               }
@@ -382,6 +402,7 @@ class GlobalClearingEngine {
               } else {
                 ruleDesc = 'Regra ${effectiveRule.type.name}';
               }
+              final isExclusiveExpense = effectiveRule.type == SplitType.categoryOwner;
               memberExpenseShares[entry.key]?.add(
                 ExpenseShareAudit(
                   expenseId: expense.id,
@@ -390,6 +411,11 @@ class GlobalClearingEngine {
                   allocatedAmount: entry.value,
                   ruleDescription: ruleDesc,
                   date: expense.date,
+                  isPersonal: isExclusiveExpense,
+                  categoryName: categoryMap[expense.categoryId]?.name,
+                  paidByMemberId: expense.paidByMemberId,
+                  paidByMemberName: memberMap[expense.paidByMemberId]?.name,
+                  paymentMethodName: methodMap[expense.paymentMethodId]?.name,
                 ),
               );
             }
@@ -560,7 +586,7 @@ class GlobalClearingEngine {
               title: e.title,
               amount: e.amount,
               date: e.date,
-              paymentMethod: e.paymentMethodId,
+              paymentMethod: methodMap[e.paymentMethodId]?.name ?? e.paymentMethodId,
             ),
           )
           .toList();
@@ -604,12 +630,64 @@ class GlobalClearingEngine {
                 loanId: loan.id,
                 description: loan.title,
                 otherMemberId: loan.lenderMemberId,
-                otherMemberName: lender?.name ?? 'Membro',
+                otherMemberName: loan.isHouseLender ? 'Caixa da Casa' : (lender?.name ?? 'Membro'),
                 installmentNumber: installment.number,
                 totalInstallments: loan.installments.length,
                 amount: installment.remainingAmount,
                 dueDate: installment.dueDate,
                 isReceivable: false,
+              ),
+            );
+          }
+        }
+      }
+
+      // Parcelas de empréstimos já quitadas/pagas neste ciclo
+      final p2pPaidInCycle = <P2PInstallmentAudit>[];
+      final p2pReceivedInCycle = <P2PInstallmentAudit>[];
+      int p2pPaidInCycleCents = 0;
+      int p2pReceivedInCycleCents = 0;
+
+      for (final loan in loans) {
+        for (final installment in loan.installments) {
+          final paidAt = installment.paidAt;
+          final wasPaidInCycle = (paidAt != null && cycle.contains(paidAt)) ||
+              (paidAt == null && installment.isFullyPaid && cycle.contains(installment.dueDate));
+          if (!wasPaidInCycle) continue;
+
+          final lender = members.where((m) => m.id == loan.lenderMemberId).firstOrNull;
+          final borrower = members.where((m) => m.id == loan.borrowerMemberId).firstOrNull;
+          final lenderName = loan.isHouseLender ? 'Caixa da Casa' : (lender?.name ?? 'Membro');
+          final borrowerName = borrower?.name ?? 'Membro';
+
+          if (loan.borrowerMemberId == member.id) {
+            p2pPaidInCycleCents += installment.paidAmount.cents;
+            p2pPaidInCycle.add(
+              P2PInstallmentAudit(
+                loanId: loan.id,
+                description: loan.title,
+                otherMemberId: loan.lenderMemberId,
+                otherMemberName: lenderName,
+                installmentNumber: installment.number,
+                totalInstallments: loan.installments.length,
+                amount: installment.paidAmount,
+                dueDate: installment.dueDate,
+                isReceivable: false,
+              ),
+            );
+          } else if (loan.lenderMemberId == member.id) {
+            p2pReceivedInCycleCents += installment.paidAmount.cents;
+            p2pReceivedInCycle.add(
+              P2PInstallmentAudit(
+                loanId: loan.id,
+                description: loan.title,
+                otherMemberId: loan.borrowerMemberId,
+                otherMemberName: borrowerName,
+                installmentNumber: installment.number,
+                totalInstallments: loan.installments.length,
+                amount: installment.paidAmount,
+                dueDate: installment.dueDate,
+                isReceivable: true,
               ),
             );
           }
@@ -651,6 +729,10 @@ class GlobalClearingEngine {
         p2pBorrowedTotal: Money(p2pBorrowedCents),
         netBalance: balance.netBalance,
         contributionRefund: contributionRefund,
+        p2pPaidInCycle: p2pPaidInCycle,
+        p2pReceivedInCycle: p2pReceivedInCycle,
+        p2pPaidInCycleTotal: Money(p2pPaidInCycleCents),
+        p2pReceivedInCycleTotal: Money(p2pReceivedInCycleCents),
       );
     }
 

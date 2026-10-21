@@ -171,6 +171,14 @@ class _HomePageContentState extends State<_HomePageContent> {
           },
         ),
         actions: [
+          IconButton(
+            tooltip: 'Extrato & Transações',
+            icon: const Icon(Icons.receipt_long_rounded),
+            onPressed: () {
+              final cycle = context.read<FinanceCubit>().state.currentCycle;
+              context.push('/casa/transacoes', extra: cycle);
+            },
+          ),
           const ThemeToggleButton(),
           const PrivacyToggleButton(),
           const NotificationBellButton(),
@@ -876,6 +884,13 @@ class _HomePageContentState extends State<_HomePageContent> {
                     style: theme.textTheme.bodySmall,
                   ),
                 ],
+                const SizedBox(width: 4),
+                IconButton(
+                  tooltip: 'Ver extrato e filtros avançados',
+                  icon: const Icon(Icons.receipt_long_rounded, size: 20),
+                  visualDensity: VisualDensity.compact,
+                  onPressed: () => context.push('/casa/transacoes', extra: state.currentCycle),
+                ),
               ],
             ),
           ],

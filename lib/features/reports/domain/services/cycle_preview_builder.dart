@@ -112,6 +112,11 @@ class CyclePreviewBuilder {
               .where((a) => a.payerMemberId == b.memberId)
               .toList(),
           projectedExtraShare: extraShares[b.memberId] ?? const Money.zero(),
+          installmentsPaidInCycle: _named(
+            summary.auditTrails[b.memberId]?.p2pPaidInCycle,
+          ),
+          p2pPaidInCycle:
+              summary.auditTrails[b.memberId]?.p2pPaidInCycleTotal ?? const Money.zero(),
         ),
     ];
 

@@ -28,6 +28,8 @@ import '../../features/reports/presentation/pages/reports_page.dart';
 import '../../features/settings/presentation/pages/settings_page.dart';
 import '../../features/settlement/presentation/pages/settlement_hub_page.dart';
 import '../../features/finance/presentation/pages/savings_vaults_page.dart';
+import '../../features/finance/presentation/pages/transactions_page.dart';
+import '../domain/value_objects/financial_cycle.dart';
 import '../../features/projects/presentation/cubit/projects_cubit.dart';
 import '../../features/projects/presentation/pages/projects_hub_page.dart';
 import '../../features/routine/presentation/pages/tasks_and_shopping_page.dart';
@@ -316,9 +318,20 @@ class AppRouter {
                       child: const ProjectsHubPage(),
                     ),
                   ),
+                  GoRoute(
+                    path: 'transacoes',
+                    name: 'transactions',
+                    builder: (context, state) => TransactionsPage(
+                      initialCycle: state.extra is FinancialCycle ? (state.extra as FinancialCycle) : null,
+                    ),
+                  ),
                 ],
               ),
               // Aliases para compatibilidade retroativa
+              GoRoute(
+                path: '/transacoes',
+                redirect: (context, state) => '/casa/transacoes',
+              ),
               GoRoute(
                 path: '/fechamento',
                 redirect: (context, state) => state.uri.replace(path: '/casa/fechamento').toString(),

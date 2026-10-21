@@ -16,6 +16,7 @@ import '../../../finance/presentation/cubit/finance_cubit.dart';
 import '../../../finance/presentation/cubit/finance_state.dart';
 import '../../../../core/di/service_locator.dart';
 import '../../../p2p/presentation/cubit/p2p_cubit.dart';
+import '../../../p2p/domain/entities/p2p_loan.dart';
 import '../cubit/reports_cubit.dart';
 import '../widgets/cycle_preview_section.dart';
 import '../widgets/payment_calendar_section.dart';
@@ -50,11 +51,12 @@ class _ReportsPageState extends State<ReportsPage> {
       create: (context) {
         final cubit = sl<ReportsCubit>();
         final finance = context.read<FinanceCubit>().state;
-        if (finance.status == FinanceStatus.success)
+        if (finance.status == FinanceStatus.success) {
           cubit.loadPreview(
             finance,
             schedule: context.read<FinanceCubit>().cycleSchedule,
           );
+        }
         return cubit;
       },
       // A prévia acompanha o ciclo que o painel carregou (troca de ciclo,
@@ -136,6 +138,14 @@ class _ReportsPageContent extends StatelessWidget {
                 ),
               ),
             ],
+          ),
+          IconButton(
+            icon: const Icon(Icons.receipt_long_rounded),
+            tooltip: 'Extrato & Transações',
+            onPressed: () {
+              final cycle = context.read<FinanceCubit>().state.currentCycle;
+              context.push('/casa/transacoes', extra: cycle);
+            },
           ),
           const PrivacyToggleButton(),
           IconButton(
@@ -720,6 +730,26 @@ class _ReportsPageContent extends StatelessWidget {
                   .where((c) => c.memberId == member.id)
                   .fold<int>(0, (acc, c) => acc + c.amount.cents);
 
+              // Amortizações de empréstimo pagas no ciclo por este membro
+              int paidLoansCents = 0;
+              final currentCycle = state.currentCycle;
+              List<P2PLoan> allLoans = const [];
+              try {
+                allLoans = context.watch<P2PCubit>().state.allLoans;
+              } catch (_) {}
+              for (final loan in allLoans) {
+                if (loan.borrowerMemberId != member.id) continue;
+                for (final inst in loan.installments) {
+                  final paidAt = inst.paidAt;
+                  final wasPaid = (paidAt != null && currentCycle.contains(paidAt)) ||
+                      (paidAt == null && inst.isFullyPaid && currentCycle.contains(inst.dueDate));
+                  if (wasPaid) {
+                    paidLoansCents += inst.paidAmount.cents.toInt();
+                  }
+                }
+              }
+              final totalTransferredCents = paidCents + paidLoansCents;
+
               return Padding(
                 padding: const EdgeInsets.symmetric(vertical: 8),
                 child: Row(
@@ -750,7 +780,16 @@ class _ReportsPageContent extends StatelessWidget {
                               fontSize: 13,
                             ),
                           ),
-                          if ((member.defaultFixedAmountCents ?? 0) > 0)
+                          if (paidLoansCents > 0)
+                            Text(
+                              'Aportes: ${Money(paidCents).formatted} • Empréstimos: ${Money(paidLoansCents).formatted}',
+                              style: TextStyle(
+                                color: AppColors.primary.withValues(alpha: 0.9),
+                                fontSize: 11,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            )
+                          else if ((member.defaultFixedAmountCents ?? 0) > 0)
                             Text(
                               'Meta de aporte: ${Money(member.defaultFixedAmountCents!).formatted}',
                               style: const TextStyle(
@@ -770,7 +809,7 @@ class _ReportsPageContent extends StatelessWidget {
                       ),
                     ),
                     PrivacySensitiveText(
-                      Money(paidCents).formatted,
+                      Money(totalTransferredCents).formatted,
                       style: const TextStyle(
                         fontWeight: FontWeight.bold,
                         color: AppColors.creditGreen,

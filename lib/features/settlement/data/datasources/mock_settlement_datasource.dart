@@ -64,10 +64,12 @@ class MockSettlementDataSource implements SettlementDataSource {
     }
 
     final members = await financeDataSource.getMembers();
+    final categories = await financeDataSource.getCategories();
+    final paymentMethods = await financeDataSource.getPaymentMethods();
     // Faturas em aberto: levadas adiante saem; as demais entram como pagas por quem foi escolhido
     final expenses = applyOpenInvoiceChoices(
       await financeDataSource.getExpensesForCycle(cycle),
-      await financeDataSource.getPaymentMethods(),
+      paymentMethods,
       options?.openInvoiceChoices ?? const {},
       billChoices: options?.openBillChoices ?? const {},
     );
@@ -111,6 +113,8 @@ class MockSettlementDataSource implements SettlementDataSource {
       expenses: expenses,
       contributions: contributions,
       loans: loans,
+      categories: categories,
+      paymentMethods: paymentMethods,
       customContributionTargets: customTargets,
       housePixKey: house?.pixKey,
       housePixKeyHolderName: house?.pixKeyHolderName,

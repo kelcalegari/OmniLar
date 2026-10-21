@@ -466,7 +466,11 @@ class LoanDetailsSheet extends StatelessWidget {
               ),
               icon: const Icon(Icons.payments_rounded),
               label: Text(
-                isDebtor ? 'Abater valor' : 'Registrar abatimento recebido',
+                isDebtor
+                    ? 'Abater valor'
+                    : (loan.isHouseLender
+                        ? 'Registrar recebimento pelo Caixa'
+                        : 'Registrar abatimento recebido'),
                 style: const TextStyle(fontWeight: FontWeight.bold),
               ),
               onPressed: () => _openPaymentDialog(context, openInstallment),
@@ -811,7 +815,11 @@ class LoanDetailsSheet extends StatelessWidget {
                 ),
                 icon: const Icon(Icons.fast_forward_rounded),
                 label: Text(
-                  isDebtor ? 'Antecipar ou abater valor' : 'Registrar pagamento recebido',
+                  isDebtor
+                      ? 'Antecipar ou abater valor'
+                      : (loan.isHouseLender
+                          ? 'Registrar pagamento recebido pelo Caixa'
+                          : 'Registrar pagamento recebido'),
                   style: const TextStyle(fontWeight: FontWeight.bold),
                 ),
                 onPressed: () => _openLoanPaymentDialog(context),
@@ -833,7 +841,12 @@ class LoanDetailsSheet extends StatelessWidget {
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                 ),
                 icon: const Icon(Icons.volunteer_activism_rounded),
-                label: const Text('Perdoar restante da dívida', style: TextStyle(fontWeight: FontWeight.bold)),
+                label: Text(
+                  loan.isHouseLender
+                      ? 'Perdoar dívida em nome da Casa'
+                      : 'Perdoar restante da dívida',
+                  style: const TextStyle(fontWeight: FontWeight.bold),
+                ),
                 onPressed: () => _confirmForgive(context),
               ),
             ),

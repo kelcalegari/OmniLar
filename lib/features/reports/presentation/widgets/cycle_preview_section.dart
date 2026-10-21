@@ -309,6 +309,14 @@ class _MemberPreviewCard extends StatelessWidget {
                 '${member.contributionDue.formatted} do ciclo, '
                 '${member.contributionPaid.formatted} já aportado',
           ),
+          if (member.p2pPaidInCycle.isPositive)
+            _line(
+              'Empréstimos já quitados no ciclo',
+              member.p2pPaidInCycle,
+              sign: '✓',
+              caption:
+                  'Total transferido no ciclo: ${(member.contributionPaid + member.p2pPaidInCycle).formatted}',
+            ),
           if (member.outOfPocket.isPositive)
             _line('Pagou do bolso (reembolso)', member.outOfPocket, sign: '−'),
           if (member.contributionRefund.isPositive)

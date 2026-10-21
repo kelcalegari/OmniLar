@@ -31,6 +31,8 @@ import '../../features/finance/domain/repositories/finance_repository.dart';
 import '../../features/finance/domain/services/cycle_funding_estimator.dart';
 import '../../features/finance/domain/services/receipt_attachment_service.dart';
 import '../../features/finance/presentation/cubit/finance_cubit.dart';
+import '../../features/finance/presentation/cubit/transactions_cubit.dart';
+import '../domain/value_objects/cycle_schedule.dart';
 import '../../features/admin/data/datasources/admin_datasource.dart';
 import '../../features/admin/data/datasources/dynamic_admin_datasource.dart';
 import '../../features/admin/data/datasources/mock_admin_datasource.dart';
@@ -205,6 +207,11 @@ Future<void> initServiceLocator() async {
         () => sl<AuthRepository>().currentHouse?.cycleStartDay,
         () => sl<AuthRepository>().currentHouse?.cycleSchedule,
         sl<MemberSettingsRepository>(),
+      ));
+  sl.registerFactory<TransactionsCubit>(() => TransactionsCubit(
+        repository: sl<FinanceRepository>(),
+        cycleSchedule: sl<AuthRepository>().currentHouse?.cycleSchedule ??
+            CycleSchedule(sl<AuthRepository>().currentHouse?.cycleStartDay ?? 1),
       ));
 
   // P2P Feature

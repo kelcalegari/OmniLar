@@ -9,6 +9,10 @@ class ExpenseShareAudit {
   final String ruleDescription;
   final DateTime date;
   final bool isPersonal;
+  final String? categoryName;
+  final String? paidByMemberId;
+  final String? paidByMemberName;
+  final String? paymentMethodName;
 
   const ExpenseShareAudit({
     required this.expenseId,
@@ -18,6 +22,10 @@ class ExpenseShareAudit {
     required this.ruleDescription,
     required this.date,
     this.isPersonal = false,
+    this.categoryName,
+    this.paidByMemberId,
+    this.paidByMemberName,
+    this.paymentMethodName,
   });
 }
 
@@ -63,8 +71,7 @@ class P2PInstallmentAudit {
   final int totalInstallments;
   final Money amount;
   final DateTime dueDate;
-  final bool
-  isReceivable; // true = tem a receber (credor), false = tem a pagar (devedor)
+  final bool isReceivable; // true = tem a receber (credor), false = tem a pagar (devedor)
 
   const P2PInstallmentAudit({
     required this.loanId,
@@ -98,6 +105,18 @@ class MemberAuditTrail {
   /// Sobra devolvida que o morador já tinha aportado (o Caixa devolve).
   final Money contributionRefund;
 
+  /// Parcelas de empréstimos/acordos pagas pelo morador durante este ciclo
+  final List<P2PInstallmentAudit> p2pPaidInCycle;
+
+  /// Parcelas de empréstimos que o morador recebeu durante este ciclo
+  final List<P2PInstallmentAudit> p2pReceivedInCycle;
+
+  /// Total pago em amortizações de empréstimos durante o ciclo
+  final Money p2pPaidInCycleTotal;
+
+  /// Total recebido em amortizações de empréstimos durante o ciclo
+  final Money p2pReceivedInCycleTotal;
+
   const MemberAuditTrail({
     required this.memberId,
     required this.memberName,
@@ -113,7 +132,22 @@ class MemberAuditTrail {
     required this.p2pBorrowedTotal,
     required this.netBalance,
     this.contributionRefund = const Money.zero(),
+    this.p2pPaidInCycle = const [],
+    this.p2pReceivedInCycle = const [],
+    this.p2pPaidInCycleTotal = const Money.zero(),
+    this.p2pReceivedInCycleTotal = const Money.zero(),
   });
+
+  /// Total desembolsado pelo morador durante o ciclo (Aportes na Casa + Amortizações de Empréstimos)
+  Money get totalDisbursedInCycle => Money(contributionPaid.cents + p2pPaidInCycleTotal.cents);
+
+  /// Lista de transações rateadas em comum
+  List<ExpenseShareAudit> get commonExpenseShares =>
+      expenseShares.where((s) => !s.isPersonal).toList();
+
+  /// Lista de transações exclusivas do morador
+  List<ExpenseShareAudit> get exclusiveExpenseShares =>
+      expenseShares.where((s) => s.isPersonal).toList();
 
   /// Total de participação em gastos comuns/compartilhados da Casa
   Money get sharedHouseSharesTotal {

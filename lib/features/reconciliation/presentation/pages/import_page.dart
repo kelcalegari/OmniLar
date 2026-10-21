@@ -850,14 +850,28 @@ class _ImportPageState extends State<ImportPage> {
     return [
       DropdownMenuItem(
         value: _houseKey,
-        child: Text('Casa', style: style(AppColors.primary, bold: true)),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text('Casa', style: style(AppColors.primary, bold: true)),
+            const SizedBox(width: 4),
+            Text('(gasto)', style: style(Colors.grey)),
+          ],
+        ),
       ),
       for (final member in debtors)
         DropdownMenuItem(
           value: '$_loanPrefix${member.id}',
-          child: Text(
-            '${member.name.split(' ').first} deve',
-            style: style(AppColors.debtRed, bold: true),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                '${member.name.split(' ').first} deve',
+                style: style(AppColors.debtRed, bold: true),
+              ),
+              const SizedBox(width: 4),
+              Text('(empréstimo)', style: style(Colors.grey)),
+            ],
           ),
         ),
       if (payerName != null)
@@ -1791,6 +1805,29 @@ class _ImportPageState extends State<ImportPage> {
             ),
           ],
         ),
+      Container(
+        margin: const EdgeInsets.only(bottom: 12),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+        decoration: BoxDecoration(
+          color: Theme.of(context).colorScheme.surfaceContainerHighest.withValues(alpha: 0.5),
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: Theme.of(context).dividerColor),
+        ),
+        child: const Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Icon(Icons.help_outline_rounded, size: 18, color: Colors.grey),
+            SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                '• Casa (gasto): despesa coletiva da casa, rateada entre os moradores no fechamento mensal.\n'
+                '• [Nome] deve (empréstimo): empréstimo individual direto entre o morador e quem paga a fatura.',
+                style: TextStyle(fontSize: 12, height: 1.4, color: Colors.grey),
+              ),
+            ),
+          ],
+        ),
+      ),
       Padding(
         padding: const EdgeInsets.only(bottom: 8),
         child: Wrap(
@@ -1858,9 +1895,39 @@ class _ImportPageState extends State<ImportPage> {
             style: const TextStyle(fontSize: 12, color: AppColors.debtRed),
           ),
         ),
-      const Text(
-        'Ao confirmar: cada linha da Casa vira uma despesa com rateio; linhas de outro morador viram empréstimo com quem paga a fatura como credor; linhas pessoais e ignoradas não geram nada.',
-        style: TextStyle(fontSize: 11, color: Colors.grey),
+      Container(
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: AppColors.primary.withValues(alpha: 0.06),
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: AppColors.primary.withValues(alpha: 0.2)),
+        ),
+        child: const Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(Icons.info_outline_rounded, size: 16, color: AppColors.primary),
+                SizedBox(width: 8),
+                Text(
+                  'O que acontece ao confirmar?',
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.bold,
+                    color: AppColors.primary,
+                  ),
+                ),
+              ],
+            ),
+            SizedBox(height: 6),
+            Text(
+              '• Casa: cria despesas da casa com rateio compartilhado (fechamento no Super Pix).\n'
+              '• [Morador] deve: cria empréstimos diretos P2P (o titular do cartão é o credor).\n'
+              '• Pessoal e Ignoradas: não geram lançamentos na casa.',
+              style: TextStyle(fontSize: 12, height: 1.35),
+            ),
+          ],
+        ),
       ),
       const SizedBox(height: 12),
       SizedBox(

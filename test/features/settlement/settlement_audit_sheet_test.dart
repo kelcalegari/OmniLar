@@ -26,6 +26,19 @@ void main() {
           allocatedAmount: const Money(100000),
           ruleDescription: '50% da despesa',
           date: DateTime(2026, 10, 10),
+          categoryName: 'Moradia',
+          paidByMemberName: 'Cris',
+        ),
+        ExpenseShareAudit(
+          expenseId: 'e3',
+          expenseTitle: 'Cerveja Artesanal Particular',
+          totalExpenseAmount: const Money(4000),
+          allocatedAmount: const Money(4000),
+          ruleDescription: 'Item pessoal exclusivo',
+          date: DateTime(2026, 10, 14),
+          isPersonal: true,
+          categoryName: 'Bebidas',
+          paidByMemberName: 'Cris',
         ),
       ],
       contributionsMade: [
@@ -57,13 +70,12 @@ void main() {
           isReceivable: false,
         ),
       ],
-      contributionDue: const Money(100000),
+      contributionDue: const Money(104000),
       contributionPaid: const Money(30000),
       outOfPocketTotal: const Money(25000),
       p2pLentTotal: const Money.zero(),
       p2pBorrowedTotal: const Money(5000),
-      // (250 - (1000 - 300)) - 50 = 250 - 700 - 50 = -500
-      netBalance: const Money(-50000),
+      netBalance: const Money(-54000),
     );
 
     final auditCris = MemberAuditTrail(
@@ -217,6 +229,144 @@ void main() {
 
         expect(find.text('Saldo Líquido de Cris:'), findsOneWidget);
         expect(find.text('Copiar memória de cálculo de Cris'), findsOneWidget);
+      },
+    );
+    testWidgets(
+      'Permite filtrar despesas entre Em Comum e Exclusivas e abrir detalhes ao tocar na transacao',
+      (tester) async {
+        tester.view.physicalSize = const Size(1080, 2400);
+        tester.view.devicePixelRatio = 1.0;
+        addTearDown(tester.view.resetPhysicalSize);
+
+        await tester.pumpWidget(
+          MaterialApp(
+            home: Scaffold(
+              body: SettlementAuditSheet(
+                summary: summary,
+                initialMemberId: 'm_kelvynn',
+              ),
+            ),
+          ),
+        );
+
+        // Ambas as transações aparecem na lista inicial
+        expect(find.text('Aluguel do Lar'), findsOneWidget);
+        expect(find.text('Cerveja Artesanal Particular'), findsOneWidget);
+        expect(find.text('RATEIO COMUM'), findsOneWidget);
+        expect(find.text('100% EXCLUSIVO'), findsOneWidget);
+
+        // Filtra para ver apenas exclusivas
+        await tester.tap(find.textContaining('Exclusivas (1)'));
+        await tester.pumpAndSettle();
+
+        expect(find.text('Cerveja Artesanal Particular'), findsOneWidget);
+        expect(find.text('Aluguel do Lar'), findsNothing);
+
+        // Filtra para ver apenas rateadas em comum
+        await tester.tap(find.textContaining('Em Comum (1)'));
+        await tester.pumpAndSettle();
+
+        expect(find.text('Aluguel do Lar'), findsOneWidget);
+        expect(find.text('Cerveja Artesanal Particular'), findsNothing);
+
+        // Toca na transação de Aluguel para abrir o modal de detalhes
+        await tester.tap(find.text('Aluguel do Lar'));
+        await tester.pumpAndSettle();
+
+        expect(find.text('Gasto Rateado em Comum'), findsOneWidget);
+        expect(find.text('Moradia'), findsWidgets);
+        expect(find.text('Entendido'), findsOneWidget);
+
+        // Fecha o modal
+        await tester.tap(find.text('Entendido'));
+        await tester.pumpAndSettle();
+      },
+    );
+
+    testWidgets(
+      'Exibe total desembolsado no ciclo e secao de emprestimos quitados no ciclo',
+      (tester) async {
+        tester.view.physicalSize = const Size(1080, 2400);
+        tester.view.devicePixelRatio = 1.0;
+        addTearDown(tester.view.resetPhysicalSize);
+
+        final auditWithCyclePayments = MemberAuditTrail(
+          memberId: 'm_lucas',
+          memberName: 'Lucas',
+          expenseShares: const [],
+          contributionsMade: [
+            ContributionAudit(
+              contributionId: 'cb_10',
+              amount: const Money(100000), // R$ 1.000,00 aporte
+              date: DateTime(2026, 10, 10),
+            ),
+          ],
+          outOfPocketExpenses: const [],
+          p2pReceivables: const [],
+          p2pPayables: const [],
+          contributionDue: const Money(100000),
+          contributionPaid: const Money(100000),
+          outOfPocketTotal: const Money.zero(),
+          p2pLentTotal: const Money.zero(),
+          p2pBorrowedTotal: const Money.zero(),
+          netBalance: const Money.zero(),
+          p2pPaidInCycle: [
+            P2PInstallmentAudit(
+              loanId: 'l_casa',
+              description: 'Acordo com Caixa da Casa',
+              otherMemberId: 'entity_caixa',
+              otherMemberName: 'Caixa da Casa',
+              installmentNumber: 1,
+              totalInstallments: 1,
+              amount: const Money(100000), // R$ 1.000,00 emprestimo pago
+              dueDate: DateTime(2026, 10, 15),
+              isReceivable: false,
+            ),
+          ],
+          p2pPaidInCycleTotal: const Money(100000),
+        );
+
+        final summaryWithPayments = SettlementSummary(
+          cycle: cycle,
+          memberBalances: [
+            const MemberNetBalance(
+              memberId: 'm_lucas',
+              memberName: 'Lucas',
+              contributionDue: Money(100000),
+              contributionPaid: Money(100000),
+              outOfPocketExpenses: Money.zero(),
+              p2pLentDue: Money.zero(),
+              p2pBorrowedDue: Money.zero(),
+            ),
+          ],
+          transfers: const [],
+          totalHouseExpenses: const Money.zero(),
+          totalContributions: const Money(100000),
+          totalP2PCleared: const Money.zero(),
+          houseTreasuryBalance: const Money.zero(),
+          auditTrails: {'m_lucas': auditWithCyclePayments},
+        );
+
+        await tester.pumpWidget(
+          MaterialApp(
+            home: Scaffold(
+              body: SettlementAuditSheet(
+                summary: summaryWithPayments,
+                initialMemberId: 'm_lucas',
+              ),
+            ),
+          ),
+        );
+
+        // Deve exibir o total desembolsado no ciclo de R$ 2.000,00
+        expect(find.textContaining('Total Desembolsado no Ciclo:'), findsOneWidget);
+        expect(find.textContaining('2.000,00'), findsWidgets);
+        expect(find.textContaining('Aporte +'), findsOneWidget);
+
+        // Deve exibir a seção de quitados no ciclo
+        expect(find.textContaining('QUITADOS / PAGOS NESTE CICLO'), findsOneWidget);
+        expect(find.textContaining('Acordo com Caixa da Casa'), findsOneWidget);
+        expect(find.text('QUITADO'), findsOneWidget);
       },
     );
   });

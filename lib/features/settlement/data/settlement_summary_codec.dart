@@ -79,6 +79,10 @@ Map<String, dynamic> _auditToJson(MemberAuditTrail a) => {
             'rule': e.ruleDescription,
             'date': _date(e.date),
             'is_personal': e.isPersonal,
+            if (e.categoryName != null) 'category_name': e.categoryName,
+            if (e.paidByMemberId != null) 'paid_by_member_id': e.paidByMemberId,
+            if (e.paidByMemberName != null) 'paid_by_member_name': e.paidByMemberName,
+            if (e.paymentMethodName != null) 'payment_method_name': e.paymentMethodName,
           },
       ],
       'contributions_made': [
@@ -102,6 +106,10 @@ Map<String, dynamic> _auditToJson(MemberAuditTrail a) => {
       ],
       'p2p_receivables': [for (final p in a.p2pReceivables) _p2pToJson(p)],
       'p2p_payables': [for (final p in a.p2pPayables) _p2pToJson(p)],
+      'p2p_paid_in_cycle': [for (final p in a.p2pPaidInCycle) _p2pToJson(p)],
+      'p2p_received_in_cycle': [for (final p in a.p2pReceivedInCycle) _p2pToJson(p)],
+      'p2p_paid_in_cycle_total_cents': a.p2pPaidInCycleTotal.cents,
+      'p2p_received_in_cycle_total_cents': a.p2pReceivedInCycleTotal.cents,
     };
 
 Map<String, dynamic> _p2pToJson(P2PInstallmentAudit p) => {
@@ -141,6 +149,10 @@ MemberAuditTrail _auditFromJson(Map<String, dynamic> j) => MemberAuditTrail(
             ruleDescription: e['rule'] as String? ?? '',
             date: _parseDate(e['date']),
             isPersonal: e['is_personal'] as bool? ?? false,
+            categoryName: e['category_name'] as String?,
+            paidByMemberId: e['paid_by_member_id'] as String?,
+            paidByMemberName: e['paid_by_member_name'] as String?,
+            paymentMethodName: e['payment_method_name'] as String?,
           ),
       ],
       contributionsMade: [
@@ -171,6 +183,10 @@ MemberAuditTrail _auditFromJson(Map<String, dynamic> j) => MemberAuditTrail(
       p2pBorrowedTotal: _money(j['p2p_borrowed_total_cents']),
       netBalance: _money(j['net_balance_cents']),
       contributionRefund: _money(j['contribution_refund_cents']),
+      p2pPaidInCycle: [for (final p in _list(j['p2p_paid_in_cycle'])) _p2pFromJson(p)],
+      p2pReceivedInCycle: [for (final p in _list(j['p2p_received_in_cycle'])) _p2pFromJson(p)],
+      p2pPaidInCycleTotal: _money(j['p2p_paid_in_cycle_total_cents']),
+      p2pReceivedInCycleTotal: _money(j['p2p_received_in_cycle_total_cents']),
     );
 
 /// Reconstrói o fechamento gravado. Devolve null quando o retrato não existe,

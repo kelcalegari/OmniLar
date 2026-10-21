@@ -62,6 +62,10 @@ class MemberCyclePreview {
   /// rateio por percentual; zero quando não há projeção).
   final Money projectedExtraShare;
 
+  /// Parcelas de empréstimo já amortizadas/pagas neste ciclo
+  final List<P2PInstallmentAudit> installmentsPaidInCycle;
+  final Money p2pPaidInCycle;
+
   const MemberCyclePreview({
     required this.memberId,
     required this.memberName,
@@ -78,6 +82,8 @@ class MemberCyclePreview {
     this.installmentsToReceive = const [],
     this.assumedPayments = const [],
     this.projectedExtraShare = const Money.zero(),
+    this.installmentsPaidInCycle = const [],
+    this.p2pPaidInCycle = const Money.zero(),
   });
 
   bool get pays => net.isNegative;

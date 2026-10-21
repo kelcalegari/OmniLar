@@ -68,13 +68,27 @@ class LoanCard extends StatelessWidget {
     }
 
     String counterpartyLabel;
-    if (showBothParties) {
+    if (loan.isHouseLender) {
+      final borrowerName = resolveMemberName(loan.borrowerMemberId);
+      final isSelf = loan.borrowerMemberId == sl<AuthRepository>().currentUser?.id;
+      counterpartyLabel = isSelf
+          ? '🏛️ Acordo com o Lar • Você deve à Casa'
+          : '🏛️ Acordo com o Lar • Devedor: $borrowerName';
+    } else if (showBothParties) {
       counterpartyLabel = '${resolveMemberName(loan.lenderMemberId)} ➔ ${resolveMemberName(loan.borrowerMemberId)}';
     } else {
       final targetId = isDebtor ? loan.lenderMemberId : loan.borrowerMemberId;
       final name = resolveMemberName(targetId);
       counterpartyLabel = isDebtor ? 'Credor: $name' : 'Devedor: $name';
     }
+
+    final isHouse = loan.isHouseLender && !isDebtor;
+    final cardAccentColor = isHouse
+        ? AppColors.primary
+        : (isDebtor ? AppColors.debtRed : AppColors.creditGreen);
+    final cardIcon = isHouse
+        ? Icons.account_balance_rounded
+        : (isDebtor ? Icons.arrow_upward_rounded : Icons.arrow_downward_rounded);
 
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
@@ -95,12 +109,12 @@ class LoanCard extends StatelessWidget {
                       width: 40,
                       height: 40,
                       decoration: BoxDecoration(
-                        color: (isDebtor ? AppColors.debtRed : AppColors.creditGreen).withValues(alpha: 0.12),
+                        color: cardAccentColor.withValues(alpha: 0.12),
                         borderRadius: BorderRadius.circular(10),
                       ),
                       child: Icon(
-                        isDebtor ? Icons.arrow_upward_rounded : Icons.arrow_downward_rounded,
-                        color: isDebtor ? AppColors.debtRed : AppColors.creditGreen,
+                        cardIcon,
+                        color: cardAccentColor,
                         size: 20,
                       ),
                     ),

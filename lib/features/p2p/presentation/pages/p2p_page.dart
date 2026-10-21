@@ -116,7 +116,7 @@ class _P2PPageContentState extends State<_P2PPageContent> {
               child: ResponsiveContainer(
                 child: Column(
                   children: [
-                    _buildBalanceCard(netBalance, isNetPositive),
+                    _buildBalanceCard(netBalance, isNetPositive, houseLoansTotal: state.totalHouseLoansPending),
                     const SizedBox(height: 24),
                     Row(
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -327,7 +327,7 @@ class _P2PPageContentState extends State<_P2PPageContent> {
             body: Column(
               children: [
                 const SizedBox(height: 8),
-                _buildBalanceCard(netBalance, isNetPositive),
+                _buildBalanceCard(netBalance, isNetPositive, houseLoansTotal: state.totalHouseLoansPending),
                 const SizedBox(height: 12),
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -434,7 +434,7 @@ class _P2PPageContentState extends State<_P2PPageContent> {
     );
   }
 
-  Widget _buildBalanceCard(dynamic netBalance, bool isNetPositive) {
+  Widget _buildBalanceCard(dynamic netBalance, bool isNetPositive, {dynamic houseLoansTotal}) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16),
       child: Container(

@@ -589,6 +589,23 @@ class _SmartFABContent extends StatelessWidget {
                 ),
               ],
             ),
+            const SizedBox(height: 10),
+            Row(
+              children: [
+                _buildActionButton(
+                  context,
+                  icon: Icons.receipt_long_rounded,
+                  label: 'Extrato Completo',
+                  subtitle: 'Ver todas e exportar',
+                  color: Colors.blueGrey,
+                  onTap: () {
+                    Navigator.pop(context);
+                    final cycle = context.read<FinanceCubit>().state.currentCycle;
+                    context.push('/casa/transacoes', extra: cycle);
+                  },
+                ),
+              ],
+            ),
           ],
         );
     }
@@ -694,6 +711,16 @@ class _SmartFABContent extends StatelessWidget {
                   );
                 },
               ),
+            _buildCompactActionChip(
+              context,
+              icon: Icons.receipt_long_rounded,
+              label: 'Extrato',
+              onTap: () {
+                Navigator.pop(context);
+                final cycle = context.read<FinanceCubit>().state.currentCycle;
+                context.push('/casa/transacoes', extra: cycle);
+              },
+            ),
             _buildCompactActionChip(
               context,
               icon: Icons.flash_on_rounded,

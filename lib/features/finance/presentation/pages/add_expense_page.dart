@@ -935,6 +935,33 @@ class _AddExpensePageState extends State<AddExpensePage> {
                 ),
             ],
           ),
+          if ((_singleResponsibleId ?? _selectedPaidByMemberId) != _selectedPaidByMemberId) ...[
+            const SizedBox(height: 10),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              decoration: BoxDecoration(
+                color: AppColors.primary.withValues(alpha: 0.08),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: AppColors.primary.withValues(alpha: 0.2)),
+              ),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Icon(Icons.info_outline_rounded, size: 16, color: AppColors.primary),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'Como outra pessoa pagou, o valor integral será reembolsado no acerto do ciclo mensal (Super Pix). Se preferir um empréstimo parcelado ou avulso fora do ciclo da casa, use a aba Empréstimos.',
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: theme.colorScheme.onSurface.withValues(alpha: 0.8),
+                        fontSize: 12,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
         ],
       ],
     );
