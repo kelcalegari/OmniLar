@@ -42,7 +42,11 @@ class SmartScannerPage extends StatefulWidget {
   @visibleForTesting
   final CaptureProposal? initialProposal;
 
-  const SmartScannerPage({super.key, this.onProposalReady, this.initialProposal});
+  const SmartScannerPage({
+    super.key,
+    this.onProposalReady,
+    this.initialProposal,
+  });
 
   static Future<void> show(BuildContext context) {
     return showAdaptiveModal(
@@ -56,7 +60,8 @@ class SmartScannerPage extends StatefulWidget {
   State<SmartScannerPage> createState() => _SmartScannerPageState();
 }
 
-class _SmartScannerPageState extends State<SmartScannerPage> with WidgetsBindingObserver {
+class _SmartScannerPageState extends State<SmartScannerPage>
+    with WidgetsBindingObserver {
   final _barcodeController = TextEditingController();
   int _activeTabIndex = 0; // 0 = Câmera/Captura, 1 = Digitar Linha do Boleto
   CaptureProposal? _currentProposal;
@@ -196,7 +201,9 @@ class _SmartScannerPageState extends State<SmartScannerPage> with WidgetsBinding
   void _switchCamera() {
     final controller = _scannerController;
     if (controller == null) return;
-    _cameraFacing = _cameraFacing == CameraFacing.back ? CameraFacing.front : CameraFacing.back;
+    _cameraFacing = _cameraFacing == CameraFacing.back
+        ? CameraFacing.front
+        : CameraFacing.back;
     _queueCamera(() async {
       if (!identical(controller, _scannerController) || !_wantsCamera) return;
       await _stopCamera(controller);
@@ -205,7 +212,9 @@ class _SmartScannerPageState extends State<SmartScannerPage> with WidgetsBinding
         _cameraOn = true;
       } catch (_) {
         // Aparelho sem a outra câmera: volta para a que funcionava
-        _cameraFacing = _cameraFacing == CameraFacing.back ? CameraFacing.front : CameraFacing.back;
+        _cameraFacing = _cameraFacing == CameraFacing.back
+            ? CameraFacing.front
+            : CameraFacing.back;
         await controller.start(cameraDirection: _cameraFacing);
         _cameraOn = true;
       }
@@ -216,7 +225,8 @@ class _SmartScannerPageState extends State<SmartScannerPage> with WidgetsBinding
   /// App ou aba do site em segundo plano: a câmera desliga e volta ao retornar.
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    _isInBackground = state == AppLifecycleState.hidden || state == AppLifecycleState.paused;
+    _isInBackground =
+        state == AppLifecycleState.hidden || state == AppLifecycleState.paused;
     _syncCamera();
   }
 
@@ -242,7 +252,11 @@ class _SmartScannerPageState extends State<SmartScannerPage> with WidgetsBinding
           // QR que a Sefaz já não entregou: não consulta de novo a cada quadro
           if (raw != _failedQrUrl) _lookupNfce(raw);
           break;
-        } else if (const {44, 47, 48}.contains(BoletoCodeReader.digitsOf(raw).length)) {
+        } else if (const {
+          44,
+          47,
+          48,
+        }.contains(BoletoCodeReader.digitsOf(raw).length)) {
           final proposal = _proposalFromCode(raw, quiet: true);
           if (proposal != null) {
             setState(() {
@@ -259,13 +273,16 @@ class _SmartScannerPageState extends State<SmartScannerPage> with WidgetsBinding
   /// estado sem consulta (SC) abre a câmera direto, sem aviso; se a Sefaz de
   /// outro estado não entregar, pede a foto do cupom para a IA.
   Future<void> _lookupNfce(String url) async {
-    if (CaptureService.photoOnlyState(url) != null && !sl<AuthRepository>().isDemoMode) {
+    if (CaptureService.photoOnlyState(url) != null &&
+        !sl<AuthRepository>().isDemoMode) {
       // O mesmo QR na frente da câmera não abre a foto de novo ao voltar
       _failedQrUrl = url;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           duration: Duration(seconds: 3),
-          content: Text('Fotografe o cupom inteiro: a IA lê a loja, os itens e os valores.'),
+          content: Text(
+            'Fotografe o cupom inteiro: a IA lê a loja, os itens e os valores.',
+          ),
         ),
       );
       await _pickImage(ImageSource.camera, trySefaz: false);
@@ -280,7 +297,10 @@ class _SmartScannerPageState extends State<SmartScannerPage> with WidgetsBinding
     CaptureProposal? proposal;
     NfceLookupError? failure;
     if (sl<AuthRepository>().isDemoMode) {
-      failure = const NfceLookupError(NfceLookupReason.other, 'No modo demonstração a nota não é consultada na Sefaz.');
+      failure = const NfceLookupError(
+        NfceLookupReason.other,
+        'No modo demonstração a nota não é consultada na Sefaz.',
+      );
     } else {
       try {
         proposal = await sl<CaptureService>().lookupNfce(url);
@@ -309,10 +329,13 @@ class _SmartScannerPageState extends State<SmartScannerPage> with WidgetsBinding
       context: context,
       builder: (dialogContext) => AlertDialog(
         title: const Text('A Sefaz não entregou a nota'),
-        content: Text('${failure?.message}\n\nTire uma foto do cupom: a IA lê a loja, os itens e os valores.'),
+        content: Text(
+          '${failure?.message}\n\nTire uma foto do cupom: a IA lê a loja, os itens e os valores.',
+        ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(dialogContext, _QrFallback.typeValue),
+            onPressed: () =>
+                Navigator.pop(dialogContext, _QrFallback.typeValue),
             child: const Text('Digitar valor'),
           ),
           FilledButton.icon(
@@ -340,7 +363,9 @@ class _SmartScannerPageState extends State<SmartScannerPage> with WidgetsBinding
   /// Foto com o QR da NFC-e: tenta a nota na Sefaz antes da IA. Nulo quando a
   /// foto não tem QR de nota ou a Sefaz não entregou; aí a IA lê a foto.
   /// Na web não há leitura de QR em foto: vai direto para a IA.
-  Future<({CaptureProposal? proposal, String? failure})> _nfceFromPhoto(String path) async {
+  Future<({CaptureProposal? proposal, String? failure})> _nfceFromPhoto(
+    String path,
+  ) async {
     final controller = _scannerController;
     if (kIsWeb || controller == null || sl<AuthRepository>().isDemoMode) {
       return (proposal: null, failure: null);
@@ -349,10 +374,15 @@ class _SmartScannerPageState extends State<SmartScannerPage> with WidgetsBinding
     // Só o QR da Sefaz: outro QR do cupom (propaganda, Pix) fica para a IA
     String? url;
     try {
-      final capture = await controller.analyzeImage(path, formats: const [BarcodeFormat.qrCode]);
+      final capture = await controller.analyzeImage(
+        path,
+        formats: const [BarcodeFormat.qrCode],
+      );
       for (final barcode in capture?.barcodes ?? const <Barcode>[]) {
         final raw = barcode.rawValue?.trim();
-        final host = raw == null ? '' : (Uri.tryParse(raw)?.host.toLowerCase() ?? '');
+        final host = raw == null
+            ? ''
+            : (Uri.tryParse(raw)?.host.toLowerCase() ?? '');
         if (host.endsWith('.gov.br')) {
           url = raw;
           break;
@@ -360,18 +390,25 @@ class _SmartScannerPageState extends State<SmartScannerPage> with WidgetsBinding
       }
     } catch (_) {}
     // Nota de SC: a IA lê a foto, sem aviso (é o caminho normal desse estado)
-    if (url == null || CaptureService.photoOnlyState(url) != null) return (proposal: null, failure: null);
+    if (url == null || CaptureService.photoOnlyState(url) != null)
+      return (proposal: null, failure: null);
 
-    if (mounted) setState(() => _processingMessage = 'Consultando a nota na Sefaz...');
+    if (mounted)
+      setState(() => _processingMessage = 'Consultando a nota na Sefaz...');
     try {
       // A foto já está pronta para a IA: não espera muito pela Sefaz
-      final proposal = await sl<CaptureService>().lookupNfce(url).timeout(const Duration(seconds: 10));
+      final proposal = await sl<CaptureService>()
+          .lookupNfce(url)
+          .timeout(const Duration(seconds: 10));
       return (proposal: proposal, failure: null);
     } on NfceLookupError catch (e) {
       return (proposal: null, failure: e.message);
     } catch (_) {
       // Inclui o tempo esgotado
-      return (proposal: null, failure: NfceLookupError.of(NfceLookupReason.unavailable).message);
+      return (
+        proposal: null,
+        failure: NfceLookupError.of(NfceLookupReason.unavailable).message,
+      );
     }
   }
 
@@ -383,10 +420,14 @@ class _SmartScannerPageState extends State<SmartScannerPage> with WidgetsBinding
 
       setState(() {
         _isProcessing = true;
-        _processingMessage = trySefaz ? 'Procurando o QR Code da nota...' : 'Auditando imagem com inteligência artificial...';
+        _processingMessage = trySefaz
+            ? 'Procurando o QR Code da nota...'
+            : 'Auditando imagem com inteligência artificial...';
       });
 
-      final fromQr = trySefaz ? await _nfceFromPhoto(image.path) : (proposal: null, failure: null);
+      final fromQr = trySefaz
+          ? await _nfceFromPhoto(image.path)
+          : (proposal: null, failure: null);
       if (fromQr.proposal != null) {
         final bytes = await image.readAsBytes();
         _scannedAttachmentFile = ReceiptAttachmentFile(
@@ -404,7 +445,11 @@ class _SmartScannerPageState extends State<SmartScannerPage> with WidgetsBinding
         return;
       }
 
-      if (mounted) setState(() => _processingMessage = 'Auditando imagem com inteligência artificial...');
+      if (mounted)
+        setState(
+          () => _processingMessage =
+              'Auditando imagem com inteligência artificial...',
+        );
       final bytes = await image.readAsBytes();
       _scannedAttachmentFile = ReceiptAttachmentFile(
         name: image.name,
@@ -426,7 +471,9 @@ class _SmartScannerPageState extends State<SmartScannerPage> with WidgetsBinding
         if (fromQr.failure != null) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text('${fromQr.failure} A IA leu a foto; confira os dados antes de lançar.'),
+              content: Text(
+                '${fromQr.failure} A IA leu a foto; confira os dados antes de lançar.',
+              ),
             ),
           );
         }
@@ -534,7 +581,10 @@ class _SmartScannerPageState extends State<SmartScannerPage> with WidgetsBinding
     } on BoletoCodeError catch (e) {
       if (!quiet && mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(backgroundColor: AppColors.debtRed, content: Text(e.message)),
+          SnackBar(
+            backgroundColor: AppColors.debtRed,
+            content: Text(e.message),
+          ),
         );
       }
       return null;
@@ -558,7 +608,10 @@ class _SmartScannerPageState extends State<SmartScannerPage> with WidgetsBinding
     final cycle = financeCubit.cycleSchedule.cycleFor(dueDate);
     var expenses = financeCubit.state.expenses;
     try {
-      expenses = [...expenses, ...await sl<FinanceRepository>().getExpensesForCycle(cycle)];
+      expenses = [
+        ...expenses,
+        ...await sl<FinanceRepository>().getExpensesForCycle(cycle),
+      ];
     } catch (_) {}
     if (!mounted || _currentProposal?.id != proposal.id) return;
     final unique = {for (final e in expenses) e.id: e}.values.toList();
@@ -577,9 +630,12 @@ class _SmartScannerPageState extends State<SmartScannerPage> with WidgetsBinding
     );
     setState(() {
       _knownBills = found;
-      if (_useKnownBill != null && !found.any((e) => e.id == _useKnownBill!.id)) _useKnownBill = null;
+      if (_useKnownBill != null && !found.any((e) => e.id == _useKnownBill!.id))
+        _useKnownBill = null;
       _knownInvoices = invoices;
-      if (_useInvoice != null && !invoices.any((i) => i.key == _useInvoice!.key)) _useInvoice = null;
+      if (_useInvoice != null &&
+          !invoices.any((i) => i.key == _useInvoice!.key))
+        _useInvoice = null;
     });
   }
 
@@ -588,8 +644,24 @@ class _SmartScannerPageState extends State<SmartScannerPage> with WidgetsBinding
     final picked = await showDatePicker(
       context: context,
       initialDate: initial,
-      firstDate: DateTime(initial.year - 1),
-      lastDate: DateTime(initial.year + 2, 12, 31),
+      firstDate: DateTime(
+        [
+          initial.year - 5,
+          DateTime.now().year - 10,
+          2015,
+        ].reduce((a, b) => a < b ? a : b),
+        1,
+        1,
+      ),
+      lastDate: DateTime(
+        [
+          initial.year + 5,
+          DateTime.now().year + 10,
+          2035,
+        ].reduce((a, b) => a > b ? a : b),
+        12,
+        31,
+      ),
       helpText: 'Vencimento do boleto',
     );
     if (picked == null || !mounted) return;
@@ -609,7 +681,9 @@ class _SmartScannerPageState extends State<SmartScannerPage> with WidgetsBinding
     return [
       for (final item in proposal.items)
         () {
-          final responsible = item.isPersonal ? (item.assignedMemberId ?? payerId) : null;
+          final responsible = item.isPersonal
+              ? (item.assignedMemberId ?? payerId)
+              : null;
           return HouseExpenseItem(
             id: 'item_${stamp}_${item.id}',
             expenseId: expenseId,
@@ -617,7 +691,9 @@ class _SmartScannerPageState extends State<SmartScannerPage> with WidgetsBinding
             amount: item.totalPrice,
             categoryId: categoryId,
             responsibleMemberId: responsible,
-            splitRule: responsible != null ? SplitRule.singleResponsible(responsible) : null,
+            splitRule: responsible != null
+                ? SplitRule.singleResponsible(responsible)
+                : null,
           );
         }(),
     ];
@@ -627,11 +703,30 @@ class _SmartScannerPageState extends State<SmartScannerPage> with WidgetsBinding
     final picked = await showDatePicker(
       context: context,
       initialDate: _paidOn,
-      firstDate: DateTime(_paidOn.year - 1),
-      lastDate: DateTime.now(),
+      firstDate: DateTime(
+        [
+          _paidOn.year - 5,
+          DateTime.now().year - 10,
+          2015,
+        ].reduce((a, b) => a < b ? a : b),
+        1,
+        1,
+      ),
+      lastDate: DateTime(
+        [
+          _paidOn.year + 2,
+          DateTime.now().year + 2,
+          2035,
+        ].reduce((a, b) => a > b ? a : b),
+        12,
+        31,
+      ),
       helpText: 'Dia do pagamento',
     );
-    if (picked != null && mounted) setState(() => _paidOn = DateTime(picked.year, picked.month, picked.day, 12));
+    if (picked != null && mounted)
+      setState(
+        () => _paidOn = DateTime(picked.year, picked.month, picked.day, 12),
+      );
   }
 
   /// Boleto: nasce como conta a pagar (ou já paga, com o meio escolhido), com
@@ -646,14 +741,19 @@ class _SmartScannerPageState extends State<SmartScannerPage> with WidgetsBinding
         invoiceDueDate: invoice.dueDate,
         barcode: proposal.rawCode,
       );
-      if (!ok) throw financeCubit.state.errorMessage ?? 'Não foi possível guardar o código da fatura.';
+      if (!ok)
+        throw financeCubit.state.errorMessage ??
+            'Não foi possível guardar o código da fatura.';
       widget.onProposalReady?.call(proposal);
       return;
     }
     final state = financeCubit.state;
     final dueDate = _dueDate!;
     final dueAt = DateTime(dueDate.year, dueDate.month, dueDate.day, 12);
-    final method = state.paymentMethods.where((p) => p.id == _selectedPaymentMethodId).firstOrNull ??
+    final method =
+        state.paymentMethods
+            .where((p) => p.id == _selectedPaymentMethodId)
+            .firstOrNull ??
         ExpenseLaunchDefaults.houseAccount(state.paymentMethods) ??
         state.paymentMethods.firstOrNull;
     final typedTitle = _titleController.text.trim();
@@ -669,18 +769,28 @@ class _SmartScannerPageState extends State<SmartScannerPage> with WidgetsBinding
         // Demonstrativo lido (condomínio): os itens deste mês substituem os anteriores
         items: proposal.items.isEmpty
             ? null
-            : _expenseItemsOf(proposal, expenseId: known.id, categoryId: known.categoryId, payerId: known.paidByMemberId),
+            : _expenseItemsOf(
+                proposal,
+                expenseId: known.id,
+                categoryId: known.categoryId,
+                payerId: known.paidByMemberId,
+              ),
       );
     } else {
-      final categoryId = state.categories.any((c) => c.id == _selectedCategoryId)
+      final categoryId =
+          state.categories.any((c) => c.id == _selectedCategoryId)
           ? _selectedCategoryId!
           : (_suggestedCategoryId(proposal, state.categories) ?? '');
-      final category = state.categories.where((c) => c.id == categoryId).firstOrNull;
-      final payer = sl<AuthRepository>().currentUser?.id ??
+      final category = state.categories
+          .where((c) => c.id == categoryId)
+          .firstOrNull;
+      final payer =
+          sl<AuthRepository>().currentUser?.id ??
           (state.members.isNotEmpty ? state.members.first.id : 'member_carlos');
       final house = ExpenseLaunchDefaults.houseAccount(state.paymentMethods);
       final newId = generateUuidV4();
-      final isPremium = sl<AuthRepository>().isDemoMode ||
+      final isPremium =
+          sl<AuthRepository>().isDemoMode ||
           (sl<AccountAccessCubit>().state.access?.isPremium ?? false);
       String? attachmentPath;
       if (isPremium && _scannedAttachmentFile != null) {
@@ -711,22 +821,40 @@ class _SmartScannerPageState extends State<SmartScannerPage> with WidgetsBinding
         status: ExpenseStatus.pending,
         notes: proposal.merchantOrBeneficiary,
         barcode: proposal.rawCode,
-        items: _expenseItemsOf(proposal, expenseId: newId, categoryId: categoryId, payerId: payer),
+        items: _expenseItemsOf(
+          proposal,
+          expenseId: newId,
+          categoryId: categoryId,
+          payerId: payer,
+        ),
         attachmentPath: attachmentPath,
-        attachmentName: attachmentPath != null ? _scannedAttachmentFile?.name : null,
-        attachmentContentType: attachmentPath != null ? _scannedAttachmentFile?.contentType : null,
-        attachmentSizeBytes: attachmentPath != null ? _scannedAttachmentFile?.sizeBytes : null,
+        attachmentName: attachmentPath != null
+            ? _scannedAttachmentFile?.name
+            : null,
+        attachmentContentType: attachmentPath != null
+            ? _scannedAttachmentFile?.contentType
+            : null,
+        attachmentSizeBytes: attachmentPath != null
+            ? _scannedAttachmentFile?.sizeBytes
+            : null,
       );
     }
 
     final expense = _alreadyPaid
-        ? paidWith(pending, paidOn: _paidOn, method: method, amount: proposal.totalAmount)
+        ? paidWith(
+            pending,
+            paidOn: _paidOn,
+            method: method,
+            amount: proposal.totalAmount,
+          )
         : pending;
     final ok = known != null
         ? await financeCubit.updateExpense(expense)
         : await financeCubit.addExpense(expense);
     if (!ok) {
-      throw ValidationFailure(financeCubit.state.errorMessage ?? kSaveFailedMessage);
+      throw ValidationFailure(
+        financeCubit.state.errorMessage ?? kSaveFailedMessage,
+      );
     }
     widget.onProposalReady?.call(proposal);
   }
@@ -748,8 +876,13 @@ class _SmartScannerPageState extends State<SmartScannerPage> with WidgetsBinding
     );
 
     // Soma dos sub-itens atuais
-    final currentItemsSumCents = proposal.items.fold<int>(0, (sum, i) => sum + i.totalPrice.cents);
-    final baseCents = currentItemsSumCents > 0 ? currentItemsSumCents : proposal.totalAmount.cents;
+    final currentItemsSumCents = proposal.items.fold<int>(
+      0,
+      (sum, i) => sum + i.totalPrice.cents,
+    );
+    final baseCents = currentItemsSumCents > 0
+        ? currentItemsSumCents
+        : proposal.totalAmount.cents;
 
     bool repassarDesconto = proposal.items.isNotEmpty;
 
@@ -758,7 +891,8 @@ class _SmartScannerPageState extends State<SmartScannerPage> with WidgetsBinding
       maxWidth: 480,
       child: StatefulBuilder(
         builder: (context, setModalState) {
-          final typedVal = double.tryParse(amountCtrl.text.replaceAll(',', '.')) ?? 0.0;
+          final typedVal =
+              double.tryParse(amountCtrl.text.replaceAll(',', '.')) ?? 0.0;
           final typedCents = (typedVal * 100).round();
 
           final diffCents = baseCents - typedCents;
@@ -775,7 +909,10 @@ class _SmartScannerPageState extends State<SmartScannerPage> with WidgetsBinding
                   children: [
                     const Text(
                       'Valor & Desconto da Proposta',
-                      style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold),
+                      style: TextStyle(
+                        fontSize: 17,
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
                     IconButton(
                       icon: const Icon(Icons.close_rounded, size: 20),
@@ -786,11 +923,15 @@ class _SmartScannerPageState extends State<SmartScannerPage> with WidgetsBinding
                 const SizedBox(height: 14),
                 TextField(
                   controller: amountCtrl,
-                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                  keyboardType: const TextInputType.numberWithOptions(
+                    decimal: true,
+                  ),
                   decoration: InputDecoration(
                     labelText: 'Valor a Pagar (R\$)',
                     prefixText: 'R\$ ',
-                    helperText: baseCents > 0 ? 'Soma nominal dos itens: ${Money(baseCents).format()}' : null,
+                    helperText: baseCents > 0
+                        ? 'Soma nominal dos itens: ${Money(baseCents).format()}'
+                        : null,
                     border: const OutlineInputBorder(),
                   ),
                   onChanged: (_) => setModalState(() {}),
@@ -805,7 +946,9 @@ class _SmartScannerPageState extends State<SmartScannerPage> with WidgetsBinding
                           : Colors.orange.withValues(alpha: 0.12),
                       borderRadius: BorderRadius.circular(10),
                       border: Border.all(
-                        color: diffCents > 0 ? AppColors.creditGreen : Colors.orange,
+                        color: diffCents > 0
+                            ? AppColors.creditGreen
+                            : Colors.orange,
                         width: 1,
                       ),
                     ),
@@ -815,9 +958,13 @@ class _SmartScannerPageState extends State<SmartScannerPage> with WidgetsBinding
                         Row(
                           children: [
                             Icon(
-                              diffCents > 0 ? Icons.discount_outlined : Icons.trending_up_rounded,
+                              diffCents > 0
+                                  ? Icons.discount_outlined
+                                  : Icons.trending_up_rounded,
                               size: 18,
-                              color: diffCents > 0 ? AppColors.creditGreen : Colors.orange,
+                              color: diffCents > 0
+                                  ? AppColors.creditGreen
+                                  : Colors.orange,
                             ),
                             const SizedBox(width: 8),
                             Expanded(
@@ -827,7 +974,9 @@ class _SmartScannerPageState extends State<SmartScannerPage> with WidgetsBinding
                                     : 'Acréscimo: ${Money(-diffCents).format()} (${(-pct).toStringAsFixed(2)}%)',
                                 style: TextStyle(
                                   fontWeight: FontWeight.bold,
-                                  color: diffCents > 0 ? AppColors.creditGreen : Colors.orange,
+                                  color: diffCents > 0
+                                      ? AppColors.creditGreen
+                                      : Colors.orange,
                                 ),
                               ),
                             ),
@@ -841,7 +990,10 @@ class _SmartScannerPageState extends State<SmartScannerPage> with WidgetsBinding
                             dense: true,
                             title: Text(
                               'Repassar ${diffCents > 0 ? "desconto" : "diferença"} proporcionalmente aos ${proposal.items.length} itens do rateio',
-                              style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+                              style: const TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w600,
+                              ),
                             ),
                             subtitle: const Text(
                               'Recalcula cada item mantendo a soma exata ao centavo (pro-rata)',
@@ -867,13 +1019,23 @@ class _SmartScannerPageState extends State<SmartScannerPage> with WidgetsBinding
                     padding: const EdgeInsets.symmetric(vertical: 14),
                   ),
                   onPressed: () {
-                    final rawAmount = double.tryParse(amountCtrl.text.replaceAll(',', '.')) ?? 0.0;
+                    final rawAmount =
+                        double.tryParse(amountCtrl.text.replaceAll(',', '.')) ??
+                        0.0;
                     final newCents = (rawAmount * 100).round();
 
                     var updatedItems = proposal.items;
-                    if (repassarDesconto && proposal.items.isNotEmpty && newCents > 0) {
-                      final itemWeights = proposal.items.map((i) => i.totalPrice.cents).toList();
-                      final distributed = BoletoParser.distributeCentsProportionally(newCents, itemWeights);
+                    if (repassarDesconto &&
+                        proposal.items.isNotEmpty &&
+                        newCents > 0) {
+                      final itemWeights = proposal.items
+                          .map((i) => i.totalPrice.cents)
+                          .toList();
+                      final distributed =
+                          BoletoParser.distributeCentsProportionally(
+                            newCents,
+                            itemWeights,
+                          );
 
                       updatedItems = [
                         for (int i = 0; i < proposal.items.length; i++)
@@ -892,7 +1054,10 @@ class _SmartScannerPageState extends State<SmartScannerPage> with WidgetsBinding
                     });
                     Navigator.pop(context);
                   },
-                  child: const Text('Aplicar Alterações', style: TextStyle(fontWeight: FontWeight.bold)),
+                  child: const Text(
+                    'Aplicar Alterações',
+                    style: TextStyle(fontWeight: FontWeight.bold),
+                  ),
                 ),
               ],
             ),
@@ -914,7 +1079,10 @@ class _SmartScannerPageState extends State<SmartScannerPage> with WidgetsBinding
     bool isPersonal = item.isPersonal;
     final members = context.read<FinanceCubit>().state.members;
     final currentUserId = sl<AuthRepository>().currentUser?.id;
-    String? assignedMemberId = item.assignedMemberId ?? currentUserId ?? (members.isNotEmpty ? members.first.id : null);
+    String? assignedMemberId =
+        item.assignedMemberId ??
+        currentUserId ??
+        (members.isNotEmpty ? members.first.id : null);
 
     showAdaptiveModal(
       context: context,
@@ -930,7 +1098,13 @@ class _SmartScannerPageState extends State<SmartScannerPage> with WidgetsBinding
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    const Text('Editar Item do Rateio', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                    const Text(
+                      'Editar Item do Rateio',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
                     IconButton(
                       icon: const Icon(Icons.close_rounded, size: 20),
                       onPressed: () => Navigator.pop(context),
@@ -948,7 +1122,9 @@ class _SmartScannerPageState extends State<SmartScannerPage> with WidgetsBinding
                 const SizedBox(height: 12),
                 TextField(
                   controller: priceCtrl,
-                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                  keyboardType: const TextInputType.numberWithOptions(
+                    decimal: true,
+                  ),
                   decoration: const InputDecoration(
                     labelText: 'Valor (R\$)',
                     prefixText: 'R\$ ',
@@ -958,16 +1134,24 @@ class _SmartScannerPageState extends State<SmartScannerPage> with WidgetsBinding
                 const SizedBox(height: 12),
                 SwitchListTile(
                   contentPadding: EdgeInsets.zero,
-                  title: Text(isPersonal ? 'Item Pessoal' : 'Gasto da Casa (Compartilhado)'),
+                  title: Text(
+                    isPersonal
+                        ? 'Item Pessoal'
+                        : 'Gasto da Casa (Compartilhado)',
+                  ),
                   subtitle: Text(
-                    isPersonal ? 'Cobrado exclusivamente do responsável' : 'Rateado entre todos os moradores',
+                    isPersonal
+                        ? 'Cobrado exclusivamente do responsável'
+                        : 'Rateado entre todos os moradores',
                     style: const TextStyle(fontSize: 11),
                   ),
                   value: isPersonal,
                   onChanged: (val) {
                     setModalState(() {
                       isPersonal = val;
-                      if (isPersonal && assignedMemberId == null && members.isNotEmpty) {
+                      if (isPersonal &&
+                          assignedMemberId == null &&
+                          members.isNotEmpty) {
                         assignedMemberId = currentUserId ?? members.first.id;
                       }
                     });
@@ -1007,13 +1191,23 @@ class _SmartScannerPageState extends State<SmartScannerPage> with WidgetsBinding
                       child: OutlinedButton.icon(
                         style: OutlinedButton.styleFrom(
                           foregroundColor: AppColors.debtRed,
-                          side: BorderSide(color: AppColors.debtRed.withValues(alpha: 0.5)),
+                          side: BorderSide(
+                            color: AppColors.debtRed.withValues(alpha: 0.5),
+                          ),
                         ),
-                        icon: const Icon(Icons.delete_outline_rounded, size: 18),
+                        icon: const Icon(
+                          Icons.delete_outline_rounded,
+                          size: 18,
+                        ),
                         label: const Text('Excluir'),
                         onPressed: () {
-                          final updatedList = List<InvoiceItemDraft>.from(proposal.items)..removeAt(idx);
-                          final newTotal = updatedList.fold<int>(0, (sum, i) => sum + i.totalPrice.cents);
+                          final updatedList = List<InvoiceItemDraft>.from(
+                            proposal.items,
+                          )..removeAt(idx);
+                          final newTotal = updatedList.fold<int>(
+                            0,
+                            (sum, i) => sum + i.totalPrice.cents,
+                          );
                           setState(() {
                             _currentProposal = proposal.copyWith(
                               items: updatedList,
@@ -1033,19 +1227,30 @@ class _SmartScannerPageState extends State<SmartScannerPage> with WidgetsBinding
                         ),
                         onPressed: () {
                           final newName = nameCtrl.text.trim();
-                          final rawVal = double.tryParse(priceCtrl.text.replaceAll(',', '.')) ?? 0.0;
+                          final rawVal =
+                              double.tryParse(
+                                priceCtrl.text.replaceAll(',', '.'),
+                              ) ??
+                              0.0;
                           final newCents = (rawVal * 100).round();
 
-                          final updatedList = List<InvoiceItemDraft>.from(proposal.items);
+                          final updatedList = List<InvoiceItemDraft>.from(
+                            proposal.items,
+                          );
                           updatedList[idx] = item.copyWith(
                             name: newName.isNotEmpty ? newName : item.name,
                             unitPrice: Money(newCents),
                             totalPrice: Money(newCents),
                             isPersonal: isPersonal,
-                            assignedMemberId: isPersonal ? assignedMemberId : null,
+                            assignedMemberId: isPersonal
+                                ? assignedMemberId
+                                : null,
                           );
 
-                          final newTotal = updatedList.fold<int>(0, (sum, i) => sum + i.totalPrice.cents);
+                          final newTotal = updatedList.fold<int>(
+                            0,
+                            (sum, i) => sum + i.totalPrice.cents,
+                          );
                           setState(() {
                             _currentProposal = proposal.copyWith(
                               items: updatedList,
@@ -1076,7 +1281,8 @@ class _SmartScannerPageState extends State<SmartScannerPage> with WidgetsBinding
     bool isPersonal = false;
     final members = context.read<FinanceCubit>().state.members;
     final currentUserId = sl<AuthRepository>().currentUser?.id;
-    String? assignedMemberId = currentUserId ?? (members.isNotEmpty ? members.first.id : null);
+    String? assignedMemberId =
+        currentUserId ?? (members.isNotEmpty ? members.first.id : null);
 
     showAdaptiveModal(
       context: context,
@@ -1092,7 +1298,13 @@ class _SmartScannerPageState extends State<SmartScannerPage> with WidgetsBinding
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    const Text('Novo Item no Rateio', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                    const Text(
+                      'Novo Item no Rateio',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
                     IconButton(
                       icon: const Icon(Icons.close_rounded, size: 20),
                       onPressed: () => Navigator.pop(context),
@@ -1110,7 +1322,9 @@ class _SmartScannerPageState extends State<SmartScannerPage> with WidgetsBinding
                 const SizedBox(height: 12),
                 TextField(
                   controller: priceCtrl,
-                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                  keyboardType: const TextInputType.numberWithOptions(
+                    decimal: true,
+                  ),
                   decoration: const InputDecoration(
                     labelText: 'Valor (R\$)',
                     prefixText: 'R\$ ',
@@ -1125,7 +1339,9 @@ class _SmartScannerPageState extends State<SmartScannerPage> with WidgetsBinding
                   onChanged: (val) {
                     setModalState(() {
                       isPersonal = val;
-                      if (isPersonal && assignedMemberId == null && members.isNotEmpty) {
+                      if (isPersonal &&
+                          assignedMemberId == null &&
+                          members.isNotEmpty) {
                         assignedMemberId = currentUserId ?? members.first.id;
                       }
                     });
@@ -1166,7 +1382,9 @@ class _SmartScannerPageState extends State<SmartScannerPage> with WidgetsBinding
                   ),
                   onPressed: () {
                     final name = nameCtrl.text.trim();
-                    final rawVal = double.tryParse(priceCtrl.text.replaceAll(',', '.')) ?? 0.0;
+                    final rawVal =
+                        double.tryParse(priceCtrl.text.replaceAll(',', '.')) ??
+                        0.0;
                     final cents = (rawVal * 100).round();
                     if (name.isEmpty || cents <= 0) return;
 
@@ -1179,8 +1397,13 @@ class _SmartScannerPageState extends State<SmartScannerPage> with WidgetsBinding
                       assignedMemberId: isPersonal ? assignedMemberId : null,
                     );
 
-                    final updatedList = List<InvoiceItemDraft>.from(proposal.items)..add(newItem);
-                    final newTotal = updatedList.fold<int>(0, (sum, i) => sum + i.totalPrice.cents);
+                    final updatedList = List<InvoiceItemDraft>.from(
+                      proposal.items,
+                    )..add(newItem);
+                    final newTotal = updatedList.fold<int>(
+                      0,
+                      (sum, i) => sum + i.totalPrice.cents,
+                    );
                     setState(() {
                       _currentProposal = proposal.copyWith(
                         items: updatedList,
@@ -1200,10 +1423,17 @@ class _SmartScannerPageState extends State<SmartScannerPage> with WidgetsBinding
   }
 
   /// Boleto cai em "Contas" e nota em "Mercado"; sem categoria parecida, a primeira da casa.
-  String? _suggestedCategoryId(CaptureProposal proposal, List<ExpenseCategory> categories) {
+  String? _suggestedCategoryId(
+    CaptureProposal proposal,
+    List<ExpenseCategory> categories,
+  ) {
     if (categories.isEmpty) return null;
-    final keyword = proposal.documentType == DocumentType.boleto ? 'conta' : 'mercado';
-    final found = categories.where((c) => c.name.toLowerCase().contains(keyword)).firstOrNull;
+    final keyword = proposal.documentType == DocumentType.boleto
+        ? 'conta'
+        : 'mercado';
+    final found = categories
+        .where((c) => c.name.toLowerCase().contains(keyword))
+        .firstOrNull;
     return (found ?? categories.first).id;
   }
 
@@ -1220,7 +1450,8 @@ class _SmartScannerPageState extends State<SmartScannerPage> with WidgetsBinding
         await _confirmBoleto(proposal);
         if (!mounted) return;
         final financeState = context.read<FinanceCubit>().state;
-        if (financeState.status == FinanceStatus.failure && financeState.errorMessage != null) {
+        if (financeState.status == FinanceStatus.failure &&
+            financeState.errorMessage != null) {
           throw financeState.errorMessage!;
         }
         Navigator.pop(context);
@@ -1230,7 +1461,7 @@ class _SmartScannerPageState extends State<SmartScannerPage> with WidgetsBinding
             content: Text(
               _useInvoice != null
                   ? 'Código guardado na fatura ${_useInvoice!.card.name} que vence em '
-                      '${DateFormat('dd/MM').format(_useInvoice!.dueDate)}.'
+                        '${DateFormat('dd/MM').format(_useInvoice!.dueDate)}.'
                   : _alreadyPaid
                   ? 'Boleto lançado como pago (${proposal.totalAmount.format()}).'
                   : 'Boleto lançado como conta a pagar, vence em ${DateFormat('dd/MM').format(_dueDate!)}.',
@@ -1241,7 +1472,10 @@ class _SmartScannerPageState extends State<SmartScannerPage> with WidgetsBinding
         if (mounted) {
           setState(() => _isSubmitting = false);
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(backgroundColor: AppColors.debtRed, content: Text('Erro ao lançar o boleto: $err')),
+            SnackBar(
+              backgroundColor: AppColors.debtRed,
+              content: Text('Erro ao lançar o boleto: $err'),
+            ),
           );
         }
       }
@@ -1255,22 +1489,26 @@ class _SmartScannerPageState extends State<SmartScannerPage> with WidgetsBinding
       final isPayable = !_alreadyPaid;
       // A pagar: o meio é escolhido ao pagar; até lá, o da casa
       final selectedPm = isPayable
-          ? (ExpenseLaunchDefaults.houseAccount(state.paymentMethods) ?? state.paymentMethods.firstOrNull)
+          ? (ExpenseLaunchDefaults.houseAccount(state.paymentMethods) ??
+                state.paymentMethods.firstOrNull)
           : state.paymentMethods
-                  .where((p) => p.id == _selectedPaymentMethodId)
-                  .firstOrNull ??
-              state.paymentMethods.firstOrNull;
+                    .where((p) => p.id == _selectedPaymentMethodId)
+                    .firstOrNull ??
+                state.paymentMethods.firstOrNull;
       // Meio de pagamento pessoal: quem pagou é o dono dele e a Casa reembolsa
-      final paidByMemberId = (isPayable ? null : selectedPm?.ownerMemberId) ??
+      final paidByMemberId =
+          (isPayable ? null : selectedPm?.ownerMemberId) ??
           currentUserId ??
           (state.members.isNotEmpty ? state.members.first.id : 'member_carlos');
-      final paidOutOfPocket = !isPayable &&
+      final paidOutOfPocket =
+          !isPayable &&
           selectedPm != null &&
           selectedPm.ownerMemberId != null &&
           selectedPm.id != 'pm_caixa';
 
       // 1. Categoria escolhida na revisão; sem escolha, a sugerida pelo tipo do documento
-      final matchedCategoryId = state.categories.any((c) => c.id == _selectedCategoryId)
+      final matchedCategoryId =
+          state.categories.any((c) => c.id == _selectedCategoryId)
           ? _selectedCategoryId
           : _suggestedCategoryId(proposal, state.categories);
       final typedTitle = _titleController.text.trim();
@@ -1282,7 +1520,9 @@ class _SmartScannerPageState extends State<SmartScannerPage> with WidgetsBinding
       // 3. Regra de rateio entre membros
       // (categoria com dono vai 100% para o dono, como nos outros lançamentos)
       final splitRule = ExpenseLaunchDefaults.splitRule(
-        category: state.categories.where((c) => c.id == matchedCategoryId).firstOrNull,
+        category: state.categories
+            .where((c) => c.id == matchedCategoryId)
+            .firstOrNull,
         members: state.members,
         paidByMemberId: paidByMemberId,
       );
@@ -1306,19 +1546,27 @@ class _SmartScannerPageState extends State<SmartScannerPage> with WidgetsBinding
         );
       }).toList();
 
-      final finalCategoryId = matchedCategoryId ?? (state.categories.isNotEmpty ? state.categories.first.id : '');
-      final finalPaymentMethodId = matchedPaymentMethodId ?? state.paymentMethods.firstOrNull?.id;
+      final finalCategoryId =
+          matchedCategoryId ??
+          (state.categories.isNotEmpty ? state.categories.first.id : '');
+      final finalPaymentMethodId =
+          matchedPaymentMethodId ?? state.paymentMethods.firstOrNull?.id;
       if (finalPaymentMethodId == null) {
-        throw const ValidationFailure('Cadastre uma forma de pagamento em Ajustes antes de lançar.');
+        throw const ValidationFailure(
+          'Cadastre uma forma de pagamento em Ajustes antes de lançar.',
+        );
       }
 
-      final scannedMethod =
-          state.paymentMethods.where((p) => p.id == finalPaymentMethodId).firstOrNull;
+      final scannedMethod = state.paymentMethods
+          .where((p) => p.id == finalPaymentMethodId)
+          .firstOrNull;
       // No cartão, a compra entra na fatura (o vencimento é calculado ao gravar)
-      final waitsForInvoice = !isPayable && ExpenseLaunchDefaults.waitsForInvoice(scannedMethod);
+      final waitsForInvoice =
+          !isPayable && ExpenseLaunchDefaults.waitsForInvoice(scannedMethod);
       final documentDate = _documentDate;
 
-      final isPremium = sl<AuthRepository>().isDemoMode ||
+      final isPremium =
+          sl<AuthRepository>().isDemoMode ||
           (sl<AccountAccessCubit>().state.access?.isPremium ?? false);
       String? attachmentPath;
       if (isPremium && _scannedAttachmentFile != null) {
@@ -1343,18 +1591,28 @@ class _SmartScannerPageState extends State<SmartScannerPage> with WidgetsBinding
         paymentMethodId: finalPaymentMethodId,
         splitRule: splitRule,
         paidOutOfPocket: waitsForInvoice ? false : paidOutOfPocket,
-        status: waitsForInvoice || isPayable ? ExpenseStatus.pending : ExpenseStatus.paid,
+        status: waitsForInvoice || isPayable
+            ? ExpenseStatus.pending
+            : ExpenseStatus.paid,
         notes: proposal.merchantOrBeneficiary,
         items: expenseItems,
         attachmentPath: attachmentPath,
-        attachmentName: attachmentPath != null ? _scannedAttachmentFile?.name : null,
-        attachmentContentType: attachmentPath != null ? _scannedAttachmentFile?.contentType : null,
-        attachmentSizeBytes: attachmentPath != null ? _scannedAttachmentFile?.sizeBytes : null,
+        attachmentName: attachmentPath != null
+            ? _scannedAttachmentFile?.name
+            : null,
+        attachmentContentType: attachmentPath != null
+            ? _scannedAttachmentFile?.contentType
+            : null,
+        attachmentSizeBytes: attachmentPath != null
+            ? _scannedAttachmentFile?.sizeBytes
+            : null,
       );
 
       // Persistir no repositório (espera o Supabase concluir)
       if (!await financeCubit.addExpense(expense)) {
-        throw ValidationFailure(financeCubit.state.errorMessage ?? kSaveFailedMessage);
+        throw ValidationFailure(
+          financeCubit.state.errorMessage ?? kSaveFailedMessage,
+        );
       }
 
       widget.onProposalReady?.call(proposal);
@@ -1422,7 +1680,9 @@ class _SmartScannerPageState extends State<SmartScannerPage> with WidgetsBinding
     if (_currentProposal != null) {
       // Rola e sobe com o teclado: a revisão tem campo de texto
       return SingleChildScrollView(
-        padding: EdgeInsets.only(bottom: MediaQuery.viewInsetsOf(context).bottom),
+        padding: EdgeInsets.only(
+          bottom: MediaQuery.viewInsetsOf(context).bottom,
+        ),
         child: _buildReviewProposalView(theme),
       );
     }
@@ -1443,7 +1703,11 @@ class _SmartScannerPageState extends State<SmartScannerPage> with WidgetsBinding
             children: [
               const Row(
                 children: [
-                  Icon(Icons.qr_code_scanner_rounded, color: AppColors.primary, size: 24),
+                  Icon(
+                    Icons.qr_code_scanner_rounded,
+                    color: AppColors.primary,
+                    size: 24,
+                  ),
                   SizedBox(width: 10),
                   Text(
                     'Captura Inteligente',
@@ -1489,9 +1753,13 @@ class _SmartScannerPageState extends State<SmartScannerPage> with WidgetsBinding
               child: Container(
                 height: 220,
                 decoration: BoxDecoration(
-                  color: theme.brightness == Brightness.dark ? Colors.white10 : Colors.grey.shade100,
+                  color: theme.brightness == Brightness.dark
+                      ? Colors.white10
+                      : Colors.grey.shade100,
                   borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: AppColors.primary.withValues(alpha: 0.3)),
+                  border: Border.all(
+                    color: AppColors.primary.withValues(alpha: 0.3),
+                  ),
                 ),
                 child: Stack(
                   alignment: Alignment.center,
@@ -1513,7 +1781,10 @@ class _SmartScannerPageState extends State<SmartScannerPage> with WidgetsBinding
                         padding: const EdgeInsets.all(28),
                         child: Container(
                           decoration: BoxDecoration(
-                            border: Border.all(color: AppColors.primary.withValues(alpha: 0.6), width: 2),
+                            border: Border.all(
+                              color: AppColors.primary.withValues(alpha: 0.6),
+                              width: 2,
+                            ),
                             borderRadius: BorderRadius.circular(12),
                           ),
                         ),
@@ -1529,7 +1800,11 @@ class _SmartScannerPageState extends State<SmartScannerPage> with WidgetsBinding
                           backgroundColor: Colors.black45,
                           child: IconButton(
                             padding: EdgeInsets.zero,
-                            icon: const Icon(Icons.cameraswitch_rounded, color: Colors.white, size: 18),
+                            icon: const Icon(
+                              Icons.cameraswitch_rounded,
+                              color: Colors.white,
+                              size: 18,
+                            ),
                             tooltip: 'Alternar Câmera / Webcam',
                             onPressed: _switchCamera,
                           ),
@@ -1555,10 +1830,18 @@ class _SmartScannerPageState extends State<SmartScannerPage> with WidgetsBinding
                   child: OutlinedButton.icon(
                     style: OutlinedButton.styleFrom(
                       padding: const EdgeInsets.symmetric(vertical: 12),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10),
+                      ),
                     ),
                     icon: const Icon(Icons.photo_camera_rounded, size: 18),
-                    label: const Text('Tirar Foto', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                    label: const Text(
+                      'Tirar Foto',
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
                     onPressed: () => _pickImage(ImageSource.camera),
                   ),
                 ),
@@ -1567,10 +1850,18 @@ class _SmartScannerPageState extends State<SmartScannerPage> with WidgetsBinding
                   child: OutlinedButton.icon(
                     style: OutlinedButton.styleFrom(
                       padding: const EdgeInsets.symmetric(vertical: 12),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10),
+                      ),
                     ),
                     icon: const Icon(Icons.photo_library_rounded, size: 18),
-                    label: const Text('Galeria', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                    label: const Text(
+                      'Galeria',
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
                     onPressed: () => _pickImage(ImageSource.gallery),
                   ),
                 ),
@@ -1579,10 +1870,22 @@ class _SmartScannerPageState extends State<SmartScannerPage> with WidgetsBinding
                   child: OutlinedButton.icon(
                     style: OutlinedButton.styleFrom(
                       padding: const EdgeInsets.symmetric(vertical: 12),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10),
+                      ),
                     ),
-                    icon: const Icon(Icons.picture_as_pdf_rounded, size: 18, color: Colors.redAccent),
-                    label: const Text('PDF / Doc', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                    icon: const Icon(
+                      Icons.picture_as_pdf_rounded,
+                      size: 18,
+                      color: Colors.redAccent,
+                    ),
+                    label: const Text(
+                      'PDF / Doc',
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
                     onPressed: _pickPdfOrDocument,
                   ),
                 ),
@@ -1597,10 +1900,15 @@ class _SmartScannerPageState extends State<SmartScannerPage> with WidgetsBinding
                   backgroundColor: AppColors.primary,
                   foregroundColor: Colors.white,
                   padding: const EdgeInsets.symmetric(vertical: 13),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
                 ),
                 icon: const Icon(Icons.flash_on_rounded, size: 20),
-                label: const Text('Simular Leitura de Cupom NFC-e (Mercado)', style: TextStyle(fontWeight: FontWeight.bold)),
+                label: const Text(
+                  'Simular Leitura de Cupom NFC-e (Mercado)',
+                  style: TextStyle(fontWeight: FontWeight.bold),
+                ),
                 onPressed: _simulateNfceScan,
               ),
             ],
@@ -1611,9 +1919,12 @@ class _SmartScannerPageState extends State<SmartScannerPage> with WidgetsBinding
               keyboardType: TextInputType.number,
               decoration: InputDecoration(
                 labelText: 'Linha digitável ou código de barras',
-                hintText: 'Ex: 34191.79001 01043.510047 91020.150008 4 98760000021540',
+                hintText:
+                    'Ex: 34191.79001 01043.510047 91020.150008 4 98760000021540',
                 prefixIcon: const Icon(Icons.barcode_reader),
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
               ),
             ),
             const SizedBox(height: 16),
@@ -1622,10 +1933,15 @@ class _SmartScannerPageState extends State<SmartScannerPage> with WidgetsBinding
                 backgroundColor: AppColors.primary,
                 foregroundColor: Colors.white,
                 padding: const EdgeInsets.symmetric(vertical: 14),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
               ),
               icon: const Icon(Icons.check_rounded),
-              label: const Text('Validar e Extrair Boleto', style: TextStyle(fontWeight: FontWeight.bold)),
+              label: const Text(
+                'Validar e Extrair Boleto',
+                style: TextStyle(fontWeight: FontWeight.bold),
+              ),
               onPressed: _processManualBoleto,
             ),
           ],
@@ -1646,7 +1962,11 @@ class _SmartScannerPageState extends State<SmartScannerPage> with WidgetsBinding
               color: AppColors.primary.withValues(alpha: 0.1),
               shape: BoxShape.circle,
             ),
-            child: const Icon(Icons.qr_code_2_rounded, size: 36, color: AppColors.primary),
+            child: const Icon(
+              Icons.qr_code_2_rounded,
+              size: 36,
+              color: AppColors.primary,
+            ),
           ),
           const SizedBox(height: 8),
           const Text(
@@ -1666,10 +1986,16 @@ class _SmartScannerPageState extends State<SmartScannerPage> with WidgetsBinding
             TextButton.icon(
               style: TextButton.styleFrom(
                 visualDensity: VisualDensity.compact,
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 4,
+                ),
               ),
               icon: const Icon(Icons.videocam_rounded, size: 16),
-              label: const Text('Tentar Ativar Webcam', style: TextStyle(fontSize: 11)),
+              label: const Text(
+                'Tentar Ativar Webcam',
+                style: TextStyle(fontSize: 11),
+              ),
               onPressed: _initCamera,
             ),
           ],
@@ -1721,7 +2047,9 @@ class _SmartScannerPageState extends State<SmartScannerPage> with WidgetsBinding
                       borderRadius: BorderRadius.circular(10),
                     ),
                     child: Icon(
-                      isNfce ? Icons.receipt_long_rounded : Icons.request_quote_rounded,
+                      isNfce
+                          ? Icons.receipt_long_rounded
+                          : Icons.request_quote_rounded,
                       color: AppColors.primary,
                       size: 22,
                     ),
@@ -1746,7 +2074,9 @@ class _SmartScannerPageState extends State<SmartScannerPage> with WidgetsBinding
             textCapitalization: TextCapitalization.sentences,
             decoration: InputDecoration(
               labelText: 'Título do gasto',
-              border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
               prefixIcon: const Icon(Icons.edit_note_rounded),
             ),
           ),
@@ -1756,7 +2086,9 @@ class _SmartScannerPageState extends State<SmartScannerPage> with WidgetsBinding
           Container(
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
-              color: theme.brightness == Brightness.dark ? Colors.white10 : Colors.grey.shade100,
+              color: theme.brightness == Brightness.dark
+                  ? Colors.white10
+                  : Colors.grey.shade100,
               borderRadius: BorderRadius.circular(14),
             ),
             child: Row(
@@ -1766,9 +2098,18 @@ class _SmartScannerPageState extends State<SmartScannerPage> with WidgetsBinding
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Text('Valor', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                      const Text(
+                        'Valor',
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 16,
+                        ),
+                      ),
                       if (proposal.merchantOrBeneficiary != null)
-                        Text(proposal.merchantOrBeneficiary!, style: theme.textTheme.bodySmall),
+                        Text(
+                          proposal.merchantOrBeneficiary!,
+                          style: theme.textTheme.bodySmall,
+                        ),
                     ],
                   ),
                 ),
@@ -1777,11 +2118,19 @@ class _SmartScannerPageState extends State<SmartScannerPage> with WidgetsBinding
                   children: [
                     Text(
                       proposal.totalAmount.format(),
-                      style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: AppColors.primary),
+                      style: const TextStyle(
+                        fontSize: 22,
+                        fontWeight: FontWeight.bold,
+                        color: AppColors.primary,
+                      ),
                     ),
                     const SizedBox(width: 8),
                     IconButton(
-                      icon: const Icon(Icons.edit_outlined, size: 20, color: AppColors.primary),
+                      icon: const Icon(
+                        Icons.edit_outlined,
+                        size: 20,
+                        color: AppColors.primary,
+                      ),
                       tooltip: 'Ajustar valor',
                       onPressed: _editProposalDetails,
                     ),
@@ -1797,11 +2146,17 @@ class _SmartScannerPageState extends State<SmartScannerPage> with WidgetsBinding
               decoration: BoxDecoration(
                 color: Colors.amber.withValues(alpha: 0.12),
                 borderRadius: BorderRadius.circular(10),
-                border: Border.all(color: Colors.amber.shade700.withValues(alpha: 0.3)),
+                border: Border.all(
+                  color: Colors.amber.shade700.withValues(alpha: 0.3),
+                ),
               ),
               child: Row(
                 children: [
-                  const Icon(Icons.info_outline_rounded, color: Colors.amber, size: 18),
+                  const Icon(
+                    Icons.info_outline_rounded,
+                    color: Colors.amber,
+                    size: 18,
+                  ),
                   const SizedBox(width: 10),
                   Expanded(
                     child: Text(
@@ -1820,7 +2175,9 @@ class _SmartScannerPageState extends State<SmartScannerPage> with WidgetsBinding
               decoration: BoxDecoration(
                 color: AppColors.creditGreen.withValues(alpha: 0.08),
                 borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: AppColors.creditGreen.withValues(alpha: 0.3)),
+                border: Border.all(
+                  color: AppColors.creditGreen.withValues(alpha: 0.3),
+                ),
               ),
               child: Row(
                 children: [
@@ -1838,31 +2195,46 @@ class _SmartScannerPageState extends State<SmartScannerPage> with WidgetsBinding
                       children: [
                         Text(
                           _scannedAttachmentFile!.name,
-                          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                          style: const TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 13,
+                          ),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                         ),
                         Text(
                           'Comprovante vinculado • ${_formatAttachmentSize(_scannedAttachmentFile!.sizeBytes)}',
-                          style: const TextStyle(fontSize: 11, color: AppColors.creditGreen),
+                          style: const TextStyle(
+                            fontSize: 11,
+                            color: AppColors.creditGreen,
+                          ),
                         ),
                       ],
                     ),
                   ),
                   IconButton(
-                    icon: const Icon(Icons.visibility_outlined, size: 20, color: AppColors.primary),
+                    icon: const Icon(
+                      Icons.visibility_outlined,
+                      size: 20,
+                      color: AppColors.primary,
+                    ),
                     tooltip: 'Visualizar comprovante',
                     onPressed: () {
                       ReceiptViewerModal.show(
                         context,
                         localBytes: _scannedAttachmentFile!.bytes,
                         attachmentName: _scannedAttachmentFile!.name,
-                        attachmentContentType: _scannedAttachmentFile!.contentType,
+                        attachmentContentType:
+                            _scannedAttachmentFile!.contentType,
                       );
                     },
                   ),
                   IconButton(
-                    icon: const Icon(Icons.close_rounded, size: 18, color: Colors.grey),
+                    icon: const Icon(
+                      Icons.close_rounded,
+                      size: 18,
+                      color: Colors.grey,
+                    ),
                     tooltip: 'Desvincular',
                     onPressed: () {
                       setState(() {
@@ -1883,12 +2255,19 @@ class _SmartScannerPageState extends State<SmartScannerPage> with WidgetsBinding
               children: [
                 Text(
                   'Itens Reconhecidos (${proposal.items.length})',
-                  style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.bold),
+                  style: theme.textTheme.titleSmall?.copyWith(
+                    fontWeight: FontWeight.bold,
+                  ),
                 ),
                 TextButton.icon(
-                  style: TextButton.styleFrom(visualDensity: VisualDensity.compact),
+                  style: TextButton.styleFrom(
+                    visualDensity: VisualDensity.compact,
+                  ),
                   icon: const Icon(Icons.add_rounded, size: 16),
-                  label: const Text('Adicionar Sub-Item', style: TextStyle(fontSize: 12)),
+                  label: const Text(
+                    'Adicionar Sub-Item',
+                    style: TextStyle(fontSize: 12),
+                  ),
                   onPressed: _addNewItem,
                 ),
               ],
@@ -1907,15 +2286,23 @@ class _SmartScannerPageState extends State<SmartScannerPage> with WidgetsBinding
                 itemBuilder: (context, idx) {
                   final item = proposal.items[idx];
                   final members = context.read<FinanceCubit>().state.members;
-                  final assignedMember = item.isPersonal && item.assignedMemberId != null
-                      ? members.where((m) => m.id == item.assignedMemberId).firstOrNull
+                  final assignedMember =
+                      item.isPersonal && item.assignedMemberId != null
+                      ? members
+                            .where((m) => m.id == item.assignedMemberId)
+                            .firstOrNull
                       : null;
-                  final assignedSuffix = assignedMember != null ? ' (${assignedMember.name.split(' ').first})' : '';
+                  final assignedSuffix = assignedMember != null
+                      ? ' (${assignedMember.name.split(' ').first})'
+                      : '';
 
                   return ListTile(
                     dense: true,
                     onTap: () => _editItemDetails(idx),
-                    title: Text(item.name, style: const TextStyle(fontWeight: FontWeight.w600)),
+                    title: Text(
+                      item.name,
+                      style: const TextStyle(fontWeight: FontWeight.w600),
+                    ),
                     subtitle: Text(
                       item.isPersonal
                           ? '${item.quantity}x • ${item.unitPrice.format()} • Pessoal${assignedMember != null ? " de ${assignedMember.name}" : ""}'
@@ -1924,33 +2311,53 @@ class _SmartScannerPageState extends State<SmartScannerPage> with WidgetsBinding
                     trailing: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Text(item.totalPrice.format(), style: const TextStyle(fontWeight: FontWeight.bold)),
+                        Text(
+                          item.totalPrice.format(),
+                          style: const TextStyle(fontWeight: FontWeight.bold),
+                        ),
                         const SizedBox(width: 6),
                         FilterChip(
                           visualDensity: VisualDensity.compact,
-                          label: Text(item.isPersonal ? 'Pessoal$assignedSuffix' : 'Casa', style: const TextStyle(fontSize: 10)),
+                          label: Text(
+                            item.isPersonal ? 'Pessoal$assignedSuffix' : 'Casa',
+                            style: const TextStyle(fontSize: 10),
+                          ),
                           selected: item.isPersonal,
-                          selectedColor: AppColors.debtRed.withValues(alpha: 0.15),
+                          selectedColor: AppColors.debtRed.withValues(
+                            alpha: 0.15,
+                          ),
                           onSelected: (val) {
-                            if (val && members.length > 1 && item.assignedMemberId == null) {
+                            if (val &&
+                                members.length > 1 &&
+                                item.assignedMemberId == null) {
                               _editItemDetails(idx);
                             } else {
-                              final currentUserId = sl<AuthRepository>().currentUser?.id;
+                              final currentUserId =
+                                  sl<AuthRepository>().currentUser?.id;
                               setState(() {
-                                final updatedItems = List<InvoiceItemDraft>.from(proposal.items);
+                                final updatedItems =
+                                    List<InvoiceItemDraft>.from(proposal.items);
                                 updatedItems[idx] = item.copyWith(
                                   isPersonal: val,
                                   assignedMemberId: val
-                                      ? (item.assignedMemberId ?? currentUserId ?? members.firstOrNull?.id)
+                                      ? (item.assignedMemberId ??
+                                            currentUserId ??
+                                            members.firstOrNull?.id)
                                       : null,
                                 );
-                                _currentProposal = proposal.copyWith(items: updatedItems);
+                                _currentProposal = proposal.copyWith(
+                                  items: updatedItems,
+                                );
                               });
                             }
                           },
                         ),
                         IconButton(
-                          icon: const Icon(Icons.edit_outlined, size: 16, color: AppColors.primary),
+                          icon: const Icon(
+                            Icons.edit_outlined,
+                            size: 16,
+                            color: AppColors.primary,
+                          ),
                           tooltip: 'Editar item',
                           onPressed: () => _editItemDetails(idx),
                         ),
@@ -1970,74 +2377,106 @@ class _SmartScannerPageState extends State<SmartScannerPage> with WidgetsBinding
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Text('Casa: ${proposal.houseAmount.format()}', style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
-                  Text('Pessoal: ${proposal.personalItemsAmount.format()}', style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13, color: AppColors.debtRed)),
+                  Text(
+                    'Casa: ${proposal.houseAmount.format()}',
+                    style: const TextStyle(
+                      fontWeight: FontWeight.w600,
+                      fontSize: 13,
+                    ),
+                  ),
+                  Text(
+                    'Pessoal: ${proposal.personalItemsAmount.format()}',
+                    style: const TextStyle(
+                      fontWeight: FontWeight.w600,
+                      fontSize: 13,
+                      color: AppColors.debtRed,
+                    ),
+                  ),
                 ],
               ),
             ),
           ],
           const SizedBox(height: 16),
 
-          if (isBoleto) ..._boletoFields(theme, proposal) else ..._documentFields(theme),
+          if (isBoleto)
+            ..._boletoFields(theme, proposal)
+          else
+            ..._documentFields(theme),
 
           // Categoria (conta já prevista mantém a dela; fatura não vira despesa)
           if (_useKnownBill == null && _useInvoice == null)
-          Builder(
-            builder: (context) {
-              final categories = context.watch<FinanceCubit>().state.categories;
-              if (categories.isEmpty) return const SizedBox.shrink();
-              final currentId = categories.any((c) => c.id == _selectedCategoryId)
-                  ? _selectedCategoryId
-                  : _suggestedCategoryId(proposal, categories);
+            Builder(
+              builder: (context) {
+                final categories = context
+                    .watch<FinanceCubit>()
+                    .state
+                    .categories;
+                if (categories.isEmpty) return const SizedBox.shrink();
+                final currentId =
+                    categories.any((c) => c.id == _selectedCategoryId)
+                    ? _selectedCategoryId
+                    : _suggestedCategoryId(proposal, categories);
 
-              return Padding(
-                padding: const EdgeInsets.only(bottom: 12),
-                child: DropdownButtonFormField<String>(
-                  key: ValueKey('scan_category_${proposal.id}'),
-                  initialValue: currentId,
-                  decoration: InputDecoration(
-                    labelText: 'Categoria',
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                    prefixIcon: const Icon(Icons.category_outlined),
+                return Padding(
+                  padding: const EdgeInsets.only(bottom: 12),
+                  child: DropdownButtonFormField<String>(
+                    key: ValueKey('scan_category_${proposal.id}'),
+                    initialValue: currentId,
+                    decoration: InputDecoration(
+                      labelText: 'Categoria',
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      prefixIcon: const Icon(Icons.category_outlined),
+                    ),
+                    items: categories.map((c) {
+                      return DropdownMenuItem(value: c.id, child: Text(c.name));
+                    }).toList(),
+                    onChanged: (val) =>
+                        setState(() => _selectedCategoryId = val),
                   ),
-                  items: categories.map((c) {
-                    return DropdownMenuItem(value: c.id, child: Text(c.name));
-                  }).toList(),
-                  onChanged: (val) => setState(() => _selectedCategoryId = val),
-                ),
-              );
-            },
-          ),
+                );
+              },
+            ),
 
           // Forma de Pagamento (conta a pagar: o meio é escolhido ao pagar)
           if (_alreadyPaid)
-          Builder(
-            builder: (context) {
-              final paymentMethods = context.watch<FinanceCubit>().state.paymentMethods;
-              if (paymentMethods.isEmpty) return const SizedBox.shrink();
-              final currentPm = paymentMethods
-                      .where((p) => p.id == _selectedPaymentMethodId)
-                      .firstOrNull ??
-                  paymentMethods.first;
-              final isHouse = currentPm.ownerMemberId == null || currentPm.id == 'pm_caixa';
+            Builder(
+              builder: (context) {
+                final paymentMethods = context
+                    .watch<FinanceCubit>()
+                    .state
+                    .paymentMethods;
+                if (paymentMethods.isEmpty) return const SizedBox.shrink();
+                final currentPm =
+                    paymentMethods
+                        .where((p) => p.id == _selectedPaymentMethodId)
+                        .firstOrNull ??
+                    paymentMethods.first;
+                final isHouse =
+                    currentPm.ownerMemberId == null ||
+                    currentPm.id == 'pm_caixa';
 
-              return DropdownButtonFormField<String>(
-                initialValue: currentPm.id,
-                decoration: InputDecoration(
-                  labelText: 'Forma de Pagamento',
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                  prefixIcon: const Icon(Icons.credit_card_rounded),
-                  helperText: isHouse
-                      ? 'Meio da Casa: despesa conjunta (sem reembolso pessoal)'
-                      : 'Meio pessoal: a Casa reembolsa quem pagou',
-                ),
-                items: paymentMethods.map((pm) {
-                  return DropdownMenuItem(value: pm.id, child: Text(pm.name));
-                }).toList(),
-                onChanged: (val) => setState(() => _selectedPaymentMethodId = val),
-              );
-            },
-          ),
+                return DropdownButtonFormField<String>(
+                  initialValue: currentPm.id,
+                  decoration: InputDecoration(
+                    labelText: 'Forma de Pagamento',
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    prefixIcon: const Icon(Icons.credit_card_rounded),
+                    helperText: isHouse
+                        ? 'Meio da Casa: despesa conjunta (sem reembolso pessoal)'
+                        : 'Meio pessoal: a Casa reembolsa quem pagou',
+                  ),
+                  items: paymentMethods.map((pm) {
+                    return DropdownMenuItem(value: pm.id, child: Text(pm.name));
+                  }).toList(),
+                  onChanged: (val) =>
+                      setState(() => _selectedPaymentMethodId = val),
+                );
+              },
+            ),
           const SizedBox(height: 20),
 
           // Botões de Confirmação
@@ -2062,16 +2501,26 @@ class _SmartScannerPageState extends State<SmartScannerPage> with WidgetsBinding
                     backgroundColor: AppColors.primary,
                     foregroundColor: Colors.white,
                   ),
-                  onPressed: _isSubmitting || (isBoleto && (_dueDate == null || proposal.totalAmount.cents <= 0))
+                  onPressed:
+                      _isSubmitting ||
+                          (isBoleto &&
+                              (_dueDate == null ||
+                                  proposal.totalAmount.cents <= 0))
                       ? null
                       : _confirmProposal,
                   child: _isSubmitting
                       ? const SizedBox(
                           height: 20,
                           width: 20,
-                          child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
+                          child: CircularProgressIndicator(
+                            color: Colors.white,
+                            strokeWidth: 2,
+                          ),
                         )
-                      : const Text('Confirmar Lançamento', style: TextStyle(fontWeight: FontWeight.bold)),
+                      : const Text(
+                          'Confirmar Lançamento',
+                          style: TextStyle(fontWeight: FontWeight.bold),
+                        ),
                 ),
               ),
             ],
@@ -2085,12 +2534,31 @@ class _SmartScannerPageState extends State<SmartScannerPage> with WidgetsBinding
     final picked = await showDatePicker(
       context: context,
       initialDate: _documentDate,
-      firstDate: DateTime(_documentDate.year - 1),
-      lastDate: _alreadyPaid ? DateTime.now() : DateTime(_documentDate.year + 2, 12, 31),
+      firstDate: DateTime(
+        [
+          _documentDate.year - 5,
+          DateTime.now().year - 10,
+          2015,
+        ].reduce((a, b) => a < b ? a : b),
+        1,
+        1,
+      ),
+      lastDate: DateTime(
+        [
+          _documentDate.year + 5,
+          DateTime.now().year + 10,
+          2035,
+        ].reduce((a, b) => a > b ? a : b),
+        12,
+        31,
+      ),
       helpText: _alreadyPaid ? 'Dia da compra' : 'Vencimento',
     );
     if (picked != null && mounted) {
-      setState(() => _documentDate = DateTime(picked.year, picked.month, picked.day, 12));
+      setState(
+        () =>
+            _documentDate = DateTime(picked.year, picked.month, picked.day, 12),
+      );
     }
   }
 
@@ -2101,25 +2569,36 @@ class _SmartScannerPageState extends State<SmartScannerPage> with WidgetsBinding
       SegmentedButton<bool>(
         key: const Key('scan_paid_choice'),
         segments: const [
-          ButtonSegment(value: true, label: Text('Já paguei'), icon: Icon(Icons.check_circle_outline, size: 16)),
-          ButtonSegment(value: false, label: Text('A pagar'), icon: Icon(Icons.schedule_rounded, size: 16)),
+          ButtonSegment(
+            value: true,
+            label: Text('Já paguei'),
+            icon: Icon(Icons.check_circle_outline, size: 16),
+          ),
+          ButtonSegment(
+            value: false,
+            label: Text('A pagar'),
+            icon: Icon(Icons.schedule_rounded, size: 16),
+          ),
         ],
         selected: {_alreadyPaid},
         onSelectionChanged: _isSubmitting
             ? null
             : (value) => setState(() {
-                  _alreadyPaid = value.first;
-                  // Já paga não pode ficar no futuro
-                  final now = DateTime.now();
-                  if (_alreadyPaid && _documentDate.isAfter(now)) {
-                    _documentDate = DateTime(now.year, now.month, now.day, 12);
-                  }
-                }),
+                _alreadyPaid = value.first;
+                // Já paga não pode ficar no futuro
+                final now = DateTime.now();
+                if (_alreadyPaid && _documentDate.isAfter(now)) {
+                  _documentDate = DateTime(now.year, now.month, now.day, 12);
+                }
+              }),
       ),
       const SizedBox(height: 8),
       OutlinedButton.icon(
         key: const Key('scan_document_date'),
-        icon: Icon(_alreadyPaid ? Icons.event_available_rounded : Icons.event_rounded, size: 18),
+        icon: Icon(
+          _alreadyPaid ? Icons.event_available_rounded : Icons.event_rounded,
+          size: 18,
+        ),
         label: Text(
           _alreadyPaid
               ? 'Compra em ${dayFormat.format(_documentDate)}'
@@ -2166,7 +2645,9 @@ class _SmartScannerPageState extends State<SmartScannerPage> with WidgetsBinding
                 onPressed: () => copyWithFeedback(
                   context,
                   proposal.rawCode!,
-                  onCopied: const SnackBar(content: Text('Código do boleto copiado.')),
+                  onCopied: const SnackBar(
+                    content: Text('Código do boleto copiado.'),
+                  ),
                 ),
               ),
             ],
@@ -2177,7 +2658,11 @@ class _SmartScannerPageState extends State<SmartScannerPage> with WidgetsBinding
       OutlinedButton.icon(
         key: const Key('scan_due_date'),
         icon: const Icon(Icons.event_rounded, size: 18),
-        label: Text(_dueDate == null ? 'Informar vencimento' : 'Vence em ${dayFormat.format(_dueDate!)}'),
+        label: Text(
+          _dueDate == null
+              ? 'Informar vencimento'
+              : 'Vence em ${dayFormat.format(_dueDate!)}',
+        ),
         style: OutlinedButton.styleFrom(
           foregroundColor: _dueDate == null ? AppColors.debtRed : null,
         ),
@@ -2197,7 +2682,11 @@ class _SmartScannerPageState extends State<SmartScannerPage> with WidgetsBinding
           margin: const EdgeInsets.only(bottom: 12),
           padding: const EdgeInsets.all(12),
           decoration: BoxDecoration(
-            color: (_useInvoice != null ? AppColors.creditGreen : AppColors.folegoWarning).withValues(alpha: 0.1),
+            color:
+                (_useInvoice != null
+                        ? AppColors.creditGreen
+                        : AppColors.folegoWarning)
+                    .withValues(alpha: 0.1),
             borderRadius: BorderRadius.circular(12),
           ),
           child: Column(
@@ -2206,10 +2695,13 @@ class _SmartScannerPageState extends State<SmartScannerPage> with WidgetsBinding
               Text(
                 _useInvoice != null
                     ? 'Vai guardar o código na fatura ${knownInvoice.card.name}, sem lançar despesa: '
-                        'as compras já estão nela. Para pagar, use "Pagar" na fatura.'
+                          'as compras já estão nela. Para pagar, use "Pagar" na fatura.'
                     : 'Parece o boleto da fatura ${knownInvoice.card.name} '
-                        '(vence ${DateFormat('dd/MM').format(knownInvoice.dueDate)}, ${knownInvoice.total.format()} no app).',
-                style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+                          '(vence ${DateFormat('dd/MM').format(knownInvoice.dueDate)}, ${knownInvoice.total.format()} no app).',
+                style: const TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                ),
               ),
               Wrap(
                 spacing: 8,
@@ -2241,7 +2733,11 @@ class _SmartScannerPageState extends State<SmartScannerPage> with WidgetsBinding
           margin: const EdgeInsets.only(bottom: 12),
           padding: const EdgeInsets.all(12),
           decoration: BoxDecoration(
-            color: (_useKnownBill != null ? AppColors.creditGreen : AppColors.folegoWarning).withValues(alpha: 0.1),
+            color:
+                (_useKnownBill != null
+                        ? AppColors.creditGreen
+                        : AppColors.folegoWarning)
+                    .withValues(alpha: 0.1),
             borderRadius: BorderRadius.circular(12),
           ),
           child: Column(
@@ -2251,8 +2747,11 @@ class _SmartScannerPageState extends State<SmartScannerPage> with WidgetsBinding
                 _useKnownBill != null
                     ? 'Vai atualizar a conta "${knownBill.title}" já prevista (valor, vencimento e código), sem lançar outra.'
                     : 'Parece a conta "${knownBill.title}" já prevista '
-                        '(vence ${DateFormat('dd/MM').format(knownBill.effectiveDueDate)}, ${knownBill.amount.format()}).',
-                style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+                          '(vence ${DateFormat('dd/MM').format(knownBill.effectiveDueDate)}, ${knownBill.amount.format()}).',
+                style: const TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                ),
               ),
               Wrap(
                 spacing: 8,
@@ -2260,7 +2759,8 @@ class _SmartScannerPageState extends State<SmartScannerPage> with WidgetsBinding
                   if (_useKnownBill == null)
                     TextButton(
                       key: const Key('scan_use_known_bill'),
-                      onPressed: () => setState(() => _useKnownBill = knownBill),
+                      onPressed: () =>
+                          setState(() => _useKnownBill = knownBill),
                       child: const Text('É esta conta'),
                     ),
                   TextButton(
@@ -2276,28 +2776,38 @@ class _SmartScannerPageState extends State<SmartScannerPage> with WidgetsBinding
           ),
         ),
       if (_useInvoice == null) ...[
-      SegmentedButton<bool>(
-        segments: const [
-          ButtonSegment(value: false, label: Text('A pagar'), icon: Icon(Icons.schedule_rounded, size: 16)),
-          ButtonSegment(value: true, label: Text('Já paga'), icon: Icon(Icons.check_circle_outline, size: 16)),
-        ],
-        selected: {_alreadyPaid},
-        onSelectionChanged: _isSubmitting ? null : (value) => setState(() => _alreadyPaid = value.first),
-      ),
-      const SizedBox(height: 8),
-      if (_alreadyPaid)
-        OutlinedButton.icon(
-          icon: const Icon(Icons.event_available_rounded, size: 18),
-          label: Text('Paga em ${dayFormat.format(_paidOn)}'),
-          onPressed: _isSubmitting ? null : _pickPaidOn,
-        )
-      else
-        Text(
-          'Fica em "A Vencer" até ser paga. Ao pagar, você escolhe o meio de pagamento: '
-          'o da casa sai do caixa; o de um morador, ele é reembolsado no fechamento.',
-          style: theme.textTheme.bodySmall?.copyWith(fontSize: 12),
+        SegmentedButton<bool>(
+          segments: const [
+            ButtonSegment(
+              value: false,
+              label: Text('A pagar'),
+              icon: Icon(Icons.schedule_rounded, size: 16),
+            ),
+            ButtonSegment(
+              value: true,
+              label: Text('Já paga'),
+              icon: Icon(Icons.check_circle_outline, size: 16),
+            ),
+          ],
+          selected: {_alreadyPaid},
+          onSelectionChanged: _isSubmitting
+              ? null
+              : (value) => setState(() => _alreadyPaid = value.first),
         ),
-      const SizedBox(height: 12),
+        const SizedBox(height: 8),
+        if (_alreadyPaid)
+          OutlinedButton.icon(
+            icon: const Icon(Icons.event_available_rounded, size: 18),
+            label: Text('Paga em ${dayFormat.format(_paidOn)}'),
+            onPressed: _isSubmitting ? null : _pickPaidOn,
+          )
+        else
+          Text(
+            'Fica em "A Vencer" até ser paga. Ao pagar, você escolhe o meio de pagamento: '
+            'o da casa sai do caixa; o de um morador, ele é reembolsado no fechamento.',
+            style: theme.textTheme.bodySmall?.copyWith(fontSize: 12),
+          ),
+        const SizedBox(height: 12),
       ],
     ];
   }

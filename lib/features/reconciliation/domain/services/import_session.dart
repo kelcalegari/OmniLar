@@ -76,7 +76,8 @@ class RefundOption {
   });
 
   /// O estorno cobre a despesa inteira: ela é excluída, e não abatida.
-  bool coversWholeExpense(Money refund) => expense != null && expense!.amount.cents <= refund.cents;
+  bool coversWholeExpense(Money refund) =>
+      expense != null && expense!.amount.cents <= refund.cents;
 }
 
 /// O que uma linha do arquivo virou, para o histórico da importação.
@@ -145,7 +146,10 @@ class ImportPlan {
   });
 
   bool get isEmpty =>
-      newExpenses.isEmpty && expenseUpdates.isEmpty && loans.isEmpty && extraActions.isEmpty;
+      newExpenses.isEmpty &&
+      expenseUpdates.isEmpty &&
+      loans.isEmpty &&
+      extraActions.isEmpty;
 }
 
 class ImportTotals {
@@ -272,19 +276,27 @@ class ImportSession {
       payerMemberId: payerMemberId,
       matching: matching,
       defaults: defaults,
-      invoiceDueDate: source.isCreditCard ? suggestInvoiceDueDate(lines, source) : null,
+      invoiceDueDate: source.isCreditCard
+          ? suggestInvoiceDueDate(lines, source)
+          : null,
     );
   }
 
   /// Vencimento da fatura a que a maioria das compras pertence. Parcela fica
   /// de fora: muitos bancos a listam com a data da compra original.
-  static DateTime? suggestInvoiceDueDate(List<ImportedStatementLine> lines, PaymentMethod card) {
+  static DateTime? suggestInvoiceDueDate(
+    List<ImportedStatementLine> lines,
+    PaymentMethod card,
+  ) {
     final closingDay = card.closingDay;
     final dueDay = card.dueDay;
     if (closingDay == null || dueDay == null) return null;
 
-    var purchases = lines.where((l) => l.isPurchase && !l.isInstallment).toList();
-    if (purchases.isEmpty) purchases = lines.where((l) => l.isPurchase).toList();
+    var purchases = lines
+        .where((l) => l.isPurchase && !l.isInstallment)
+        .toList();
+    if (purchases.isEmpty)
+      purchases = lines.where((l) => l.isPurchase).toList();
 
     final votes = <DateTime, int>{};
     for (final line in purchases) {
@@ -337,8 +349,12 @@ class ImportSession {
       refundChoices: refundChoices ?? this.refundChoices,
       decisionTargets: decisionTargets ?? this.decisionTargets,
       ruledLineIds: ruledLineIds ?? this.ruledLineIds,
-      invoicePaidAt: invoicePayment != null ? invoicePayment.paidAt : invoicePaidAt,
-      invoicePaidByHouse: invoicePayment != null ? invoicePayment.byHouse : invoicePaidByHouse,
+      invoicePaidAt: invoicePayment != null
+          ? invoicePayment.paidAt
+          : invoicePaidAt,
+      invoicePaidByHouse: invoicePayment != null
+          ? invoicePayment.byHouse
+          : invoicePaidByHouse,
       matching: matching,
       defaults: defaults,
     );
@@ -348,9 +364,12 @@ class ImportSession {
   bool get waitsForInvoice => ExpenseLaunchDefaults.waitsForInvoice(source);
 
   /// Informa (ou, com [paidAt] null, desfaz) que a fatura já foi paga.
-  ImportSession withInvoicePayment(DateTime? paidAt, {bool byHouse = false}) => _copy(
+  ImportSession withInvoicePayment(DateTime? paidAt, {bool byHouse = false}) =>
+      _copy(
         invoicePayment: (
-          paidAt: paidAt == null ? null : DateTime(paidAt.year, paidAt.month, paidAt.day, 12),
+          paidAt: paidAt == null
+              ? null
+              : DateTime(paidAt.year, paidAt.month, paidAt.day, 12),
           byHouse: paidAt != null && byHouse,
         ),
       );
@@ -377,17 +396,22 @@ class ImportSession {
         continue;
       }
       final debtor = rule.assignedMemberId;
-      final loanStillValid = rule.destination != LineDestination.splitP2P ||
+      final loanStillValid =
+          rule.destination != LineDestination.splitP2P ||
           (canOwe(debtor) && memberIds.contains(debtor));
       ruled.add(line.id);
       updated.add(
         line.copyWith(
           // No cartão da Casa não existe gasto pessoal fora do Caixa
-          destination: !loanStillValid ||
-                  (isHouseCard && rule.destination == LineDestination.cardOwnerPersonal)
+          destination:
+              !loanStillValid ||
+                  (isHouseCard &&
+                      rule.destination == LineDestination.cardOwnerPersonal)
               ? LineDestination.house
               : rule.destination,
-          categoryId: categoryIds.contains(rule.categoryId) ? rule.categoryId : null,
+          categoryId: categoryIds.contains(rule.categoryId)
+              ? rule.categoryId
+              : null,
           assignedMemberId: loanStillValid ? debtor : null,
           clearAssignedMember: !loanStillValid || debtor == null,
         ),
@@ -402,7 +426,8 @@ class ImportSession {
     final byKey = <String, List<ImportedStatementLine>>{};
     for (final line in lines) {
       final status = statusOf(line);
-      if (status != LineStatus.newLine && status != LineStatus.ignored) continue;
+      if (status != LineStatus.newLine && status != LineStatus.ignored)
+        continue;
       final key = ruleKeyOf(line);
       if (key.length < 3) continue;
       byKey.putIfAbsent(key, () => []).add(line);
@@ -411,13 +436,19 @@ class ImportSession {
     final rules = <ImportRule>[];
     for (final entry in byKey.entries) {
       final first = entry.value.first;
-      final consistent = entry.value.every((line) =>
-          line.destination == first.destination &&
-          line.categoryId == first.categoryId &&
-          line.assignedMemberId == first.assignedMemberId);
+      final consistent = entry.value.every(
+        (line) =>
+            line.destination == first.destination &&
+            line.categoryId == first.categoryId &&
+            line.assignedMemberId == first.assignedMemberId,
+      );
       if (!consistent) continue;
-      if (first.destination == LineDestination.house && first.categoryId == null) continue;
-      if (first.destination == LineDestination.splitP2P && first.assignedMemberId == null) continue;
+      if (first.destination == LineDestination.house &&
+          first.categoryId == null)
+        continue;
+      if (first.destination == LineDestination.splitP2P &&
+          first.assignedMemberId == null)
+        continue;
       // Quem paga por terceiros muda de uma compra para outra: não vira regra
       if (first.destination == LineDestination.thirdParty) continue;
 
@@ -428,8 +459,9 @@ class ImportSession {
           merchantName: StatementText.cleanTitle(first.description),
           destination: first.destination,
           categoryId: isHouse ? first.categoryId : null,
-          assignedMemberId:
-              first.destination == LineDestination.splitP2P ? first.assignedMemberId : null,
+          assignedMemberId: first.destination == LineDestination.splitP2P
+              ? first.assignedMemberId
+              : null,
         ),
       );
     }
@@ -440,8 +472,11 @@ class ImportSession {
   ImportSession withLines(
     Set<String> lineIds,
     ImportedStatementLine Function(ImportedStatementLine line) change,
-  ) =>
-      _copy(lines: [for (final line in lines) lineIds.contains(line.id) ? change(line) : line]);
+  ) => _copy(
+    lines: [
+      for (final line in lines) lineIds.contains(line.id) ? change(line) : line,
+    ],
+  );
 
   /// Divide uma compra em duas partes: a primeira com [firstAmount], a segunda
   /// com o resto. Cada parte recebe destino, categoria e devedor próprios (de
@@ -450,7 +485,9 @@ class ImportSession {
     final index = lines.indexWhere((l) => l.id == lineId);
     if (index < 0) return this;
     final line = lines[index];
-    if (!line.isPurchase || firstAmount.cents <= 0 || firstAmount.cents >= line.amount.cents) {
+    if (!line.isPurchase ||
+        firstAmount.cents <= 0 ||
+        firstAmount.cents >= line.amount.cents) {
       return this;
     }
 
@@ -468,17 +505,31 @@ class ImportSession {
 
     final parts = [
       line.asPart(id: newId(), amount: firstAmount, splitFrom: root),
-      line.asPart(id: newId(), amount: line.amount - firstAmount, splitFrom: root),
+      line.asPart(
+        id: newId(),
+        amount: line.amount - firstAmount,
+        splitFrom: root,
+      ),
     ];
     return _copy(
       refundChoices: {
         for (final entry in refundChoices.entries)
           if (entry.value != 'line:$lineId') entry.key: entry.value,
       },
-      lines: [...lines.sublist(0, index), ...parts, ...lines.sublist(index + 1)],
+      lines: [
+        ...lines.sublist(0, index),
+        ...parts,
+        ...lines.sublist(index + 1),
+      ],
       // A linha dividida deixa de casar com uma despesa só
-      matches: {for (final e in matches.entries) if (e.key != lineId) e.key: e.value},
-      decisions: {for (final e in decisions.entries) if (e.key != lineId) e.key: e.value},
+      matches: {
+        for (final e in matches.entries)
+          if (e.key != lineId) e.key: e.value,
+      },
+      decisions: {
+        for (final e in decisions.entries)
+          if (e.key != lineId) e.key: e.value,
+      },
     );
   }
 
@@ -516,52 +567,70 @@ class ImportSession {
     final partIds = {for (final p in parts) p.id};
     return _copy(
       lines: updated,
-      matches: {for (final e in matches.entries) if (!partIds.contains(e.key)) e.key: e.value},
-      decisions: {for (final e in decisions.entries) if (!partIds.contains(e.key)) e.key: e.value},
+      matches: {
+        for (final e in matches.entries)
+          if (!partIds.contains(e.key)) e.key: e.value,
+      },
+      decisions: {
+        for (final e in decisions.entries)
+          if (!partIds.contains(e.key)) e.key: e.value,
+      },
     );
   }
 
   /// Partes da divisão da linha [rootId], na ordem.
-  List<ImportedStatementLine> partsOf(String rootId) =>
-      [for (final line in lines) if (line.splitFrom == rootId) line];
+  List<ImportedStatementLine> partsOf(String rootId) => [
+    for (final line in lines)
+      if (line.splitFrom == rootId) line,
+  ];
 
   /// Outras linhas ainda por decidir do mesmo estabelecimento de [line].
   List<ImportedStatementLine> similarLines(ImportedStatementLine line) {
-    final name = StatementText.normalize(StatementText.cleanTitle(line.description));
+    final name = StatementText.normalize(
+      StatementText.cleanTitle(line.description),
+    );
     return [
       for (final other in lines)
         if (other.id != line.id &&
             // As partes de uma divisão existem justamente para ter decisões diferentes
             !(line.splitFrom != null && other.splitFrom == line.splitFrom) &&
-            (statusOf(other) == LineStatus.newLine || statusOf(other) == LineStatus.ignored) &&
-            StatementText.normalize(StatementText.cleanTitle(other.description)) == name)
+            (statusOf(other) == LineStatus.newLine ||
+                statusOf(other) == LineStatus.ignored) &&
+            StatementText.normalize(
+                  StatementText.cleanTitle(other.description),
+                ) ==
+                name)
           other,
     ];
   }
 
   /// Guarda o que as linhas que não são compra podem virar; a escolha feita
   /// continua valendo enquanto a opção existir.
-  ImportSession withExtraOptions(Map<String, List<ExtraAction>> options) => _copy(
+  ImportSession withExtraOptions(Map<String, List<ExtraAction>> options) =>
+      _copy(
         extraOptions: options,
         extraChoices: {
           for (final entry in extraChoices.entries)
-            if (options[entry.key]?.any((o) => o.key == entry.value) ?? false) entry.key: entry.value,
+            if (options[entry.key]?.any((o) => o.key == entry.value) ?? false)
+              entry.key: entry.value,
         },
       );
 
   /// Escolhe (ou, com null, desfaz a escolha de) o que a linha vira.
   ImportSession withExtraChoice(String lineId, String? optionKey) => _copy(
-        extraChoices: {
-          for (final entry in extraChoices.entries)
-            if (entry.key != lineId) entry.key: entry.value,
-          lineId: ?optionKey,
-        },
-      );
+    extraChoices: {
+      for (final entry in extraChoices.entries)
+        if (entry.key != lineId) entry.key: entry.value,
+      lineId: ?optionKey,
+    },
+  );
 
   /// Opções de uma linha que não é compra. Linha que já veio em outra
   /// importação não tem opções: o movimento já foi registrado.
   List<ExtraAction> extraOptionsOf(ImportedStatementLine line) =>
-      line.isPurchase || _wasImported(line) ? const [] : (extraOptions[line.id] ?? const []);
+      line.isPurchase || _wasImported(line)
+      ? const []
+      : (extraOptions[line.id] ?? const []);
 
   ExtraAction? chosenExtra(ImportedStatementLine line) {
     final key = extraChoices[line.id];
@@ -586,51 +655,74 @@ class ImportSession {
 
   /// Parâmetros da casa para esta importação: janelas do casamento e destino
   /// padrão das linhas novas (0100).
-  ImportSession withParams({ImportMatching? matching, ImportDefaults? defaults}) => ImportSession(
-        source: source,
-        fileName: fileName,
-        lines: lines,
-        matches: matches,
-        decisions: decisions,
-        invoiceDueDate: invoiceDueDate,
-        payerMemberId: payerMemberId,
-        importedSignatures: importedSignatures,
-        forcedLineIds: forcedLineIds,
-        extraOptions: extraOptions,
-        extraChoices: extraChoices,
-        knownExpenses: knownExpenses,
-        refundChoices: refundChoices,
-        decisionTargets: decisionTargets,
-        ruledLineIds: ruledLineIds,
-        invoicePaidAt: invoicePaidAt,
-        invoicePaidByHouse: invoicePaidByHouse,
-        matching: matching ?? this.matching,
-        defaults: defaults ?? this.defaults,
-      );
+  ImportSession withParams({
+    ImportMatching? matching,
+    ImportDefaults? defaults,
+  }) => ImportSession(
+    source: source,
+    fileName: fileName,
+    lines: lines,
+    matches: matches,
+    decisions: decisions,
+    invoiceDueDate: invoiceDueDate,
+    payerMemberId: payerMemberId,
+    importedSignatures: importedSignatures,
+    forcedLineIds: forcedLineIds,
+    extraOptions: extraOptions,
+    extraChoices: extraChoices,
+    knownExpenses: knownExpenses,
+    refundChoices: refundChoices,
+    decisionTargets: decisionTargets,
+    ruledLineIds: ruledLineIds,
+    invoicePaidAt: invoicePaidAt,
+    invoicePaidByHouse: invoicePaidByHouse,
+    matching: matching ?? this.matching,
+    defaults: defaults ?? this.defaults,
+  );
 
-  ImportSession withInvoiceDueDate(DateTime dueDate) =>
-      _copy(invoiceDueDate: DateTime(dueDate.year, dueDate.month, dueDate.day));
+  ImportSession withInvoiceDueDate(DateTime dueDate) {
+    final oldYear = invoiceDueDate?.year;
+    final newYear = dueDate.year;
+    final fixedLines = (oldYear != null && oldYear != newYear)
+        ? [
+            for (final line in lines)
+              line.copyWith(
+                date: DateTime(
+                  line.date.year + (newYear - oldYear),
+                  line.date.month,
+                  line.date.day,
+                  line.date.hour,
+                  line.date.minute,
+                ),
+              ),
+          ]
+        : lines;
+    return _copy(
+      invoiceDueDate: DateTime(dueDate.year, dueDate.month, dueDate.day),
+      lines: fixedLines,
+    );
+  }
 
   ImportSession withPayer(String memberId) {
     // Quem paga a fatura não pode dever para si mesmo
     if (isHouseCard) return _copy(payerMemberId: memberId);
     final fixed = [
       for (final line in lines)
-        line.assignedMemberId == memberId ? line.copyWith(clearAssignedMember: true) : line,
+        line.assignedMemberId == memberId
+            ? line.copyWith(clearAssignedMember: true)
+            : line,
     ];
     return _copy(payerMemberId: memberId, lines: fixed);
   }
 
-  ImportSession withLine(ImportedStatementLine updated) =>
-      _copy(lines: [for (final line in lines) line.id == updated.id ? updated : line]);
+  ImportSession withLine(ImportedStatementLine updated) => _copy(
+    lines: [for (final line in lines) line.id == updated.id ? updated : line],
+  );
 
   ImportSession withDecision(String lineId, MatchDecision decision) => _copy(
-        decisions: {...decisions, lineId: decision},
-        decisionTargets: {
-          ...decisionTargets,
-          lineId: ?matches[lineId]?.expense.id,
-        },
-      );
+    decisions: {...decisions, lineId: decision},
+    decisionTargets: {...decisionTargets, lineId: ?matches[lineId]?.expense.id},
+  );
 
   /// Compara as linhas com as despesas do app. Mantém o que o usuário já
   /// respondeu quando a linha continua casada com a mesma despesa.
@@ -657,20 +749,24 @@ class ImportSession {
   /// lançada no mesmo cartão ou conta, com valor de pelo menos o estorno e
   /// anterior a ele. As prováveis (mesmo valor ou descrição parecida) vêm antes.
   List<RefundOption> refundOptionsOf(ImportedStatementLine refund) {
-    if (refund.kind != StatementLineKind.refund || _wasImported(refund)) return const [];
+    if (refund.kind != StatementLineKind.refund || _wasImported(refund))
+      return const [];
     final options = <RefundOption>[];
     final cents = refund.amount.cents;
-    bool similar(String text) => StatementText.similarity(refund.description, text) >= 0.5;
+    bool similar(String text) =>
+        StatementText.similarity(refund.description, text) >= 0.5;
 
     for (final line in newLines) {
       if (line.date.isAfter(refund.date.add(const Duration(days: 1)))) continue;
       // O que outros estornos já abateram desta compra não pode ser abatido de novo
-      final available = line.amount.cents - _refundedFromLine(line.id, except: refund.id);
+      final available =
+          line.amount.cents - _refundedFromLine(line.id, except: refund.id);
       if (available < cents) continue;
       options.add(
         RefundOption(
           key: 'line:${line.id}',
-          label: 'Abater de "${_titleOf(line)}" (${_dayMonthShort.format(line.date)}, ${line.amount.format()}) desta fatura',
+          label:
+              'Abater de "${_titleOf(line)}" (${_dayMonthShort.format(line.date)}, ${line.amount.format()}) desta fatura',
           suggested: line.amount.cents == cents || similar(line.description),
           lineId: line.id,
         ),
@@ -679,9 +775,11 @@ class ImportSession {
 
     final earliest = refund.date.subtract(const Duration(days: 120));
     for (final expense in knownExpenses) {
-      if (expense.paymentMethodId != source.id || expense.isProjectExpense) continue;
+      if (expense.paymentMethodId != source.id || expense.isProjectExpense)
+        continue;
       if (!canUpdateAmount(expense) || expense.amount.cents < cents) continue;
-      if (expense.date.isAfter(refund.date.add(const Duration(days: 1))) || expense.date.isBefore(earliest)) {
+      if (expense.date.isAfter(refund.date.add(const Duration(days: 1))) ||
+          expense.date.isBefore(earliest)) {
         continue;
       }
       final whole = expense.amount.cents == cents;
@@ -708,7 +806,8 @@ class ImportSession {
   }
 
   /// Escolhe (ou, com null, desfaz) para onde vai o estorno.
-  ImportSession withRefundChoice(String refundLineId, String? optionKey) => _copy(
+  ImportSession withRefundChoice(String refundLineId, String? optionKey) =>
+      _copy(
         refundChoices: {
           for (final entry in refundChoices.entries)
             if (entry.key != refundLineId) entry.key: entry.value,
@@ -722,7 +821,9 @@ class ImportSession {
     for (final entry in refundChoices.entries) {
       if (entry.key == except || entry.value != 'line:$lineId') continue;
       final refund = lines.where((l) => l.id == entry.key).firstOrNull;
-      if (refund != null && refund.kind == StatementLineKind.refund && !_wasImported(refund)) {
+      if (refund != null &&
+          refund.kind == StatementLineKind.refund &&
+          !_wasImported(refund)) {
         total += refund.amount.cents;
       }
     }
@@ -744,7 +845,9 @@ class ImportSession {
     if (categories.isEmpty) return this;
     final validIds = {for (final c in categories) c.id};
     // Categoria padrão da importação (0100), se ainda existir
-    final defaultCategoryId = validIds.contains(defaults.categoryId) ? defaults.categoryId : null;
+    final defaultCategoryId = validIds.contains(defaults.categoryId)
+        ? defaults.categoryId
+        : null;
 
     String? suggest(ImportedStatementLine line) {
       HouseExpense? best;
@@ -760,7 +863,8 @@ class ImportSession {
       if (best != null) return best.categoryId;
 
       for (final category in categories) {
-        if (StatementText.similarity(line.description, category.name) >= 1) return category.id;
+        if (StatementText.similarity(line.description, category.name) >= 1)
+          return category.id;
       }
       return null;
     }
@@ -799,14 +903,17 @@ class ImportSession {
           break;
       }
     }
-    return line.destination == LineDestination.ignored ? LineStatus.ignored : LineStatus.newLine;
+    return line.destination == LineDestination.ignored
+        ? LineStatus.ignored
+        : LineStatus.newLine;
   }
 
   /// Linhas que vão virar lançamento.
   Iterable<ImportedStatementLine> get newLines =>
       lines.where((line) => statusOf(line) == LineStatus.newLine);
 
-  int countOf(LineStatus status) => lines.where((line) => statusOf(line) == status).length;
+  int countOf(LineStatus status) =>
+      lines.where((line) => statusOf(line) == status).length;
 
   ImportTotals get totals {
     var file = 0;
@@ -870,19 +977,27 @@ class ImportSession {
     }
     final pending = countOf(LineStatus.needsReview);
     if (pending > 0) {
-      issues.add(pending == 1
-          ? '1 linha parece já estar lançada: diga se é a mesma.'
-          : '$pending linhas parecem já estar lançadas: diga se são as mesmas.');
+      issues.add(
+        pending == 1
+            ? '1 linha parece já estar lançada: diga se é a mesma.'
+            : '$pending linhas parecem já estar lançadas: diga se são as mesmas.',
+      );
     }
-    final withoutDebtor = newLines.where((line) =>
-        line.destination == LineDestination.splitP2P &&
-        !canOwe(line.assignedMemberId));
+    final withoutDebtor = newLines.where(
+      (line) =>
+          line.destination == LineDestination.splitP2P &&
+          !canOwe(line.assignedMemberId),
+    );
     if (withoutDebtor.isNotEmpty) {
       issues.add('Escolha quem deve em cada linha marcada como empréstimo.');
     }
     if (isHouseCard &&
-        newLines.any((line) => line.destination == LineDestination.cardOwnerPersonal)) {
-      issues.add('Cartão da Casa não tem gasto pessoal: diga quem deve para o Caixa.');
+        newLines.any(
+          (line) => line.destination == LineDestination.cardOwnerPersonal,
+        )) {
+      issues.add(
+        'Cartão da Casa não tem gasto pessoal: diga quem deve para o Caixa.',
+      );
     }
     return issues;
   }
@@ -894,9 +1009,9 @@ class ImportSession {
 
   /// Ciclos em que as compras do arquivo contam (para saber se algum já fechou).
   Set<FinancialCycle> countingCycles(CycleSchedule schedule) => {
-        for (final line in lines)
-          if (line.isPurchase) schedule.cycleFor(_countingDate(line)),
-      };
+    for (final line in lines)
+      if (line.isPurchase) schedule.cycleFor(_countingDate(line)),
+  };
 
   /// Linhas novas da Casa que cairiam em um dos [closedCycles].
   List<ImportedStatementLine> linesInClosedCycles(
@@ -906,20 +1021,23 @@ class ImportSession {
       // Compra pendente não é travada por ciclo fechado: em aberto, ela pesa
       // no ciclo atual como conta vencida
       waitsForInvoice
-          ? const []
-          : [
-              for (final line in newLines)
-                if (line.destination == LineDestination.house &&
-                    closedCycles.contains(schedule.cycleFor(_countingDate(line))))
-                  line,
-            ];
+      ? const []
+      : [
+          for (final line in newLines)
+            if (line.destination == LineDestination.house &&
+                closedCycles.contains(schedule.cycleFor(_countingDate(line))))
+              line,
+        ];
 
   /// Ciclos onde pode haver uma despesa igual a alguma linha do arquivo.
   Set<FinancialCycle> cyclesToSearch(CycleSchedule schedule) {
     final cycles = <FinancialCycle>{};
     for (final line in lines) {
       if (!line.isPurchase) continue;
-      for (final offset in [-matching.dateWindowDays, matching.dateWindowDays]) {
+      for (final offset in [
+        -matching.dateWindowDays,
+        matching.dateWindowDays,
+      ]) {
         cycles.add(schedule.cycleFor(line.date.add(Duration(days: offset))));
       }
     }
@@ -930,20 +1048,26 @@ class ImportSession {
 
   String _titleOf(ImportedStatementLine line) {
     final edited = line.title?.trim();
-    final base = edited != null && edited.isNotEmpty ? edited : StatementText.cleanTitle(line.description);
-    return line.isInstallment ? '$base (${line.installmentNumber}/${line.installmentsTotal})' : base;
+    final base = edited != null && edited.isNotEmpty
+        ? edited
+        : StatementText.cleanTitle(line.description);
+    return line.isInstallment
+        ? '$base (${line.installmentNumber}/${line.installmentsTotal})'
+        : base;
   }
 
   /// Divisão das linhas novas: categoria com dono é sempre 100% do dono; no
   /// resto vale o modo escolhido pela casa (0100), e por padrão a divisão da
   /// categoria ou da casa.
-  SplitRule _splitRuleFor({required ExpenseCategory? category, required List<HouseMember> members}) =>
-      ExpenseLaunchDefaults.splitRuleForMode(
-        mode: defaults.splitMode,
-        category: category,
-        members: members,
-        paidByMemberId: payerMemberId,
-      );
+  SplitRule _splitRuleFor({
+    required ExpenseCategory? category,
+    required List<HouseMember> members,
+  }) => ExpenseLaunchDefaults.splitRuleForMode(
+    mode: defaults.splitMode,
+    category: category,
+    members: members,
+    paidByMemberId: payerMemberId,
+  );
 
   /// Monta o que a confirmação vai gravar. [closedCycles] são os ciclos já
   /// fechados entre os de [countingCycles].
@@ -952,14 +1076,19 @@ class ImportSession {
     required List<ExpenseCategory> categories,
     required CycleSchedule schedule,
     Set<FinancialCycle> closedCycles = const {},
-    ClosedCyclePolicy closedCyclePolicy = ClosedCyclePolicy.adjustInCurrentCycle,
+    ClosedCyclePolicy closedCyclePolicy =
+        ClosedCyclePolicy.adjustInCurrentCycle,
     DateTime? now,
     String Function() newId = generateUuidV4,
   }) {
     final today = now ?? DateTime.now();
-    final memberNames = {for (final m in members) m.id: m.name.split(' ').first};
-    final defaultCategory =
-        ExpenseLaunchDefaults.matchCategory(categories, preferred: defaults.categoryId);
+    final memberNames = {
+      for (final m in members) m.id: m.name.split(' ').first,
+    };
+    final defaultCategory = ExpenseLaunchDefaults.matchCategory(
+      categories,
+      preferred: defaults.categoryId,
+    );
     final outOfPocket = ExpenseLaunchDefaults.paidOutOfPocket(source);
 
     final newExpenses = <HouseExpense>[];
@@ -976,14 +1105,18 @@ class ImportSession {
       switch (line.destination) {
         case LineDestination.house:
           final inClosedCycle =
-              !waitsForInvoice && closedCycles.contains(schedule.cycleFor(_countingDate(line)));
+              !waitsForInvoice &&
+              closedCycles.contains(schedule.cycleFor(_countingDate(line)));
           if (inClosedCycle && closedCyclePolicy == ClosedCyclePolicy.skip) {
             skipped.add(line);
-            records.add(ImportLineRecord(line: line, outcome: LineOutcome.skipped));
+            records.add(
+              ImportLineRecord(line: line, outcome: LineOutcome.skipped),
+            );
             continue;
           }
           final category =
-              categories.where((c) => c.id == line.categoryId).firstOrNull ?? defaultCategory;
+              categories.where((c) => c.id == line.categoryId).firstOrNull ??
+              defaultCategory;
           final title = _titleOf(line);
           final expenseId = newId();
           records.add(
@@ -997,12 +1130,16 @@ class ImportSession {
           newExpenses.add(
             HouseExpense(
               id: expenseId,
-              title: inClosedCycle ? '$title (ajuste de ${_dayMonth.format(line.date)})' : title,
+              title: inClosedCycle
+                  ? '$title (ajuste de ${_dayMonth.format(line.date)})'
+                  : title,
               amount: effectiveAmountOf(line),
               // Ajuste de ciclo fechado conta hoje, e não na data da compra
               date: inClosedCycle ? today : line.date,
               dueDate: source.isCreditCard
-                  ? (inClosedCycle ? DateTime(today.year, today.month, today.day) : invoiceDueDate)
+                  ? (inClosedCycle
+                        ? DateTime(today.year, today.month, today.day)
+                        : invoiceDueDate)
                   : null,
               categoryId: category?.id ?? '',
               paidByMemberId: payerMemberId,
@@ -1010,7 +1147,9 @@ class ImportSession {
               // Pendente até a fatura ser paga: quem pagou se decide no pagamento
               paidOutOfPocket: waitsForInvoice ? false : outOfPocket,
               splitRule: _splitRuleFor(category: category, members: members),
-              status: waitsForInvoice ? ExpenseStatus.pending : ExpenseStatus.paid,
+              status: waitsForInvoice
+                  ? ExpenseStatus.pending
+                  : ExpenseStatus.paid,
               notes: 'Importado de ${source.name}: ${line.description}',
             ),
           );
@@ -1028,9 +1167,12 @@ class ImportSession {
 
     final todayDate = DateTime(today.year, today.month, today.day);
     final invoiceDay = invoiceDueDate ?? todayDate;
-    final loanFundedOn =
-        closedCycles.contains(schedule.cycleFor(invoiceDay)) ? todayDate : invoiceDay;
-    final dueLabel = invoiceDueDate != null ? ' (venc. ${_dayMonth.format(invoiceDueDate!)})' : '';
+    final loanFundedOn = closedCycles.contains(schedule.cycleFor(invoiceDay))
+        ? todayDate
+        : invoiceDay;
+    final dueLabel = invoiceDueDate != null
+        ? ' (venc. ${_dayMonth.format(invoiceDueDate!)})'
+        : '';
     final loans = <P2PLoan>[];
     for (final entry in loanLines.entries) {
       final loanId = newId();
@@ -1047,11 +1189,20 @@ class ImportSession {
       loans.add(
         P2PLoan(
           id: loanId,
-          title: '${source.name}$dueLabel — ${memberNames[entry.key] ?? 'morador'}',
+          title:
+              '${source.name}$dueLabel — ${memberNames[entry.key] ?? 'morador'}',
           description: entry.value
-              .map((line) => '${_titleOf(line)} ${effectiveAmountOf(line).formatted}')
+              .map(
+                (line) =>
+                    '${_titleOf(line)} ${effectiveAmountOf(line).formatted}',
+              )
               .join('; '),
-          totalAmount: Money(entry.value.fold<int>(0, (acc, line) => acc + effectiveAmountOf(line).cents)),
+          totalAmount: Money(
+            entry.value.fold<int>(
+              0,
+              (acc, line) => acc + effectiveAmountOf(line).cents,
+            ),
+          ),
           lenderMemberId: lenderId,
           borrowerMemberId: entry.key,
           installmentsCount: 1,
@@ -1072,7 +1223,8 @@ class ImportSession {
     for (final line in lines) {
       final status = statusOf(line);
       // Pessoal, de terceiros, ignorada, pagamento, estorno e entrada: ficam só no histórico
-      final leftOut = status == LineStatus.informational ||
+      final leftOut =
+          status == LineStatus.informational ||
           status == LineStatus.ignored ||
           (status == LineStatus.newLine &&
               (line.destination == LineDestination.cardOwnerPersonal ||
@@ -1087,7 +1239,9 @@ class ImportSession {
           ),
         );
         final expense = refundTarget.expense;
-        if (expense != null) refundedExpenses[expense.id] = (refundedExpenses[expense.id] ?? 0) + line.amount.cents;
+        if (expense != null)
+          refundedExpenses[expense.id] =
+              (refundedExpenses[expense.id] ?? 0) + line.amount.cents;
         continue;
       }
       if (leftOut && !_wasImported(line)) {
@@ -1105,11 +1259,16 @@ class ImportSession {
       final match = matches[line.id]!;
       final expense = match.expense;
       records.add(
-        ImportLineRecord(line: line, outcome: LineOutcome.linked, expenseId: expense.id),
+        ImportLineRecord(
+          line: line,
+          outcome: LineOutcome.linked,
+          expenseId: expense.id,
+        ),
       );
       if (expense.settledAt != null) continue;
 
-      if (match.kind == LineMatchKind.amountDiffers && canUpdateAmount(expense)) {
+      if (match.kind == LineMatchKind.amountDiffers &&
+          canUpdateAmount(expense)) {
         updates.add(expense.copyWith(amount: line.amount));
       } else if (match.kind == LineMatchKind.probable &&
           expense.isPaid &&
@@ -1150,8 +1309,13 @@ class ImportSession {
       skippedClosedCycle: skipped,
       lineRecords: records,
       extraActions: extraActions,
-      invoicePayment: waitsForInvoice && invoiceDueDate != null && invoicePaidAt != null
-          ? (dueDate: invoiceDueDate!, paidAt: invoicePaidAt!, paidByHouse: invoicePaidByHouse)
+      invoicePayment:
+          waitsForInvoice && invoiceDueDate != null && invoicePaidAt != null
+          ? (
+              dueDate: invoiceDueDate!,
+              paidAt: invoicePaidAt!,
+              paidByHouse: invoicePaidByHouse,
+            )
           : null,
     );
   }

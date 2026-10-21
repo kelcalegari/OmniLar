@@ -128,7 +128,11 @@ class _ImportPageState extends State<ImportPage> {
   void _saveDraftNow() {
     final session = _sessionValue;
     if (session == null) return;
-    sl<ImportDraftStore>().save(session.source.id, session.fileName, ImportDraftCodec.toJson(session));
+    sl<ImportDraftStore>().save(
+      session.source.id,
+      session.fileName,
+      ImportDraftCodec.toJson(session),
+    );
   }
 
   Future<void> _loadDraft(String sourceId) async {
@@ -142,7 +146,10 @@ class _ImportPageState extends State<ImportPage> {
     if (draft == null) return;
     final session = ImportDraftCodec.fromJson(draft.session, source);
     if (session == null) {
-      _showMessage('Não foi possível retomar esta revisão. Importe o arquivo de novo.', error: true);
+      _showMessage(
+        'Não foi possível retomar esta revisão. Importe o arquivo de novo.',
+        error: true,
+      );
       await _discardDraft(source);
       return;
     }
@@ -189,25 +196,35 @@ class _ImportPageState extends State<ImportPage> {
   }
 
   static bool _canImport(PaymentMethod method) =>
-      method.type == PaymentMethodType.card || method.type == PaymentMethodType.account;
+      method.type == PaymentMethodType.card ||
+      method.type == PaymentMethodType.account;
 
   PaymentMethod? _sourceOf(FinanceState state) {
     final sources = state.paymentMethods.where(_canImport).toList();
     return sources.where((p) => p.id == _sourceId).firstOrNull ??
         // Cartão ou conta que a casa escolheu abrir (0100)
-        sources.where((p) => p.id == state.houseSettings.importDefaults.paymentMethodId).firstOrNull ??
+        sources
+            .where(
+              (p) => p.id == state.houseSettings.importDefaults.paymentMethodId,
+            )
+            .firstOrNull ??
         (sources.length == 1 ? sources.first : null);
   }
 
   String _memberName(String? memberId) {
-    final member = _finance.state.members.where((m) => m.id == memberId).firstOrNull;
+    final member = _finance.state.members
+        .where((m) => m.id == memberId)
+        .firstOrNull;
     return member?.name.split(' ').first ?? 'morador';
   }
 
   void _showMessage(String message, {bool error = false}) {
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(message), backgroundColor: error ? AppColors.debtRed : null),
+      SnackBar(
+        content: Text(message),
+        backgroundColor: error ? AppColors.debtRed : null,
+      ),
     );
   }
 
@@ -228,7 +245,12 @@ class _ImportPageState extends State<ImportPage> {
     }
   }
 
-  static final _allowedExtensions = ['ofx', 'csv', 'txt', ...ImportAiService.mimeTypes.keys];
+  static final _allowedExtensions = [
+    'ofx',
+    'csv',
+    'txt',
+    ...ImportAiService.mimeTypes.keys,
+  ];
 
   /// Arquivo solto sobre a página (navegador e computador).
   Future<void> _onDrop(List<DropItem> files, FinanceState state) async {
@@ -236,13 +258,21 @@ class _ImportPageState extends State<ImportPage> {
     if (files.isEmpty || _busy) return;
     final source = _sourceOf(state);
     if (source == null) {
-      _showMessage('Escolha primeiro o cartão ou a conta de origem.', error: true);
+      _showMessage(
+        'Escolha primeiro o cartão ou a conta de origem.',
+        error: true,
+      );
       return;
     }
     final file = files.first;
-    final extension = file.name.contains('.') ? file.name.split('.').last.toLowerCase() : '';
+    final extension = file.name.contains('.')
+        ? file.name.split('.').last.toLowerCase()
+        : '';
     if (!_allowedExtensions.contains(extension)) {
-      _showMessage('Formato não aceito. Use OFX, CSV, PDF ou foto da fatura.', error: true);
+      _showMessage(
+        'Formato não aceito. Use OFX, CSV, PDF ou foto da fatura.',
+        error: true,
+      );
       return;
     }
     try {
@@ -252,9 +282,14 @@ class _ImportPageState extends State<ImportPage> {
     }
   }
 
-  Future<void> _readFile(PaymentMethod source, String fileName, Uint8List bytes) async {
-    final sourceType =
-        source.isCreditCard ? StatementSourceType.creditCard : StatementSourceType.bankAccount;
+  Future<void> _readFile(
+    PaymentMethod source,
+    String fileName,
+    Uint8List bytes,
+  ) async {
+    final sourceType = source.isCreditCard
+        ? StatementSourceType.creditCard
+        : StatementSourceType.bankAccount;
 
     // PDF e foto não têm estrutura: quem lê é a IA, e a revisão confere
     final mimeType = ImportAiService.mimeTypeOf(fileName);
@@ -264,7 +299,9 @@ class _ImportPageState extends State<ImportPage> {
     }
 
     final content = StatementParser.decodeBytes(bytes);
-    final isOfx = fileName.toLowerCase().endsWith('.ofx') || content.contains('<STMTTRN>');
+    final isOfx =
+        fileName.toLowerCase().endsWith('.ofx') ||
+        content.contains('<STMTTRN>');
     if (!isOfx) {
       await _importCsv(source, fileName, content, sourceType);
       return;
@@ -272,12 +309,16 @@ class _ImportPageState extends State<ImportPage> {
 
     final lines = StatementParser.parseOfx(content, source: sourceType);
     if (lines.isEmpty) {
-      _showMessage('Nenhum lançamento encontrado no arquivo selecionado.', error: true);
+      _showMessage(
+        'Nenhum lançamento encontrado no arquivo selecionado.',
+        error: true,
+      );
       return;
     }
 
     String? warning;
-    if (isOfx && StatementParser.isCreditCardOfx(content) != source.isCreditCard) {
+    if (isOfx &&
+        StatementParser.isCreditCardOfx(content) != source.isCreditCard) {
       warning = source.isCreditCard
           ? 'Este arquivo parece ser o extrato de uma conta, e não a fatura de um cartão. Confira a origem escolhida.'
           : 'Este arquivo parece ser a fatura de um cartão, e não o extrato de uma conta. Confira a origem escolhida.';
@@ -296,14 +337,27 @@ class _ImportPageState extends State<ImportPage> {
   ) async {
     final saved = await sl<CsvMappingStore>().load(source.id);
     var lines = saved != null
-        ? StatementParser.parseCsvWithMapping(content, saved, source: sourceType)
+        ? StatementParser.parseCsvWithMapping(
+            content,
+            saved,
+            source: sourceType,
+          )
         : const <ImportedStatementLine>[];
-    if (lines.isEmpty) lines = StatementParser.parseCsv(content, source: sourceType);
+    if (lines.isEmpty)
+      lines = StatementParser.parseCsv(content, source: sourceType);
     if (!mounted) return;
 
     if (lines.isEmpty) {
-      _showMessage('Não reconheci as colunas deste arquivo. Diga o que é cada uma.');
-      await _mapCsvColumns(source, fileName, content, sourceType, initial: saved);
+      _showMessage(
+        'Não reconheci as colunas deste arquivo. Diga o que é cada uma.',
+      );
+      await _mapCsvColumns(
+        source,
+        fileName,
+        content,
+        sourceType,
+        initial: saved,
+      );
       return;
     }
     _csv = (content: content, fileName: fileName);
@@ -328,9 +382,16 @@ class _ImportPageState extends State<ImportPage> {
     );
     if (mapping == null || !mounted) return;
 
-    final lines = StatementParser.parseCsvWithMapping(content, mapping, source: sourceType);
+    final lines = StatementParser.parseCsvWithMapping(
+      content,
+      mapping,
+      source: sourceType,
+    );
     if (lines.isEmpty) {
-      _showMessage('Nenhuma linha com data e valor nessas colunas.', error: true);
+      _showMessage(
+        'Nenhuma linha com data e valor nessas colunas.',
+        error: true,
+      );
       return;
     }
     await sl<CsvMappingStore>().save(source.id, mapping);
@@ -347,7 +408,9 @@ class _ImportPageState extends State<ImportPage> {
     StatementSourceType sourceType,
   ) async {
     setState(() => _busy = true);
-    _showMessage('Lendo "$fileName" com IA. Isso pode levar alguns segundos...');
+    _showMessage(
+      'Lendo "$fileName" com IA. Isso pode levar alguns segundos...',
+    );
     final AiStatementReading reading;
     try {
       reading = await sl<ImportAiService>().readFile(
@@ -367,11 +430,19 @@ class _ImportPageState extends State<ImportPage> {
       false =>
         'Lido por IA: a soma das linhas (${reading.linesSum.format()}) não bate com o total impresso '
             '(${reading.printedTotal!.format()}). Pode faltar ou sobrar alguma linha: confira com o arquivo.',
-      true => 'Lido por IA: a soma das linhas bate com o total impresso. Confira as linhas antes de confirmar.',
-      null => 'Lido por IA: o arquivo não traz um total para conferir. Confira as linhas antes de confirmar.',
+      true =>
+        'Lido por IA: a soma das linhas bate com o total impresso. Confira as linhas antes de confirmar.',
+      null =>
+        'Lido por IA: o arquivo não traz um total para conferir. Confira as linhas antes de confirmar.',
     };
     _csv = null;
-    await _start(source, fileName, reading.lines, warning: warning, dueDate: reading.dueDate);
+    await _start(
+      source,
+      fileName,
+      reading.lines,
+      warning: warning,
+      dueDate: reading.dueDate,
+    );
   }
 
   /// Informa que a fatura importada já foi paga: data e, se o cartão tem
@@ -382,8 +453,8 @@ class _ImportPageState extends State<ImportPage> {
     final picked = await showDatePicker(
       context: context,
       initialDate: session.invoicePaidAt ?? DateTime.now(),
-      firstDate: DateTime(DateTime.now().year - 2),
-      lastDate: DateTime.now(),
+      firstDate: DateTime(2015, 1, 1),
+      lastDate: DateTime(DateTime.now().year + 2, 12, 31),
       helpText: 'Dia em que a fatura foi paga',
     );
     if (picked == null || !mounted) return;
@@ -391,7 +462,9 @@ class _ImportPageState extends State<ImportPage> {
     final options = invoicePaymentOptions(
       session.source,
       _finance.state.paymentMethods,
-      memberNames: {for (final m in _finance.state.members) m.id: m.name.split(' ').first},
+      memberNames: {
+        for (final m in _finance.state.members) m.id: m.name.split(' ').first,
+      },
       usualPayerId: session.source.usualInvoicePayerId,
     );
     var byHouse = options.first.byHouse;
@@ -399,7 +472,10 @@ class _ImportPageState extends State<ImportPage> {
       final choice = await showDialog<InvoicePaymentOption>(
         context: context,
         builder: (dialogContext) => SimpleDialog(
-          title: const Text('Com que meio foi paga?', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+          title: const Text(
+            'Com que meio foi paga?',
+            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+          ),
           children: [
             for (final option in options)
               SimpleDialogOption(
@@ -425,7 +501,9 @@ class _ImportPageState extends State<ImportPage> {
     if (session == null) return;
     final targets = [
       for (final line in session.newLines)
-        if (line.destination == LineDestination.house && line.categoryId == null) line,
+        if (line.destination == LineDestination.house &&
+            line.categoryId == null)
+          line,
     ];
     if (targets.isEmpty) return;
 
@@ -466,14 +544,20 @@ class _ImportPageState extends State<ImportPage> {
   /// Fatura de exemplo do modo demo, para ver a tela sem ter um arquivo.
   Future<void> _useSample(PaymentMethod source) async {
     final now = DateTime.now();
-    ImportedStatementLine line(int index, int daysAgo, String description, int cents) {
+    ImportedStatementLine line(
+      int index,
+      int daysAgo,
+      String description,
+      int cents,
+    ) {
       final date = now.subtract(Duration(days: daysAgo));
       return ImportedStatementLine(
         id: 'sample_$index',
         date: date,
         description: description,
         amount: Money(cents),
-        signature: '${StatementParser.signatureContent(date, cents, description)}#1',
+        signature:
+            '${StatementParser.signatureContent(date, cents, description)}#1',
       );
     }
 
@@ -500,7 +584,8 @@ class _ImportPageState extends State<ImportPage> {
     final usualPayer = members.any((m) => m.id == source.usualInvoicePayerId)
         ? source.usualInvoicePayerId
         : null;
-    final payer = usualPayer ??
+    final payer =
+        usualPayer ??
         source.ownerMemberId ??
         currentUserId ??
         (members.isNotEmpty ? members.first.id : '');
@@ -512,18 +597,19 @@ class _ImportPageState extends State<ImportPage> {
     final state = _finance.state;
 
     setState(() {
-      _session = ImportSession.start(
-        source: source,
-        fileName: fileName,
-        lines: lines,
-        payerMemberId: payer,
-        matching: state.houseSettings.importMatching,
-        defaults: state.houseSettings.importDefaults,
-      ).withRules(
-        rules,
-        memberIds: {for (final m in state.members) m.id},
-        categoryIds: {for (final c in state.categories) c.id},
-      );
+      _session =
+          ImportSession.start(
+            source: source,
+            fileName: fileName,
+            lines: lines,
+            payerMemberId: payer,
+            matching: state.houseSettings.importMatching,
+            defaults: state.houseSettings.importDefaults,
+          ).withRules(
+            rules,
+            memberIds: {for (final m in state.members) m.id},
+            categoryIds: {for (final c in state.categories) c.id},
+          );
       // O vencimento impresso na fatura vale mais que o calculado pelas compras
       if (source.isCreditCard && dueDate != null) {
         _session = _session!.withInvoiceDueDate(dueDate);
@@ -557,12 +643,17 @@ class _ImportPageState extends State<ImportPage> {
         }
       }
     } catch (e) {
-      _showMessage('Não foi possível comparar com os lançamentos do app: $e', error: true);
+      _showMessage(
+        'Não foi possível comparar com os lançamentos do app: $e',
+        error: true,
+      );
     }
 
     var imported = session.importedSignatures;
     try {
-      imported = await sl<ImportRepository>().importedSignatures(session.source.id);
+      imported = await sl<ImportRepository>().importedSignatures(
+        session.source.id,
+      );
     } catch (_) {
       // Sem a resposta, vale a comparação com as despesas do app
     }
@@ -579,11 +670,15 @@ class _ImportPageState extends State<ImportPage> {
 
     // Extrato de conta: o que as linhas que não são compra podem ser
     final openInvoices = <CardInvoice>[];
-    final cards = _finance.state.paymentMethods.where((p) => p.isCreditCard).toList();
+    final cards = _finance.state.paymentMethods
+        .where((p) => p.isCreditCard)
+        .toList();
     if (!session.source.isCreditCard) {
       try {
         for (final card in cards) {
-          openInvoices.addAll(await sl<FinanceRepository>().getOpenCardInvoices(card.id));
+          openInvoices.addAll(
+            await sl<FinanceRepository>().getOpenCardInvoices(card.id),
+          );
         }
         await p2pCubit.loadLoans();
       } catch (_) {
@@ -596,7 +691,10 @@ class _ImportPageState extends State<ImportPage> {
     final current = _session ?? session;
     final houseSettings = _finance.state.houseSettings;
     var updated = current
-        .withParams(matching: houseSettings.importMatching, defaults: houseSettings.importDefaults)
+        .withParams(
+          matching: houseSettings.importMatching,
+          defaults: houseSettings.importDefaults,
+        )
         .withImportedSignatures(imported)
         .withExpenses(byId.values.toList())
         .withExtraOptions(
@@ -632,23 +730,26 @@ class _ImportPageState extends State<ImportPage> {
   static ImportedStatementLine _sameClassification(
     ImportedStatementLine target,
     ImportedStatementLine from,
-  ) =>
-      target.copyWith(
-        destination: from.destination,
-        categoryId: from.categoryId,
-        assignedMemberId: from.assignedMemberId,
-        clearAssignedMember: from.assignedMemberId == null,
-      );
+  ) => target.copyWith(
+    destination: from.destination,
+    categoryId: from.categoryId,
+    assignedMemberId: from.assignedMemberId,
+    clearAssignedMember: from.assignedMemberId == null,
+  );
 
   /// Grava a decisão de uma linha e oferece repetir nas outras do mesmo lugar.
   void _classify(ImportSession session, ImportedStatementLine changed) {
     final updated = session.withLine(changed);
     _update(updated);
 
-    final others = updated.similarLines(changed).where((other) =>
-        other.destination != changed.destination ||
-        other.categoryId != changed.categoryId ||
-        other.assignedMemberId != changed.assignedMemberId);
+    final others = updated
+        .similarLines(changed)
+        .where(
+          (other) =>
+              other.destination != changed.destination ||
+              other.categoryId != changed.categoryId ||
+              other.assignedMemberId != changed.assignedMemberId,
+        );
     if (others.isEmpty) return;
 
     final ids = {for (final other in others) other.id};
@@ -668,9 +769,16 @@ class _ImportPageState extends State<ImportPage> {
             onPressed: () {
               final current = _session;
               if (current == null) return;
-              final source = current.lines.where((l) => l.id == changed.id).firstOrNull;
+              final source = current.lines
+                  .where((l) => l.id == changed.id)
+                  .firstOrNull;
               if (source == null) return;
-              _update(current.withLines(ids, (line) => _sameClassification(line, source)));
+              _update(
+                current.withLines(
+                  ids,
+                  (line) => _sameClassification(line, source),
+                ),
+              );
             },
           ),
         ),
@@ -707,7 +815,10 @@ class _ImportPageState extends State<ImportPage> {
     }
   }
 
-  static ImportedStatementLine _withDestinationKey(ImportedStatementLine line, String key) {
+  static ImportedStatementLine _withDestinationKey(
+    ImportedStatementLine line,
+    String key,
+  ) {
     if (key.startsWith(_loanPrefix)) {
       return line.copyWith(
         destination: LineDestination.splitP2P,
@@ -731,10 +842,10 @@ class _ImportPageState extends State<ImportPage> {
     required bool colored,
   }) {
     TextStyle style(Color color, {bool bold = false}) => TextStyle(
-          fontSize: 12,
-          color: colored ? color : null,
-          fontWeight: colored && bold ? FontWeight.bold : null,
-        );
+      fontSize: 12,
+      color: colored ? color : null,
+      fontWeight: colored && bold ? FontWeight.bold : null,
+    );
 
     return [
       DropdownMenuItem(
@@ -766,7 +877,9 @@ class _ImportPageState extends State<ImportPage> {
   }
 
   /// Aplica uma mudança às linhas marcadas.
-  void _bulk(ImportedStatementLine Function(ImportedStatementLine line) change) {
+  void _bulk(
+    ImportedStatementLine Function(ImportedStatementLine line) change,
+  ) {
     final session = _session;
     if (session == null) return;
     _update(session.withLines(_selected, change));
@@ -778,8 +891,24 @@ class _ImportPageState extends State<ImportPage> {
     final picked = await showDatePicker(
       context: context,
       initialDate: initial,
-      firstDate: DateTime(initial.year - 2),
-      lastDate: DateTime(initial.year + 1, 12, 31),
+      firstDate: DateTime(
+        [
+          initial.year - 5,
+          DateTime.now().year - 10,
+          2015,
+        ].reduce((a, b) => a < b ? a : b),
+        1,
+        1,
+      ),
+      lastDate: DateTime(
+        [
+          initial.year + 5,
+          DateTime.now().year + 10,
+          2035,
+        ].reduce((a, b) => a > b ? a : b),
+        12,
+        31,
+      ),
       helpText: 'Vencimento da fatura',
     );
     if (picked == null || !mounted) return;
@@ -797,7 +926,10 @@ class _ImportPageState extends State<ImportPage> {
         builder: (context, setDialogState) {
           final valid = first.cents > 0 && first.cents < line.amount.cents;
           return AlertDialog(
-            title: const Text('Dividir em duas partes', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+            title: const Text(
+              'Dividir em duas partes',
+              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+            ),
             content: Column(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -839,7 +971,9 @@ class _ImportPageState extends State<ImportPage> {
               ),
               FilledButton(
                 key: const Key('import_split_confirm'),
-                onPressed: valid ? () => Navigator.pop(dialogContext, true) : null,
+                onPressed: valid
+                    ? () => Navigator.pop(dialogContext, true)
+                    : null,
                 child: const Text('Dividir'),
               ),
             ],
@@ -848,10 +982,12 @@ class _ImportPageState extends State<ImportPage> {
       ),
     );
     if (confirmed != true || !mounted || _session == null) return;
-    setState(() => _selected = {
-          for (final id in _selected)
-            if (id != line.id) id,
-        });
+    setState(
+      () => _selected = {
+        for (final id in _selected)
+          if (id != line.id) id,
+      },
+    );
     _update(_session!.splitLine(line.id, first));
   }
 
@@ -864,16 +1000,26 @@ class _ImportPageState extends State<ImportPage> {
       children: [
         Text(
           'Parte $index de ${parts.length} de ${total.format()}',
-          style: const TextStyle(fontSize: 11, color: AppColors.primary, fontWeight: FontWeight.w600),
+          style: const TextStyle(
+            fontSize: 11,
+            color: AppColors.primary,
+            fontWeight: FontWeight.w600,
+          ),
         ),
         const SizedBox(width: 4),
         InkWell(
-          onTap: _busy ? null : () => _update(session.mergeSplit(line.splitFrom!)),
+          onTap: _busy
+              ? null
+              : () => _update(session.mergeSplit(line.splitFrom!)),
           child: const Padding(
             padding: EdgeInsets.symmetric(horizontal: 4, vertical: 2),
             child: Text(
               'Juntar',
-              style: TextStyle(fontSize: 11, color: AppColors.primary, decoration: TextDecoration.underline),
+              style: TextStyle(
+                fontSize: 11,
+                color: AppColors.primary,
+                decoration: TextDecoration.underline,
+              ),
             ),
           ),
         ),
@@ -891,16 +1037,24 @@ class _ImportPageState extends State<ImportPage> {
       context: context,
       builder: (dialogContext) => StatefulBuilder(
         builder: (context, setDialogState) => AlertDialog(
-          title: const Text('Editar linha', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+          title: const Text(
+            'Editar linha',
+            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+          ),
           content: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Text(line.description, style: const TextStyle(fontSize: 12, color: Colors.grey)),
+              Text(
+                line.description,
+                style: const TextStyle(fontSize: 12, color: Colors.grey),
+              ),
               const SizedBox(height: 12),
               TextField(
                 controller: controller,
-                decoration: const InputDecoration(labelText: 'Nome do lançamento'),
+                decoration: const InputDecoration(
+                  labelText: 'Nome do lançamento',
+                ),
               ),
               const SizedBox(height: 12),
               OutlinedButton.icon(
@@ -910,8 +1064,24 @@ class _ImportPageState extends State<ImportPage> {
                   final picked = await showDatePicker(
                     context: context,
                     initialDate: date,
-                    firstDate: DateTime(date.year - 2),
-                    lastDate: DateTime.now().add(const Duration(days: 31)),
+                    firstDate: DateTime(
+                      [
+                        date.year - 5,
+                        DateTime.now().year - 10,
+                        2015,
+                      ].reduce((a, b) => a < b ? a : b),
+                      1,
+                      1,
+                    ),
+                    lastDate: DateTime(
+                      [
+                        date.year + 5,
+                        DateTime.now().year + 2,
+                        2035,
+                      ].reduce((a, b) => a > b ? a : b),
+                      12,
+                      31,
+                    ),
                   );
                   if (picked != null) setDialogState(() => date = picked);
                 },
@@ -975,7 +1145,10 @@ class _ImportPageState extends State<ImportPage> {
 
     // O que foi decidido para cada estabelecimento vale para a próxima fatura
     try {
-      await sl<ImportRepository>().saveRules(session.source.id, session.rulesToLearn());
+      await sl<ImportRepository>().saveRules(
+        session.source.id,
+        session.rulesToLearn(),
+      );
     } catch (_) {
       // Regra não gravada não desfaz a importação
     }
@@ -1030,7 +1203,10 @@ class _ImportPageState extends State<ImportPage> {
               ),
             );
           case ExtraActionType.loanPayment:
-            await sl<P2PRepository>().payLoan(action.loanId!, extra.line.amount);
+            await sl<P2PRepository>().payLoan(
+              action.loanId!,
+              extra.line.amount,
+            );
           case ExtraActionType.thirdPartyReceipt:
             await finance.registerThirdPartyReceipt(
               payerName: StatementText.cleanTitle(extra.line.description),
@@ -1051,14 +1227,17 @@ class _ImportPageState extends State<ImportPage> {
     if (!mounted) return;
 
     final extrasDone = plan.extraActions.length - warnings.length;
-    final linked = session.countOf(LineStatus.linked) + session.countOf(LineStatus.alreadyImported);
+    final linked =
+        session.countOf(LineStatus.linked) +
+        session.countOf(LineStatus.alreadyImported);
     final summary = [
       '${plan.newExpenses.length} ${plan.newExpenses.length == 1 ? 'despesa lançada' : 'despesas lançadas'}',
       if (plan.loans.isNotEmpty)
         '${plan.loans.length} ${plan.loans.length == 1 ? 'empréstimo criado' : 'empréstimos criados'}',
       if (extrasDone > 0)
         '$extrasDone ${extrasDone == 1 ? 'movimento registrado' : 'movimentos registrados'}',
-      if (linked > 0) '$linked já ${linked == 1 ? 'estava lançada' : 'estavam lançadas'}',
+      if (linked > 0)
+        '$linked já ${linked == 1 ? 'estava lançada' : 'estavam lançadas'}',
       if (plan.skippedClosedCycle.isNotEmpty)
         '${plan.skippedClosedCycle.length} de ciclo fechado ${plan.skippedClosedCycle.length == 1 ? 'ficou' : 'ficaram'} de fora',
     ].join(' • ');
@@ -1078,7 +1257,10 @@ class _ImportPageState extends State<ImportPage> {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => AlertDialog(
-        title: const Text('Desfazer importação?', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+        title: const Text(
+          'Desfazer importação?',
+          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+        ),
         content: Text(
           'As despesas e os empréstimos criados por "${batch.fileName}" serão excluídos. '
           'Correções feitas em despesas que já existiam continuam como estão.',
@@ -1121,7 +1303,10 @@ class _ImportPageState extends State<ImportPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Importar fatura ou extrato', style: TextStyle(fontWeight: FontWeight.bold)),
+        title: const Text(
+          'Importar fatura ou extrato',
+          style: TextStyle(fontWeight: FontWeight.bold),
+        ),
       ),
       body: BlocBuilder<FinanceCubit, FinanceState>(
         builder: (context, state) {
@@ -1140,7 +1325,12 @@ class _ImportPageState extends State<ImportPage> {
                     padding: const EdgeInsets.only(bottom: 96),
                     children: [
                       _originCard(state),
-                      if (_resultMessage != null) _banner(_resultMessage!, AppColors.creditGreen, Icons.check_circle_outline_rounded),
+                      if (_resultMessage != null)
+                        _banner(
+                          _resultMessage!,
+                          AppColors.creditGreen,
+                          Icons.check_circle_outline_rounded,
+                        ),
                       if (_resultWarnings.isNotEmpty)
                         _banner(
                           'A importação foi gravada, mas parte dos movimentos não pôde ser registrada:',
@@ -1149,8 +1339,14 @@ class _ImportPageState extends State<ImportPage> {
                           children: [
                             for (final warning in _resultWarnings)
                               Padding(
-                                padding: const EdgeInsets.only(top: 6, left: 26),
-                                child: Text(warning, style: const TextStyle(fontSize: 12)),
+                                padding: const EdgeInsets.only(
+                                  top: 6,
+                                  left: 26,
+                                ),
+                                child: Text(
+                                  warning,
+                                  style: const TextStyle(fontSize: 12),
+                                ),
                               ),
                           ],
                         ),
@@ -1167,18 +1363,28 @@ class _ImportPageState extends State<ImportPage> {
                         margin: const EdgeInsets.all(12),
                         decoration: BoxDecoration(
                           color: AppColors.primary.withValues(alpha: 0.12),
-                          border: Border.all(color: AppColors.primary, width: 2),
+                          border: Border.all(
+                            color: AppColors.primary,
+                            width: 2,
+                          ),
                           borderRadius: BorderRadius.circular(16),
                         ),
                         alignment: Alignment.center,
                         child: const Column(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            Icon(Icons.file_download_outlined, size: 40, color: AppColors.primary),
+                            Icon(
+                              Icons.file_download_outlined,
+                              size: 40,
+                              color: AppColors.primary,
+                            ),
                             SizedBox(height: 8),
                             Text(
                               'Solte o arquivo para importar',
-                              style: TextStyle(fontWeight: FontWeight.bold, color: AppColors.primary),
+                              style: TextStyle(
+                                fontWeight: FontWeight.bold,
+                                color: AppColors.primary,
+                              ),
                             ),
                           ],
                         ),
@@ -1203,11 +1409,19 @@ class _ImportPageState extends State<ImportPage> {
         border: Border.all(color: theme.dividerColor),
         borderRadius: BorderRadius.circular(16),
       ),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: children),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: children,
+      ),
     );
   }
 
-  Widget _banner(String text, Color color, IconData icon, {List<Widget> children = const []}) {
+  Widget _banner(
+    String text,
+    Color color,
+    IconData icon, {
+    List<Widget> children = const [],
+  }) {
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
       padding: const EdgeInsets.all(12),
@@ -1235,7 +1449,11 @@ class _ImportPageState extends State<ImportPage> {
   /// Navegador e computador aceitam arrastar o arquivo.
   bool get _canDropFiles =>
       kIsWeb ||
-      const {TargetPlatform.windows, TargetPlatform.macOS, TargetPlatform.linux}.contains(defaultTargetPlatform);
+      const {
+        TargetPlatform.windows,
+        TargetPlatform.macOS,
+        TargetPlatform.linux,
+      }.contains(defaultTargetPlatform);
 
   Widget _originCard(FinanceState state) {
     final sources = state.paymentMethods.where(_canImport).toList();
@@ -1244,13 +1462,17 @@ class _ImportPageState extends State<ImportPage> {
 
     String detail(PaymentMethod method) {
       if (!method.isCreditCard) return 'Conta';
-      if (method.closingDay == null || method.dueDay == null) return 'Cartão sem fechamento e vencimento cadastrados';
+      if (method.closingDay == null || method.dueDay == null)
+        return 'Cartão sem fechamento e vencimento cadastrados';
       return 'Cartão • fecha dia ${method.closingDay}, vence dia ${method.dueDay}';
     }
 
     return _card(
       children: [
-        const Text('1. De onde é o arquivo?', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+        const Text(
+          '1. De onde é o arquivo?',
+          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+        ),
         const SizedBox(height: 4),
         const Text(
           'Escolha o cartão ou a conta. É por ele que o app sabe o vencimento da fatura e o que já foi lançado.',
@@ -1271,25 +1493,28 @@ class _ImportPageState extends State<ImportPage> {
             onChanged: _busy
                 ? null
                 : (id) => setState(() {
-                      if (id != _sourceId) {
-                        _session = null;
-                        _fileWarning = null;
-                        _failure = null;
-                        _rules = const [];
-                        _draft = null;
-                        _draftTimer?.cancel();
-                        if (id != null) {
-                          _loadRules(id);
-                          _loadDraft(id);
-                        }
+                    if (id != _sourceId) {
+                      _session = null;
+                      _fileWarning = null;
+                      _failure = null;
+                      _rules = const [];
+                      _draft = null;
+                      _draftTimer?.cancel();
+                      if (id != null) {
+                        _loadRules(id);
+                        _loadDraft(id);
                       }
-                      _sourceId = id;
-                    }),
+                    }
+                    _sourceId = id;
+                  }),
             items: [
               for (final method in sources)
                 DropdownMenuItem(
                   value: method.id,
-                  child: Text('${method.name} — ${detail(method)}', overflow: TextOverflow.ellipsis),
+                  child: Text(
+                    '${method.name} — ${detail(method)}',
+                    overflow: TextOverflow.ellipsis,
+                  ),
                 ),
             ],
           ),
@@ -1300,17 +1525,26 @@ class _ImportPageState extends State<ImportPage> {
             children: [
               FilledButton.icon(
                 icon: const Icon(Icons.upload_file_rounded, size: 18),
-                label: Text(_session == null ? 'Escolher arquivo' : 'Trocar arquivo'),
-                onPressed: source == null || _busy ? null : () => _pickFile(source),
+                label: Text(
+                  _session == null ? 'Escolher arquivo' : 'Trocar arquivo',
+                ),
+                onPressed: source == null || _busy
+                    ? null
+                    : () => _pickFile(source),
               ),
               if (_canDropFiles)
                 const Padding(
                   padding: EdgeInsets.symmetric(vertical: 10),
-                  child: Text('ou arraste o arquivo para esta página', style: TextStyle(color: Colors.grey, fontSize: 13)),
+                  child: Text(
+                    'ou arraste o arquivo para esta página',
+                    style: TextStyle(color: Colors.grey, fontSize: 13),
+                  ),
                 ),
               if (isDemo)
                 OutlinedButton(
-                  onPressed: source == null || _busy ? null : () => _useSample(source),
+                  onPressed: source == null || _busy
+                      ? null
+                      : () => _useSample(source),
                   child: const Text('Usar fatura de exemplo'),
                 ),
             ],
@@ -1328,11 +1562,18 @@ class _ImportPageState extends State<ImportPage> {
                 runSpacing: 4,
                 crossAxisAlignment: WrapCrossAlignment.center,
                 children: [
-                  const Icon(Icons.history_rounded, size: 18, color: AppColors.primary),
+                  const Icon(
+                    Icons.history_rounded,
+                    size: 18,
+                    color: AppColors.primary,
+                  ),
                   Text(
                     'Revisão em andamento: ${_draft!.fileName} '
                     '(salva em ${DateFormat('dd/MM HH:mm').format(_draft!.savedAt)})',
-                    style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+                    style: const TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
                   FilledButton(
                     key: const Key('import_resume_draft'),
@@ -1368,7 +1609,9 @@ class _ImportPageState extends State<ImportPage> {
     ];
 
     Widget filterChip(String label, LineStatus? status) {
-      final count = status == null ? session.lines.length : session.countOf(status);
+      final count = status == null
+          ? session.lines.length
+          : session.countOf(status);
       return ChoiceChip(
         label: Text('$label ($count)'),
         selected: _filter == status,
@@ -1408,7 +1651,9 @@ class _ImportPageState extends State<ImportPage> {
                             session.source.isCreditCard
                                 ? StatementSourceType.creditCard
                                 : StatementSourceType.bankAccount,
-                            initial: await sl<CsvMappingStore>().load(session.source.id),
+                            initial: await sl<CsvMappingStore>().load(
+                              session.source.id,
+                            ),
                           );
                         },
                 ),
@@ -1438,38 +1683,53 @@ class _ImportPageState extends State<ImportPage> {
                 )
               else if (session.waitsForInvoice)
                 InputChip(
-                  avatar: const Icon(Icons.check_circle_outline_rounded, size: 18, color: AppColors.creditGreen),
+                  avatar: const Icon(
+                    Icons.check_circle_outline_rounded,
+                    size: 18,
+                    color: AppColors.creditGreen,
+                  ),
                   label: Text(
                     'Paga em ${_dayFormat.format(session.invoicePaidAt!)}'
                     '${session.invoicePaidByHouse ? ' pelo Caixa' : ''}',
                   ),
                   onPressed: _busy ? null : _pickInvoicePayment,
-                  onDeleted: _busy ? null : () => _update(session.withInvoicePayment(null)),
+                  onDeleted: _busy
+                      ? null
+                      : () => _update(session.withInvoicePayment(null)),
                 ),
               if (session.isHouseCard)
-                const Text('Quem paga: Caixa da Casa', style: TextStyle(fontSize: 13))
+                const Text(
+                  'Quem paga: Caixa da Casa',
+                  style: TextStyle(fontSize: 13),
+                )
               else
-              Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const Text('Quem paga: ', style: TextStyle(fontSize: 13)),
-                  DropdownButton<String>(
-                    value: state.members.any((m) => m.id == session.payerMemberId)
-                        ? session.payerMemberId
-                        : null,
-                    underline: const SizedBox.shrink(),
-                    onChanged: _busy
-                        ? null
-                        : (id) {
-                            if (id != null) _update(session.withPayer(id));
-                          },
-                    items: [
-                      for (final member in state.members)
-                        DropdownMenuItem(value: member.id, child: Text(member.name.split(' ').first)),
-                    ],
-                  ),
-                ],
-              ),
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Text('Quem paga: ', style: TextStyle(fontSize: 13)),
+                    DropdownButton<String>(
+                      value:
+                          state.members.any(
+                            (m) => m.id == session.payerMemberId,
+                          )
+                          ? session.payerMemberId
+                          : null,
+                      underline: const SizedBox.shrink(),
+                      onChanged: _busy
+                          ? null
+                          : (id) {
+                              if (id != null) _update(session.withPayer(id));
+                            },
+                      items: [
+                        for (final member in state.members)
+                          DropdownMenuItem(
+                            value: member.id,
+                            child: Text(member.name.split(' ').first),
+                          ),
+                      ],
+                    ),
+                  ],
+                ),
             ],
           ),
           const SizedBox(height: 12),
@@ -1482,13 +1742,20 @@ class _ImportPageState extends State<ImportPage> {
               _total('Casa', totals.house, AppColors.primary),
               _total('Empréstimos', totals.loans, AppColors.debtRed),
               _total('Pessoal', totals.personal, Colors.blueGrey),
-              if (!totals.thirdParty.isZero) _total('Pago por terceiros', totals.thirdParty, Colors.teal),
-              if (!totals.ignored.isZero) _total('Ignorado', totals.ignored, Colors.grey),
+              if (!totals.thirdParty.isZero)
+                _total('Pago por terceiros', totals.thirdParty, Colors.teal),
+              if (!totals.ignored.isZero)
+                _total('Ignorado', totals.ignored, Colors.grey),
             ],
           ),
         ],
       ),
-      if (_fileWarning != null) _banner(_fileWarning!, AppColors.folegoWarning, Icons.warning_amber_rounded),
+      if (_fileWarning != null)
+        _banner(
+          _fileWarning!,
+          AppColors.folegoWarning,
+          Icons.warning_amber_rounded,
+        ),
       if (_failure != null)
         _banner(
           'Nada foi gravado. $_failure',
@@ -1504,7 +1771,9 @@ class _ImportPageState extends State<ImportPage> {
           children: [
             RadioGroup<ClosedCyclePolicy>(
               groupValue: _closedCyclePolicy,
-              onChanged: (policy) => setState(() => _closedCyclePolicy = policy ?? _closedCyclePolicy),
+              onChanged: (policy) => setState(
+                () => _closedCyclePolicy = policy ?? _closedCyclePolicy,
+              ),
               child: const Column(
                 children: [
                   RadioListTile<ClosedCyclePolicy>(
@@ -1539,12 +1808,17 @@ class _ImportPageState extends State<ImportPage> {
         ),
       ),
       if (!sl<AuthRepository>().isDemoMode &&
-          session.newLines.any((l) => l.destination == LineDestination.house && l.categoryId == null))
+          session.newLines.any(
+            (l) =>
+                l.destination == LineDestination.house && l.categoryId == null,
+          ))
         Align(
           alignment: Alignment.centerLeft,
           child: TextButton.icon(
             icon: const Icon(Icons.auto_awesome_rounded, size: 18),
-            label: const Text('Sugerir nome e categoria com IA para as linhas sem categoria'),
+            label: const Text(
+              'Sugerir nome e categoria com IA para as linhas sem categoria',
+            ),
             onPressed: _busy ? null : _suggestWithAi,
           ),
         ),
@@ -1553,7 +1827,12 @@ class _ImportPageState extends State<ImportPage> {
       if (visible.isEmpty)
         const Padding(
           padding: EdgeInsets.all(24),
-          child: Center(child: Text('Nenhuma linha neste filtro.', style: TextStyle(color: Colors.grey))),
+          child: Center(
+            child: Text(
+              'Nenhuma linha neste filtro.',
+              style: TextStyle(color: Colors.grey),
+            ),
+          ),
         )
       else
         Container(
@@ -1574,7 +1853,10 @@ class _ImportPageState extends State<ImportPage> {
       for (final blocker in blockers)
         Padding(
           padding: const EdgeInsets.only(bottom: 6),
-          child: Text(blocker, style: const TextStyle(fontSize: 12, color: AppColors.debtRed)),
+          child: Text(
+            blocker,
+            style: const TextStyle(fontSize: 12, color: AppColors.debtRed),
+          ),
         ),
       const Text(
         'Ao confirmar: cada linha da Casa vira uma despesa com rateio; linhas de outro morador viram empréstimo com quem paga a fatura como credor; linhas pessoais e ignoradas não geram nada.',
@@ -1598,21 +1880,43 @@ class _ImportPageState extends State<ImportPage> {
       crossAxisAlignment: CrossAxisAlignment.start,
       mainAxisSize: MainAxisSize.min,
       children: [
-        Text(label, style: const TextStyle(fontSize: 11, color: Colors.grey, fontWeight: FontWeight.w500)),
+        Text(
+          label,
+          style: const TextStyle(
+            fontSize: 11,
+            color: Colors.grey,
+            fontWeight: FontWeight.w500,
+          ),
+        ),
         const SizedBox(height: 2),
-        Text(value.format(), style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: color)),
+        Text(
+          value.format(),
+          style: TextStyle(
+            fontSize: 14,
+            fontWeight: FontWeight.bold,
+            color: color,
+          ),
+        ),
       ],
     );
   }
 
-  Widget _lineTile(FinanceState state, ImportSession session, ImportedStatementLine line) {
+  Widget _lineTile(
+    FinanceState state,
+    ImportSession session,
+    ImportedStatementLine line,
+  ) {
     final status = session.statusOf(line);
     final title = line.title?.trim().isNotEmpty == true
         ? line.title!.trim()
         : StatementText.cleanTitle(line.description);
-    final installment = line.isInstallment ? ' • parcela ${line.installmentNumber}/${line.installmentsTotal}' : '';
-    final muted = status == LineStatus.informational || status == LineStatus.ignored;
-    final editable = status == LineStatus.newLine || status == LineStatus.ignored;
+    final installment = line.isInstallment
+        ? ' • parcela ${line.installmentNumber}/${line.installmentsTotal}'
+        : '';
+    final muted =
+        status == LineStatus.informational || status == LineStatus.ignored;
+    final editable =
+        status == LineStatus.newLine || status == LineStatus.ignored;
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(14, 10, 8, 10),
@@ -1632,12 +1936,12 @@ class _ImportPageState extends State<ImportPage> {
                       onChanged: _busy
                           ? null
                           : (checked) => setState(() {
-                                _selected = {
-                                  for (final id in _selected)
-                                    if (id != line.id) id,
-                                  if (checked == true) line.id,
-                                };
-                              }),
+                              _selected = {
+                                for (final id in _selected)
+                                  if (id != line.id) id,
+                                if (checked == true) line.id,
+                              };
+                            }),
                     ),
                   ),
                 ),
@@ -1647,7 +1951,10 @@ class _ImportPageState extends State<ImportPage> {
                   children: [
                     Text(
                       title,
-                      style: TextStyle(fontWeight: FontWeight.w600, color: muted ? Colors.grey : null),
+                      style: TextStyle(
+                        fontWeight: FontWeight.w600,
+                        color: muted ? Colors.grey : null,
+                      ),
                     ),
                     Text(
                       '${_shortDay.format(line.date)} • ${line.description}$installment',
@@ -1659,7 +1966,8 @@ class _ImportPageState extends State<ImportPage> {
                 ),
               ),
               const SizedBox(width: 8),
-              if (line.isPurchase && session.effectiveAmountOf(line) != line.amount)
+              if (line.isPurchase &&
+                  session.effectiveAmountOf(line) != line.amount)
                 Column(
                   crossAxisAlignment: CrossAxisAlignment.end,
                   children: [
@@ -1673,21 +1981,30 @@ class _ImportPageState extends State<ImportPage> {
                     ),
                     Text(
                       session.effectiveAmountOf(line).format(),
-                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                      style: const TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 13,
+                      ),
                     ),
                   ],
                 )
               else
                 Text(
                   line.amount.format(),
-                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: muted ? Colors.grey : null),
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 13,
+                    color: muted ? Colors.grey : null,
+                  ),
                 ),
               if (editable) ...[
                 IconButton(
                   key: Key('import_split_${line.id}'),
                   icon: const Icon(Icons.call_split_rounded, size: 18),
                   tooltip: 'Dividir em duas partes',
-                  onPressed: _busy || line.amount.cents < 2 ? null : () => _splitLine(line),
+                  onPressed: _busy || line.amount.cents < 2
+                      ? null
+                      : () => _splitLine(line),
                 ),
                 IconButton(
                   icon: const Icon(Icons.edit_outlined, size: 18),
@@ -1702,8 +2019,10 @@ class _ImportPageState extends State<ImportPage> {
           switch (status) {
             LineStatus.informational => _informationalRow(session, line),
             LineStatus.alreadyImported => _importedRow(session, line),
-            LineStatus.linked || LineStatus.needsReview => _matchRow(state, session, line),
-            LineStatus.newLine || LineStatus.ignored => _destinationRow(state, session, line),
+            LineStatus.linked ||
+            LineStatus.needsReview => _matchRow(state, session, line),
+            LineStatus.newLine ||
+            LineStatus.ignored => _destinationRow(state, session, line),
           },
         ],
       ),
@@ -1721,14 +2040,19 @@ class _ImportPageState extends State<ImportPage> {
     if (line.kind == StatementLineKind.refund) return _refundRow(session, line);
 
     final label = switch (line.kind) {
-      StatementLineKind.payment => 'Pagamento de fatura: não é uma despesa nova',
-      StatementLineKind.refund => 'Estorno ou crédito: confira a compra original no app',
+      StatementLineKind.payment =>
+        'Pagamento de fatura: não é uma despesa nova',
+      StatementLineKind.refund =>
+        'Estorno ou crédito: confira a compra original no app',
       StatementLineKind.income => 'Entrada na conta: não é uma despesa',
       StatementLineKind.purchase => '',
     };
     final options = session.extraOptionsOf(line);
     if (options.isEmpty) {
-      return Text(label, style: const TextStyle(fontSize: 12, color: Colors.grey));
+      return Text(
+        label,
+        style: const TextStyle(fontSize: 12, color: Colors.grey),
+      );
     }
 
     final chosen = session.chosenExtra(line);
@@ -1743,26 +2067,44 @@ class _ImportPageState extends State<ImportPage> {
           isDense: true,
           onChanged: _busy
               ? null
-              : (key) => _update(session.withExtraChoice(line.id, key == null || key.isEmpty ? null : key)),
+              : (key) => _update(
+                  session.withExtraChoice(
+                    line.id,
+                    key == null || key.isEmpty ? null : key,
+                  ),
+                ),
           items: [
             const DropdownMenuItem(
               value: '',
-              child: Text('Não registrar nada', style: TextStyle(fontSize: 12, color: Colors.grey)),
+              child: Text(
+                'Não registrar nada',
+                style: TextStyle(fontSize: 12, color: Colors.grey),
+              ),
             ),
             for (final option in options)
               DropdownMenuItem(
                 value: option.key,
                 child: Text(
                   option.label,
-                  style: const TextStyle(fontSize: 12, color: AppColors.primary, fontWeight: FontWeight.bold),
+                  style: const TextStyle(
+                    fontSize: 12,
+                    color: AppColors.primary,
+                    fontWeight: FontWeight.bold,
+                  ),
                 ),
               ),
           ],
         ),
         if (chosen == null && suggestion != null)
           TextButton(
-            onPressed: _busy ? null : () => _update(session.withExtraChoice(line.id, suggestion.key)),
-            child: Text('Parece: ${suggestion.label}', style: const TextStyle(fontSize: 12)),
+            onPressed: _busy
+                ? null
+                : () =>
+                      _update(session.withExtraChoice(line.id, suggestion.key)),
+            child: Text(
+              'Parece: ${suggestion.label}',
+              style: const TextStyle(fontSize: 12),
+            ),
           ),
       ],
     );
@@ -1791,36 +2133,60 @@ class _ImportPageState extends State<ImportPage> {
           isDense: true,
           onChanged: _busy
               ? null
-              : (key) => _update(session.withRefundChoice(line.id, key == null || key.isEmpty ? null : key)),
+              : (key) => _update(
+                  session.withRefundChoice(
+                    line.id,
+                    key == null || key.isEmpty ? null : key,
+                  ),
+                ),
           items: [
             const DropdownMenuItem(
               value: '',
-              child: Text('Estorno: não abater de nada', style: TextStyle(fontSize: 12, color: Colors.grey)),
+              child: Text(
+                'Estorno: não abater de nada',
+                style: TextStyle(fontSize: 12, color: Colors.grey),
+              ),
             ),
             for (final option in options)
               DropdownMenuItem(
                 value: option.key,
                 child: Text(
                   option.label,
-                  style: const TextStyle(fontSize: 12, color: AppColors.primary, fontWeight: FontWeight.bold),
+                  style: const TextStyle(
+                    fontSize: 12,
+                    color: AppColors.primary,
+                    fontWeight: FontWeight.bold,
+                  ),
                 ),
               ),
           ],
         ),
         if (chosen == null && suggestion != null)
           TextButton(
-            onPressed: _busy ? null : () => _update(session.withRefundChoice(line.id, suggestion.key)),
-            child: Text('Parece: ${suggestion.label}', style: const TextStyle(fontSize: 12)),
+            onPressed: _busy
+                ? null
+                : () => _update(
+                    session.withRefundChoice(line.id, suggestion.key),
+                  ),
+            child: Text(
+              'Parece: ${suggestion.label}',
+              style: const TextStyle(fontSize: 12),
+            ),
           ),
       ],
     );
   }
 
   /// Seleção e edição de várias linhas de uma vez.
-  Widget _bulkBar(FinanceState state, ImportSession session, List<ImportedStatementLine> visible) {
+  Widget _bulkBar(
+    FinanceState state,
+    ImportSession session,
+    List<ImportedStatementLine> visible,
+  ) {
     final selectable = {
       for (final line in visible)
-        if (session.statusOf(line) == LineStatus.newLine || session.statusOf(line) == LineStatus.ignored)
+        if (session.statusOf(line) == LineStatus.newLine ||
+            session.statusOf(line) == LineStatus.ignored)
           line.id,
     };
     if (selectable.isEmpty && _selected.isEmpty) return const SizedBox.shrink();
@@ -1835,8 +2201,12 @@ class _ImportPageState extends State<ImportPage> {
         alignment: Alignment.centerLeft,
         child: TextButton.icon(
           icon: const Icon(Icons.checklist_rounded, size: 18),
-          label: Text('Selecionar as ${selectable.length} linhas para editar juntas'),
-          onPressed: _busy ? null : () => setState(() => _selected = selectable),
+          label: Text(
+            'Selecionar as ${selectable.length} linhas para editar juntas',
+          ),
+          onPressed: _busy
+              ? null
+              : () => setState(() => _selected = selectable),
         ),
       );
     }
@@ -1854,7 +2224,9 @@ class _ImportPageState extends State<ImportPage> {
         crossAxisAlignment: WrapCrossAlignment.center,
         children: [
           Text(
-            _selected.length == 1 ? '1 linha marcada' : '${_selected.length} linhas marcadas',
+            _selected.length == 1
+                ? '1 linha marcada'
+                : '${_selected.length} linhas marcadas',
             style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold),
           ),
           DropdownButton<String>(
@@ -1865,7 +2237,8 @@ class _ImportPageState extends State<ImportPage> {
             onChanged: _busy
                 ? null
                 : (key) {
-                    if (key != null) _bulk((line) => _withDestinationKey(line, key));
+                    if (key != null)
+                      _bulk((line) => _withDestinationKey(line, key));
                   },
             items: _destinationItems(
               debtors,
@@ -1879,12 +2252,17 @@ class _ImportPageState extends State<ImportPage> {
               hint: const Text('Categoria', style: TextStyle(fontSize: 12)),
               underline: const SizedBox.shrink(),
               isDense: true,
-              onChanged: _busy ? null : (id) => _bulk((line) => line.copyWith(categoryId: id)),
+              onChanged: _busy
+                  ? null
+                  : (id) => _bulk((line) => line.copyWith(categoryId: id)),
               items: [
                 for (final category in state.categories)
                   DropdownMenuItem(
                     value: category.id,
-                    child: Text(category.name, style: const TextStyle(fontSize: 12)),
+                    child: Text(
+                      category.name,
+                      style: const TextStyle(fontSize: 12),
+                    ),
                   ),
               ],
             ),
@@ -1904,10 +2282,16 @@ class _ImportPageState extends State<ImportPage> {
       children: [
         const Text(
           'Já veio em uma importação anterior. Não será lançada de novo.',
-          style: TextStyle(fontSize: 12, color: AppColors.creditGreen, fontWeight: FontWeight.w600),
+          style: TextStyle(
+            fontSize: 12,
+            color: AppColors.creditGreen,
+            fontWeight: FontWeight.w600,
+          ),
         ),
         TextButton(
-          onPressed: _busy ? null : () => _update(session.withForcedLine(line.id)),
+          onPressed: _busy
+              ? null
+              : () => _update(session.withForcedLine(line.id)),
           child: const Text('Lançar de novo'),
         ),
       ],
@@ -1918,7 +2302,9 @@ class _ImportPageState extends State<ImportPage> {
     String describe(ImportRule rule) {
       switch (rule.destination) {
         case LineDestination.house:
-          final category = state.categories.where((c) => c.id == rule.categoryId).firstOrNull;
+          final category = state.categories
+              .where((c) => c.id == rule.categoryId)
+              .firstOrNull;
           return category == null ? 'Casa' : 'Casa • ${category.name}';
         case LineDestination.splitP2P:
           return '${_memberName(rule.assignedMemberId)} deve';
@@ -1957,12 +2343,20 @@ class _ImportPageState extends State<ImportPage> {
               for (final rule in _rules)
                 ListTile(
                   dense: true,
-                  title: Text(rule.merchantName, style: const TextStyle(fontWeight: FontWeight.w600)),
-                  subtitle: Text(describe(rule), style: const TextStyle(fontSize: 12)),
+                  title: Text(
+                    rule.merchantName,
+                    style: const TextStyle(fontWeight: FontWeight.w600),
+                  ),
+                  subtitle: Text(
+                    describe(rule),
+                    style: const TextStyle(fontSize: 12),
+                  ),
                   trailing: IconButton(
                     icon: const Icon(Icons.delete_outline_rounded, size: 18),
                     tooltip: 'Esquecer esta regra',
-                    onPressed: _busy || rule.id == null ? null : () => _deleteRule(rule),
+                    onPressed: _busy || rule.id == null
+                        ? null
+                        : () => _deleteRule(rule),
                   ),
                 ),
             ],
@@ -1987,7 +2381,10 @@ class _ImportPageState extends State<ImportPage> {
       padding: const EdgeInsets.only(top: 16),
       child: _card(
         children: [
-          const Text('Importações anteriores', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+          const Text(
+            'Importações anteriores',
+            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+          ),
           const SizedBox(height: 4),
           for (final batch in _history)
             ListTile(
@@ -1998,14 +2395,17 @@ class _ImportPageState extends State<ImportPage> {
                 style: TextStyle(
                   fontWeight: FontWeight.w600,
                   color: batch.isUndone ? Colors.grey : null,
-                  decoration: batch.isUndone ? TextDecoration.lineThrough : null,
+                  decoration: batch.isUndone
+                      ? TextDecoration.lineThrough
+                      : null,
                 ),
                 overflow: TextOverflow.ellipsis,
               ),
               subtitle: Text(
                 [
                   'Importado em ${_dayFormat.format(batch.createdAt)}',
-                  if (batch.invoiceDueDate != null) 'fatura de ${_dayFormat.format(batch.invoiceDueDate!)}',
+                  if (batch.invoiceDueDate != null)
+                    'fatura de ${_dayFormat.format(batch.invoiceDueDate!)}',
                   batch.total.format(),
                   '${batch.createdCount} ${batch.createdCount == 1 ? 'lançamento criado' : 'lançamentos criados'}',
                   if (batch.isUndone) 'desfeita',
@@ -2024,13 +2424,22 @@ class _ImportPageState extends State<ImportPage> {
     );
   }
 
-  Widget _matchRow(FinanceState state, ImportSession session, ImportedStatementLine line) {
+  Widget _matchRow(
+    FinanceState state,
+    ImportSession session,
+    ImportedStatementLine line,
+  ) {
     final match = session.matchOf(line.id)!;
     final expense = match.expense;
     final accepted = session.decisionOf(line.id) == MatchDecision.accepted;
-    final method = state.paymentMethods.where((p) => p.id == expense.paymentMethodId).firstOrNull;
-    final where = method == null || method.id == session.source.id ? '' : ' em ${method.name}';
-    final found = '"${expense.title}" de ${_shortDay.format(expense.date)}$where';
+    final method = state.paymentMethods
+        .where((p) => p.id == expense.paymentMethodId)
+        .firstOrNull;
+    final where = method == null || method.id == session.source.id
+        ? ''
+        : ' em ${method.name}';
+    final found =
+        '"${expense.title}" de ${_shortDay.format(expense.date)}$where';
 
     final String text;
     switch (match.kind) {
@@ -2053,9 +2462,11 @@ class _ImportPageState extends State<ImportPage> {
         if (!accepted) {
           text = 'Parece ser $found, lançada por ${expense.amount.format()}.';
         } else if (canUpdate) {
-          text = 'É $found: o valor passa de ${expense.amount.format()} para ${line.amount.format()}.';
+          text =
+              'É $found: o valor passa de ${expense.amount.format()} para ${line.amount.format()}.';
         } else {
-          text = 'É $found, lançada por ${expense.amount.format()}. Ajuste o valor na própria despesa.';
+          text =
+              'É $found, lançada por ${expense.amount.format()}. Ajuste o valor na própria despesa.';
         }
     }
 
@@ -2073,70 +2484,115 @@ class _ImportPageState extends State<ImportPage> {
         ),
         if (!accepted)
           TextButton(
-            onPressed: _busy ? null : () => _update(session.withDecision(line.id, MatchDecision.accepted)),
+            onPressed: _busy
+                ? null
+                : () => _update(
+                    session.withDecision(line.id, MatchDecision.accepted),
+                  ),
             child: const Text('É a mesma'),
           ),
         TextButton(
-          onPressed: _busy ? null : () => _update(session.withDecision(line.id, MatchDecision.rejected)),
+          onPressed: _busy
+              ? null
+              : () => _update(
+                  session.withDecision(line.id, MatchDecision.rejected),
+                ),
           child: const Text('São diferentes'),
         ),
       ],
     );
   }
 
-  Widget _destinationRow(FinanceState state, ImportSession session, ImportedStatementLine line) {
+  Widget _destinationRow(
+    FinanceState state,
+    ImportSession session,
+    ImportedStatementLine line,
+  ) {
     final rejected = session.matchOf(line.id);
     final debtors = [
       for (final HouseMember member in state.members)
         if (session.canOwe(member.id)) member,
     ];
     // Cartão da Casa não tem dono para ter gasto pessoal
-    final payerName = session.isHouseCard ? null : _memberName(session.payerMemberId);
+    final payerName = session.isHouseCard
+        ? null
+        : _memberName(session.payerMemberId);
 
     return Wrap(
       spacing: 12,
       crossAxisAlignment: WrapCrossAlignment.center,
       children: [
         DropdownButton<String>(
-          value: _destinationKeyOf(line, debtors, allowPersonal: payerName != null),
-          hint: const Text('Quem deve?', style: TextStyle(fontSize: 12, color: AppColors.debtRed)),
+          value: _destinationKeyOf(
+            line,
+            debtors,
+            allowPersonal: payerName != null,
+          ),
+          hint: const Text(
+            'Quem deve?',
+            style: TextStyle(fontSize: 12, color: AppColors.debtRed),
+          ),
           underline: const SizedBox.shrink(),
           isDense: true,
           onChanged: _busy
               ? null
               : (key) {
-                  if (key != null) _classify(session, _withDestinationKey(line, key));
+                  if (key != null)
+                    _classify(session, _withDestinationKey(line, key));
                 },
           items: _destinationItems(debtors, payerName, colored: true),
         ),
-        if (line.destination == LineDestination.house && state.categories.isNotEmpty)
+        if (line.destination == LineDestination.house &&
+            state.categories.isNotEmpty)
           DropdownButton<String>(
-            value: state.categories.any((c) => c.id == line.categoryId) ? line.categoryId : null,
+            value: state.categories.any((c) => c.id == line.categoryId)
+                ? line.categoryId
+                : null,
             // Sem sugestão, vale a primeira categoria da casa
             hint: Text(
               '${state.categories.first.name} (padrão)',
-              style: const TextStyle(fontSize: 12, color: Colors.grey, fontStyle: FontStyle.italic),
+              style: const TextStyle(
+                fontSize: 12,
+                color: Colors.grey,
+                fontStyle: FontStyle.italic,
+              ),
             ),
             underline: const SizedBox.shrink(),
             isDense: true,
-            onChanged: _busy ? null : (id) => _classify(session, line.copyWith(categoryId: id)),
+            onChanged: _busy
+                ? null
+                : (id) => _classify(session, line.copyWith(categoryId: id)),
             items: [
               for (final category in state.categories)
                 DropdownMenuItem(
                   value: category.id,
-                  child: Text(category.name, style: const TextStyle(fontSize: 12)),
+                  child: Text(
+                    category.name,
+                    style: const TextStyle(fontSize: 12),
+                  ),
                 ),
             ],
           ),
         if (session.ruledLineIds.contains(line.id))
           const Tooltip(
             message: 'Veio assim por uma regra aprendida em outra importação',
-            child: Icon(Icons.auto_awesome_outlined, size: 14, color: Colors.grey),
+            child: Icon(
+              Icons.auto_awesome_outlined,
+              size: 14,
+              color: Colors.grey,
+            ),
           ),
         if (rejected != null)
           TextButton(
-            onPressed: _busy ? null : () => _update(session.withDecision(line.id, MatchDecision.accepted)),
-            child: Text('Era "${rejected.expense.title}"', style: const TextStyle(fontSize: 12)),
+            onPressed: _busy
+                ? null
+                : () => _update(
+                    session.withDecision(line.id, MatchDecision.accepted),
+                  ),
+            child: Text(
+              'Era "${rejected.expense.title}"',
+              style: const TextStyle(fontSize: 12),
+            ),
           ),
       ],
     );

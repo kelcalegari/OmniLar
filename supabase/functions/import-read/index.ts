@@ -49,11 +49,11 @@ REGRAS:
    - "refund": estorno ou crédito de uma compra.
    - "payment": pagamento da fatura (na fatura: "pagamento recebido"; no extrato: saída que paga a fatura de um cartão).
    - "income": entrada na conta (Pix recebido, salário, transferência recebida).
-3. "date" é a data do lançamento no formato YYYY-MM-DD. Se o documento mostrar só dia e mês, use o ano do período do documento.
+3. "date" é a data do lançamento no formato YYYY-MM-DD. Se o documento mostrar só dia e mês, use o ano do período do documento. NUNCA use anos de rodapé, copyright ou avisos legais (ex: "© 2020"). Se o ano não for explícito na fatura, use o ano corrente (${new Date().getFullYear()}).
 4. "description" é o texto do lançamento exatamente como aparece, sem a data e sem o valor.
 5. Compra parcelada ("03/10", "Parcela 3 de 10"): preencha "installment_number" e "installments_total"; senão, null.
 6. NÃO inclua linhas de saldo, subtotal, total, limite, encargos projetados nem lançamentos futuros.
-7. Do cabeçalho: "due_date" (vencimento da fatura), "total_cents" (total da fatura ou, no extrato, null), "card_last_digits" (4 últimos dígitos do cartão), "period_start" e "period_end". O que não estiver no documento fica null.
+7. Do cabeçalho: "due_date" (vencimento da fatura - nunca use ano de copyright do rodapé), "total_cents" (total da fatura ou, no extrato, null), "card_last_digits" (4 últimos dígitos do cartão), "period_start" e "period_end". O que não estiver no documento fica null.
 8. Nunca copie CPF, número completo de cartão ou de conta para a resposta.
 
 Retorne EXCLUSIVAMENTE um objeto JSON:
