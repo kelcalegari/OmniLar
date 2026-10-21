@@ -299,12 +299,18 @@ void main() {
       expect(housePaymentTx.memberName, 'Kelvyn');
       expect(housePaymentTx.notes, contains('Caixa da Casa'));
 
-      // Amortização entre membros entra como despesa/saída do devedor
+      // Amortização entre membros entra como repasse com origem loanRepayment
       final p2pPaymentTx = all.firstWhere((t) => t.id == 'loan_pay_inst_p2p_paid');
       expect(p2pPaymentTx.origin, TransactionOrigin.loanRepayment);
-      expect(p2pPaymentTx.type, TransactionType.expense);
       expect(p2pPaymentTx.amount.cents, 20000);
       expect(p2pPaymentTx.notes, contains('Cris'));
+
+      // Validação das métricas: amortizações contam em totalLoanRepayments e não inflam o Caixa
+      final metrics = TransactionAggregator.computeMetrics(all);
+      expect(metrics.totalLoanRepayments.cents, 70000); // 50000 + 20000
+      expect(metrics.totalInflows.cents, 0); // Sem aportes na caixinha
+      expect(metrics.totalExpenses.cents, 0); // Sem despesas comuns
+      expect(metrics.netBalance.cents, 0); // Saldo livre do caixa intocado
     });
   });
 }

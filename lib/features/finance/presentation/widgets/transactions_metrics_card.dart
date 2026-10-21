@@ -106,10 +106,10 @@ class TransactionsMetricsCard extends StatelessWidget {
                   height: 36,
                   color: isDark ? Colors.white.withValues(alpha: 0.1) : Colors.grey.shade200,
                 ),
-                // Saldo Líquido
+                // Saldo Líquido do Caixa da Casa
                 Expanded(
                   child: _MetricItem(
-                    label: 'Saldo',
+                    label: 'Saldo Caixa',
                     amount: metrics.netBalance.format(),
                     color: isPositive
                         ? (isDark ? Colors.green.shade400 : Colors.green.shade700)
@@ -119,6 +119,36 @@ class TransactionsMetricsCard extends StatelessWidget {
                 ),
               ],
             ),
+            if (metrics.totalLoanRepayments.cents > 0) ...[
+              const SizedBox(height: 12),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                decoration: BoxDecoration(
+                  color: isDark ? Colors.white.withValues(alpha: 0.05) : Colors.grey.shade100,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Row(
+                  children: [
+                    Icon(
+                      Icons.handshake_outlined,
+                      size: 15,
+                      color: isDark ? Colors.tealAccent : AppColors.primary,
+                    ),
+                    const SizedBox(width: 6),
+                    Expanded(
+                      child: Text(
+                        'Repasses & Faturas Pessoais compensados: ${metrics.totalLoanRepayments.format()}',
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w500,
+                          color: isDark ? Colors.grey.shade300 : Colors.grey.shade700,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
           ],
         ),
       ),

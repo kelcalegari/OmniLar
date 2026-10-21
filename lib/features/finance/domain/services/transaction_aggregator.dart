@@ -14,12 +14,14 @@ class TransactionAggregatorMetrics {
   final Money totalInflows;
   final Money totalExpenses;
   final Money netBalance;
+  final Money totalLoanRepayments;
   final int count;
 
   const TransactionAggregatorMetrics({
     required this.totalInflows,
     required this.totalExpenses,
     required this.netBalance,
+    this.totalLoanRepayments = const Money.zero(),
     required this.count,
   });
 
@@ -27,6 +29,7 @@ class TransactionAggregatorMetrics {
     totalInflows: Money.zero(),
     totalExpenses: Money.zero(),
     netBalance: Money.zero(),
+    totalLoanRepayments: Money.zero(),
     count: 0,
   );
 }
@@ -151,15 +154,17 @@ class TransactionAggregator {
             id: 'loan_pay_${inst.id}',
             title: 'Amortização: ${loan.title} (${inst.number}/${inst.totalCount})',
             amount: inst.paidAmount,
-            type: loan.isHouseLender ? TransactionType.inflow : TransactionType.expense,
+            type: TransactionType.inflow,
             origin: TransactionOrigin.loanRepayment,
             date: payDate,
             dueDate: inst.dueDate,
             memberId: loan.borrowerMemberId,
             memberName: borrower?.name,
+            categoryName: loan.isHouseLender ? 'Repasse: Cartão da Casa' : 'Acordo P2P',
+            categoryIcon: 'handshake',
             notes: loan.isHouseLender
-                ? 'Pago por ${borrower?.name ?? 'Morador'} para o Caixa da Casa'
-                : 'Pago por ${borrower?.name ?? 'Morador'} para $lenderLabel',
+                ? 'Repasse de ${borrower?.name ?? 'Morador'} para o Caixa da Casa'
+                : 'Acordo de ${borrower?.name ?? 'Morador'} para $lenderLabel',
             rawEntity: inst,
           ),
         );
@@ -262,14 +267,21 @@ class TransactionAggregator {
   ) => computeMetrics(transactions);
 
   /// Calcula as métricas agregadas (total de entradas, saídas e saldo líquido).
+  /// As amortizações/repasses de acordos não inflam o saldo operacional do Caixa da Casa.
   static TransactionAggregatorMetrics computeMetrics(List<HouseTransaction> transactions) {
     var inflowsCents = 0;
     var expensesCents = 0;
+    var repaymentsCents = 0;
 
     for (final t in transactions) {
-      if (t.type == TransactionType.inflow) {
+      if (t.origin == TransactionOrigin.loanRepayment) {
+        // Amortizações e repasses de cartão/acordo entre membros
+        repaymentsCents += t.amount.cents;
+      } else if (t.type == TransactionType.inflow) {
+        // Entradas reais do Caixa da Casa (Aportes, Inflows, Repasses de terceiros)
         inflowsCents += t.amount.cents;
       } else {
+        // Saídas operacionais pagas pela Casa
         expensesCents += t.amount.cents;
       }
     }
@@ -277,11 +289,13 @@ class TransactionAggregator {
     final totalInflows = Money(inflowsCents);
     final totalExpenses = Money(expensesCents);
     final netBalance = Money(inflowsCents - expensesCents);
+    final totalLoanRepayments = Money(repaymentsCents);
 
     return TransactionAggregatorMetrics(
       totalInflows: totalInflows,
       totalExpenses: totalExpenses,
       netBalance: netBalance,
+      totalLoanRepayments: totalLoanRepayments,
       count: transactions.length,
     );
   }

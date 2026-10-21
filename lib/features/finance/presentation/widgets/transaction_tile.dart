@@ -49,14 +49,21 @@ class TransactionTile extends StatelessWidget {
       iconColor = AppColors.primary;
     }
 
-    final amountColor = isExpense
-        ? (isDark ? Colors.red.shade300 : AppColors.debtRed)
-        : (isDark ? Colors.green.shade300 : Colors.green.shade700);
+    final isRepayment = transaction.origin == TransactionOrigin.loanRepayment;
 
-    final sign = isExpense ? '- ' : '+ ';
+    final amountColor = isRepayment
+        ? (isDark ? Colors.tealAccent : AppColors.primary)
+        : (isExpense
+            ? (isDark ? Colors.red.shade300 : AppColors.debtRed)
+            : (isDark ? Colors.green.shade300 : Colors.green.shade700));
+
+    final sign = isRepayment ? '🤝 ' : (isExpense ? '- ' : '+ ');
 
     // Monta o subtítulo
     final List<String> details = [];
+    if (isRepayment) {
+      details.add('Repasse / Acordo');
+    }
     if (transaction.memberName != null && transaction.memberName!.isNotEmpty) {
       details.add(transaction.memberName!.split(' ').first);
     }
