@@ -57,7 +57,7 @@ class GlobalClearingEngine {
     // 0. Despesas de projetos compartilhados são liquidadas apenas no próprio projeto
     // (ProjectSettlementService). Filtramos aqui por defesa em profundidade para
     // impedir contagem dupla mesmo que o chamador as envie.
-    final houseExpenses = expenses.where((e) => !e.isProjectExpense).toList();
+    final houseExpenses = expenses.where((e) => !e.isProjectExpense && !e.isReconciliationAdjustment).toList();
     expenses = houseExpenses;
 
     // 1. Total de despesas da casa no ciclo

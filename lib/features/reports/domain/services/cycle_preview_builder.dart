@@ -30,7 +30,7 @@ class CyclePreviewBuilder {
     final cycle = summary.cycle;
     final isSettled = summary.status == SettlementStatus.settled;
     final day = DateTime(today.year, today.month, today.day);
-    final houseExpenses = expenses.where((e) => !e.isProjectExpense).toList();
+    final houseExpenses = expenses.where((e) => !e.isProjectExpense && !e.isReconciliationAdjustment).toList();
 
     final assumed = isSettled
         ? const <AssumedPayment>[]

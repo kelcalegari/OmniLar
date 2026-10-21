@@ -29,6 +29,7 @@ import '../../../finance/presentation/widgets/expense_grid_table.dart';
 import '../../../../core/widgets/search_shortcut.dart';
 import '../../../finance/presentation/widgets/card_invoice_group_tile.dart';
 import '../../../finance/presentation/widgets/card_invoice_payment_sheet.dart';
+import '../../../finance/presentation/widgets/reconcile_cash_modal.dart';
 import '../../../settlement/domain/entities/settlement_summary.dart';
 import '../../../settlement/domain/repositories/settlement_repository.dart';
 import '../../../finance/presentation/widgets/folego_gauge_card.dart';
@@ -279,6 +280,10 @@ class _HomePageContentState extends State<_HomePageContent> {
         isLoading: _isSwitchingCycle(state),
         isCycleSettled: snapshot.data,
         params: state.houseSettings.folegoParams,
+        onReconcile: () => ReconcileCashModal.show(
+          context,
+          currentBalance: summary.folego,
+        ),
       ),
     );
   }

@@ -25,6 +25,7 @@ class FolegoGaugeCard extends StatelessWidget {
 
   /// Limites da casa para o selo, a barra e o gasto diário (0098).
   final FolegoParams params;
+  final VoidCallback? onReconcile;
 
   const FolegoGaugeCard({
     super.key,
@@ -36,6 +37,7 @@ class FolegoGaugeCard extends StatelessWidget {
     this.isLoading = false,
     this.isCycleSettled,
     this.params = const FolegoParams(),
+    this.onReconcile,
   });
 
   @override
@@ -143,9 +145,25 @@ class FolegoGaugeCard extends StatelessWidget {
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      Text(
-                        'Fôlego do Caixa',
-                        style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
+                      Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            'Fôlego do Caixa',
+                            style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
+                          ),
+                          if (onReconcile != null) ...[
+                            const SizedBox(width: 6),
+                            IconButton(
+                              icon: const Icon(Icons.tune_rounded, size: 18),
+                              tooltip: 'Conciliar saldo com o banco',
+                              padding: EdgeInsets.zero,
+                              constraints: const BoxConstraints(),
+                              visualDensity: VisualDensity.compact,
+                              onPressed: onReconcile,
+                            ),
+                          ],
+                        ],
                       ),
                       if (showBadge)
                       Container(

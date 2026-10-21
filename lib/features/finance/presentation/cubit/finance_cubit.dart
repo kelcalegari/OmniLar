@@ -1,4 +1,5 @@
 import '../../domain/entities/card_invoice.dart';
+import '../../domain/entities/split_rule.dart';
 import 'dart:async';
 
 import '../../../../core/domain/value_objects/cycle_schedule.dart';
@@ -1158,6 +1159,87 @@ class FinanceCubit extends Cubit<FinanceState> {
       return await _repository.getAuditLog(entityId: entityId, limit: limit);
     } catch (_) {
       return [];
+    }
+  }
+
+
+  /// Ajusta o saldo do Caixa da Casa para igualar ao saldo real da conta bancaria.
+  Future<bool> reconcileCashBalance({
+    required Money targetBalance,
+    required Money currentBalance,
+    required String reason,
+    required DateTime date,
+    bool impactCycleSettlement = false,
+  }) async {
+    final diff = targetBalance.cents - currentBalance.cents;
+    if (diff == 0) return true;
+
+    try {
+      if (diff > 0) {
+        // O banco tem mais saldo: cria um HouseInflow de ajuste positivo
+        final descPrefix = impactCycleSettlement
+            ? '[Ajuste Ciclo (+)] '
+            : '[Ajuste de Caixa (+)] ';
+        final inflow = HouseInflow(
+          id: '',
+          amount: Money(diff),
+          receivedOn: date,
+          description: reason.trim().isEmpty ? '${descPrefix}Conciliacao de saldo' : '$descPrefix${reason.trim()}',
+          source: HouseInflowSource.other,
+        );
+        return await addHouseInflow(inflow);
+      } else {
+        // O banco tem menos saldo: cria uma despesa paga pelo Caixa da Casa
+        final absDiff = Money(-diff);
+        final members = state.members;
+        final currentMemberId = members.isNotEmpty ? members.first.id : '';
+        final houseMethod = state.paymentMethods
+            .where((p) => p.ownerMemberId == null || p.type == PaymentMethodType.account || p.name.toLowerCase().contains('caixa'))
+            .firstOrNull;
+        final catId = state.categories
+                .where((c) =>
+                    c.name.toLowerCase().contains('ajuste') ||
+                    c.name.toLowerCase().contains('outro') ||
+                    c.name.toLowerCase().contains('geral'))
+                .firstOrNull
+                ?.id ??
+            (state.categories.isNotEmpty ? state.categories.first.id : '');
+
+        final count = members.isEmpty ? 1 : members.length;
+        final weights = <String, double>{};
+        final baseWeight = 100.0 / count;
+
+        for (final m in members) {
+          weights[m.id] = baseWeight;
+        }
+
+        final notes = impactCycleSettlement
+            ? (reason.trim().isEmpty ? 'Conciliacao com o saldo da conta bancaria (rateada)' : reason.trim())
+            : '[sem_rateio] ${reason.trim().isEmpty ? "Conciliacao com o saldo da conta bancaria" : reason.trim()}';
+
+        final expense = HouseExpense(
+          id: '',
+          title: 'Ajuste de Conciliacao de Caixa',
+          amount: absDiff,
+          date: date,
+          categoryId: catId,
+          paidByMemberId: currentMemberId,
+          paymentMethodId: houseMethod?.id ?? (state.paymentMethods.isNotEmpty ? state.paymentMethods.first.id : ''),
+          status: ExpenseStatus.paid,
+          splitRule: SplitRule.percentage(weights.isEmpty ? {currentMemberId: 100.0} : weights),
+          notes: notes,
+        );
+
+        await _repository.addExpense(expense);
+        await loadCycleData(cycle: state.currentCycle);
+        return true;
+      }
+    } catch (e) {
+      emit(state.copyWith(
+        status: FinanceStatus.failure,
+        errorMessage: 'Nao foi possivel registrar o ajuste de saldo: $e',
+      ));
+      return false;
     }
   }
 }

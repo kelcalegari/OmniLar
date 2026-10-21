@@ -23,6 +23,7 @@ import '../cubit/transactions_state.dart';
 import '../widgets/house_inflows_card.dart';
 import '../widgets/transactions_filter_sheet.dart';
 import '../widgets/transactions_metrics_card.dart';
+import '../widgets/reconcile_cash_modal.dart';
 import '../widgets/transaction_tile.dart';
 import 'add_contribution_page.dart';
 import 'add_expense_page.dart';
@@ -348,13 +349,31 @@ class _TransactionsPageState extends State<TransactionsPage> {
                   tooltip: 'Exportar extrato',
                   icon: const Icon(Icons.more_vert_rounded),
                   onSelected: (val) {
-                    if (val == 'csv') {
+                    if (val == 'reconcile') {
+                      final transCubit = context.read<TransactionsCubit>();
+                      ReconcileCashModal.show(
+                        context,
+                        currentBalance: state.metrics.netBalance,
+                        onSuccess: () => transCubit.refresh(),
+                      );
+                    } else if (val == 'csv') {
                       _exportCsv(context, houseName, periodDesc, state.filteredTransactions, state.metrics);
                     } else if (val == 'pdf') {
                       _exportPdf(context, houseName, periodDesc, state.filteredTransactions, state.metrics);
                     }
                   },
                   itemBuilder: (ctx) => [
+                    const PopupMenuItem(
+                      value: 'reconcile',
+                      child: Row(
+                        children: [
+                          Icon(Icons.tune_rounded, color: AppColors.primary, size: 20),
+                          SizedBox(width: 10),
+                          Text('Conciliar com o Banco'),
+                        ],
+                      ),
+                    ),
+                    const PopupMenuDivider(),
                     const PopupMenuItem(
                       value: 'pdf',
                       child: Row(

@@ -79,6 +79,9 @@ class HouseExpense extends Equatable {
   /// fechamento do ciclo; são rateadas apenas entre os participantes do projeto.
   bool get isProjectExpense => projectId != null;
 
+  /// Se é um ajuste de conciliação de caixa que não deve ser rateado entre moradores no fechamento.
+  bool get isReconciliationAdjustment => notes != null && notes!.contains('[sem_rateio]');
+
   /// Data efetiva de vencimento ou de referência
   DateTime get effectiveDueDate => dueDate ?? date;
 
