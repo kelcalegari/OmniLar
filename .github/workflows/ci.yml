@@ -67,6 +67,10 @@ jobs:
             echo "Sincronizando historico de migracoes e aplicando pendentes..."
             supabase db push --include-all --password "$SUPABASE_DB_PASSWORD"
             echo "Migracoes aplicadas com sucesso no Supabase!"
+            echo "Publicando Edge Functions no Supabase..."
+            supabase functions deploy capture-read nfce-read import-read assistant delete-account --project-ref "$PROJECT_REF"
+            supabase functions deploy notify --no-verify-jwt --project-ref "$PROJECT_REF"
+            echo "Edge Functions publicadas com sucesso!"
           else
             echo "::warning title=Supabase Secrets Ausentes::Para ativar a sincronizacao automatica de banco, adicione SUPABASE_ACCESS_TOKEN e SUPABASE_DB_PASSWORD em Settings > Secrets and variables > Actions no GitHub."
           fi

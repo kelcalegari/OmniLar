@@ -5,6 +5,7 @@ import 'package:intl/intl.dart';
 
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/widgets/responsive_container.dart';
+import '../../../capture/presentation/pages/smart_scanner_page.dart';
 import '../../domain/entities/app_notification.dart';
 import '../cubit/notifications_cubit.dart';
 
@@ -30,6 +31,14 @@ class _NotificationsPageState extends State<NotificationsPage> {
     context.read<NotificationsCubit>().markAsRead(notification.id);
     final link = notification.deeplink;
     if (link == null || !link.startsWith('/')) return;
+    if (link == '/captura/revisar') {
+      final rootCtx = Navigator.of(context, rootNavigator: true).context;
+      if (context.canPop()) context.pop();
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        SmartScannerPage.show(rootCtx);
+      });
+      return;
+    }
     // Sai do sino antes de ir ao item: o painel que a tela do item abre não
     // pode ficar preso à página do sino, que sai da pilha com a navegação.
     final router = GoRouter.of(context);

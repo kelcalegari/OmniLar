@@ -155,6 +155,7 @@ class CaptureService {
   }) async {
     // 1. CÓDIGO PRIMEIRO (RN do Omni Lar): Tenta buscar boleto diretamente no texto embutido
     CaptureProposal? codeProposal;
+    CaptureAiError? aiError;
     try {
       final rawText = latin1.decode(bytes, allowInvalid: true);
       final foundLine = BoletoParser.findBoletoLineInText(rawText);
@@ -270,6 +271,9 @@ class CaptureService {
           );
         }
       }
+    } on FunctionException catch (e) {
+      // Limite ou instabilidade do Gemini: a tela oferece esperar ou preencher à mão
+      aiError = CaptureAiError.fromServer(e.status, e.details);
     } catch (_) {
       // Falha ou indisponibilidade da Edge Function -> segue para código/fallback
     }
@@ -281,7 +285,15 @@ class CaptureService {
       );
     }
 
-    // Fallback: Proposta editável
+    // Sem código que resolva: a tela decide entre tentar de novo e preencher à mão
+    if (aiError != null) throw aiError;
+
+    return manualProposal(fileName);
+  }
+
+  /// Proposta vazia e editável, para quando a IA não leu o documento e a pessoa
+  /// escolhe preencher à mão.
+  static CaptureProposal manualProposal(String fileName) {
     final cleanName = fileName.replaceAll(RegExp(r'\.[a-zA-Z0-9]+$'), '');
     final isPdf = fileName.toLowerCase().endsWith('.pdf');
 
@@ -297,6 +309,45 @@ class CaptureService {
       capturedAt: DateTime.now(),
     );
   }
+}
+
+/// Por que a IA não leu o documento: minute e server passam esperando;
+/// day (cota diária) não passa esperando.
+enum CaptureAiScope { minute, day, server }
+
+/// Limite ou instabilidade do Gemini na leitura de um documento. A captura não
+/// se perde: a tela oferece tentar de novo (com contagem) ou preencher à mão.
+class CaptureAiError implements Exception {
+  final CaptureAiScope scope;
+  final String message;
+
+  /// Espera sugerida pelo servidor. Nulo quando esperar não adianta (day).
+  final int? retryAfterSeconds;
+  const CaptureAiError(this.scope, this.message, {this.retryAfterSeconds});
+
+  bool get canRetry => scope != CaptureAiScope.day;
+
+  /// Resposta de erro do capture-read. Nulo quando não é limite nem instabilidade.
+  static CaptureAiError? fromServer(int status, Object? details) {
+    final map = details is Map ? details : const {};
+    final scope = switch (map['scope']) {
+      'minute' => CaptureAiScope.minute,
+      'day' => CaptureAiScope.day,
+      'server' => CaptureAiScope.server,
+      _ => status == 429 ? CaptureAiScope.minute : (status == 503 ? CaptureAiScope.server : null),
+    };
+    if (scope == null) return null;
+    final retry = (map['retry_after_s'] as num?)?.toInt();
+    final message = (map['error'] as String?)?.trim();
+    return CaptureAiError(
+      scope,
+      message != null && message.isNotEmpty ? message : 'A leitura por IA não está disponível agora.',
+      retryAfterSeconds: scope == CaptureAiScope.day ? null : (retry ?? 30),
+    );
+  }
+
+  @override
+  String toString() => message;
 }
 
 enum NfceLookupReason { unavailable, captcha, stateWithoutLookup, notFound, invalidQr, quota, other }

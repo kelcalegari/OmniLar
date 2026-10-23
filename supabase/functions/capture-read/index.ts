@@ -1,9 +1,10 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { corsHeaders } from '../_shared/cors.ts';
-import { GeminiProvider } from '../_shared/ai_provider.ts';
+import { GeminiBusyError, GeminiProvider, GeminiQuotaExhaustedError } from '../_shared/ai_provider.ts';
 import { maskSensitiveData } from '../_shared/mask.ts';
 import { checkAiDailyQuota, recordAiUsage } from '../_shared/usage.ts';
 import { HttpError, requireHouseMember } from '../_shared/auth.ts';
+import type { UserClient } from '../_shared/auth.ts';
 
 // ~7,5 MB de arquivo em base64
 const MAX_IMAGE_BASE64_CHARS = 10_000_000;
@@ -135,6 +136,11 @@ serve(async (req) => {
     return new Response('ok', { headers: corsHeaders });
   }
 
+  // Preenchido depois da autenticaÃ§Ã£o, para registrar o uso quando a IA falha
+  let usageContext:
+    | { supabaseClient: UserClient; houseId: string; userId: string; model: string }
+    | undefined;
+
   try {
     const body = await req.json();
     const {
@@ -187,12 +193,14 @@ serve(async (req) => {
             'A cota diária gratuita de leitura de documentos desta casa foi atingida. ' +
             'Adicione sua chave gratuita do Google AI Studio em Ajustes > Assistente IA para continuar.',
           rateLimited: true,
+          scope: 'day',
         }),
         { status: 429, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
       );
     }
 
     const provider = new GeminiProvider(effectiveApiKey, effectiveModel);
+    usageContext = { supabaseClient, houseId, userId, model: provider.effectiveModel };
 
     let fullPrompt = OCR_PROMPT;
     if (ocrRawText) {
@@ -235,6 +243,35 @@ serve(async (req) => {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
   } catch (error: any) {
+    // Limite do Gemini ou serviÃ§o sobrecarregado: o app decide entre esperar e tentar de novo ou preencher Ã  mÃ£o
+    if (error instanceof GeminiQuotaExhaustedError || error instanceof GeminiBusyError) {
+      const isQuota = error instanceof GeminiQuotaExhaustedError;
+      if (usageContext) {
+        await recordAiUsage(usageContext.supabaseClient, {
+          houseId: usageContext.houseId,
+          memberId: usageContext.userId,
+          feature: 'capture',
+          model: usageContext.model,
+          status: isQuota ? 'rate_limited' : 'error',
+        });
+      }
+      const waitHeader: Record<string, string> =
+        error.scope !== 'day' && error.retryAfterS ? { 'Retry-After': String(error.retryAfterS) } : {};
+      return new Response(
+        JSON.stringify({
+          success: false,
+          error: error.message,
+          rateLimited: isQuota,
+          scope: error.scope,
+          retry_after_s: error.scope === 'day' ? undefined : error.retryAfterS,
+        }),
+        {
+          status: isQuota ? 429 : 503,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json', ...waitHeader },
+        },
+      );
+    }
+
     if (error instanceof HttpError) {
       return new Response(
         JSON.stringify({ success: false, error: error.message }),

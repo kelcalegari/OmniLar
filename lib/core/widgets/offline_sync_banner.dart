@@ -7,6 +7,8 @@ import '../network/offline_sync_service.dart';
 import '../theme/app_colors.dart';
 import '../../features/calendar/presentation/cubit/calendar_cubit.dart';
 import '../../features/finance/presentation/cubit/finance_cubit.dart';
+import '../../features/capture/data/capture_background_queue.dart';
+import '../../features/capture/presentation/pages/smart_scanner_page.dart';
 import '../../features/shopping/presentation/cubit/shopping_cubit.dart';
 
 /// Envolve o conteúdo do app: mostra uma faixa enquanto houver alterações
@@ -25,6 +27,7 @@ class _OfflineSyncHostState extends State<OfflineSyncHost> with WidgetsBindingOb
   static const _retryInterval = Duration(seconds: 30);
 
   OfflineSyncService? _sync;
+  CaptureBackgroundQueue? _captureQueue;
   StreamSubscription<List<OfflineQueuedAction>>? _queueSubscription;
   Timer? _retryTimer;
   bool _sending = false;
@@ -33,6 +36,10 @@ class _OfflineSyncHostState extends State<OfflineSyncHost> with WidgetsBindingOb
   @override
   void initState() {
     super.initState();
+    if (sl.isRegistered<CaptureBackgroundQueue>()) {
+      _captureQueue = sl<CaptureBackgroundQueue>();
+      _captureQueue!.state.addListener(_onCaptureQueueChanged);
+    }
     if (!sl.isRegistered<OfflineSyncService>()) return;
 
     _sync = sl<OfflineSyncService>();
@@ -44,10 +51,32 @@ class _OfflineSyncHostState extends State<OfflineSyncHost> with WidgetsBindingOb
 
   @override
   void dispose() {
+    _captureQueue?.state.removeListener(_onCaptureQueueChanged);
     if (_sync != null) WidgetsBinding.instance.removeObserver(this);
     _queueSubscription?.cancel();
     _retryTimer?.cancel();
     super.dispose();
+  }
+
+  void _onCaptureQueueChanged() {
+    final queue = _captureQueue;
+    if (!mounted || queue == null) return;
+    final event = queue.state.value;
+    if (event.status == BackgroundCaptureStatus.ready &&
+        !queue.isEditingInForeground) {
+      queue.acknowledge();
+      ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+        SnackBar(
+          content: const Text('Uma captura está pronta para revisar.'),
+          action: SnackBarAction(
+            label: 'Revisar',
+            onPressed: () {
+              if (mounted) SmartScannerPage.show(context);
+            },
+          ),
+        ),
+      );
+    }
   }
 
   @override

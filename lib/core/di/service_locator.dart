@@ -89,6 +89,8 @@ import '../../features/projects/data/repositories/dynamic_projects_repository.da
 import '../../features/settlement/data/datasources/dynamic_settlement_datasource.dart';
 import '../../features/projects/domain/repositories/projects_repository.dart';
 import '../../features/projects/presentation/cubit/projects_cubit.dart';
+import '../../features/capture/data/capture_background_queue.dart';
+import '../../features/capture/data/capture_draft_store.dart';
 import '../../features/capture/domain/services/capture_service.dart';
 import '../../features/finance/data/offline/house_expense_offline_codec.dart';
 import '../../features/shopping/data/offline/shopping_item_offline_codec.dart';
@@ -518,8 +520,18 @@ Future<void> initServiceLocator() async {
       ));
 
   // Capture Feature
+  sl.registerLazySingleton<CaptureDraftStore>(() => CaptureDraftStore(
+        sl<FlutterSecureStorage>(),
+        () => sl<AuthRepository>().currentHouse?.id,
+      ));
   sl.registerLazySingleton<CaptureService>(() => CaptureService(
         aiConfigService: sl(),
         getCurrentHouseId: () => sl<AuthRepository>().currentHouse?.id,
+      ));
+  sl.registerLazySingleton<CaptureBackgroundQueue>(() => CaptureBackgroundQueue(
+        captureService: sl<CaptureService>(),
+        draftStore: sl<CaptureDraftStore>(),
+        getNotificationsCubit: () =>
+            sl.isRegistered<NotificationsCubit>() ? sl<NotificationsCubit>() : null,
       ));
 }

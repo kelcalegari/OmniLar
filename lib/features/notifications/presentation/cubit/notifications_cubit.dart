@@ -129,6 +129,16 @@ class NotificationsCubit extends Cubit<NotificationsState> {
     }
   }
 
+  /// Insere uma notificação gerada localmente no aparelho (ex.: captura em 2º plano).
+  void pushLocalNotification(AppNotification notification) {
+    if (isClosed) return;
+    final updated = [
+      notification,
+      ...state.items.where((n) => n.id != notification.id),
+    ];
+    emit(state.copyWith(status: NotificationsStatus.success, items: updated));
+  }
+
   void resetState() {
     _stopWatching();
     emit(const NotificationsState());

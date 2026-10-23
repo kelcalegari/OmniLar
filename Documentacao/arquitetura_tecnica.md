@@ -470,3 +470,47 @@ ai_usage(id, house_id, member_id, feature[capture|import|assistant], model,
 - Conjunto fixo de notas, boletos e faturas **fictícios** com a saída esperada, executado a cada mudança de modelo ou de prompt.
 - Métricas: acerto por campo, taxa de baixa confiança, taxa de correção pelo usuário.
 - Testes de falha: erro 429, resposta fora do schema, timeout e imagem ilegível devem cair no fallback manual.
+
+
+### 17.10. Retry, rascunho e notificações na leitura por IA (implementado em 22/10/2026: retry da `capture-read`, diálogo de espera, rascunho persistente com autosave em `CaptureDraftStore`, fila em segundo plano `CaptureBackgroundQueue`, mesclagem sem sobrescrever na edição e notificações no sino/faixa global)
+Objetivo: tolerar erros 429/503 do Gemini sem perder a captura e sem o usuário ficar travado. A leitura segue a ordem da seção 8 e 17.6 (código primeiro, depois IA com imagem, depois manual). **OCR no aparelho foi avaliado e descartado.**
+
+**Níveis de leitura**
+1. QR Code, linha digitável, OFX e CSV: por código, sem IA.
+2. Foto ou PDF sem estrutura: Gemini com imagem e saída em JSON Schema.
+3. IA indisponível, limite atingido ou falha final: preenchimento manual, com a foto anexada.
+
+> **Melhoria adiada:** na web e no PWA do iPhone, a foto com QR da NFC-e não é lida por código (`_nfceFromPhoto` retorna vazio com `kIsWeb`) e vai direto ao Gemini. Hoje isso não pesa: em Santa Catarina a Sefaz não libera a consulta (`photoOnlyState`) e a nota já iria para a foto. Revisar quando houver usuários de outros estados na web ou quando a cota do Gemini pesar (por exemplo, com leitura de QR em imagem no navegador).
+
+**Erros do Gemini e reação**
+
+| Erro | Reação |
+|---|---|
+| 429 por minuto | Retry automático (backoff com jitter, respeitando `Retry-After`/`retryDelay`). Espera curta (até ~10 s) é absorvida pela Edge Function |
+| 429 por dia | Sem timer. Oferecer manual ou deixar na fila para o dia seguinte |
+| 503 / timeout | Até 2 ou 3 tentativas e depois manual |
+| Fora do schema | Uma nova tentativa, depois manual |
+| Imagem ilegível | Pedir outra foto (não gasta cota) |
+| Sem internet | Fila offline |
+
+A Edge Function devolve erro estruturado: `{ "error": "rate_limited", "scope": "minute|day|server|invalid", "retry_after_s": 35 }`. O app mostra contagem regressiva (só quando `scope=minute`), com "Tentar agora", "Lançar manualmente" e "Continuar em segundo plano". Um limitador local (token bucket) evita estourar o RPM ao lançar vários cupons seguidos.
+
+**Rascunho e fila persistente**
+- Estados: `capturada → processando → aguardando_retry → pronta_para_revisao → editando → confirmada | descartada | expirada` (e `falhou → manual`).
+- Só `confirmada` grava dinheiro, por ação explícita (RN01).
+- Foto e rascunho ficam salvos no aparelho com `idempotency_key` e `file_hash`. O worker processa em ritmo controlado e pausa no 429. O timer vive no worker, não na tela.
+- **Autosave** com debounce. Sair da tela, voltar ou fechar o app não perde nada.
+- Resposta da IA que chega durante a edição **não sobrescreve** o que foi digitado: oferece aplicar só nos campos vazios.
+- Revalidar duplicidade (RN06) e ciclo financeiro **no momento do Confirmar**. Data do cupom vale a da compra. Em ciclo fechado, avisar e oferecer lançar no atual ou reabrir.
+- Controle de versão do rascunho para conflito entre dois aparelhos.
+- Retenção sugerida (configurável): lembretes em 1 h, 24 h e 3 d (agrupados, no máximo um por dia), arquivar em 7 d, expirar e apagar a foto em 30 d, com aviso antes. A foto segue o RN04/RN05.
+
+**Notificações**
+- Local (`flutter_local_notifications`) com o app aberto ou em segundo plano. Push (FCM, já previsto) quando o servidor termina o processamento com o app fechado. No Android, `workmanager` para a fila. No iOS (site instalado) o processamento em segundo plano é limitado, então o servidor com push é o caminho confiável.
+- Eventos: leitura pronta, falha final, limite diário (foto salva), reconexão com capturas sincronizadas, rascunho parado, possível duplicata. Não notificar tentativas intermediárias.
+- Texto genérico na tela de bloqueio (sem valor nem estabelecimento). Pedir permissão no primeiro momento útil. Deep link por `id` do rascunho. Sem botão "Confirmar" na notificação, só "Revisar" e "Depois".
+- Catálogo e tabelas ficam em `plano_notificacoes.md`. Incluir lá os eventos acima.
+
+**Métricas novas:** tokens por captura, taxa de 429 por escopo, tempo até a revisão, % de capturas que caem no manual, taxa de correção pelo usuário.
+
+**Dependências (hoje só `firebase_messaging` e `image_picker` estão no `pubspec.yaml`):** `flutter_local_notifications`, `workmanager`.

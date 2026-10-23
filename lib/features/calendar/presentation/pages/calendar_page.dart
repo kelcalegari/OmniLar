@@ -1127,29 +1127,6 @@ class _CalendarPageState extends State<CalendarPage> {
                     ],
                   ),
                 ),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: statusColor.withValues(alpha: 0.12),
-                    borderRadius: BorderRadius.circular(20),
-                    border: Border.all(color: statusColor.withValues(alpha: 0.3)),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(statusIcon, size: 14, color: statusColor),
-                      const SizedBox(width: 4),
-                      Text(
-                        statusLabel,
-                        style: TextStyle(
-                          fontSize: 11,
-                          fontWeight: FontWeight.bold,
-                          color: statusColor,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
                 const SizedBox(width: 8),
                 IconButton(
                   icon: const Icon(Icons.edit_outlined, size: 18),
@@ -1167,6 +1144,34 @@ class _CalendarPageState extends State<CalendarPage> {
                   onPressed: () => _handleDeleteEvent(context, event, cubit),
                 ),
               ],
+            ),
+            const SizedBox(height: 8),
+            Align(
+              alignment: Alignment.centerLeft,
+              child:
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: statusColor.withValues(alpha: 0.12),
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(color: statusColor.withValues(alpha: 0.3)),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(statusIcon, size: 14, color: statusColor),
+                        const SizedBox(width: 4),
+                        Text(
+                          statusLabel,
+                          style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.bold,
+                            color: statusColor,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
             ),
             const SizedBox(height: 6),
             Row(
@@ -1200,14 +1205,16 @@ class _CalendarPageState extends State<CalendarPage> {
               ),
             ],
             const Divider(height: 20),
-            Row(
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 const Text(
                   'Participantes:',
                   style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
                 ),
-                const SizedBox(width: 8),
-                Expanded(
+                const SizedBox(height: 6),
+                SizedBox(
+                  width: double.infinity,
                   child: Wrap(
                     spacing: 8,
                     runSpacing: 4,
@@ -1259,13 +1266,16 @@ class _CalendarPageState extends State<CalendarPage> {
                   color: AppColors.primary.withValues(alpha: 0.05),
                   borderRadius: BorderRadius.circular(10),
                 ),
-                child: Row(
+                child: Wrap(
+                  alignment: WrapAlignment.spaceBetween,
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  spacing: 8,
+                  runSpacing: 8,
                   children: [
                     const Text(
                       'Sua Presença:',
                       style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
                     ),
-                    const Spacer(),
                     _buildRsvpActionButton(
                       label: 'Sim',
                       icon: Icons.check,
@@ -1276,7 +1286,6 @@ class _CalendarPageState extends State<CalendarPage> {
                         status: RsvpStatus.accepted,
                       ),
                     ),
-                    const SizedBox(width: 8),
                     _buildRsvpActionButton(
                       label: 'Talvez',
                       icon: Icons.question_mark,
@@ -1287,7 +1296,6 @@ class _CalendarPageState extends State<CalendarPage> {
                         status: RsvpStatus.tentative,
                       ),
                     ),
-                    const SizedBox(width: 8),
                     _buildRsvpActionButton(
                       label: 'Não',
                       icon: Icons.close,

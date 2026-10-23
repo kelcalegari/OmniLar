@@ -112,3 +112,42 @@ O arquivo original fica no storage com acesso controlado por RLS. `file_hash` aj
 * Cache por `file_hash`: o mesmo arquivo nunca é enviado duas vezes à IA.
 * Limite de uso por usuário e por Casa por dia. Ao atingir o limite ou em caso de erro de serviço, o app oferece o preenchimento manual, mantendo a imagem anexada (RN12).
 * Plano gratuito: conteúdo enviado pode ser usado pelo Google para melhoria dos produtos. Durante o desenvolvimento, use apenas documentos fictícios ou seus. Antes de convidar outros usuários, migre para o plano pago e atualize o texto de consentimento (RN13).
+
+
+
+10. Retry, Rascunho e Notificações (proposta, 22/10/2026)
+    Detalhes técnicos na seção 17.10 de [arquitetura_tecnica.md](arquitetura_tecnica.md).
+    10.1. Ordem de leitura
+* 1º QR Code, linha digitável, OFX/CSV (código).
+* 2º Foto ou PDF sem estrutura: IA com imagem.
+* 3º Manual, com a foto anexada.
+  10.2. Regras de Negócio Adicionais
+  RN14: Falha Temporária Não Perde a Captura
+  Erro de IA (limite por minuto, indisponibilidade) não descarta a captura. Ela fica em `aguardando_retry` com nova tentativa automática (máx. 3). O usuário pode tentar agora, lançar manualmente ou continuar em segundo plano.
+  RN15: Limite Diário Sem Falsa Espera
+  Quando o limite é diário, o app não mostra contagem regressiva. Oferece preenchimento manual ou processar no dia seguinte, com a foto salva.
+  RN16: Rascunho com Autosave
+  A revisão é salva a cada alteração. Sair da tela, fechar o app ou perder a conexão não perde dados. Nada é gravado como dinheiro sem Confirmar (RN01).
+  RN17: Leitura Tardia Não Sobrescreve
+  Se a IA responder enquanto o usuário edita, o app só preenche campos vazios, após aviso.
+  RN18: Revalidação ao Confirmar
+  Duplicidade (RN06) e ciclo financeiro são checados de novo no Confirmar. Compra em ciclo fechado exibe aviso para lançar no ciclo atual ou reabrir.
+  RN19: Expiração de Rascunhos
+  Lembretes agrupados (1 h, 24 h, 3 d), arquivamento em 7 dias e expiração em 30 dias, com aviso. A foto é apagada ao expirar, ao descartar ou ao confirmar (salvo anexo escolhido, RN04).
+  RN20: Notificação Sem Dados Sensíveis
+  Notificações não exibem valor nem estabelecimento e não confirmam lançamentos. Só abrem a revisão.
+  10.3. Estados do Rascunho
+  `capturada`, `processando`, `aguardando_retry`, `pronta_para_revisao`, `editando`, `confirmada`, `descartada`, `expirada`, `falhou`.
+  10.4. Tela de Revisão: Complementos
+* Confiança por campo com ícone e texto (✓ ok, ⚠ conferir, ✗ não lido). Confirmar só libera após tocar nos campos ⚠.
+* Selo da origem: "Lido por código", "Lido com IA", "Preenchimento manual".
+* Foto com zoom ao lado dos campos.
+* Lista "Para revisar" com estados (Lendo, Tentando de novo, Precisa de você, Rascunho salvo, Não consegui ler) e "Confirmar e próximo". Ações de risco nunca em lote.
+  10.5. Casos de Teste Adicionais
+* 429 por minuto: retry automático e contagem regressiva, sem perder a foto (RN14).
+* 429 por dia: sem timer, oferece manual ou amanhã (RN15).
+* Sair da tela durante a edição e voltar: campos preservados (RN16).
+* Resposta da IA durante a edição não altera campos digitados (RN17).
+* Confirmar rascunho antigo revalida duplicidade e ciclo (RN18).
+* Rascunho parado 30 dias expira e a foto é apagada (RN19).
+* Notificação não contém valor nem confirma lançamento (RN20).

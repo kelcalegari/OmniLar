@@ -47,6 +47,13 @@ supabase/functions/
 - Perguntas frequentes têm atalhos que chamam SQL direto, sem LLM.
 - Não enviar CPF, número de cartão ou conta no contexto.
 
+## Retry e rascunho (ver `arquitetura_tecnica.md` 17.10)
+- Ordem: código (QR/boleto/OFX/CSV) → Gemini com imagem → manual. OCR no aparelho foi descartado.
+- Erro estruturado da Edge Function: `{ error, scope: minute|day|server|invalid, retry_after_s }`. Retry com backoff e jitter respeitando `Retry-After`; máx. 3 tentativas. `scope=day` não mostra timer.
+- Captura vira rascunho persistente (`idempotency_key`, `file_hash`), com autosave e estados. A fila e o timer vivem no worker, não na tela.
+- Resposta tardia da IA nunca sobrescreve campos digitados. Revalidar duplicidade e ciclo no Confirmar.
+- Notificações: sem valor/estabelecimento, sem ação de confirmar, deep link por id do rascunho. Catálogo em `plano_notificacoes.md`.
+
 ## Economia de chamadas
 Cache por hash, classificação em lote numa chamada, regras aprendidas antes da IA, imagens comprimidas, `backoff` exponencial em erro 429.
 

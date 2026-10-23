@@ -8,7 +8,9 @@ import '../../../finance/domain/services/pending_payment.dart';
 import '../../../finance/presentation/cubit/finance_state.dart';
 import '../../domain/services/boleto_code.dart';
 import '../../../finance/domain/services/expense_launch_defaults.dart';
+import 'dart:async' show Timer, unawaited;
 import 'dart:io' show Platform;
+import 'dart:typed_data' show Uint8List;
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -24,7 +26,10 @@ import '../../../auth/domain/repositories/auth_repository.dart';
 import '../../../admin/presentation/cubit/account_access_cubit.dart';
 import '../../../finance/domain/services/receipt_attachment_service.dart';
 import '../../../finance/presentation/widgets/receipt_attachment_viewer.dart';
+import '../../data/capture_background_queue.dart';
+import '../../data/capture_draft_store.dart';
 import '../../domain/entities/capture_proposal.dart';
+import '../../domain/services/capture_draft_codec.dart';
 import '../../domain/services/boleto_parser.dart';
 import '../../domain/services/capture_service.dart';
 import '../utils/camera_release.dart';
@@ -71,8 +76,13 @@ class _SmartScannerPageState extends State<SmartScannerPage>
   String? _selectedPaymentMethodId;
   // Título e categoria editados na revisão; voltam ao sugerido a cada documento lido
   final _titleController = TextEditingController();
+  // Valor editado direto no campo da revisão (sem modal secundário)
+  final _amountController = TextEditingController();
+  int _originalAmountCents = 0;
+  List<InvoiceItemDraft> _originalItems = const [];
   String? _selectedCategoryId;
   String? _reviewedProposalId;
+  String _initialProposalTitle = '';
 
   // Boleto: vencimento, se já foi pago e a conta já prevista no app
   DateTime? _dueDate;
@@ -92,6 +102,9 @@ class _SmartScannerPageState extends State<SmartScannerPage>
   CardInvoiceEntry? _useInvoice;
   bool _invoiceDismissed = false;
   ReceiptAttachmentFile? _scannedAttachmentFile;
+  CaptureDraft? _savedDraft;
+  Timer? _draftTimer;
+  bool _suppressDraftSave = false;
 
   MobileScannerController? _scannerController;
   bool _isCameraActive = false;
@@ -132,9 +145,207 @@ class _SmartScannerPageState extends State<SmartScannerPage>
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     _currentProposal = widget.initialProposal;
+    _titleController.addListener(_onTitleControllerChanged);
+    if (sl.isRegistered<CaptureBackgroundQueue>()) {
+      final bgQueue = sl<CaptureBackgroundQueue>();
+      bgQueue.isEditingInForeground = _currentProposal != null;
+      bgQueue.state.addListener(_onBackgroundQueueChanged);
+      if (bgQueue.state.value.status == BackgroundCaptureStatus.ready &&
+          _currentProposal == null) {
+        bgQueue.acknowledge();
+      }
+    }
+    if (_currentProposal == null) {
+      _loadSavedDraft();
+    }
     if (_isLiveCameraSupported) {
       _initCamera();
     }
+  }
+
+  void _onTitleControllerChanged() {
+    if (_suppressDraftSave || _currentProposal == null) return;
+    _scheduleDraftSave();
+  }
+
+  CaptureDraft? _buildCurrentDraft() {
+    final proposal = _currentProposal;
+    if (proposal == null) return null;
+    return CaptureDraft(
+      savedAt: DateTime.now(),
+      proposal: proposal,
+      titleText: _titleController.text,
+      amountText: _amountController.text,
+      originalAmountCents: _originalAmountCents,
+      originalItems: _originalItems,
+      selectedCategoryId: _selectedCategoryId,
+      selectedPaymentMethodId: _selectedPaymentMethodId,
+      dueDate: _dueDate,
+      alreadyPaid: _alreadyPaid,
+      documentDate: _documentDate,
+      paidOn: _paidOn,
+      attachmentFile: _scannedAttachmentFile,
+    );
+  }
+
+  void _scheduleDraftSave() {
+    if (_suppressDraftSave || _currentProposal == null || widget.initialProposal != null) return;
+    _draftTimer?.cancel();
+    _draftTimer = Timer(const Duration(milliseconds: 500), _saveDraftNow);
+  }
+
+  void _saveDraftNow() {
+    _draftTimer?.cancel();
+    if (_suppressDraftSave || widget.initialProposal != null) return;
+    final draft = _buildCurrentDraft();
+    if (draft == null || !sl.isRegistered<CaptureDraftStore>()) return;
+    unawaited(sl<CaptureDraftStore>().save(draft));
+  }
+
+  Future<void> _loadSavedDraft() async {
+    if (!sl.isRegistered<CaptureDraftStore>()) return;
+    final draft = await sl<CaptureDraftStore>().load();
+    if (!mounted || _currentProposal != null) return;
+    setState(() => _savedDraft = draft);
+  }
+
+  Future<void> _resumeSavedDraft() async {
+    final draft = _savedDraft;
+    if (draft == null) return;
+    _suppressDraftSave = true;
+    final proposal = draft.proposal;
+    final isBoleto = proposal.documentType == DocumentType.boleto;
+    setState(() {
+      _savedDraft = null;
+      _currentProposal = proposal;
+      _reviewedProposalId = proposal.id;
+      _initialProposalTitle = proposal.title;
+      _titleController.text = draft.titleText;
+      _amountController.text = draft.amountText;
+      _originalAmountCents = draft.originalAmountCents;
+      _originalItems = draft.originalItems;
+      _selectedCategoryId = draft.selectedCategoryId;
+      _selectedPaymentMethodId = draft.selectedPaymentMethodId;
+      _dueDate = draft.dueDate;
+      _alreadyPaid = draft.alreadyPaid;
+      _documentDate = draft.documentDate;
+      _paidOn = draft.paidOn;
+      _scannedAttachmentFile = draft.attachmentFile;
+      _knownBills = const [];
+      _useKnownBill = null;
+      _knownBillDismissed = false;
+      _knownInvoices = const [];
+      _useInvoice = null;
+      _invoiceDismissed = false;
+    });
+    _suppressDraftSave = false;
+    if (isBoleto && _dueDate != null) {
+      await _lookForKnownBill(proposal);
+    }
+  }
+
+  Future<void> _discardSavedDraft() async {
+    _draftTimer?.cancel();
+    setState(() => _savedDraft = null);
+    if (sl.isRegistered<CaptureDraftStore>()) {
+      unawaited(sl<CaptureDraftStore>().clear());
+    }
+  }
+
+  void _clearDraftStore() {
+    _draftTimer?.cancel();
+    _savedDraft = null;
+    if (sl.isRegistered<CaptureDraftStore>()) {
+      unawaited(sl<CaptureDraftStore>().clear());
+    }
+    if (sl.isRegistered<CaptureBackgroundQueue>()) {
+      sl<CaptureBackgroundQueue>().cancel();
+    }
+  }
+
+  void _onBackgroundQueueChanged() {
+    if (!mounted || !sl.isRegistered<CaptureBackgroundQueue>()) return;
+    final bgQueue = sl<CaptureBackgroundQueue>();
+    if (bgQueue.state.value.status == BackgroundCaptureStatus.ready &&
+        _currentProposal == null) {
+      bgQueue.acknowledge();
+      _loadSavedDraft();
+      return;
+    }
+    setState(() {});
+  }
+
+  /// RN17: aplica a leitura tardia da IA apenas nos campos que continuam em
+  /// branco ou com o valor inicial padrão, sem sobrescrever o que a pessoa já
+  /// digitou manualmente.
+  void _applyLateAiDraft(CaptureProposal aiProposal) {
+    final current = _currentProposal;
+    if (current == null) return;
+
+    final typedTitle = _titleController.text.trim();
+    final shouldFillTitle =
+        typedTitle.isEmpty || typedTitle == _initialProposalTitle;
+    if (shouldFillTitle && aiProposal.title.trim().isNotEmpty) {
+      _titleController.text = aiProposal.title;
+      _initialProposalTitle = aiProposal.title;
+    }
+
+    var mergedAmount = current.totalAmount;
+    var mergedItems = current.items;
+
+    if (current.items.isEmpty && aiProposal.items.isNotEmpty) {
+      _originalItems = aiProposal.items;
+      final aiItemsSum = aiProposal.items.fold<int>(
+        0,
+        (sum, i) => sum + i.totalPrice.cents,
+      );
+      _originalAmountCents = aiItemsSum > 0
+          ? aiItemsSum
+          : aiProposal.totalAmount.cents;
+
+      if (current.totalAmount.cents > 0) {
+        final distributed = BoletoParser.distributeCentsProportionally(
+          current.totalAmount.cents,
+          aiProposal.items.map((i) => i.totalPrice.cents).toList(),
+        );
+        mergedItems = [
+          for (int i = 0; i < aiProposal.items.length; i++)
+            aiProposal.items[i].copyWith(
+              unitPrice: Money(distributed[i]),
+              totalPrice: Money(distributed[i]),
+            ),
+        ];
+      } else {
+        mergedItems = aiProposal.items;
+      }
+    }
+
+    if (current.totalAmount.cents <= 0 && aiProposal.totalAmount.cents > 0) {
+      mergedAmount = aiProposal.totalAmount;
+      _amountController.text = (aiProposal.totalAmount.cents / 100)
+          .toStringAsFixed(2);
+      if (_originalAmountCents <= 0) {
+        _originalAmountCents = aiProposal.totalAmount.cents;
+      }
+    }
+
+    setState(() {
+      _dueDate ??= aiProposal.dueDate;
+      _currentProposal = current.copyWith(
+        title: shouldFillTitle && aiProposal.title.trim().isNotEmpty
+            ? aiProposal.title
+            : current.title,
+        totalAmount: mergedAmount,
+        items: mergedItems,
+        dueDate: _dueDate ?? current.dueDate,
+        rawCode: (current.rawCode == null || current.rawCode!.isEmpty)
+            ? aiProposal.rawCode
+            : current.rawCode,
+        merchantOrBeneficiary:
+            current.merchantOrBeneficiary ?? aiProposal.merchantOrBeneficiary,
+      );
+    });
+    _saveDraftNow();
   }
 
   /// Cria o controle da câmera. Quem liga e desliga é [_syncCamera], depois
@@ -232,8 +443,19 @@ class _SmartScannerPageState extends State<SmartScannerPage>
 
   @override
   void dispose() {
+    if (sl.isRegistered<CaptureBackgroundQueue>()) {
+      final bgQueue = sl<CaptureBackgroundQueue>();
+      bgQueue.state.removeListener(_onBackgroundQueueChanged);
+      bgQueue.isEditingInForeground = false;
+    }
+    if (_currentProposal != null && !_isSubmitting) {
+      _saveDraftNow();
+    }
+    _draftTimer?.cancel();
+    _titleController.removeListener(_onTitleControllerChanged);
     _barcodeController.dispose();
     _titleController.dispose();
+    _amountController.dispose();
     WidgetsBinding.instance.removeObserver(this);
     _isClosing = true;
     final controller = _scannerController;
@@ -457,7 +679,7 @@ class _SmartScannerPageState extends State<SmartScannerPage>
         sizeBytes: bytes.length,
         contentType: image.mimeType ?? 'image/jpeg',
       );
-      final proposal = await sl<CaptureService>().processDocumentFile(
+      final proposal = await _readDocument(
         bytes: bytes,
         fileName: image.name,
         mimeType: image.mimeType ?? 'image/jpeg',
@@ -493,6 +715,73 @@ class _SmartScannerPageState extends State<SmartScannerPage>
     }
   }
 
+  /// Lê o documento com a IA. Em limite por minuto ou instabilidade, espera e
+  /// tenta de novo (o arquivo fica guardado aqui, nada se perde). Em cota
+  /// diária, ou depois de 3 esperas, oferece preencher à mão. Nulo quando a
+  /// pessoa cancela.
+  Future<CaptureProposal?> _readDocument({
+    required Uint8List bytes,
+    required String fileName,
+    required String mimeType,
+  }) async {
+    var waits = 0;
+    while (true) {
+      try {
+        return await sl<CaptureService>().processDocumentFile(
+          bytes: bytes,
+          fileName: fileName,
+          mimeType: mimeType,
+        );
+      } on CaptureAiError catch (e) {
+        if (!mounted) return null;
+        final choice = await showDialog<_AiRetryChoice>(
+          context: context,
+          barrierDismissible: false,
+          builder: (_) =>
+              _AiRetryDialog(error: e, autoRetry: e.canRetry && waits < 3),
+        );
+        if (!mounted) return null;
+        switch (choice) {
+          case _AiRetryChoice.retry:
+            waits++;
+            setState(() => _processingMessage = 'Tentando ler de novo...');
+          case _AiRetryChoice.background:
+            if (sl.isRegistered<CaptureBackgroundQueue>()) {
+              sl<CaptureBackgroundQueue>().enqueue(
+                bytes: bytes,
+                fileName: fileName,
+                mimeType: mimeType,
+                initialDelaySeconds: e.retryAfterSeconds ?? 30,
+              );
+            }
+            if (mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text(
+                    'Vamos avisar quando a leitura ficar pronta. Sua foto está guardada.',
+                  ),
+                ),
+              );
+              Navigator.pop(context);
+            }
+            return null;
+          case _AiRetryChoice.manual:
+            if (e.canRetry && sl.isRegistered<CaptureBackgroundQueue>()) {
+              sl<CaptureBackgroundQueue>().enqueue(
+                bytes: bytes,
+                fileName: fileName,
+                mimeType: mimeType,
+                initialDelaySeconds: e.retryAfterSeconds ?? 30,
+              );
+            }
+            return CaptureService.manualProposal(fileName);
+          case null:
+            return null;
+        }
+      }
+    }
+  }
+
   Future<void> _pickPdfOrDocument() async {
     try {
       final files = await FilePicker.pickFiles(
@@ -517,7 +806,7 @@ class _SmartScannerPageState extends State<SmartScannerPage>
         sizeBytes: bytes.length,
         contentType: isPdf ? 'application/pdf' : 'image/jpeg',
       );
-      final proposal = await sl<CaptureService>().processDocumentFile(
+      final proposal = await _readDocument(
         bytes: bytes,
         fileName: file.name,
         mimeType: isPdf ? 'application/pdf' : 'image/jpeg',
@@ -666,6 +955,7 @@ class _SmartScannerPageState extends State<SmartScannerPage>
     );
     if (picked == null || !mounted) return;
     setState(() => _dueDate = picked);
+    _scheduleDraftSave();
     await _lookForKnownBill(proposal);
   }
 
@@ -723,10 +1013,12 @@ class _SmartScannerPageState extends State<SmartScannerPage>
       ),
       helpText: 'Dia do pagamento',
     );
-    if (picked != null && mounted)
+    if (picked != null && mounted) {
       setState(
         () => _paidOn = DateTime(picked.year, picked.month, picked.day, 12),
       );
+      _scheduleDraftSave();
+    }
   }
 
   /// Boleto: nasce como conta a pagar (ou já paga, com o meio escolhido), com
@@ -865,206 +1157,36 @@ class _SmartScannerPageState extends State<SmartScannerPage>
     return '${(bytes / (1024 * 1024)).toStringAsFixed(1)} MB';
   }
 
-  void _editProposalDetails() {
+  /// Atualiza o valor direto do campo da revisão; se houver itens de rateio,
+  /// repassa a diferença proporcionalmente (pro-rata) a partir dos originais.
+  void _onAmountChanged(String text) {
     final proposal = _currentProposal;
     if (proposal == null) return;
+    final raw = double.tryParse(text.replaceAll(',', '.')) ?? 0.0;
+    final newCents = (raw * 100).round();
 
-    final amountCtrl = TextEditingController(
-      text: (proposal.totalAmount.cents > 0)
-          ? (proposal.totalAmount.cents / 100).toStringAsFixed(2)
-          : '',
-    );
+    var updatedItems = proposal.items;
+    if (_originalItems.isNotEmpty && newCents > 0) {
+      final distributed = BoletoParser.distributeCentsProportionally(
+        newCents,
+        _originalItems.map((i) => i.totalPrice.cents).toList(),
+      );
+      updatedItems = [
+        for (int i = 0; i < _originalItems.length; i++)
+          _originalItems[i].copyWith(
+            unitPrice: Money(distributed[i]),
+            totalPrice: Money(distributed[i]),
+          ),
+      ];
+    }
 
-    // Soma dos sub-itens atuais
-    final currentItemsSumCents = proposal.items.fold<int>(
-      0,
-      (sum, i) => sum + i.totalPrice.cents,
-    );
-    final baseCents = currentItemsSumCents > 0
-        ? currentItemsSumCents
-        : proposal.totalAmount.cents;
-
-    bool repassarDesconto = proposal.items.isNotEmpty;
-
-    showAdaptiveModal(
-      context: context,
-      maxWidth: 480,
-      child: StatefulBuilder(
-        builder: (context, setModalState) {
-          final typedVal =
-              double.tryParse(amountCtrl.text.replaceAll(',', '.')) ?? 0.0;
-          final typedCents = (typedVal * 100).round();
-
-          final diffCents = baseCents - typedCents;
-          final pct = baseCents > 0 ? (diffCents / baseCents) * 100 : 0.0;
-
-          return Padding(
-            padding: const EdgeInsets.all(20),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    const Text(
-                      'Valor & Desconto da Proposta',
-                      style: TextStyle(
-                        fontSize: 17,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    IconButton(
-                      icon: const Icon(Icons.close_rounded, size: 20),
-                      onPressed: () => Navigator.pop(context),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 14),
-                TextField(
-                  controller: amountCtrl,
-                  keyboardType: const TextInputType.numberWithOptions(
-                    decimal: true,
-                  ),
-                  decoration: InputDecoration(
-                    labelText: 'Valor a Pagar (R\$)',
-                    prefixText: 'R\$ ',
-                    helperText: baseCents > 0
-                        ? 'Soma nominal dos itens: ${Money(baseCents).format()}'
-                        : null,
-                    border: const OutlineInputBorder(),
-                  ),
-                  onChanged: (_) => setModalState(() {}),
-                ),
-                if (diffCents != 0 && baseCents > 0 && typedCents > 0) ...[
-                  const SizedBox(height: 12),
-                  Container(
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: diffCents > 0
-                          ? AppColors.creditGreen.withValues(alpha: 0.12)
-                          : Colors.orange.withValues(alpha: 0.12),
-                      borderRadius: BorderRadius.circular(10),
-                      border: Border.all(
-                        color: diffCents > 0
-                            ? AppColors.creditGreen
-                            : Colors.orange,
-                        width: 1,
-                      ),
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          children: [
-                            Icon(
-                              diffCents > 0
-                                  ? Icons.discount_outlined
-                                  : Icons.trending_up_rounded,
-                              size: 18,
-                              color: diffCents > 0
-                                  ? AppColors.creditGreen
-                                  : Colors.orange,
-                            ),
-                            const SizedBox(width: 8),
-                            Expanded(
-                              child: Text(
-                                diffCents > 0
-                                    ? 'Desconto: ${Money(diffCents).format()} (${pct.toStringAsFixed(2)}%)'
-                                    : 'Acréscimo: ${Money(-diffCents).format()} (${(-pct).toStringAsFixed(2)}%)',
-                                style: TextStyle(
-                                  fontWeight: FontWeight.bold,
-                                  color: diffCents > 0
-                                      ? AppColors.creditGreen
-                                      : Colors.orange,
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                        if (proposal.items.isNotEmpty) ...[
-                          const SizedBox(height: 8),
-                          SwitchListTile(
-                            contentPadding: EdgeInsets.zero,
-                            visualDensity: VisualDensity.compact,
-                            dense: true,
-                            title: Text(
-                              'Repassar ${diffCents > 0 ? "desconto" : "diferença"} proporcionalmente aos ${proposal.items.length} itens do rateio',
-                              style: const TextStyle(
-                                fontSize: 12,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                            subtitle: const Text(
-                              'Recalcula cada item mantendo a soma exata ao centavo (pro-rata)',
-                              style: TextStyle(fontSize: 10),
-                            ),
-                            value: repassarDesconto,
-                            onChanged: (val) {
-                              setModalState(() {
-                                repassarDesconto = val;
-                              });
-                            },
-                          ),
-                        ],
-                      ],
-                    ),
-                  ),
-                ],
-                const SizedBox(height: 18),
-                ElevatedButton(
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: AppColors.primary,
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(vertical: 14),
-                  ),
-                  onPressed: () {
-                    final rawAmount =
-                        double.tryParse(amountCtrl.text.replaceAll(',', '.')) ??
-                        0.0;
-                    final newCents = (rawAmount * 100).round();
-
-                    var updatedItems = proposal.items;
-                    if (repassarDesconto &&
-                        proposal.items.isNotEmpty &&
-                        newCents > 0) {
-                      final itemWeights = proposal.items
-                          .map((i) => i.totalPrice.cents)
-                          .toList();
-                      final distributed =
-                          BoletoParser.distributeCentsProportionally(
-                            newCents,
-                            itemWeights,
-                          );
-
-                      updatedItems = [
-                        for (int i = 0; i < proposal.items.length; i++)
-                          proposal.items[i].copyWith(
-                            unitPrice: Money(distributed[i]),
-                            totalPrice: Money(distributed[i]),
-                          ),
-                      ];
-                    }
-
-                    setState(() {
-                      _currentProposal = proposal.copyWith(
-                        totalAmount: Money(newCents),
-                        items: updatedItems,
-                      );
-                    });
-                    Navigator.pop(context);
-                  },
-                  child: const Text(
-                    'Aplicar Alterações',
-                    style: TextStyle(fontWeight: FontWeight.bold),
-                  ),
-                ),
-              ],
-            ),
-          );
-        },
-      ),
-    );
+    setState(() {
+      _currentProposal = proposal.copyWith(
+        totalAmount: Money(newCents),
+        items: updatedItems,
+      );
+    });
+    _scheduleDraftSave();
   }
 
   void _editItemDetails(int idx) {
@@ -1209,11 +1331,17 @@ class _SmartScannerPageState extends State<SmartScannerPage>
                             (sum, i) => sum + i.totalPrice.cents,
                           );
                           setState(() {
+                            _originalItems = updatedList;
+                            _originalAmountCents = newTotal;
+                            _amountController.text = newTotal > 0
+                                ? (newTotal / 100).toStringAsFixed(2)
+                                : '';
                             _currentProposal = proposal.copyWith(
                               items: updatedList,
                               totalAmount: Money(newTotal),
                             );
                           });
+                          _scheduleDraftSave();
                           Navigator.pop(context);
                         },
                       ),
@@ -1252,11 +1380,17 @@ class _SmartScannerPageState extends State<SmartScannerPage>
                             (sum, i) => sum + i.totalPrice.cents,
                           );
                           setState(() {
+                            _originalItems = updatedList;
+                            _originalAmountCents = newTotal;
+                            _amountController.text = newTotal > 0
+                                ? (newTotal / 100).toStringAsFixed(2)
+                                : '';
                             _currentProposal = proposal.copyWith(
                               items: updatedList,
                               totalAmount: Money(newTotal),
                             );
                           });
+                          _scheduleDraftSave();
                           Navigator.pop(context);
                         },
                         child: const Text('Salvar'),
@@ -1405,11 +1539,17 @@ class _SmartScannerPageState extends State<SmartScannerPage>
                       (sum, i) => sum + i.totalPrice.cents,
                     );
                     setState(() {
+                      _originalItems = updatedList;
+                      _originalAmountCents = newTotal;
+                      _amountController.text = newTotal > 0
+                          ? (newTotal / 100).toStringAsFixed(2)
+                          : '';
                       _currentProposal = proposal.copyWith(
                         items: updatedList,
                         totalAmount: Money(newTotal),
                       );
                     });
+                    _scheduleDraftSave();
                     Navigator.pop(context);
                   },
                   child: const Text('Adicionar Item'),
@@ -1454,6 +1594,7 @@ class _SmartScannerPageState extends State<SmartScannerPage>
             financeState.errorMessage != null) {
           throw financeState.errorMessage!;
         }
+        _clearDraftStore();
         Navigator.pop(context);
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -1615,6 +1756,7 @@ class _SmartScannerPageState extends State<SmartScannerPage>
         );
       }
 
+      _clearDraftStore();
       widget.onProposalReady?.call(proposal);
 
       if (mounted) {
@@ -1648,6 +1790,10 @@ class _SmartScannerPageState extends State<SmartScannerPage>
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    if (sl.isRegistered<CaptureBackgroundQueue>()) {
+      sl<CaptureBackgroundQueue>().isEditingInForeground =
+          _currentProposal != null;
+    }
     // Depois do quadro: o visor já entrou (ou saiu) da tela
     if (_scannerController != null) {
       WidgetsBinding.instance.addPostFrameCallback((_) => _syncCamera());
@@ -1744,6 +1890,79 @@ class _SmartScannerPageState extends State<SmartScannerPage>
               });
             },
           ),
+          if (_savedDraft != null) ...[
+            const SizedBox(height: 12),
+            Container(
+              key: const Key('capture_draft_banner'),
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: AppColors.primary.withValues(alpha: 0.08),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Wrap(
+                spacing: 8,
+                runSpacing: 4,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                children: [
+                  const Icon(
+                    Icons.history_rounded,
+                    size: 18,
+                    color: AppColors.primary,
+                  ),
+                  Text(
+                    'Revisão em andamento: ${_savedDraft!.displayTitle} '
+                    '(salva em ${DateFormat('dd/MM HH:mm').format(_savedDraft!.savedAt)})',
+                    style: const TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  FilledButton(
+                    key: const Key('capture_resume_draft'),
+                    onPressed: _resumeSavedDraft,
+                    child: const Text('Retomar'),
+                  ),
+                  TextButton(
+                    key: const Key('capture_discard_draft'),
+                    onPressed: _discardSavedDraft,
+                    child: const Text('Descartar'),
+                  ),
+                ],
+              ),
+            ),
+          ],
+          if (sl.isRegistered<CaptureBackgroundQueue>() &&
+              sl<CaptureBackgroundQueue>().isActive) ...[
+            const SizedBox(height: 12),
+            Container(
+              key: const Key('capture_background_active_banner'),
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: AppColors.primary.withValues(alpha: 0.08),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Row(
+                children: [
+                  const SizedBox(
+                    width: 16,
+                    height: 16,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      sl<CaptureBackgroundQueue>().state.value.message ??
+                          'Processando captura em segundo plano...',
+                      style: const TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
           const SizedBox(height: 20),
 
           if (_activeTabIndex == 0) ...[
@@ -2009,8 +2228,21 @@ class _SmartScannerPageState extends State<SmartScannerPage>
     final isNfce = proposal.documentType == DocumentType.nfce;
     final isBoleto = proposal.documentType == DocumentType.boleto;
     if (_reviewedProposalId != proposal.id) {
+      _suppressDraftSave = true;
       _reviewedProposalId = proposal.id;
+      _initialProposalTitle = proposal.title;
       _titleController.text = proposal.title;
+      _originalItems = proposal.items;
+      _originalAmountCents = proposal.items.fold<int>(
+            0,
+            (sum, i) => sum + i.totalPrice.cents,
+          ) >
+              0
+          ? proposal.items.fold<int>(0, (sum, i) => sum + i.totalPrice.cents)
+          : proposal.totalAmount.cents;
+      _amountController.text = proposal.totalAmount.cents > 0
+          ? (proposal.totalAmount.cents / 100).toStringAsFixed(2)
+          : '';
       _selectedCategoryId = null;
       _dueDate = isBoleto ? proposal.dueDate : null;
       _alreadyPaid = !isBoleto;
@@ -2022,11 +2254,13 @@ class _SmartScannerPageState extends State<SmartScannerPage>
       _knownInvoices = const [];
       _useInvoice = null;
       _invoiceDismissed = false;
-      if (isBoleto && _dueDate != null) {
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (mounted) _lookForKnownBill(proposal);
-        });
-      }
+      _suppressDraftSave = false;
+      _savedDraft = null;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        _saveDraftNow();
+        if (isBoleto && _dueDate != null) _lookForKnownBill(proposal);
+      });
     }
 
     return Padding(
@@ -2068,6 +2302,74 @@ class _SmartScannerPageState extends State<SmartScannerPage>
             ],
           ),
           const SizedBox(height: 16),
+
+          if (sl.isRegistered<CaptureBackgroundQueue>() &&
+              sl<CaptureBackgroundQueue>().state.value.status ==
+                  BackgroundCaptureStatus.ready &&
+              sl<CaptureBackgroundQueue>().state.value.draft != null) ...[
+            Container(
+              key: const Key('capture_late_ai_banner'),
+              margin: const EdgeInsets.only(bottom: 12),
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: AppColors.creditGreen.withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                  color: AppColors.creditGreen.withValues(alpha: 0.4),
+                ),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  const Row(
+                    children: [
+                      Icon(
+                        Icons.auto_awesome_rounded,
+                        size: 18,
+                        color: AppColors.creditGreen,
+                      ),
+                      SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          'A leitura por IA ficou pronta. Aplicar nos campos vazios sem apagar o que você já digitou?',
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  Wrap(
+                    spacing: 8,
+                    children: [
+                      FilledButton(
+                        key: const Key('capture_apply_late_ai'),
+                        onPressed: () {
+                          final bg = sl<CaptureBackgroundQueue>();
+                          final lateDraft = bg.state.value.draft;
+                          bg.acknowledge();
+                          if (lateDraft != null) {
+                            _applyLateAiDraft(lateDraft.proposal);
+                          }
+                        },
+                        child: const Text('Aplicar nos campos vazios'),
+                      ),
+                      TextButton(
+                        key: const Key('capture_dismiss_late_ai'),
+                        onPressed: () {
+                          sl<CaptureBackgroundQueue>().acknowledge();
+                          setState(() {});
+                        },
+                        child: const Text('Ignorar'),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ],
 
           TextField(
             controller: _titleController,
@@ -2113,32 +2415,57 @@ class _SmartScannerPageState extends State<SmartScannerPage>
                     ],
                   ),
                 ),
-                Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      proposal.totalAmount.format(),
-                      style: const TextStyle(
-                        fontSize: 22,
-                        fontWeight: FontWeight.bold,
-                        color: AppColors.primary,
-                      ),
+                SizedBox(
+                  width: 160,
+                  child: TextField(
+                    controller: _amountController,
+                    keyboardType: const TextInputType.numberWithOptions(
+                      decimal: true,
                     ),
-                    const SizedBox(width: 8),
-                    IconButton(
-                      icon: const Icon(
+                    textAlign: TextAlign.end,
+                    style: const TextStyle(
+                      fontSize: 22,
+                      fontWeight: FontWeight.bold,
+                      color: AppColors.primary,
+                    ),
+                    decoration: const InputDecoration(
+                      prefixText: 'R\$ ',
+                      hintText: '0,00',
+                      isDense: true,
+                      border: InputBorder.none,
+                      suffixIcon: Icon(
                         Icons.edit_outlined,
-                        size: 20,
+                        size: 18,
                         color: AppColors.primary,
                       ),
-                      tooltip: 'Ajustar valor',
-                      onPressed: _editProposalDetails,
+                      suffixIconConstraints: BoxConstraints(
+                        minWidth: 28,
+                        minHeight: 28,
+                      ),
                     ),
-                  ],
+                    onChanged: _onAmountChanged,
+                  ),
                 ),
               ],
             ),
           ),
+          if (_originalAmountCents > 0 &&
+              proposal.totalAmount.cents > 0 &&
+              proposal.totalAmount.cents != _originalAmountCents)
+            Padding(
+              padding: const EdgeInsets.only(top: 8, left: 4),
+              child: Text(
+                proposal.totalAmount.cents < _originalAmountCents
+                    ? 'Desconto de ${Money(_originalAmountCents - proposal.totalAmount.cents).format()} sobre ${Money(_originalAmountCents).format()}'
+                    : 'Acréscimo de ${Money(proposal.totalAmount.cents - _originalAmountCents).format()} sobre ${Money(_originalAmountCents).format()}',
+                style: theme.textTheme.bodySmall?.copyWith(
+                  fontWeight: FontWeight.w600,
+                  color: proposal.totalAmount.cents < _originalAmountCents
+                      ? AppColors.creditGreen
+                      : Colors.orange,
+                ),
+              ),
+            ),
           if (proposal.totalAmount.cents == 0) ...[
             const SizedBox(height: 12),
             Container(
@@ -2160,7 +2487,7 @@ class _SmartScannerPageState extends State<SmartScannerPage>
                   const SizedBox(width: 10),
                   Expanded(
                     child: Text(
-                      'Dica: Cadastre sua chave gratuita do Gemini em Ajustes > Assistente IA para leitura com IA, ou clique no lápis acima para definir o valor manualmente.',
+                      'Dica: Cadastre sua chave gratuita do Gemini em Ajustes > Assistente IA para leitura com IA, ou digite o valor manualmente no campo acima.',
                       style: theme.textTheme.bodySmall?.copyWith(fontSize: 11),
                     ),
                   ),
@@ -2240,6 +2567,7 @@ class _SmartScannerPageState extends State<SmartScannerPage>
                       setState(() {
                         _scannedAttachmentFile = null;
                       });
+                      _scheduleDraftSave();
                     },
                   ),
                 ],
@@ -2345,10 +2673,23 @@ class _SmartScannerPageState extends State<SmartScannerPage>
                                             members.firstOrNull?.id)
                                       : null,
                                 );
+                                if (idx < _originalItems.length) {
+                                  final updatedOrig =
+                                      List<InvoiceItemDraft>.from(
+                                        _originalItems,
+                                      );
+                                  updatedOrig[idx] = updatedOrig[idx].copyWith(
+                                    isPersonal: val,
+                                    assignedMemberId:
+                                        updatedItems[idx].assignedMemberId,
+                                  );
+                                  _originalItems = updatedOrig;
+                                }
                                 _currentProposal = proposal.copyWith(
                                   items: updatedItems,
                                 );
                               });
+                              _scheduleDraftSave();
                             }
                           },
                         ),
@@ -2432,8 +2773,10 @@ class _SmartScannerPageState extends State<SmartScannerPage>
                     items: categories.map((c) {
                       return DropdownMenuItem(value: c.id, child: Text(c.name));
                     }).toList(),
-                    onChanged: (val) =>
-                        setState(() => _selectedCategoryId = val),
+                    onChanged: (val) {
+                      setState(() => _selectedCategoryId = val);
+                      _scheduleDraftSave();
+                    },
                   ),
                 );
               },
@@ -2472,8 +2815,10 @@ class _SmartScannerPageState extends State<SmartScannerPage>
                   items: paymentMethods.map((pm) {
                     return DropdownMenuItem(value: pm.id, child: Text(pm.name));
                   }).toList(),
-                  onChanged: (val) =>
-                      setState(() => _selectedPaymentMethodId = val),
+                  onChanged: (val) {
+                    setState(() => _selectedPaymentMethodId = val);
+                    _scheduleDraftSave();
+                  },
                 );
               },
             ),
@@ -2487,6 +2832,7 @@ class _SmartScannerPageState extends State<SmartScannerPage>
                   onPressed: _isSubmitting
                       ? null
                       : () {
+                          _clearDraftStore();
                           setState(() {
                             _currentProposal = null;
                           });
@@ -2559,6 +2905,7 @@ class _SmartScannerPageState extends State<SmartScannerPage>
         () =>
             _documentDate = DateTime(picked.year, picked.month, picked.day, 12),
       );
+      _scheduleDraftSave();
     }
   }
 
@@ -2583,14 +2930,17 @@ class _SmartScannerPageState extends State<SmartScannerPage>
         selected: {_alreadyPaid},
         onSelectionChanged: _isSubmitting
             ? null
-            : (value) => setState(() {
-                _alreadyPaid = value.first;
-                // Já paga não pode ficar no futuro
-                final now = DateTime.now();
-                if (_alreadyPaid && _documentDate.isAfter(now)) {
-                  _documentDate = DateTime(now.year, now.month, now.day, 12);
-                }
-              }),
+            : (value) {
+                setState(() {
+                  _alreadyPaid = value.first;
+                  // Já paga não pode ficar no futuro
+                  final now = DateTime.now();
+                  if (_alreadyPaid && _documentDate.isAfter(now)) {
+                    _documentDate = DateTime(now.year, now.month, now.day, 12);
+                  }
+                });
+                _scheduleDraftSave();
+              },
       ),
       const SizedBox(height: 8),
       OutlinedButton.icon(
@@ -2792,7 +3142,10 @@ class _SmartScannerPageState extends State<SmartScannerPage>
           selected: {_alreadyPaid},
           onSelectionChanged: _isSubmitting
               ? null
-              : (value) => setState(() => _alreadyPaid = value.first),
+              : (value) {
+                  setState(() => _alreadyPaid = value.first);
+                  _scheduleDraftSave();
+                },
         ),
         const SizedBox(height: 8),
         if (_alreadyPaid)
@@ -2815,3 +3168,85 @@ class _SmartScannerPageState extends State<SmartScannerPage>
 
 /// O que fazer quando a Sefaz não entrega a nota do QR lido ao vivo.
 enum _QrFallback { photo, typeValue }
+
+enum _AiRetryChoice { retry, background, manual }
+
+/// A IA está no limite ou sobrecarregada. Com espera possível, conta os
+/// segundos e tenta de novo sozinha; com a cota do dia esgotada, não promete
+/// espera. A foto continua guardada nos dois casos.
+class _AiRetryDialog extends StatefulWidget {
+  final CaptureAiError error;
+  final bool autoRetry;
+  const _AiRetryDialog({required this.error, required this.autoRetry});
+
+  @override
+  State<_AiRetryDialog> createState() => _AiRetryDialogState();
+}
+
+class _AiRetryDialogState extends State<_AiRetryDialog> {
+  Timer? _timer;
+  late int _secondsLeft = widget.error.retryAfterSeconds ?? 0;
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.autoRetry && _secondsLeft > 0) {
+      _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
+        if (_secondsLeft <= 1) {
+          timer.cancel();
+          Navigator.pop(context, _AiRetryChoice.retry);
+        } else {
+          setState(() => _secondsLeft--);
+        }
+      });
+    }
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isDaily = widget.error.scope == CaptureAiScope.day;
+    final counting = widget.autoRetry && _secondsLeft > 0;
+    return AlertDialog(
+      title: Text(
+        isDaily ? 'Limite de leituras de hoje' : 'A leitura por IA está ocupada',
+      ),
+      content: Text(
+        isDaily
+            ? '${widget.error.message}\n\nSua foto está guardada: você pode preencher à mão.'
+            : counting
+            ? 'Tentando de novo em $_secondsLeft s. Sua foto está guardada.'
+            : '${widget.error.message}\n\nSua foto está guardada.',
+      ),
+      actions: [
+        if (isDaily)
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Fechar'),
+          ),
+        TextButton(
+          key: const Key('ai_retry_manual'),
+          onPressed: () => Navigator.pop(context, _AiRetryChoice.manual),
+          child: const Text('Preencher à mão'),
+        ),
+        if (!isDaily)
+          TextButton(
+            key: const Key('ai_retry_background'),
+            onPressed: () => Navigator.pop(context, _AiRetryChoice.background),
+            child: const Text('Continuar em 2º plano'),
+          ),
+        if (!isDaily)
+          FilledButton(
+            key: const Key('ai_retry_now'),
+            onPressed: () => Navigator.pop(context, _AiRetryChoice.retry),
+            child: Text(counting ? 'Tentar agora' : 'Tentar de novo'),
+          ),
+      ],
+    );
+  }
+}

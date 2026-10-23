@@ -414,9 +414,21 @@ enabled = true
 # and column/key alignment. Set to "null" to emit raw, unformatted SQL.
 # format_options = "{\"keywordCase\":\"upper\",\"indent\":2,\"maxWidth\":180,\"commaStyle\":\"trailing\"}"
 
-# As funções de IA exigem usuário autenticado
+# As funções de IA e de conta exigem usuário autenticado; notify é chamada pelo banco (pg_net) sem JWT
 [functions.capture-read]
+verify_jwt = true
+
+[functions.nfce-read]
+verify_jwt = true
+
+[functions.import-read]
 verify_jwt = true
 
 [functions.assistant]
 verify_jwt = true
+
+[functions.delete-account]
+verify_jwt = true
+
+[functions.notify]
+verify_jwt = false

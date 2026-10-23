@@ -141,6 +141,7 @@ Hoje as rotas só abrem a tela. Para a notificação abrir o item, as rotas pass
 | Evento | `/agenda/evento/{id}` |
 | Projeto | `/projetos/{id}` |
 | Importação | `/casa/importar` |
+| Revisão de captura (rascunho local) | `/captura/revisar` |
 | Moradores | `/ajustes?grupo=casa` |
 
 Item que não existe mais (excluído) abre a tela da lista com o aviso "Este item não existe mais".
@@ -171,6 +172,8 @@ Coluna **Quando**: *na hora* (gatilho no banco) ou *agendada* (`pg_cron`). Colun
 | `invoice_due_soon` | Fatura em aberto vence em 3 dias e no dia | Titular (e moradores, se o cartão é da casa) | "Fatura Nubank vence dia 5: R$ 1.480,00" | agendada | essencial |
 | `invoice_paid` | Fatura paga | Titular e moradores com compras nela | "A fatura Nubank de outubro foi paga pelo Caixa" | na hora | informativa |
 | `reimbursement_due` | Despesa paga do bolso entrou no ciclo | Quem pagou | "Você será reembolsado de R$ 80,00 no fechamento" | na hora | informativa |
+| `capture_ready` | Leitura por IA em 2º plano ficou pronta (no aparelho) | Quem capturou | "Uma captura está pronta para revisar" (sem valor nem loja, RN20; abre `/captura/revisar`) | na hora (local) | essencial |
+| `capture_failed` | Leitura por IA em 2º plano esgotou as tentativas (foto salva para manual) | Quem capturou | "Captura salva para preenchimento manual" (abre `/captura/revisar`) | na hora (local) | essencial |
 
 ### 6.3. Fechamento do ciclo
 | Tipo | Gatilho | Quem recebe | Exemplo | Quando | Peso |
