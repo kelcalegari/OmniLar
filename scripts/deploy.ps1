@@ -41,7 +41,8 @@ Write-Host "Copia salva em: $HOME\Downloads\OmniLar-arm64-release.apk" -Foregrou
 # 3. Upload para Supabase Storage
 Write-Host "`n[3/5] Enviando APK para o Supabase Storage..." -ForegroundColor Cyan
 $SupabaseUrl = "https://rygxmpwzofgieodvhpcy.supabase.co"
-$ApiKey = if ($env:SUPABASE_SERVICE_ROLE_KEY) { $env:SUPABASE_SERVICE_ROLE_KEY } else { "sb_publishable_GshamuXeZLHEPF1bch5SgQ_eVXv_ckW" }
+# O bucket 'releases' so aceita escrita pela service_role (migration 0114)
+$ApiKey = $env:SUPABASE_SERVICE_ROLE_KEY
 $TargetFileName = "OmniLar-arm64-release.apk"
 $UploadUrl = "$SupabaseUrl/storage/v1/object/releases/$TargetFileName"
 
@@ -61,7 +62,7 @@ if ($HttpCode -eq "200" -or $HttpCode -eq "201") {
   Write-Host "APK publicado no Supabase Storage! (HTTP $HttpCode)" -ForegroundColor Green
 } else {
   Write-Warning "Falha no upload para o Supabase (HTTP $HttpCode): $ResponseBody"
-  Write-Warning "Certifique-se de que a migration 0106 foi rodada no Supabase SQL Editor."
+  Write-Warning "Defina SUPABASE_SERVICE_ROLE_KEY com a chave service_role do projeto."
 }
 
 # 4. Compilacao Web

@@ -9,7 +9,12 @@ $ProjectRoot = "$PSScriptRoot\.."
 Set-Location -Path $ProjectRoot
 
 $SupabaseUrl = "https://rygxmpwzofgieodvhpcy.supabase.co"
-$ApiKey = if ($ServiceRoleKey) { $ServiceRoleKey } else { "sb_publishable_GshamuXeZLHEPF1bch5SgQ_eVXv_ckW" }
+# O bucket 'releases' so aceita escrita pela service_role (migration 0114)
+if (-not $ServiceRoleKey) {
+  Write-Error "Defina SUPABASE_SERVICE_ROLE_KEY (ou passe -ServiceRoleKey) para publicar o APK."
+  exit 1
+}
+$ApiKey = $ServiceRoleKey
 $ApkPath = "build\app\outputs\flutter-apk\app-arm64-v8a-release.apk"
 $TargetFileName = "OmniLar-arm64-release.apk"
 
@@ -49,6 +54,6 @@ if ($HttpCode -eq "200" -or $HttpCode -eq "201") {
   Write-Host "Link encurtado no site: https://omnilar.web.app/apk" -ForegroundColor Green
 } else {
   Write-Error "Erro no upload (HTTP $HttpCode): $ResponseBody"
-  Write-Host "Dica: certifique-se de que a migration 0106 foi executada no Supabase SQL Editor para liberar o upload no bucket 'releases'." -ForegroundColor Yellow
+  Write-Host "Dica: confira se SUPABASE_SERVICE_ROLE_KEY e a chave service_role do projeto." -ForegroundColor Yellow
   exit 1
 }

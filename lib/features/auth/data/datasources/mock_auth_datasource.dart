@@ -609,7 +609,7 @@ class MockAuthDataSource implements AuthDataSource {
     final house = _houses[houseId];
     if (house == null) throw const NotFoundFailure('Casa não encontrada.');
     if (house.createdBy != _currentUser!.id) {
-      throw const AuthFailure('Apenas o proprietário da casa pode arquivá-la.');
+      throw const AuthFailure('Apenas quem criou a casa pode arquivá-la.');
     }
     final activeHouses = (await getUserHouses()).where((h) => h.id != houseId).toList();
     if (activeHouses.isEmpty) {
@@ -630,7 +630,7 @@ class MockAuthDataSource implements AuthDataSource {
     final house = _houses[houseId];
     if (house == null) throw const NotFoundFailure('Casa não encontrada.');
     if (house.createdBy != _currentUser!.id) {
-      throw const AuthFailure('Apenas o proprietário pode desarquivar a casa.');
+      throw const AuthFailure('Apenas quem criou a casa pode desarquivá-la.');
     }
     _houses[houseId] = house.copyWith(clearArchivedAt: true);
   }
