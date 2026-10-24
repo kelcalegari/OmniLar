@@ -15,8 +15,10 @@
 --     lançada duas vezes, mesmo se o app errar o casamento;
 --   - `confirm_import` grava planos, vínculos e as previstas que deixam de
 --     existir, na mesma transação;
---   - `undo_import` apaga as previstas e o plano que a importação criou e volta
---     a prever as parcelas que ela tinha confirmado.
+--   - `undo_import` apaga as previstas e o plano que a importação criou, volta
+--     a prever as parcelas que ela tinha confirmado e traz de volta as previstas
+--     que ela tirou da casa. Só desfaz a importação mais recente de cada
+--     compra parcelada, para uma fatura não desmanchar a seguinte.
 -- ==============================================================================
 
 -- 1. Plano de parcelamento
@@ -98,6 +100,12 @@ alter table public.import_lines
 create index if not exists idx_import_lines_installment_plan
   on public.import_lines (installment_plan_id);
 
+-- Previstas que a importação tirou da casa, para o desfazer trazê-las de volta
+alter table public.import_batches
+  add column if not exists replaced_forecast_ids uuid[] not null default '{}',
+  -- O que a casa tinha decidido nos planos antes desta importação
+  add column if not exists previous_plan_states jsonb not null default '[]'::jsonb;
+
 -- 3. Confirma a importação. Devolve o id do lote.
 --    p_import = {
 --      "batch": {...}, "lines": [...],
@@ -124,6 +132,8 @@ declare
   v_batch_id uuid := coalesce((p_import->'batch'->>'id')::uuid, gen_random_uuid());
   v_item jsonb;
   v_expense_id uuid;
+  v_previous jsonb := '[]'::jsonb;
+  v_old jsonb;
 begin
   if v_house_id is null or not public.is_house_member(v_house_id) then
     raise exception 'Acesso negado: você não é membro desta casa.';
@@ -132,7 +142,7 @@ begin
   -- O lote vem antes: o plano de parcelamento aponta para a importação que o criou
   insert into public.import_batches (
     id, house_id, source_type, account_name, payment_method_id, file_name, invoice_due_date,
-    payer_id, total_cents, lines_count, is_reconciled, status, created_by
+    payer_id, total_cents, lines_count, is_reconciled, status, created_by, replaced_forecast_ids
   ) values (
     v_batch_id,
     v_house_id,
@@ -146,11 +156,28 @@ begin
     jsonb_array_length(coalesce(p_import->'lines', '[]'::jsonb)),
     true,
     'confirmed',
-    auth.uid()
+    auth.uid(),
+    coalesce(
+      array(
+        select (value #>> '{}')::uuid
+        from jsonb_array_elements(coalesce(p_import->'forecast_deletions', '[]'::jsonb))
+      ),
+      '{}'::uuid[]
+    )
   );
 
   -- Planos novos nascem; nos que já existiam só muda o que a casa decidiu
   for v_item in select * from jsonb_array_elements(coalesce(p_import->'installment_plans', '[]'::jsonb)) loop
+    select jsonb_build_object(
+      'id', id, 'destination', destination, 'category_id', category_id,
+      'assigned_member_id', assigned_member_id
+    ) into v_old
+    from public.installment_plans
+    where id = (v_item->>'id')::uuid and house_id = v_house_id;
+    if v_old is not null then
+      v_previous := v_previous || jsonb_build_array(v_old);
+    end if;
+
     insert into public.installment_plans (
       id, house_id, payment_method_id, merchant_key, title, installments_total,
       installment_cents, anchor_number, anchor_line_date, anchor_due_date, destination,
@@ -178,6 +205,8 @@ begin
           updated_at = now()
       where public.installment_plans.house_id = v_house_id;
   end loop;
+
+  update public.import_batches set previous_plan_states = v_previous where id = v_batch_id;
 
   for v_item in select * from jsonb_array_elements(coalesce(p_import->'expenses', '[]'::jsonb)) loop
     if (v_item->>'house_id')::uuid is distinct from v_house_id then
@@ -285,7 +314,48 @@ begin
 end;
 $$;
 
--- 4. Desfaz uma importação (a da 0055, mais as parcelas)
+-- 4. Traz de volta as previstas que uma importação desfeita tinha tirado da
+--    casa. A despesa excluída some para o RLS de quem chama, então isto roda
+--    como dona das tabelas: só para lote já desfeito, e uma vez só.
+create or replace function public.restore_replaced_forecasts(p_batch_id uuid)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_house_id uuid;
+  v_status text;
+  v_ids uuid[];
+begin
+  select house_id, status, replaced_forecast_ids into v_house_id, v_status, v_ids
+  from public.import_batches
+  where id = p_batch_id
+  for update;
+
+  if v_house_id is null or not public.is_house_member(v_house_id) then
+    raise exception 'Importação não encontrada.';
+  end if;
+  if v_status <> 'undone' or coalesce(cardinality(v_ids), 0) = 0 then
+    return;
+  end if;
+
+  update public.house_expenses
+  set deleted_at = null
+  where id = any(v_ids)
+    and house_id = v_house_id
+    and is_forecast
+    and deleted_at is not null
+    and settled_at is null;
+
+  update public.import_batches set replaced_forecast_ids = '{}' where id = p_batch_id;
+end;
+$$;
+
+revoke execute on function public.restore_replaced_forecasts(uuid) from public, anon;
+grant execute on function public.restore_replaced_forecasts(uuid) to authenticated;
+
+-- 5. Desfaz uma importação (a da 0055, mais as parcelas)
 create or replace function public.undo_import(p_batch_id uuid)
 returns void
 language plpgsql
@@ -299,9 +369,13 @@ declare
   v_expense_id uuid;
   v_loans uuid[];
   v_plans uuid[];
+  v_touched uuid[];
+  v_previous jsonb;
+  v_created_at timestamptz;
   v_deleted integer;
 begin
-  select house_id, status, house_paid_at into v_house_id, v_status, v_house_paid_at
+  select house_id, status, house_paid_at, created_at, previous_plan_states
+    into v_house_id, v_status, v_house_paid_at, v_created_at, v_previous
   from public.import_batches
   where id = p_batch_id
   for update;
@@ -320,14 +394,20 @@ begin
   from public.installment_plans
   where created_batch_id = p_batch_id;
 
-  -- Plano que uma fatura seguinte já usou: desfazer esta apagaria parcelas dela
-  if v_plans is not null and exists (
+  select array_agg(distinct installment_plan_id) into v_touched
+  from public.import_lines
+  where batch_id = p_batch_id and installment_plan_id is not null;
+
+  -- Compra parcelada que uma fatura importada depois já usou: desfazer esta
+  -- desmancharia as parcelas daquela
+  if v_touched is not null and exists (
     select 1
     from public.import_lines l
     join public.import_batches b on b.id = l.batch_id
-    where l.installment_plan_id = any(v_plans)
+    where l.installment_plan_id = any(v_touched)
       and l.batch_id <> p_batch_id
       and b.status = 'confirmed'
+      and b.created_at >= v_created_at
   ) then
     raise exception 'Uma fatura importada depois desta já usa uma das compras parceladas dela. Desfaça antes a importação mais recente.';
   end if;
@@ -342,6 +422,16 @@ begin
     and l.expense_id = e.id
     and e.installment_plan_id = l.installment_plan_id
     and not (l.installment_plan_id = any(coalesce(v_plans, '{}'::uuid[])));
+
+  -- Os planos voltam ao destino, categoria e devedor de antes
+  update public.installment_plans p
+  set destination = x.destination,
+      category_id = x.category_id,
+      assigned_member_id = x.assigned_member_id,
+      updated_at = now()
+  from jsonb_to_recordset(coalesce(v_previous, '[]'::jsonb))
+    as x(id uuid, destination text, category_id uuid, assigned_member_id uuid)
+  where p.id = x.id and p.house_id = v_house_id;
 
   -- Previstas dos planos que esta importação criou
   if v_plans is not null then
@@ -387,6 +477,9 @@ begin
   update public.import_batches
   set status = 'undone', undone_at = now(), undone_by = auth.uid()
   where id = p_batch_id;
+
+  -- Previstas que esta importação tirou da casa voltam a existir
+  perform public.restore_replaced_forecasts(p_batch_id);
 end;
 $$;
 

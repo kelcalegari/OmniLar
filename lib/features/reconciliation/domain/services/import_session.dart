@@ -851,14 +851,15 @@ class ImportSession {
       : null;
 
   /// Quantas parcelas previstas a linha cria: as que faltam de uma compra
-  /// parcelada nova lançada para a Casa.
+  /// parcelada nova lançada para a Casa (ou já lançada à mão).
   int forecastsCreatedBy(ImportedStatementLine line) {
     final match = installmentMatchOf(line);
     if (!forecastInstallments ||
         match == null ||
         match.kind != InstallmentMatchKind.newPlan ||
         _houseLineOf(match.groupId)?.id != line.id ||
-        statusOf(line) != LineStatus.newLine) {
+        (statusOf(line) != LineStatus.newLine &&
+            statusOf(line) != LineStatus.linked)) {
       return 0;
     }
     return match.total - match.number;
@@ -1468,16 +1469,22 @@ class ImportSession {
             expenseId: forecast.id,
           ),
         );
-        if (forecast.settledAt == null) {
+        if (forecast.settledAt != null) continue;
+        final amount = canUpdateAmount(forecast) ? effectiveAmountOf(line) : null;
+        if (forecast.isPending) {
           updates.add(
             forecast.copyWith(
-              amount: canUpdateAmount(forecast) ? effectiveAmountOf(line) : null,
+              amount: amount,
               paymentMethodId: source.id,
               paidByMemberId: payerMemberId,
               paidOutOfPocket: false,
               dueDate: invoiceDueDate,
             ),
           );
+        } else if (amount != null && amount != forecast.amount) {
+          // Fatura já paga no app antes de importar: quem pagou e o
+          // vencimento ficam como o pagamento registrou
+          updates.add(forecast.copyWith(amount: amount));
         }
         continue;
       }
@@ -1531,6 +1538,8 @@ class ImportSession {
       records: records,
       newExpenses: newExpenses,
       skipped: {for (final line in skipped) line.id},
+      members: members,
+      categories: categories,
       newId: newId,
     );
 
@@ -1556,11 +1565,37 @@ class ImportSession {
     );
   }
   /// Previstas do plano a partir da parcela [number], em ordem.
+  /// Só as que ainda esperam a fatura: a paga ou acertada fica como está.
   static List<String> _forecastsFrom(InstallmentPlan plan, int number) => [
     for (final entry
         in plan.parcels.entries.toList()..sort((a, b) => a.key.compareTo(b.key)))
-      if (entry.key >= number && entry.value.isForecast) entry.value.expense.id,
+      if (entry.key >= number &&
+          entry.value.isForecast &&
+          entry.value.expense.isPending &&
+          entry.value.expense.settledAt == null)
+        entry.value.expense.id,
   ];
+
+  /// Dia de compra da parcela desta fatura: o da linha, quando o banco mostra
+  /// a data dentro da fatura; quando mostra a data da compra original, a
+  /// véspera do fechamento. É dele que as previstas avançam um mês por vez,
+  /// para cada uma cair na sua fatura (e no seu ciclo, no cartão que conta
+  /// pela data da compra).
+  DateTime _periodDateOf(ImportedStatementLine line) {
+    final due = invoiceDueDate!;
+    final daysBefore = DateTime(due.year, due.month, due.day)
+        .difference(DateTime(line.date.year, line.date.month, line.date.day))
+        .inDays;
+    final closingDay = source.closingDay;
+    final dueDay = source.dueDay;
+    if ((daysBefore >= 0 && daysBefore <= 40) ||
+        closingDay == null ||
+        dueDay == null) {
+      return line.date;
+    }
+    final closingMonth = closingDay < dueDay ? due.month : due.month - 1;
+    return DateTime(due.year, closingMonth, closingDay - 1, 12);
+  }
 
   /// O que a gravação faz nas compras parceladas: planos novos (com as
   /// próximas parcelas previstas, em [newExpenses]), o destino lembrado nos
@@ -1576,6 +1611,8 @@ class ImportSession {
     required List<ImportLineRecord> records,
     required List<HouseExpense> newExpenses,
     required Set<String> skipped,
+    required List<HouseMember> members,
+    required List<ExpenseCategory> categories,
     required String Function() newId,
   }) {
     final plans = <InstallmentPlan>[];
@@ -1625,6 +1662,19 @@ class ImportSession {
           : null;
       final lead = carrier ?? active.firstOrNull;
 
+      // Despesa que fica com a parcela: a lançada agora ou a que já estava no
+      // app e a linha casou (compra lançada à mão)
+      HouseExpense? carrierExpense;
+      if (carrier != null) {
+        final createdId = createdExpenseOf[carrier.id];
+        carrierExpense = createdId != null
+            ? newExpenses.where((e) => e.id == createdId).firstOrNull
+            : (statusOf(carrier) == LineStatus.linked
+                  ? matches[carrier.id]?.expense
+                  : null);
+      }
+      final takesPart = active.isNotEmpty || carrierExpense != null;
+
       switch (match.kind) {
         case InstallmentMatchKind.alreadyImported:
           continue;
@@ -1649,17 +1699,16 @@ class ImportSession {
           planOfGroup[match.groupId] = plan.id;
           if (lead != null) remember(plan, lead);
         case InstallmentMatchKind.continues:
-          if (active.isEmpty) continue;
+          if (!takesPart) continue;
           final plan = match.plan!;
           planOfGroup[match.groupId] = plan.id;
           if (carrier == null) {
             forecastDeletions.addAll(_forecastsFrom(plan, match.number));
           }
-          final expenseId = carrier == null ? null : createdExpenseOf[carrier.id];
-          if (expenseId != null) {
+          if (carrierExpense != null) {
             links.add(
               InstallmentLink(
-                expenseId: expenseId,
+                expenseId: carrierExpense.id,
                 planId: plan.id,
                 number: match.number,
               ),
@@ -1667,7 +1716,7 @@ class ImportSession {
           }
           remember(plan, lead!);
         case InstallmentMatchKind.newPlan:
-          if (active.isEmpty) continue;
+          if (!takesPart) continue;
           final first = group.first;
           final plan = InstallmentPlan(
             id: newId(),
@@ -1688,11 +1737,10 @@ class ImportSession {
           plans.add(plan);
           planOfGroup[match.groupId] = plan.id;
 
-          final expenseId = carrier == null ? null : createdExpenseOf[carrier.id];
-          if (expenseId == null) continue;
+          if (carrierExpense == null) continue;
           links.add(
             InstallmentLink(
-              expenseId: expenseId,
+              expenseId: carrierExpense.id,
               planId: plan.id,
               number: match.number,
             ),
@@ -1700,22 +1748,35 @@ class ImportSession {
           if (!forecastInstallments) continue;
 
           // As próximas parcelas: a parte da Casa, uma por fatura
-          final base = newExpenses.firstWhere((e) => e.id == expenseId);
-          final houseCents = active
-              .where((l) => l.destination == LineDestination.house)
+          final houseCents = group
+              .where(
+                (l) =>
+                    l.destination == LineDestination.house &&
+                    !skipped.contains(l.id) &&
+                    (statusOf(l) == LineStatus.newLine ||
+                        statusOf(l) == LineStatus.linked),
+              )
               .fold<int>(0, (acc, l) => acc + l.amount.cents);
+          final category = categories
+              .where((c) => c.id == carrierExpense!.categoryId)
+              .firstOrNull;
+          final periodDate = _periodDateOf(carrier!);
           for (var number = match.number + 1; number <= match.total; number++) {
             final offset = number - match.number;
             final forecastId = newId();
             newExpenses.add(
-              base.copyWith(
+              HouseExpense(
                 id: forecastId,
-                title: '${_baseTitleOf(carrier!)} ($number/${match.total})',
+                title: '${_baseTitleOf(carrier)} ($number/${match.total})',
                 amount: Money(houseCents),
-                date: addMonths(first.date, offset),
+                date: addMonths(periodDate, offset),
                 dueDate: addMonths(invoiceDueDate!, offset),
-                status: ExpenseStatus.pending,
+                categoryId: carrierExpense.categoryId,
+                paidByMemberId: payerMemberId,
+                paymentMethodId: source.id,
                 paidOutOfPocket: false,
+                splitRule: _splitRuleFor(category: category, members: members),
+                status: ExpenseStatus.pending,
                 notes:
                     'Parcela prevista de ${source.name}: ${first.description}',
               ),

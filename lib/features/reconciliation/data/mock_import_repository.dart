@@ -16,11 +16,17 @@ class _StoredImport {
   final Set<String> createdPlanIds;
   final List<InstallmentLink> confirmedForecasts;
 
+  /// Previstas que ela tirou da casa e o que os planos eram antes dela.
+  final List<({String planId, int number, HouseExpense expense})> replacedForecasts;
+  final List<InstallmentPlan> previousPlans;
+
   const _StoredImport(
     this.batch,
     this.records, {
     this.createdPlanIds = const {},
     this.confirmedForecasts = const [],
+    this.replacedForecasts = const [],
+    this.previousPlans = const [],
   });
 }
 
@@ -88,20 +94,28 @@ class MockImportRepository implements ImportRepository {
     for (final loan in plan.loans) {
       await p2p.createLoan(loan);
     }
+    final replacedForecasts = <({String planId, int number, HouseExpense expense})>[];
     for (final expenseId in plan.forecastDeletions) {
       await finance.deleteExpense(expenseId);
-      for (final stored in _plans.values) {
-        stored.parcels.removeWhere((_, parcel) => parcel.expense.id == expenseId);
+      for (final entry in _plans.entries) {
+        final parcels = entry.value.parcels;
+        for (final number in parcels.keys.toList()) {
+          if (parcels[number]!.expense.id != expenseId) continue;
+          replacedForecasts.add((planId: entry.key, number: number, expense: parcels[number]!.expense));
+          parcels.remove(number);
+        }
       }
     }
 
     final createdPlanIds = <String>{};
+    final previousPlans = <InstallmentPlan>[];
     for (final installment in plan.installmentPlans) {
       final stored = _plans[installment.id];
       if (stored == null) {
         _plans[installment.id] = _StoredPlan(installment);
         createdPlanIds.add(installment.id);
       } else {
+        previousPlans.add(stored.plan);
         stored.plan = installment;
       }
     }
@@ -140,6 +154,8 @@ class MockImportRepository implements ImportRepository {
         plan.lineRecords,
         createdPlanIds: createdPlanIds,
         confirmedForecasts: confirmedForecasts,
+        replacedForecasts: replacedForecasts,
+        previousPlans: previousPlans,
       ),
     );
   }
@@ -206,12 +222,15 @@ class MockImportRepository implements ImportRepository {
     final stored = _imports[index];
     if (stored.batch.isUndone) throw const ValidationFailure('Esta importação já foi desfeita.');
 
-    final usedLater = _imports.any(
-      (other) =>
-          !other.batch.isUndone &&
-          other.batch.id != batchId &&
-          other.records.any((r) => stored.createdPlanIds.contains(r.installmentPlanId)),
-    );
+    // Só a importação mais recente de cada compra parcelada pode ser desfeita
+    // (as mais novas ficam antes na lista)
+    final touched = {
+      ...stored.createdPlanIds,
+      for (final record in stored.records) ?record.installmentPlanId,
+    };
+    final usedLater = _imports
+        .take(index)
+        .any((other) => !other.batch.isUndone && other.records.any((r) => touched.contains(r.installmentPlanId)));
     if (usedLater) {
       throw const ValidationFailure(
         'Uma fatura importada depois desta já usa uma das compras parceladas dela. Desfaça antes a importação mais recente.',
@@ -222,6 +241,15 @@ class MockImportRepository implements ImportRepository {
       if (parcel != null) {
         _plans[link.planId]!.parcels[link.number] = InstallmentParcel(expense: parcel.expense, isForecast: true);
       }
+    }
+    for (final previous in stored.previousPlans) {
+      _plans[previous.id]?.plan = previous;
+    }
+    for (final replaced in stored.replacedForecasts) {
+      final target = _plans[replaced.planId];
+      if (target == null) continue;
+      await finance.addExpense(replaced.expense);
+      target.parcels[replaced.number] = InstallmentParcel(expense: replaced.expense, isForecast: true);
     }
     for (final planId in stored.createdPlanIds) {
       final removed = _plans.remove(planId);
@@ -255,6 +283,8 @@ class MockImportRepository implements ImportRepository {
       stored.records,
       createdPlanIds: stored.createdPlanIds,
       confirmedForecasts: stored.confirmedForecasts,
+      replacedForecasts: stored.replacedForecasts,
+      previousPlans: stored.previousPlans,
     );
   }
 }

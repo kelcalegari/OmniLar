@@ -8,6 +8,7 @@ import 'package:omni_lar/features/finance/domain/entities/category.dart';
 import 'package:omni_lar/features/finance/domain/entities/house_expense.dart';
 import 'package:omni_lar/features/finance/domain/entities/house_member.dart';
 import 'package:omni_lar/features/finance/domain/entities/payment_method.dart';
+import 'package:omni_lar/features/finance/domain/entities/split_rule.dart';
 import 'package:omni_lar/features/p2p/data/datasources/mock_p2p_datasource.dart';
 import 'package:omni_lar/features/reconciliation/data/mock_import_repository.dart';
 import 'package:omni_lar/features/reconciliation/domain/entities/imported_statement_line.dart';
@@ -287,6 +288,106 @@ void main() {
     });
   });
 
+  group('consistência com o resto do app', () {
+    test('data da compra original: as previstas caem cada uma no período da sua fatura', () async {
+      final result = plan(await review(_card(), _october, [_line('a', _purchase, 'MAGALU 03/10', 10000)]));
+      final forecasts = result.newExpenses.skip(1).toList();
+      // Fechamento dia 9: a parcela 4 é da fatura de 14/11, comprada até 08/11
+      expect(forecasts.first.date, DateTime(2026, 11, 8, 12));
+      expect(forecasts.last.date, DateTime(2027, 5, 8, 12));
+    });
+
+    test('data dentro da fatura: as previstas avançam um mês a partir dela', () async {
+      final result = plan(await review(_card(), _october, [
+        _line('a', DateTime(2026, 10, 2), 'MAGALU 03/10', 10000),
+      ]));
+      expect(result.newExpenses[1].date, DateTime(2026, 11, 2));
+    });
+
+    test('prevista já paga no app: a fatura confirma sem mexer em quem pagou', () async {
+      final paid = HouseExpense(
+        id: 'prevista_4',
+        title: 'Magalu (4/10)',
+        amount: const Money(10000),
+        date: DateTime(2026, 11, 8),
+        dueDate: _november,
+        categoryId: 'cat_casa',
+        paidByMemberId: 'kelvynn',
+        paymentMethodId: 'pm_magalu',
+        splitRule: const SplitRule.percentage(null),
+        paidAt: DateTime(2026, 11, 10),
+        paidOutOfPocket: true,
+      );
+      final installment = InstallmentPlan(
+        id: 'p',
+        paymentMethodId: 'pm_magalu',
+        merchantKey: InstallmentMatcher.merchantKeyOf('MAGALU 03/10'),
+        title: 'Magalu',
+        total: 10,
+        installmentAmount: const Money(10000),
+        anchorNumber: 3,
+        anchorLineDate: _purchase,
+        anchorDueDate: _october,
+        parcels: {4: InstallmentParcel(expense: paid, isForecast: true)},
+        importedNumbers: const {3},
+      );
+      final session = ImportSession.start(
+        source: _card(owner: 'kelvynn'),
+        fileName: 'fatura.csv',
+        lines: [_line('a', _purchase, 'MAGALU 04/10', 10000)],
+        payerMemberId: 'kelvynn',
+      ).withInvoiceDueDate(_november).withInstallmentPlans(
+        [installment],
+        memberIds: {'kelvynn', 'cristiano'},
+        categoryIds: {'cat_casa'},
+      );
+      expect(session.statusOf(session.lines.single), LineStatus.linked);
+      final result = plan(session);
+      expect(result.expenseUpdates, isEmpty);
+      expect(result.installmentLinks.single.expenseId, 'prevista_4');
+
+      // Valor diferente: só o valor muda
+      final differs = ImportSession.start(
+        source: _card(owner: 'kelvynn'),
+        fileName: 'fatura.csv',
+        lines: [_line('a', _purchase, 'MAGALU 04/10', 10050)],
+        payerMemberId: 'kelvynn',
+      ).withInvoiceDueDate(_november).withInstallmentPlans(
+        [installment],
+        memberIds: {'kelvynn', 'cristiano'},
+        categoryIds: {'cat_casa'},
+      );
+      final update = plan(differs).expenseUpdates.single;
+      expect(update.amount.cents, 10050);
+      expect(update.paidOutOfPocket, isTrue);
+    });
+
+    test('compra lançada à mão que a fatura casa vira a parcela, com as previstas', () async {
+      final manual = HouseExpense(
+        id: 'manual',
+        title: 'Magalu',
+        amount: const Money(10000),
+        date: DateTime(2026, 10, 2),
+        dueDate: _october,
+        categoryId: 'cat_casa',
+        paidByMemberId: 'kelvynn',
+        paymentMethodId: 'pm_magalu',
+        splitRule: const SplitRule.percentage(null),
+        status: ExpenseStatus.pending,
+      );
+      final session = (await review(_card(), _october, [
+        _line('a', DateTime(2026, 10, 2), 'MAGALU 01/10', 10000),
+      ]))
+          .withExpenses([manual]);
+      expect(session.statusOf(session.lines.single), LineStatus.linked);
+      expect(session.forecastsCreatedBy(session.lines.single), 9);
+
+      final result = plan(session);
+      expect(result.installmentLinks.where((l) => !l.isForecast).single.expenseId, 'manual');
+      expect(result.newExpenses, hasLength(9));
+    });
+  });
+
   group('desfazer', () {
     test('não desfaz a fatura que criou o plano enquanto a seguinte o usa', () async {
       await confirm(await review(_card(), _october, [_line('a', _purchase, 'MAGALU 03/10', 10000)]));
@@ -303,6 +404,26 @@ void main() {
 
       await repository.undoImport(octoberBatch.id);
       expect(await repository.installmentPlans('pm_magalu'), isEmpty);
+    });
+
+    test('só desfaz a fatura mais recente da compra, e desfazer traz de volta as previstas', () async {
+      await confirm(await review(_card(), _october, [_line('a', _purchase, 'MAGALU 03/10', 10000)]));
+      var november = await review(_card(), _november, [_line('a', _purchase, 'MAGALU 04/10', 10000)]);
+      november = november.withLine(
+        lineOf(november, 'a').copyWith(destination: LineDestination.splitP2P, assignedMemberId: 'cristiano'),
+      );
+      await confirm(november);
+      await confirm(await review(_card(), DateTime(2026, 12, 14), [_line('a', _purchase, 'MAGALU 05/10', 10000)]));
+      final history = await repository.getHistory();
+      expect((await repository.installmentPlans('pm_magalu')).single.forecastOf(6), isNull);
+
+      await expectLater(repository.undoImport(history[1].id), throwsA(isA<ValidationFailure>()));
+      await repository.undoImport(history[0].id);
+      await repository.undoImport(history[1].id);
+
+      final restored = (await repository.installmentPlans('pm_magalu')).single;
+      expect(restored.destination, LineDestination.house);
+      expect([for (var n = 4; n <= 10; n++) restored.forecastOf(n) != null], everyElement(isTrue));
     });
   });
 
