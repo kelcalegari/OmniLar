@@ -63,6 +63,8 @@ class ImportDraftCodec {
         'extraChoices': session.extraChoices,
         'refundChoices': session.refundChoices,
         'ruledLineIds': session.ruledLineIds.toList(),
+        'forecastInstallments': session.forecastInstallments,
+        'installmentPrefilledIds': session.installmentPrefilledIds.toList(),
       };
 
   /// Monta a revisão de volta. Null se o rascunho for de outra versão ou de
@@ -92,6 +94,10 @@ class ImportDraftCodec {
         extraChoices: strings(json['extraChoices']),
         refundChoices: strings(json['refundChoices']),
         ruledLineIds: {for (final id in (json['ruledLineIds'] as List? ?? const [])) id as String},
+        forecastInstallments: json['forecastInstallments'] as bool? ?? true,
+        installmentPrefilledIds: {
+          for (final id in (json['installmentPrefilledIds'] as List? ?? const [])) id as String,
+        },
       );
     } catch (_) {
       return null;

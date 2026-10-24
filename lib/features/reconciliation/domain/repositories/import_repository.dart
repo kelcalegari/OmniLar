@@ -1,5 +1,6 @@
 import '../../../../core/domain/value_objects/money.dart';
 import '../entities/imported_statement_line.dart';
+import '../entities/installment_plan.dart';
 import '../services/import_session.dart';
 
 /// Uma importação já confirmada, para o histórico.
@@ -87,4 +88,8 @@ abstract class ImportRepository {
 
   /// Compras de importações ativas que formam o empréstimo [loanId], por data.
   Future<List<LoanPurchase>> purchasesOfLoan(String loanId);
+
+  /// Compras parceladas de um cartão que ainda estão em curso, com as
+  /// despesas das parcelas e as parcelas que as importações ativas já trataram.
+  Future<List<InstallmentPlan>> installmentPlans(String paymentMethodId);
 }
