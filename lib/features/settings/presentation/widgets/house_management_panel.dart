@@ -42,8 +42,8 @@ class HouseManagementPanel extends StatelessWidget {
         icon: const Icon(Icons.archive_outlined, color: Colors.amber, size: 36),
         title: Text('Arquivar "${house.name}"?'),
         content: const Text(
-          'Ao arquivar a casa, ela será ocultada da sua visualização do dia a dia, '
-          'mas todo o livro-razão financeiro, lançamentos e histórico permanecerão preservados com total segurança.\n\n'
+          'A casa sai da lista de todos os moradores, não só da sua. '
+          'Todo o livro-razão financeiro, lançamentos e histórico permanecem preservados.\n\n'
           'O app alternará automaticamente para outra de suas casas ativas.',
         ),
         actions: [
