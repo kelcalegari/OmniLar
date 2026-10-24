@@ -4,8 +4,10 @@ import '../../../core/domain/value_objects/money.dart';
 import '../../../core/errors/failures.dart';
 import '../../../core/utils/uuid.dart';
 import '../../finance/data/datasources/house_expense_payload.dart';
+import '../../finance/data/datasources/house_expense_row.dart';
 import '../../p2p/data/datasources/p2p_loan_payload.dart';
 import '../domain/entities/imported_statement_line.dart';
+import '../domain/entities/installment_plan.dart';
 import '../domain/repositories/import_repository.dart';
 import '../domain/services/import_session.dart';
 
@@ -78,7 +80,41 @@ Map<String, dynamic> importPayload(
           'decision': record.outcome.name,
           if (isUuid(record.expenseId)) 'expense_id': record.expenseId,
           if (isUuid(record.loanId)) 'loan_id': record.loanId,
+          if (isUuid(record.installmentPlanId)) 'installment_plan_id': record.installmentPlanId,
+          'installment_number': ?record.installmentNumber,
         },
+    ],
+    'installment_plans': [
+      for (final installment in plan.installmentPlans)
+        if (isUuid(installment.id) && isUuid(installment.paymentMethodId))
+          {
+            'id': installment.id,
+            'payment_method_id': installment.paymentMethodId,
+            'merchant_key': installment.merchantKey,
+            'title': installment.title,
+            'installments_total': installment.total,
+            'installment_cents': installment.installmentAmount.cents,
+            'anchor_number': installment.anchorNumber,
+            'anchor_line_date': _dateOnly(installment.anchorLineDate),
+            if (installment.anchorDueDate != null) 'anchor_due_date': _dateOnly(installment.anchorDueDate!),
+            'destination': _destinationToDb(installment.destination),
+            if (isUuid(installment.categoryId)) 'category_id': installment.categoryId,
+            if (isUuid(installment.assignedMemberId)) 'assigned_member_id': installment.assignedMemberId,
+          },
+    ],
+    'installment_links': [
+      for (final link in plan.installmentLinks)
+        if (isUuid(link.expenseId) && isUuid(link.planId))
+          {
+            'expense_id': link.expenseId,
+            'plan_id': link.planId,
+            'number': link.number,
+            'is_forecast': link.isForecast,
+          },
+    ],
+    'forecast_deletions': [
+      for (final id in plan.forecastDeletions)
+        if (isUuid(id)) id,
     ],
   };
 }
@@ -187,6 +223,88 @@ class SupabaseImportRepository implements ImportRepository {
     } catch (e) {
       throw _failure('Erro ao carregar as compras do empréstimo', e);
     }
+  }
+
+  @override
+  Future<List<InstallmentPlan>> installmentPlans(String paymentMethodId) async {
+    if (!isUuid(paymentMethodId)) return const [];
+    try {
+      final planRows = await client
+          .from('installment_plans')
+          .select()
+          .eq('house_id', _houseId)
+          .eq('payment_method_id', paymentMethodId);
+      // Plano cuja última parcela venceu há mais de dois meses já terminou
+      final cutoff = DateTime.now().subtract(const Duration(days: 60));
+      final rows = [
+        for (final row in planRows)
+          if (_lastDueOf(row)?.isBefore(cutoff) != true) row,
+      ];
+      if (rows.isEmpty) return const [];
+      final ids = [for (final row in rows) row['id'] as String];
+
+      final expenseRows = await client
+          .from('house_expenses')
+          .select('*, house_expense_items(*), split_rules(*)')
+          .eq('house_id', _houseId)
+          .inFilter('installment_plan_id', ids)
+          .isFilter('deleted_at', null);
+      final lineRows = await client
+          .from('import_lines')
+          .select('installment_plan_id, installment_number, import_batches!inner(status)')
+          .eq('house_id', _houseId)
+          .inFilter('installment_plan_id', ids)
+          .eq('import_batches.status', 'confirmed')
+          .neq('decision', 'skipped');
+
+      final parcels = <String, Map<int, InstallmentParcel>>{};
+      for (final row in expenseRows) {
+        final number = (row['installment_number'] as num?)?.toInt();
+        if (number == null) continue;
+        parcels.putIfAbsent(row['installment_plan_id'] as String, () => {})[number] =
+            InstallmentParcel(
+          expense: houseExpenseFromRow(row),
+          isForecast: row['is_forecast'] as bool? ?? false,
+        );
+      }
+      final imported = <String, Set<int>>{};
+      for (final row in lineRows) {
+        final number = (row['installment_number'] as num?)?.toInt();
+        if (number == null) continue;
+        imported.putIfAbsent(row['installment_plan_id'] as String, () => {}).add(number);
+      }
+
+      return [
+        for (final row in rows)
+          InstallmentPlan(
+            id: row['id'] as String,
+            paymentMethodId: row['payment_method_id'] as String,
+            merchantKey: row['merchant_key'] as String,
+            title: row['title'] as String,
+            total: (row['installments_total'] as num).toInt(),
+            installmentAmount: Money((row['installment_cents'] as num).toInt()),
+            anchorNumber: (row['anchor_number'] as num).toInt(),
+            anchorLineDate: DateTime.parse(row['anchor_line_date'] as String),
+            anchorDueDate: DateTime.tryParse(row['anchor_due_date'] as String? ?? ''),
+            destination: _destinationFromDb(row['destination'] as String?),
+            categoryId: row['category_id'] as String?,
+            assignedMemberId: row['assigned_member_id'] as String?,
+            parcels: parcels[row['id']] ?? const {},
+            importedNumbers: imported[row['id']] ?? const {},
+          ),
+      ];
+    } catch (e) {
+      throw _failure('Erro ao carregar as compras parceladas', e);
+    }
+  }
+
+  static DateTime? _lastDueOf(Map<String, dynamic> row) {
+    final anchorDue = DateTime.tryParse(row['anchor_due_date'] as String? ?? '');
+    if (anchorDue == null) return null;
+    return addMonths(
+      anchorDue,
+      (row['installments_total'] as num).toInt() - (row['anchor_number'] as num).toInt(),
+    );
   }
 
   @override

@@ -1,7 +1,9 @@
 import '../../../core/errors/failures.dart';
 import '../../../core/utils/uuid.dart';
 import '../../finance/data/datasources/finance_datasource.dart';
+import '../../finance/domain/entities/house_expense.dart';
 import '../../p2p/data/datasources/p2p_datasource.dart';
+import '../domain/entities/installment_plan.dart';
 import '../domain/repositories/import_repository.dart';
 import '../domain/services/import_session.dart';
 
@@ -9,7 +11,25 @@ class _StoredImport {
   final ImportBatch batch;
   final List<ImportLineRecord> records;
 
-  const _StoredImport(this.batch, this.records);
+  /// Planos de parcelamento que esta importação criou e parcelas previstas
+  /// que ela confirmou.
+  final Set<String> createdPlanIds;
+  final List<InstallmentLink> confirmedForecasts;
+
+  const _StoredImport(
+    this.batch,
+    this.records, {
+    this.createdPlanIds = const {},
+    this.confirmedForecasts = const [],
+  });
+}
+
+/// Plano guardado em memória com as despesas das parcelas, pelo número.
+class _StoredPlan {
+  InstallmentPlan plan;
+  final Map<int, InstallmentParcel> parcels = {};
+
+  _StoredPlan(this.plan);
 }
 
 /// Importações do modo demo e dos testes: grava nas mesmas fontes em memória
@@ -24,6 +44,9 @@ class MockImportRepository implements ImportRepository {
 
   /// Regras por cartão ou conta.
   final Map<String, List<ImportRule>> _rules = {};
+
+  /// Compras parceladas, pelo id do plano.
+  final Map<String, _StoredPlan> _plans = {};
 
   @override
   Future<List<ImportRule>> getRules(String paymentMethodId) async =>
@@ -65,6 +88,40 @@ class MockImportRepository implements ImportRepository {
     for (final loan in plan.loans) {
       await p2p.createLoan(loan);
     }
+    for (final expenseId in plan.forecastDeletions) {
+      await finance.deleteExpense(expenseId);
+      for (final stored in _plans.values) {
+        stored.parcels.removeWhere((_, parcel) => parcel.expense.id == expenseId);
+      }
+    }
+
+    final createdPlanIds = <String>{};
+    for (final installment in plan.installmentPlans) {
+      final stored = _plans[installment.id];
+      if (stored == null) {
+        _plans[installment.id] = _StoredPlan(installment);
+        createdPlanIds.add(installment.id);
+      } else {
+        stored.plan = installment;
+      }
+    }
+    final expenses = <String, HouseExpense>{
+      for (final expense in plan.newExpenses) expense.id: expense,
+      for (final expense in plan.expenseUpdates) expense.id: expense,
+    };
+    final confirmedForecasts = <InstallmentLink>[];
+    for (final link in plan.installmentLinks) {
+      final stored = _plans[link.planId];
+      if (stored == null) continue;
+      final previous = stored.parcels[link.number];
+      if (previous != null && previous.expense.id != link.expenseId) {
+        throw const ValidationFailure('Uma parcela desta fatura já está lançada no app. Abra a importação de novo.');
+      }
+      final expense = expenses[link.expenseId] ?? previous?.expense;
+      if (expense == null) continue;
+      if (previous != null && previous.isForecast && !link.isForecast) confirmedForecasts.add(link);
+      stored.parcels[link.number] = InstallmentParcel(expense: expense, isForecast: link.isForecast);
+    }
 
     _imports.insert(
       0,
@@ -81,9 +138,40 @@ class MockImportRepository implements ImportRepository {
           createdAt: DateTime.now(),
         ),
         plan.lineRecords,
+        createdPlanIds: createdPlanIds,
+        confirmedForecasts: confirmedForecasts,
       ),
     );
   }
+
+  @override
+  Future<List<InstallmentPlan>> installmentPlans(String paymentMethodId) async => [
+        for (final stored in _plans.values)
+          if (stored.plan.paymentMethodId == paymentMethodId)
+            InstallmentPlan(
+              id: stored.plan.id,
+              paymentMethodId: stored.plan.paymentMethodId,
+              merchantKey: stored.plan.merchantKey,
+              title: stored.plan.title,
+              total: stored.plan.total,
+              installmentAmount: stored.plan.installmentAmount,
+              anchorNumber: stored.plan.anchorNumber,
+              anchorLineDate: stored.plan.anchorLineDate,
+              anchorDueDate: stored.plan.anchorDueDate,
+              destination: stored.plan.destination,
+              categoryId: stored.plan.categoryId,
+              assignedMemberId: stored.plan.assignedMemberId,
+              parcels: Map.of(stored.parcels),
+              importedNumbers: {
+                for (final other in _imports)
+                  if (!other.batch.isUndone)
+                    for (final record in other.records)
+                      if (record.installmentPlanId == stored.plan.id &&
+                          record.outcome != LineOutcome.skipped)
+                        ?record.installmentNumber,
+              },
+            ),
+      ];
 
   @override
   Future<Set<String>> importedSignatures(String paymentMethodId) async => {
@@ -118,6 +206,30 @@ class MockImportRepository implements ImportRepository {
     final stored = _imports[index];
     if (stored.batch.isUndone) throw const ValidationFailure('Esta importação já foi desfeita.');
 
+    final usedLater = _imports.any(
+      (other) =>
+          !other.batch.isUndone &&
+          other.batch.id != batchId &&
+          other.records.any((r) => stored.createdPlanIds.contains(r.installmentPlanId)),
+    );
+    if (usedLater) {
+      throw const ValidationFailure(
+        'Uma fatura importada depois desta já usa uma das compras parceladas dela. Desfaça antes a importação mais recente.',
+      );
+    }
+    for (final link in stored.confirmedForecasts) {
+      final parcel = _plans[link.planId]?.parcels[link.number];
+      if (parcel != null) {
+        _plans[link.planId]!.parcels[link.number] = InstallmentParcel(expense: parcel.expense, isForecast: true);
+      }
+    }
+    for (final planId in stored.createdPlanIds) {
+      final removed = _plans.remove(planId);
+      for (final parcel in removed?.parcels.values ?? const <InstallmentParcel>[]) {
+        if (parcel.isForecast) await finance.deleteExpense(parcel.expense.id);
+      }
+    }
+
     final created = stored.records.where((r) => r.outcome == LineOutcome.created);
     for (final expenseId in {for (final r in created) ?r.expenseId}) {
       await finance.deleteExpense(expenseId);
@@ -141,6 +253,8 @@ class MockImportRepository implements ImportRepository {
         isUndone: true,
       ),
       stored.records,
+      createdPlanIds: stored.createdPlanIds,
+      confirmedForecasts: stored.confirmedForecasts,
     );
   }
 }
@@ -181,4 +295,8 @@ class DynamicImportRepository implements ImportRepository {
 
   @override
   Future<void> deleteRule(String ruleId) => _active.deleteRule(ruleId);
+
+  @override
+  Future<List<InstallmentPlan>> installmentPlans(String paymentMethodId) =>
+      _active.installmentPlans(paymentMethodId);
 }

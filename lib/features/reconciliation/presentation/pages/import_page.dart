@@ -37,6 +37,7 @@ import '../widgets/csv_mapping_dialog.dart';
 import '../../domain/entities/imported_statement_line.dart';
 import '../../domain/repositories/import_repository.dart';
 import '../../domain/services/import_session.dart';
+import '../../domain/services/installment_matcher.dart';
 import '../../domain/services/statement_extras.dart';
 import '../../domain/services/statement_matcher.dart';
 import '../../domain/services/statement_parser.dart';
@@ -658,6 +659,17 @@ class _ImportPageState extends State<ImportPage> {
       // Sem a resposta, vale a comparação com as despesas do app
     }
 
+    var plans = session.installmentPlans;
+    if (session.source.isCreditCard) {
+      try {
+        plans = await sl<ImportRepository>().installmentPlans(
+          session.source.id,
+        );
+      } catch (_) {
+        // Sem a resposta, cada parcela é tratada como compra nova
+      }
+    }
+
     final settlements = sl<SettlementRepository>();
     for (final cycle in session.countingCycles(schedule)) {
       try {
@@ -696,6 +708,11 @@ class _ImportPageState extends State<ImportPage> {
           defaults: houseSettings.importDefaults,
         )
         .withImportedSignatures(imported)
+        .withInstallmentPlans(
+          plans,
+          memberIds: {for (final m in _finance.state.members) m.id},
+          categoryIds: {for (final c in _finance.state.categories) c.id},
+        )
         .withExpenses(byId.values.toList())
         .withExtraOptions(
           StatementExtras.optionsFor(
@@ -1828,6 +1845,23 @@ class _ImportPageState extends State<ImportPage> {
           ],
         ),
       ),
+      if (session.installmentMatches.values.any(
+        (m) => m.kind == InstallmentMatchKind.newPlan,
+      ))
+        SwitchListTile(
+          key: const Key('import_forecast_installments'),
+          contentPadding: EdgeInsets.zero,
+          dense: true,
+          value: session.forecastInstallments,
+          onChanged: _busy
+              ? null
+              : (value) => _update(session.withForecastInstallments(value)),
+          title: const Text('Prever as próximas parcelas'),
+          subtitle: const Text(
+            'Compra parcelada nova da Casa já deixa as parcelas seguintes como contas pendentes. A próxima fatura só as confirma.',
+            style: TextStyle(fontSize: 12),
+          ),
+        ),
       Padding(
         padding: const EdgeInsets.only(bottom: 8),
         child: Wrap(
@@ -1977,13 +2011,14 @@ class _ImportPageState extends State<ImportPage> {
     final title = line.title?.trim().isNotEmpty == true
         ? line.title!.trim()
         : StatementText.cleanTitle(line.description);
-    final installment = line.isInstallment
-        ? ' • parcela ${line.installmentNumber}/${line.installmentsTotal}'
-        : '';
+    final installment = _installmentLabel(session, line);
     final muted =
         status == LineStatus.informational || status == LineStatus.ignored;
+    final confirmsForecast = session.confirmsForecast(line);
     final editable =
-        status == LineStatus.newLine || status == LineStatus.ignored;
+        status == LineStatus.newLine ||
+        status == LineStatus.ignored ||
+        confirmsForecast;
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(14, 10, 8, 10),
@@ -2086,6 +2121,11 @@ class _ImportPageState extends State<ImportPage> {
           switch (status) {
             LineStatus.informational => _informationalRow(session, line),
             LineStatus.alreadyImported => _importedRow(session, line),
+            LineStatus.linked when confirmsForecast => _forecastRow(
+              state,
+              session,
+              line,
+            ),
             LineStatus.linked ||
             LineStatus.needsReview => _matchRow(state, session, line),
             LineStatus.newLine ||
@@ -2339,6 +2379,50 @@ class _ImportPageState extends State<ImportPage> {
           ),
         ],
       ),
+    );
+  }
+
+  /// Parcela da linha e o que a importação faz com a compra parcelada.
+  String _installmentLabel(ImportSession session, ImportedStatementLine line) {
+    if (!line.isInstallment) return '';
+    final parcel = ' • parcela ${line.installmentNumber}/${line.installmentsTotal}';
+    final match = session.installmentMatchOf(line);
+    if (match == null) return parcel;
+    if (session.confirmsForecast(line)) return '$parcel (prevista)';
+    final forecasts = session.forecastsCreatedBy(line);
+    if (forecasts > 0) {
+      return forecasts == 1
+          ? '$parcel • prevê a última'
+          : '$parcel • prevê as próximas $forecasts';
+    }
+    if (match.kind == InstallmentMatchKind.forecast &&
+        session.statusOf(line) == LineStatus.newLine) {
+      return '$parcel • tira esta e as próximas previstas da Casa';
+    }
+    return parcel;
+  }
+
+  /// Linha que confirma uma parcela prevista: o destino ainda pode mudar.
+  Widget _forecastRow(
+    FinanceState state,
+    ImportSession session,
+    ImportedStatementLine line,
+  ) {
+    final forecast = session.confirmedForecastOf(line)!;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Text(
+          'Parcela prevista "${forecast.title}": a fatura confirma valor e vencimento, sem lançar de novo.',
+          style: const TextStyle(
+            fontSize: 12,
+            color: AppColors.creditGreen,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+        const SizedBox(height: 4),
+        _destinationRow(state, session, line),
+      ],
     );
   }
 
