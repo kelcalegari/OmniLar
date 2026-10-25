@@ -13,3 +13,9 @@ key.properties
 **/*.keystore
 !**/debug.keystore
 **/*.jks
+
+# Chave de assinatura do release: nunca vai para o repositório
+key.properties
+*.jks
+*.keystore
+!app/debug.keystore
