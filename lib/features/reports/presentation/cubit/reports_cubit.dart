@@ -308,6 +308,7 @@ class ReportsCubit extends Cubit<ReportsState> {
         today: today,
         cashLabel: finance.houseSettings.cashName,
         installmentPlans: plans,
+        importLoansNeedAcceptance: finance.houseSettings.loanAcceptance.import,
       );
       emit(state.copyWith(upcoming: upcoming, upcomingLoading: false));
     } catch (e) {

@@ -706,6 +706,7 @@ class _ImportPageState extends State<ImportPage> {
         .withParams(
           matching: houseSettings.importMatching,
           defaults: houseSettings.importDefaults,
+          loansNeedAcceptance: houseSettings.loanAcceptance.import,
         )
         .withImportedSignatures(imported)
         .withInstallmentPlans(
@@ -2448,6 +2449,7 @@ class _ImportPageState extends State<ImportPage> {
     }
     final plan = match.plan;
     if (plan != null &&
+        session.loansNeedAcceptance &&
         plan.isAccepted &&
         line.destination == LineDestination.splitP2P &&
         line.assignedMemberId == plan.assignedMemberId) {

@@ -8,6 +8,7 @@ import 'folego_params.dart';
 import 'house_permissions.dart';
 import 'import_params.dart';
 import 'income_split.dart';
+import 'loan_acceptance.dart';
 
 /// O que o dinheiro que já está no Caixa no início do ciclo (sobra do ciclo
 /// anterior e pagamentos de empréstimo do Caixa que voltaram a ele) faz no
@@ -229,6 +230,10 @@ class HouseSettings extends Equatable {
   /// de quem administra a casa (0104). Nulo: não há aprovação por valor.
   final int? approvalThresholdCents;
 
+  /// Por origem, se o empréstimo lançado por outra pessoa espera o aceite
+  /// do devedor (0116).
+  final LoanAcceptance loanAcceptance;
+
   /// O [cents] pede aprovação: passa do limite da casa. Sem limite, nunca.
   bool requiresApproval(int cents) => approvalThresholdCents != null && cents > approvalThresholdCents!;
 
@@ -260,6 +265,7 @@ class HouseSettings extends Equatable {
   const HouseSettings({
     this.permissions = const HousePermissions(),
     this.approvalThresholdCents,
+    this.loanAcceptance = const LoanAcceptance(),
     this.cashLabel,
     this.shoppingUnits = defaultShoppingUnits,
     this.incomeVisibility = IncomeVisibility.self,
@@ -327,11 +333,15 @@ class HouseSettings extends Equatable {
         final num n when n > 0 => n.toInt(),
         _ => null,
       },
+      loanAcceptance: LoanAcceptance.fromJson(json['loan_acceptance']),
     );
   }
 
   /// Colunas lidas de `houses`.
-  static const String columns = '$columnsBefore0104, approval_threshold_cents';
+  static const String columns = '$columnsBefore0116, loan_acceptance';
+
+  /// Colunas até a 0104, para o banco que ainda não tem a 0116.
+  static const String columnsBefore0116 = '$columnsBefore0104, approval_threshold_cents';
 
   /// Colunas até a 0103, para o banco que ainda não tem a 0104.
   static const String columnsBefore0104 = '$columnsBefore0103, permissions';
@@ -390,8 +400,10 @@ class HouseSettings extends Equatable {
     HousePermissions? permissions,
     int? approvalThresholdCents,
     bool clearApprovalThreshold = false,
+    LoanAcceptance? loanAcceptance,
   }) =>
       HouseSettings(
+        loanAcceptance: loanAcceptance ?? this.loanAcceptance,
         permissions: permissions ?? this.permissions,
         approvalThresholdCents:
             clearApprovalThreshold ? null : (approvalThresholdCents ?? this.approvalThresholdCents),
@@ -416,5 +428,5 @@ class HouseSettings extends Equatable {
 
   @override
   List<Object?> get props =>
-      [openingBalanceRule, historyCycles, plannerMode, adjustPercent, categoryOverrides, inflowRules, closingDefaults, newMemberSplitPolicy, folegoParams, budgetAlertStages, importMatching, importDefaults, cashLabel, shoppingUnits, incomeVisibility, splitBasis, permissions, approvalThresholdCents];
+      [openingBalanceRule, historyCycles, plannerMode, adjustPercent, categoryOverrides, inflowRules, closingDefaults, newMemberSplitPolicy, folegoParams, budgetAlertStages, importMatching, importDefaults, cashLabel, shoppingUnits, incomeVisibility, splitBasis, permissions, approvalThresholdCents, loanAcceptance];
 }

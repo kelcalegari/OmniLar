@@ -7,6 +7,7 @@ import 'package:omni_lar/features/finance/data/datasources/mock_finance_datasour
 import 'package:omni_lar/features/finance/domain/entities/category.dart';
 import 'package:omni_lar/features/finance/domain/entities/house_expense.dart';
 import 'package:omni_lar/features/finance/domain/entities/house_member.dart';
+import 'package:omni_lar/features/finance/domain/entities/loan_acceptance.dart';
 import 'package:omni_lar/features/finance/domain/entities/payment_method.dart';
 import 'package:omni_lar/features/finance/domain/entities/split_rule.dart';
 import 'package:omni_lar/features/p2p/data/datasources/mock_p2p_datasource.dart';
@@ -486,6 +487,28 @@ void main() {
       expect(accepted.totalAmount.cents, 10000);
       final other = result.loans.firstWhere((l) => l.installmentPlanIds.isEmpty);
       expect(other.totalAmount.cents, 3000);
+    });
+
+    test('casa que dispensa o aceite da importação: um empréstimo só, como antes', () async {
+      await firstInvoice(_card(), debtor: 'cristiano');
+      await repository.acceptInstallmentPlan((await repository.installmentPlans('pm_magalu')).single.id);
+      var next = await review(_card(), _november, [
+        _line('a', _purchase, 'MAGALU 04/10', 10000),
+        _line('b', DateTime(2026, 10, 30), 'PADARIA', 3000),
+      ]);
+      next = next
+          .withParams(loansNeedAcceptance: false)
+          .withLine(lineOf(next, 'b').copyWith(destination: LineDestination.splitP2P, assignedMemberId: 'cristiano'));
+      final loan = plan(next).loans.single;
+      expect(loan.totalAmount.cents, 13000);
+      expect(loan.title, isNot(contains('aceitos')));
+    });
+
+    test('aceite por origem: chave ausente pede aceite, e o objeto vai inteiro', () {
+      expect(LoanAcceptance.fromJson(const {}), const LoanAcceptance());
+      final parsed = LoanAcceptance.fromJson(const {'import': false});
+      expect([parsed.manual, parsed.import, parsed.house], [true, false, true]);
+      expect(parsed.toJson(), {'manual': true, 'import': false, 'house': true});
     });
 
     test('outro devedor: o aceite de quem devia antes não vale', () async {

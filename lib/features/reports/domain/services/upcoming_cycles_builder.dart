@@ -47,6 +47,7 @@ class UpcomingCyclesBuilder {
     int count = 3,
     String cashLabel = HouseSettings.defaultCashLabel,
     List<InstallmentPlan> installmentPlans = const [],
+    bool importLoansNeedAcceptance = true,
   }) {
     final day = DateTime(today.year, today.month, today.day);
     final current = schedule.cycleFor(day);
@@ -131,7 +132,7 @@ class UpcomingCyclesBuilder {
           monthly: plan.installmentAmount,
           remainingCount: dues.length,
           lastDueDate: dues.last.due,
-          accepted: plan.isAccepted,
+          accepted: plan.isAccepted || !importLoansNeedAcceptance,
         ),
       );
     }

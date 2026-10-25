@@ -308,6 +308,7 @@ extension _SettingsGroupViews on _SettingsPageState {
       _NewMemberSplitBlock(financeState: financeState),
       _IncomeSplitBlock(financeState: financeState),
       _ApprovalThresholdBlock(financeState: financeState),
+      _LoanAcceptanceBlock(financeState: financeState),
       _PlanningSettingsBlock(financeState: financeState),
       _FolegoParamsBlock(financeState: financeState),
       _BudgetAlertBlock(financeState: financeState),
@@ -2958,6 +2959,104 @@ class _ApprovalThresholdBlockState extends State<_ApprovalThresholdBlock> {
 }
 
 
+
+/// Por origem, se o empréstimo lançado por outra pessoa espera o aceite de
+/// quem deve (0116). Cada interruptor grava na hora.
+class _LoanAcceptanceBlock extends StatefulWidget {
+  final FinanceState financeState;
+
+  const _LoanAcceptanceBlock({required this.financeState});
+
+  @override
+  State<_LoanAcceptanceBlock> createState() => _LoanAcceptanceBlockState();
+}
+
+class _LoanAcceptanceBlockState extends State<_LoanAcceptanceBlock> {
+  bool _isSaving = false;
+
+  bool _canEdit() =>
+      widget.financeState.canDo(HousePermissionAction.editConfigurations, sl<AuthRepository>().currentUser?.id);
+
+  Future<void> _save(LoanAcceptance value) async {
+    setState(() => _isSaving = true);
+    final messenger = ScaffoldMessenger.of(context);
+    final ok = await context.read<FinanceCubit>().updateHouseSettings(loanAcceptance: value);
+    if (mounted) setState(() => _isSaving = false);
+    showSaveFeedback(messenger, ok: ok, success: 'Aceite dos empréstimos atualizado.');
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final acceptance = widget.financeState.houseSettings.loanAcceptance;
+    final enabled = _canEdit() && !_isSaving;
+
+    Widget toggle(String key, String title, String subtitle, bool value, LoanAcceptance Function(bool) change) =>
+        SwitchListTile(
+          key: ValueKey('loan_acceptance_$key'),
+          dense: true,
+          contentPadding: const EdgeInsets.symmetric(horizontal: 16),
+          title: Text(title, style: const TextStyle(fontSize: 14)),
+          subtitle: Text(subtitle, style: const TextStyle(fontSize: 12, color: Colors.grey)),
+          value: value,
+          onChanged: enabled ? (v) => _save(change(v)) : null,
+        );
+
+    return Container(
+      decoration: BoxDecoration(
+        color: Theme.of(context).cardColor,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.grey.withValues(alpha: 0.2)),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: Material(
+        color: Colors.transparent,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            const Padding(
+              padding: EdgeInsets.fromLTRB(16, 16, 16, 4),
+              child: Text(
+                'Aceite dos empréstimos',
+                style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
+              ),
+            ),
+            const Padding(
+              padding: EdgeInsets.fromLTRB(16, 0, 16, 8),
+              child: Text(
+                'Ligado: o empréstimo lançado por outra pessoa fica fora do fechamento até quem deve aceitar. '
+                'Desligado: ele já nasce aceito.',
+                style: TextStyle(color: Colors.grey, fontSize: 13),
+              ),
+            ),
+            const Divider(height: 1),
+            toggle(
+              'manual',
+              'Lançado à mão',
+              'Empréstimo entre moradores criado no app.',
+              acceptance.manual,
+              (v) => acceptance.copyWith(manual: v),
+            ),
+            toggle(
+              'import',
+              'Vindo da importação da fatura',
+              'Compra da fatura marcada para um morador, no cartão da Casa ou de morador.',
+              acceptance.import,
+              (v) => acceptance.copyWith(import: v),
+            ),
+            toggle(
+              'house',
+              'Do Caixa da Casa',
+              'Empréstimo do Caixa lançado à mão.',
+              acceptance.house,
+              (v) => acceptance.copyWith(house: v),
+            ),
+            const SizedBox(height: 8),
+          ],
+        ),
+      ),
+    );
+  }
+}
 
 /// Bloco inline para exibir e alterar permissões da casa.
 class _PermissionsBlock extends StatefulWidget {

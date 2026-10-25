@@ -14,8 +14,34 @@
 --     empréstimo. O guarda da 0082 deixa o empréstimo nascer aceito quando
 --     todas elas já foram aceitas pelo devedor e o valor cabe nas parcelas;
 --   - aceitar o empréstimo do mês aceita também os parcelamentos dele;
---   - `confirm_import` grava a situação do plano e `undo_import` a devolve.
+--   - `confirm_import` grava a situação do plano e `undo_import` a devolve;
+--   - `houses.loan_acceptance`: a casa diz, por origem, se o empréstimo
+--     lançado por outra pessoa espera o aceite do devedor: lançado à mão
+--     (`manual`), criado pela importação da fatura (`import`) ou do Caixa da
+--     Casa lançado à mão (`house`). Chave ausente vale true (pede aceite, como
+--     na 0082). A importação vale pela origem, mesmo no cartão da Casa.
 -- ==============================================================================
+
+-- 0. Aceite por origem, na casa
+create or replace function public.loan_acceptance_valid(p jsonb)
+returns boolean
+language sql
+immutable
+set search_path = public
+as $$
+  select jsonb_typeof(p) = 'object'
+    and not exists (
+      select 1 from jsonb_each(p) e
+      where e.key not in ('manual', 'import', 'house') or jsonb_typeof(e.value) <> 'boolean'
+    )
+$$;
+
+alter table public.houses
+  add column if not exists loan_acceptance jsonb not null default '{}'::jsonb
+    check (public.loan_acceptance_valid(loan_acceptance));
+
+comment on column public.houses.loan_acceptance is
+  'Por origem (manual, import, house), se o empréstimo lançado por outra pessoa espera o aceite do devedor; chave ausente = true (0116).';
 
 -- 1. Situação e aceite do plano
 alter table public.installment_plans
@@ -68,8 +94,23 @@ declare
   v_user uuid := auth.uid();
   v_by_app boolean := current_user = 'authenticated';
   v_plans_accepted boolean := false;
+  v_required boolean := true;
 begin
   if TG_OP = 'INSERT' then
+    -- A casa pode dispensar o aceite conforme a origem. A importação se
+    -- identifica pela variável da transação que só o confirm_import liga.
+    if v_by_app then
+      select coalesce((h.loan_acceptance->>(
+               case
+                 when current_setting('omnilar.loan_origin', true) = 'import' then 'import'
+                 when new.lender_is_house then 'house'
+                 else 'manual'
+               end))::boolean, true)
+        into v_required
+      from public.houses h
+      where h.id = new.house_id;
+    end if;
+
     -- Parcelas de compras que o devedor já aceitou: o empréstimo nasce aceito,
     -- desde que o valor caiba nelas (com a folga de centavos e IOF da importação)
     if v_by_app and coalesce(cardinality(new.installment_plan_ids), 0) > 0 then
@@ -85,6 +126,7 @@ begin
     end if;
 
     if v_by_app and v_user is not null and v_user is distinct from new.borrower_id
+       and coalesce(v_required, true)
        and not coalesce(v_plans_accepted, false) then
       new.awaiting_acceptance := true;
       new.accepted_at := null;
@@ -373,12 +415,15 @@ begin
     perform public.create_house_expense(v_item);
   end loop;
 
+  -- Os empréstimos daqui contam como vindos da importação (aceite por origem)
+  perform set_config('omnilar.loan_origin', 'import', true);
   for v_item in select * from jsonb_array_elements(coalesce(p_import->'loans', '[]'::jsonb)) loop
     if (v_item->>'house_id')::uuid is distinct from v_house_id then
       raise exception 'A importação tem um empréstimo de outra casa.';
     end if;
     perform public.create_p2p_loan(v_item);
   end loop;
+  perform set_config('omnilar.loan_origin', '', true);
 
   -- Despesa que já existia e a fatura corrige (valor real, cartão, vencimento)
   for v_item in select * from jsonb_array_elements(coalesce(p_import->'expense_updates', '[]'::jsonb)) loop
@@ -605,5 +650,186 @@ revoke execute on function public.confirm_import(jsonb) from public, anon;
 revoke execute on function public.undo_import(uuid) from public, anon;
 grant execute on function public.confirm_import(jsonb) to authenticated;
 grant execute on function public.undo_import(uuid) to authenticated;
+
+-- 9. update_house_settings (0104) com o aceite por origem
+create or replace function public.update_house_settings(p_house_id uuid, p_settings jsonb)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_row public.houses%rowtype;
+begin
+  if auth.uid() is null or not public.is_house_member(p_house_id) then
+    raise exception 'Você não faz parte desta casa.';
+  end if;
+  if (p_settings ? 'opening_balance_rule' or p_settings ? 'opening_inflow_rules')
+      and not public.has_house_permission(p_house_id, 'editar_configuracoes') then
+    raise exception 'Só administradores mudam como a sobra entra no rateio.';
+  end if;
+  if p_settings ? 'opening_inflow_rules'
+      and not public.opening_inflow_rules_valid(p_settings->'opening_inflow_rules') then
+    raise exception 'Regra das entradas no Caixa inválida.';
+  end if;
+  if p_settings ? 'closing_defaults' and not public.has_house_permission(p_house_id, 'editar_configuracoes') then
+    raise exception 'Só administradores mudam os padrões do fechamento.';
+  end if;
+  if p_settings ? 'closing_defaults'
+      and not public.closing_defaults_valid(p_settings->'closing_defaults') then
+    raise exception 'Padrões do fechamento inválidos.';
+  end if;
+  if p_settings ? 'new_member_split_policy' and not public.has_house_permission(p_house_id, 'editar_configuracoes') then
+    raise exception 'Só administradores mudam a divisão para quem entra na casa.';
+  end if;
+  if p_settings ? 'new_member_split_policy'
+      and coalesce(p_settings->>'new_member_split_policy', '') not in ('equal', 'keep_current', 'ask') then
+    raise exception 'Política de divisão para novo morador inválida.';
+  end if;
+
+  if p_settings ? 'folego_params' and not public.has_house_permission(p_house_id, 'editar_configuracoes') then
+    raise exception 'Só administradores mudam os parâmetros do Fôlego.';
+  end if;
+  if p_settings ? 'folego_params' and not public.folego_params_valid(p_settings->'folego_params') then
+    raise exception 'Parâmetros do Fôlego inválidos.';
+  end if;
+
+  if p_settings ? 'budget_alert_stages' and not public.has_house_permission(p_house_id, 'editar_configuracoes') then
+    raise exception 'Só administradores mudam os estágios do alerta de orçamento.';
+  end if;
+  if p_settings ? 'budget_alert_stages'
+      and not public.budget_alert_stages_valid(p_settings->'budget_alert_stages') then
+    raise exception 'Estágios do alerta de orçamento inválidos.';
+  end if;
+
+  if p_settings ? 'import_matching' and not public.has_house_permission(p_house_id, 'editar_configuracoes') then
+    raise exception 'Só administradores mudam as janelas de casamento da importação.';
+  end if;
+  if p_settings ? 'import_matching' and not public.import_matching_valid(p_settings->'import_matching') then
+    raise exception 'Janelas de casamento da importação inválidas.';
+  end if;
+
+  if p_settings ? 'import_defaults' and not public.has_house_permission(p_house_id, 'editar_configuracoes') then
+    raise exception 'Só administradores mudam o destino padrão da importação.';
+  end if;
+  if p_settings ? 'import_defaults' and not public.import_defaults_valid(p_settings->'import_defaults') then
+    raise exception 'Destino padrão da importação inválido.';
+  end if;
+
+  if p_settings ? 'cash_label' and not public.has_house_permission(p_house_id, 'editar_configuracoes') then
+    raise exception 'Só administradores mudam o nome do Caixa.';
+  end if;
+  if p_settings ? 'cash_label' and not public.cash_label_valid(p_settings->'cash_label') then
+    raise exception 'Nome do Caixa inválido.';
+  end if;
+
+  if p_settings ? 'shopping_units' and not public.has_house_permission(p_house_id, 'editar_configuracoes') then
+    raise exception 'Só administradores mudam as unidades de compra.';
+  end if;
+  if p_settings ? 'shopping_units' and not public.shopping_units_valid(p_settings->'shopping_units') then
+    raise exception 'Unidades de compra inválidas.';
+  end if;
+
+  if p_settings ? 'income_visibility' and not public.has_house_permission(p_house_id, 'editar_configuracoes') then
+    raise exception 'Só administradores mudam quem vê a renda dos moradores.';
+  end if;
+  if p_settings ? 'income_visibility'
+      and coalesce(p_settings->>'income_visibility', '') not in ('all', 'admins', 'self') then
+    raise exception 'Visibilidade da renda inválida.';
+  end if;
+
+  if p_settings ? 'split_basis' and not public.has_house_permission(p_house_id, 'editar_configuracoes') then
+    raise exception 'Só administradores mudam a base da divisão padrão.';
+  end if;
+  if p_settings ? 'split_basis'
+      and coalesce(p_settings->>'split_basis', '') not in ('manual', 'income') then
+    raise exception 'Base da divisão padrão inválida.';
+  end if;
+
+  if p_settings ? 'permissions' and not public.is_house_admin(p_house_id) then
+    raise exception 'Só administradores mudam quem pode fazer cada ação.';
+  end if;
+  if p_settings ? 'permissions' and not public.house_permissions_valid(p_settings->'permissions') then
+    raise exception 'Permissões inválidas.';
+  end if;
+
+  if p_settings ? 'approval_threshold_cents' and not public.has_house_permission(p_house_id, 'editar_configuracoes') then
+    raise exception 'Só administradores mudam o limite de aprovação por valor.';
+  end if;
+  if p_settings ? 'approval_threshold_cents'
+      and jsonb_typeof(p_settings->'approval_threshold_cents') <> 'null'
+      and (
+        jsonb_typeof(p_settings->'approval_threshold_cents') <> 'number'
+        or (p_settings->>'approval_threshold_cents')::numeric <= 0
+        or (p_settings->>'approval_threshold_cents')::numeric > 100000000000
+        or (p_settings->>'approval_threshold_cents')::numeric <> trunc((p_settings->>'approval_threshold_cents')::numeric)
+      ) then
+    raise exception 'Limite de aprovação por valor inválido.';
+  end if;
+
+  if p_settings ? 'loan_acceptance' and not public.has_house_permission(p_house_id, 'editar_configuracoes') then
+    raise exception 'Só administradores mudam quando o empréstimo pede aceite.';
+  end if;
+  if p_settings ? 'loan_acceptance' and not public.loan_acceptance_valid(p_settings->'loan_acceptance') then
+    raise exception 'Aceite dos empréstimos inválido.';
+  end if;
+
+  update public.houses set
+    opening_balance_rule = case when p_settings ? 'opening_balance_rule'
+      then nullif(p_settings->>'opening_balance_rule', '') else opening_balance_rule end,
+    opening_inflow_rules = coalesce(p_settings->'opening_inflow_rules', opening_inflow_rules),
+    closing_defaults = coalesce(p_settings->'closing_defaults', closing_defaults),
+    new_member_split_policy = coalesce(p_settings->>'new_member_split_policy', new_member_split_policy),
+    folego_params = coalesce(p_settings->'folego_params', folego_params),
+    budget_alert_stages = coalesce(p_settings->'budget_alert_stages', budget_alert_stages),
+    import_matching = coalesce(p_settings->'import_matching', import_matching),
+    import_defaults = coalesce(p_settings->'import_defaults', import_defaults),
+    cash_label = case when p_settings ? 'cash_label'
+      then nullif(btrim(p_settings->>'cash_label'), '') else cash_label end,
+    shopping_units = coalesce(p_settings->'shopping_units', shopping_units),
+    income_visibility = coalesce(p_settings->>'income_visibility', income_visibility),
+    split_basis = coalesce(p_settings->>'split_basis', split_basis),
+    planner_history_cycles = coalesce((p_settings->>'planner_history_cycles')::smallint, planner_history_cycles),
+    planner_mode = coalesce(p_settings->>'planner_mode', planner_mode),
+    planner_adjust_percent = coalesce((p_settings->>'planner_adjust_percent')::smallint, planner_adjust_percent),
+    planner_category_overrides = coalesce(p_settings->'planner_category_overrides', planner_category_overrides),
+    permissions = coalesce(p_settings->'permissions', permissions),
+    approval_threshold_cents = case when p_settings ? 'approval_threshold_cents'
+      then (p_settings->>'approval_threshold_cents')::bigint else approval_threshold_cents end,
+    loan_acceptance = coalesce(p_settings->'loan_acceptance', loan_acceptance)
+  where id = p_house_id
+  returning * into v_row;
+
+  -- Base "renda": recalcula o rateio padrão já com as rendas informadas
+  if p_settings ? 'split_basis' and v_row.split_basis = 'income' then
+    perform public.apply_income_split(p_house_id);
+  end if;
+
+  return jsonb_build_object(
+    'opening_balance_rule', v_row.opening_balance_rule,
+    'opening_inflow_rules', v_row.opening_inflow_rules,
+    'closing_defaults', v_row.closing_defaults,
+    'new_member_split_policy', v_row.new_member_split_policy,
+    'folego_params', v_row.folego_params,
+    'budget_alert_stages', v_row.budget_alert_stages,
+    'import_matching', v_row.import_matching,
+    'import_defaults', v_row.import_defaults,
+    'cash_label', v_row.cash_label,
+    'shopping_units', v_row.shopping_units,
+    'income_visibility', v_row.income_visibility,
+    'split_basis', v_row.split_basis,
+    'planner_history_cycles', v_row.planner_history_cycles,
+    'planner_mode', v_row.planner_mode,
+    'planner_adjust_percent', v_row.planner_adjust_percent,
+    'planner_category_overrides', v_row.planner_category_overrides,
+    'permissions', v_row.permissions,
+    'approval_threshold_cents', v_row.approval_threshold_cents,
+    'loan_acceptance', v_row.loan_acceptance
+  );
+end;
+$$;
+
+revoke execute on function public.update_house_settings(uuid, jsonb) from public, anon;
+grant execute on function public.update_house_settings(uuid, jsonb) to authenticated, service_role;
 
 notify pgrst, 'reload schema';

@@ -955,6 +955,9 @@ class MockFinanceDataSource implements FinanceDataSource {
     if (changes.containsKey('approval_threshold_cents') && !canEdit) {
       throw const ServerFailure('Você não tem permissão para mudar a aprovação por valor.');
     }
+    if (changes.containsKey('loan_acceptance') && !canEdit) {
+      throw const ServerFailure('Você não tem permissão para mudar quando o empréstimo pede aceite.');
+    }
     _houseSettingsRow = {..._houseSettingsRow, ...changes};
     if (changes.containsKey('split_basis')) _applyIncomeSplit();
     return HouseSettings.fromJson(_houseSettingsRow);

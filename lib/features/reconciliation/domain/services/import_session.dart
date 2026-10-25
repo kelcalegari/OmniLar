@@ -294,6 +294,10 @@ class ImportSession {
   /// que não é antecipação). Sem resposta, vale a sugestão forte.
   final Map<String, String> prepaymentChoices;
 
+  /// O empréstimo da importação espera o aceite de quem deve (0116). Sem
+  /// aceite, não há por que separar as parcelas de compras já aceitas.
+  final bool loansNeedAcceptance;
+
   const ImportSession({
     required this.source,
     required this.fileName,
@@ -318,6 +322,7 @@ class ImportSession {
     this.forecastInstallments = true,
     this.installmentPrefilledIds = const {},
     this.prepaymentChoices = const {},
+    this.loansNeedAcceptance = true,
   });
 
   static final _dayMonth = DateFormat('dd/MM');
@@ -438,6 +443,7 @@ class ImportSession {
       installmentPrefilledIds:
           installmentPrefilledIds ?? this.installmentPrefilledIds,
       prepaymentChoices: prepaymentChoices ?? this.prepaymentChoices,
+      loansNeedAcceptance: loansNeedAcceptance,
     );
   }
 
@@ -741,6 +747,7 @@ class ImportSession {
   ImportSession withParams({
     ImportMatching? matching,
     ImportDefaults? defaults,
+    bool? loansNeedAcceptance,
   }) => ImportSession(
     source: source,
     fileName: fileName,
@@ -765,6 +772,7 @@ class ImportSession {
     forecastInstallments: forecastInstallments,
     installmentPrefilledIds: installmentPrefilledIds,
     prepaymentChoices: prepaymentChoices,
+    loansNeedAcceptance: loansNeedAcceptance ?? this.loansNeedAcceptance,
   );
 
   ImportSession withInvoiceDueDate(DateTime dueDate) {
@@ -1620,6 +1628,7 @@ class ImportSession {
             final plan = installmentMatchOf(line)?.plan;
             final group = line.splitFrom ?? line.id;
             final accepted =
+                loansNeedAcceptance &&
                 plan != null &&
                 plan.isActive &&
                 plan.isAccepted &&

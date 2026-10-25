@@ -62,6 +62,8 @@ void main() {
   testWidgets('Categoria: percentuais próprios precisam fechar 100% e ficam gravados', (tester) async {
     await openSplitGroup(tester);
 
+    await tester.ensureVisible(find.text('Lazer e Restaurantes'));
+    await tester.pumpAndSettle();
     await tester.tap(find.text('Lazer e Restaurantes'));
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const Key('category_split_mode')));
