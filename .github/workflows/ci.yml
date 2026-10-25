@@ -126,8 +126,46 @@ jobs:
       - name: Install Dependencies
         run: flutter pub get
 
+      - name: Restore Release Keystore
+        # A chave de release vem dos secrets (ver Documentacao/assinatura_android.md); sem ela o job para,
+        # para nunca publicar um APK assinado com a chave de debug
+        run: |
+          for VAR in ANDROID_KEYSTORE_BASE64 ANDROID_KEYSTORE_PASSWORD ANDROID_KEY_ALIAS ANDROID_KEY_PASSWORD; do
+            if [ -z "${!VAR}" ]; then
+              echo "::error title=Secret ausente::Adicione $VAR em Settings > Secrets and variables > Actions (ver Documentacao/assinatura_android.md)."
+              exit 1
+            fi
+          done
+          echo "$ANDROID_KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/omnilar-release.jks"
+          echo "OMNILAR_KEYSTORE_PATH=$RUNNER_TEMP/omnilar-release.jks" >> "$GITHUB_ENV"
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+
       - name: Build APK Release
         run: flutter build apk --release --target-platform android-arm64 --dart-define=SENTRY_DSN=https://12b32d1db8bdf0ed9578cdd02e18d9e4@o4512285777657856.ingest.us.sentry.io/4512285825433600
+        env:
+          OMNILAR_REQUIRE_RELEASE_SIGNING: 'true'
+          OMNILAR_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          OMNILAR_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          OMNILAR_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+
+      - name: Verify APK Signature
+        # Confere que o APK saiu com a chave de release, e nao com a de debug, antes de publicar
+        run: |
+          APKSIGNER=$(ls -d "$ANDROID_HOME"/build-tools/*/ | sort -V | tail -n 1)apksigner
+          CERTS=$("$APKSIGNER" verify --print-certs build/app/outputs/flutter-apk/app-release.apk)
+          echo "$CERTS" | grep -E "certificate (DN|SHA-256 digest)"
+          if echo "$CERTS" | grep -q "CN=Android Debug"; then
+            echo "::error title=APK com chave de debug::O APK foi assinado com a chave de debug; nada foi publicado."
+            exit 1
+          fi
+
+      - name: Remove Release Keystore
+        if: always()
+        run: rm -f "$RUNNER_TEMP/omnilar-release.jks"
 
       - name: Upload APK to Supabase Storage
         # O bucket 'releases' nao aceita escrita publica (0114): o upload exige a service_role
