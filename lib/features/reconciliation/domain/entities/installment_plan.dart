@@ -12,6 +12,18 @@ class InstallmentParcel {
   const InstallmentParcel({required this.expense, this.isForecast = false});
 }
 
+/// Situação da compra parcelada.
+enum InstallmentPlanStatus {
+  /// Ainda tem parcelas por vir.
+  active,
+
+  /// Quitada de uma vez (antecipação das parcelas restantes).
+  finished,
+
+  /// Cancelada por estorno: as parcelas que faltavam não vêm mais.
+  cancelled,
+}
+
 /// Compra parcelada de um cartão ("MAGALU 03/10"): liga as parcelas de uma
 /// fatura às das seguintes e lembra o que a casa decidiu sobre ela.
 class InstallmentPlan {
@@ -34,6 +46,12 @@ class InstallmentPlan {
   final String? categoryId;
   final String? assignedMemberId;
 
+  final InstallmentPlanStatus status;
+
+  /// Morador que aceitou o parcelamento: os empréstimos mensais dele nascem
+  /// aceitos enquanto ele for quem deve.
+  final String? acceptedBy;
+
   /// Despesas das parcelas, pelo número.
   final Map<int, InstallmentParcel> parcels;
 
@@ -54,9 +72,43 @@ class InstallmentPlan {
     this.destination = LineDestination.house,
     this.categoryId,
     this.assignedMemberId,
+    this.status = InstallmentPlanStatus.active,
+    this.acceptedBy,
     this.parcels = const {},
     this.importedNumbers = const {},
   });
+
+  bool get isActive => status == InstallmentPlanStatus.active;
+
+  /// Quem deve hoje já aceitou o parcelamento.
+  bool get isAccepted =>
+      assignedMemberId != null && acceptedBy == assignedMemberId;
+
+  /// Vencimento da fatura da parcela [number].
+  DateTime? dueDateOf(int number) => anchorDueDate == null
+      ? null
+      : addMonths(anchorDueDate!, number - anchorNumber);
+
+  /// Parcelas que ainda não vieram em nenhuma fatura, depois da última que veio.
+  List<int> get remainingNumbers {
+    var last = anchorNumber - 1;
+    for (var n = anchorNumber; n <= total; n++) {
+      if (handled(n)) last = n;
+    }
+    return [
+      for (var n = last + 1; n <= total; n++)
+        if (!handled(n)) n,
+    ];
+  }
+
+  /// Quanto falta pagar: as previstas pelo valor delas, as demais pelo da parcela.
+  int remainingCents() {
+    var cents = 0;
+    for (final n in remainingNumbers) {
+      cents += forecastOf(n)?.amount.cents ?? installmentAmount.cents;
+    }
+    return cents;
+  }
 
   /// A parcela [number] já foi tratada: importada antes ou confirmada no app.
   bool handled(int number) =>
@@ -69,15 +121,17 @@ class InstallmentPlan {
   }
 
   /// Vencimento da última parcela, para saber se o plano ainda está em curso.
-  DateTime? get lastDueDate => anchorDueDate == null
-      ? null
-      : addMonths(anchorDueDate!, total - anchorNumber);
+  DateTime? get lastDueDate => dueDateOf(total);
 
   InstallmentPlan copyWith({
     LineDestination? destination,
     String? categoryId,
     String? assignedMemberId,
     bool clearAssignedMember = false,
+    InstallmentPlanStatus? status,
+    String? acceptedBy,
+    Map<int, InstallmentParcel>? parcels,
+    Set<int>? importedNumbers,
   }) => InstallmentPlan(
     id: id,
     paymentMethodId: paymentMethodId,
@@ -93,8 +147,10 @@ class InstallmentPlan {
     assignedMemberId: clearAssignedMember
         ? null
         : (assignedMemberId ?? this.assignedMemberId),
-    parcels: parcels,
-    importedNumbers: importedNumbers,
+    status: status ?? this.status,
+    acceptedBy: acceptedBy ?? this.acceptedBy,
+    parcels: parcels ?? this.parcels,
+    importedNumbers: importedNumbers ?? this.importedNumbers,
   );
 }
 

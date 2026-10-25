@@ -10,6 +10,9 @@ import '../cubit/reports_cubit.dart';
 String _date(DateTime d) =>
     '${d.day.toString().padLeft(2, '0')}/${d.month.toString().padLeft(2, '0')}/${d.year}';
 
+String _monthYear(DateTime d) =>
+    '${d.month.toString().padLeft(2, '0')}/${d.year}';
+
 String _day(DateTime d) =>
     '${d.day.toString().padLeft(2, '0')}/${d.month.toString().padLeft(2, '0')}';
 
@@ -23,11 +26,15 @@ class UpcomingCyclesSection extends StatelessWidget {
   /// Pede a carga dos próximos ciclos (só quando a seção é aberta).
   final VoidCallback onRequested;
 
+  /// O morador logado aceita o parcelamento de uma compra no cartão.
+  final Future<bool> Function(String planId)? onAcceptInstallment;
+
   const UpcomingCyclesSection({
     super.key,
     required this.currentMemberId,
     required this.showAll,
     required this.onRequested,
+    this.onAcceptInstallment,
   });
 
   @override
@@ -100,6 +107,7 @@ class UpcomingCyclesSection extends StatelessWidget {
               else if (upcoming != null) ...[
                 for (final cycle in upcoming.cycles) _cycle(cycle, mine),
                 _payoffs(upcoming.payoffs, mine),
+                _installments(context, upcoming.installments, mine),
               ],
             ],
           ),
@@ -121,6 +129,9 @@ class UpcomingCyclesSection extends StatelessWidget {
               .where((e) => e.involves(currentMemberId))
               .toList()
         : forecast.outsideClosing;
+    final projected = mine
+        ? forecast.projected.where((e) => e.involves(currentMemberId)).toList()
+        : forecast.projected;
 
     return Padding(
       padding: const EdgeInsets.only(top: 8, bottom: 8),
@@ -137,6 +148,23 @@ class UpcomingCyclesSection extends StatelessWidget {
           ),
           const SizedBox(height: 4),
           for (final m in members) _member(m),
+          if (projected.isNotEmpty) ...[
+            const SizedBox(height: 4),
+            const Text(
+              'Parcelas de compras no cartão (projeção, já somadas acima)',
+              style: TextStyle(
+                fontSize: 11,
+                color: Colors.grey,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            for (final e in projected)
+              _row(
+                '${_day(e.date!)} · ${e.title}',
+                '${e.payerName} paga a ${e.receiverName}',
+                e.amount,
+              ),
+          ],
           if (outside.isNotEmpty) ...[
             const SizedBox(height: 4),
             const Text(
@@ -235,6 +263,81 @@ class UpcomingCyclesSection extends StatelessWidget {
             '${p.openInstallments} ${p.openInstallments == 1 ? 'parcela' : 'parcelas'} · '
             'última em ${_date(p.lastDueDate)}',
             p.remaining,
+          ),
+      ],
+    );
+  }
+
+  /// O que cada morador ainda vai dever pelas compras parceladas no cartão.
+  Widget _installments(
+    BuildContext context,
+    List<InstallmentProjection> projections,
+    bool mine,
+  ) {
+    final shown = mine
+        ? projections.where((p) => p.involves(currentMemberId)).toList()
+        : projections;
+    if (shown.isEmpty) return const SizedBox.shrink();
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        const SizedBox(height: 12),
+        const Text(
+          'Compras parceladas no cartão',
+          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+        ),
+        const Text(
+          'Projeção: cada parcela vira empréstimo quando a fatura dela é importada.',
+          style: TextStyle(fontSize: 11, color: Colors.grey),
+        ),
+        const SizedBox(height: 4),
+        for (final p in shown) _installment(context, p),
+      ],
+    );
+  }
+
+  Widget _installment(BuildContext context, InstallmentProjection p) {
+    final canAccept =
+        !p.accepted &&
+        onAcceptInstallment != null &&
+        p.borrowerId == currentMemberId;
+    final count = p.remainingCount == 1
+        ? '1 parcela'
+        : '${p.remainingCount} parcelas';
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _row(
+          p.title,
+          '${p.borrowerName} deve a ${p.lenderName} ${p.monthly.formatted}/mês · '
+          '$count · até ${_monthYear(p.lastDueDate)}'
+          '${p.accepted ? ' · parcelamento aceito' : ' · aguardando aceite'}',
+          p.remaining,
+        ),
+        if (canAccept)
+          Align(
+            alignment: Alignment.centerLeft,
+            child: TextButton.icon(
+              key: Key('upcoming_accept_installment_${p.planId}'),
+              icon: const Icon(Icons.check_circle_outline_rounded, size: 18),
+              label: const Text('Aceitar o parcelamento'),
+              onPressed: () async {
+                final messenger = ScaffoldMessenger.of(context);
+                final ok = await onAcceptInstallment!(p.planId);
+                messenger.showSnackBar(
+                  SnackBar(
+                    content: Text(
+                      ok
+                          ? 'Parcelamento aceito: as próximas parcelas já entram aceitas.'
+                          : 'Não foi possível aceitar o parcelamento. Tente de novo.',
+                    ),
+                    backgroundColor: ok
+                        ? AppColors.creditGreen
+                        : AppColors.debtRed,
+                  ),
+                );
+              },
+            ),
           ),
       ],
     );

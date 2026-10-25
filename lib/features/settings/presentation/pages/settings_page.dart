@@ -1,4 +1,5 @@
 import '../../../../core/domain/value_objects/cycle_schedule.dart';
+import '../../../finance/domain/entities/loan_acceptance.dart';
 import '../../../finance/domain/entities/house_permissions.dart';
 import 'package:flutter/material.dart';
 import '../../../finance/domain/entities/category_default_split.dart';

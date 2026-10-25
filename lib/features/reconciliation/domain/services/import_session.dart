@@ -69,17 +69,48 @@ class RefundOption {
   /// Despesa já lançada no app de que o estorno é abatido.
   final HouseExpense? expense;
 
+  /// Compra parcelada que o estorno cancela: as parcelas que faltavam não vêm
+  /// mais. Com [lineId], abate também da parcela desta fatura.
+  final InstallmentPlan? plan;
+
   const RefundOption({
     required this.key,
     required this.label,
     this.suggested = false,
     this.lineId,
     this.expense,
+    this.plan,
   });
 
   /// O estorno cobre a despesa inteira: ela é excluída, e não abatida.
   bool coversWholeExpense(Money refund) =>
       expense != null && expense!.amount.cents <= refund.cents;
+}
+
+/// Linha da fatura que quita de uma vez as parcelas restantes de uma compra
+/// parcelada (antecipação).
+class PrepaymentOption {
+  final InstallmentPlan plan;
+
+  /// Parcelas que a linha quita, em ordem.
+  final List<int> numbers;
+
+  /// Quanto essas parcelas somavam.
+  final Money remaining;
+
+  /// A descrição fala em antecipação ou o valor bate com o que faltava.
+  final bool suggested;
+
+  const PrepaymentOption({
+    required this.plan,
+    required this.numbers,
+    required this.remaining,
+    this.suggested = false,
+  });
+
+  String get rangeLabel => numbers.length == 1
+      ? '${numbers.first}/${plan.total}'
+      : '${numbers.first} a ${numbers.last}/${plan.total}';
 }
 
 /// O que uma linha do arquivo virou, para o histórico da importação.
@@ -171,7 +202,8 @@ class ImportPlan {
       expenseUpdates.isEmpty &&
       loans.isEmpty &&
       extraActions.isEmpty &&
-      forecastDeletions.isEmpty;
+      forecastDeletions.isEmpty &&
+      installmentPlans.isEmpty;
 }
 
 class ImportTotals {
@@ -258,6 +290,14 @@ class ImportSession {
   /// a busca refeita não desfazer o que o usuário mudou depois.
   final Set<String> installmentPrefilledIds;
 
+  /// Antecipações: id da linha -> plano que ela quita ('' = o usuário disse
+  /// que não é antecipação). Sem resposta, vale a sugestão forte.
+  final Map<String, String> prepaymentChoices;
+
+  /// O empréstimo da importação espera o aceite de quem deve (0116). Sem
+  /// aceite, não há por que separar as parcelas de compras já aceitas.
+  final bool loansNeedAcceptance;
+
   const ImportSession({
     required this.source,
     required this.fileName,
@@ -281,6 +321,8 @@ class ImportSession {
     this.installmentPlans = const [],
     this.forecastInstallments = true,
     this.installmentPrefilledIds = const {},
+    this.prepaymentChoices = const {},
+    this.loansNeedAcceptance = true,
   });
 
   static final _dayMonth = DateFormat('dd/MM');
@@ -370,6 +412,7 @@ class ImportSession {
     List<InstallmentPlan>? installmentPlans,
     bool? forecastInstallments,
     Set<String>? installmentPrefilledIds,
+    Map<String, String>? prepaymentChoices,
   }) {
     return ImportSession(
       source: source,
@@ -399,6 +442,8 @@ class ImportSession {
       forecastInstallments: forecastInstallments ?? this.forecastInstallments,
       installmentPrefilledIds:
           installmentPrefilledIds ?? this.installmentPrefilledIds,
+      prepaymentChoices: prepaymentChoices ?? this.prepaymentChoices,
+      loansNeedAcceptance: loansNeedAcceptance,
     );
   }
 
@@ -556,7 +601,9 @@ class ImportSession {
     return _copy(
       refundChoices: {
         for (final entry in refundChoices.entries)
-          if (entry.value != 'line:$lineId') entry.key: entry.value,
+          if (entry.value != 'line:$lineId' &&
+              !entry.value.endsWith('|line:$lineId'))
+            entry.key: entry.value,
       },
       lines: [
         ...lines.sublist(0, index),
@@ -700,6 +747,7 @@ class ImportSession {
   ImportSession withParams({
     ImportMatching? matching,
     ImportDefaults? defaults,
+    bool? loansNeedAcceptance,
   }) => ImportSession(
     source: source,
     fileName: fileName,
@@ -723,6 +771,8 @@ class ImportSession {
     installmentPlans: installmentPlans,
     forecastInstallments: forecastInstallments,
     installmentPrefilledIds: installmentPrefilledIds,
+    prepaymentChoices: prepaymentChoices,
+    loansNeedAcceptance: loansNeedAcceptance ?? this.loansNeedAcceptance,
   );
 
   ImportSession withInvoiceDueDate(DateTime dueDate) {
@@ -820,10 +870,113 @@ class ImportSession {
   InstallmentMatch? installmentMatchOf(ImportedStatementLine line) {
     if (!line.isPurchase ||
         !line.isInstallment ||
-        forcedLineIds.contains(line.id)) {
+        forcedLineIds.contains(line.id) ||
+        chosenPrepayment(line) != null) {
       return null;
     }
     return installmentMatches[line.splitFrom ?? line.id];
+  }
+
+  /// Compras parceladas deste cartão que a linha pode estar quitando de uma
+  /// vez: mesmo lugar e valor entre o que faltava com desconto e o que
+  /// faltava. As parcelas que vieram nesta mesma fatura ficam de fora.
+  List<PrepaymentOption> prepaymentOptionsOf(ImportedStatementLine line) {
+    if (!tracksInstallments ||
+        !line.isPurchase ||
+        line.splitFrom != null ||
+        _wasImported(line)) {
+      return const [];
+    }
+    // "ANTECIPACAO MAGALU 05/10 A 10/10" é lida como a parcela 10/10
+    final asParcel = line.isInstallment ? installmentMatches[line.id] : null;
+    if (asParcel != null && asParcel.kind != InstallmentMatchKind.newPlan) {
+      return const [];
+    }
+    final inThisInvoice = <String, Set<int>>{};
+    for (final match in installmentMatches.values) {
+      final plan = match.plan;
+      if (plan != null) inThisInvoice.putIfAbsent(plan.id, () => {}).add(match.number);
+    }
+    final text = StatementText.normalize(line.description);
+    final mentionsPrepayment = RegExp(
+      r'antecip|adiant|quitac|liquidac',
+    ).hasMatch(text);
+
+    final options = <PrepaymentOption>[];
+    for (final plan in installmentPlans) {
+      if (!plan.isActive || plan.paymentMethodId != source.id) continue;
+      if (StatementText.similarity(line.description, plan.title) <
+          InstallmentMatcher.minSimilarity) {
+        continue;
+      }
+      final numbers = [
+        for (final n in plan.remainingNumbers)
+          if (!(inThisInvoice[plan.id]?.contains(n) ?? false)) n,
+      ];
+      if (numbers.length < 2) continue;
+      var remaining = 0;
+      for (final n in numbers) {
+        remaining += plan.forecastOf(n)?.amount.cents ?? plan.installmentAmount.cents;
+      }
+      final cents = line.amount.cents;
+      // Antecipar costuma tirar os juros: aceita até 40% de desconto
+      if (cents > remaining * 1.02 + 100 || cents < remaining * 0.6) continue;
+      options.add(
+        PrepaymentOption(
+          plan: plan,
+          numbers: numbers,
+          remaining: Money(remaining),
+          suggested:
+              mentionsPrepayment ||
+              (cents - remaining).abs() <=
+                  InstallmentMatcher.amountToleranceCents,
+        ),
+      );
+    }
+    return options;
+  }
+
+  /// Compra parcelada que a linha quita de uma vez, se é uma antecipação.
+  PrepaymentOption? chosenPrepayment(ImportedStatementLine line) {
+    if (prepaymentChoices.isEmpty && installmentPlans.isEmpty) return null;
+    final chosen = prepaymentChoices[line.id];
+    if (chosen != null && chosen.isEmpty) return null;
+    final options = prepaymentOptionsOf(line);
+    if (chosen != null) {
+      return options.where((o) => o.plan.id == chosen).firstOrNull;
+    }
+    final suggested = options.where((o) => o.suggested).toList();
+    return suggested.length == 1 ? suggested.single : null;
+  }
+
+  /// Diz que a linha quita a compra [planId] (ou, com null, que não quita
+  /// nenhuma). Quitando, a linha vai para onde as parcelas iam.
+  ImportSession withPrepaymentChoice(String lineId, String? planId) {
+    final session = _copy(
+      prepaymentChoices: {...prepaymentChoices, lineId: planId ?? ''},
+    );
+    final line = lines.where((l) => l.id == lineId).firstOrNull;
+    final plan = planId == null
+        ? null
+        : installmentPlans.where((p) => p.id == planId).firstOrNull;
+    if (line == null || plan == null) return session;
+    final destination =
+        isHouseCard && plan.destination == LineDestination.cardOwnerPersonal
+        ? LineDestination.house
+        : plan.destination;
+    final debtor = destination == LineDestination.splitP2P
+        ? plan.assignedMemberId
+        : null;
+    return session.withLine(
+      line.copyWith(
+        destination: debtor == null && destination == LineDestination.splitP2P
+            ? LineDestination.house
+            : destination,
+        categoryId: plan.categoryId,
+        assignedMemberId: debtor,
+        clearAssignedMember: debtor == null,
+      ),
+    );
   }
 
   List<ImportedStatementLine> _groupOf(String groupId) => [
@@ -979,9 +1132,98 @@ class ImportSession {
       );
     }
 
+    // Parcelas já confirmadas de compras parceladas deste cartão ("ESTORNO
+    // MAGALU 03/10" abate da parcela 3), mesmo fora da janela de datas
+    final refundParcel = StatementText.installmentOf(refund.description);
+    final offered = {
+      for (final option in options) ?option.expense?.id,
+    };
+    for (final plan in installmentPlans) {
+      if (plan.paymentMethodId != source.id || !similar(plan.title)) continue;
+      for (final entry in plan.parcels.entries) {
+        final expense = entry.value.expense;
+        if (entry.value.isForecast ||
+            offered.contains(expense.id) ||
+            !canUpdateAmount(expense) ||
+            expense.amount.cents < cents) {
+          continue;
+        }
+        offered.add(expense.id);
+        final whole = expense.amount.cents == cents;
+        options.add(
+          RefundOption(
+            key: 'expense:${expense.id}',
+            label: whole
+                ? 'Excluir a parcela ${entry.key}/${plan.total} de "${plan.title}", já lançada'
+                : 'Abater da parcela ${entry.key}/${plan.total} de "${plan.title}", já lançada',
+            suggested: refundParcel?.number == entry.key,
+            expense: expense,
+          ),
+        );
+      }
+    }
+
+    // Estorno da compra parcelada inteira: as parcelas que faltavam não vêm mais
+    for (final plan in installmentPlans) {
+      if (!plan.isActive ||
+          plan.paymentMethodId != source.id ||
+          !similar(plan.title)) {
+        continue;
+      }
+      final forecasts = _forecastsFrom(plan, 1).length;
+      if (plan.remainingNumbers.isEmpty && forecasts == 0) continue;
+      final parcelLine = _parcelLineOf(plan.id);
+      final effects = [
+        if (forecasts > 0)
+          forecasts == 1
+              ? 'apaga a parcela prevista'
+              : 'apaga as $forecasts parcelas previstas',
+        if (parcelLine != null) 'abate da parcela desta fatura',
+      ];
+      final purchase = plan.installmentAmount.cents * plan.total;
+      final rest = plan.remainingCents();
+      bool near(int target) =>
+          (cents - target).abs() <=
+          InstallmentMatcher.amountToleranceCents + target * 0.02;
+      options.add(
+        RefundOption(
+          key: parcelLine == null
+              ? 'plan:${plan.id}'
+              : 'plan:${plan.id}|line:${parcelLine.id}',
+          label:
+              'Cancelar a compra parcelada "${plan.title}" (${plan.total}x de ${plan.installmentAmount.format()}): ${effects.isEmpty ? 'as próximas parcelas não vêm mais' : effects.join(' e ')}',
+          suggested: near(purchase) || near(rest),
+          lineId: parcelLine?.id,
+          plan: plan,
+        ),
+      );
+    }
+
     options.sort((a, b) => (b.suggested ? 1 : 0) - (a.suggested ? 1 : 0));
     return options;
   }
+
+  /// Linha desta fatura que traz uma parcela do plano [planId] (a da Casa,
+  /// quando ela foi dividida).
+  ImportedStatementLine? _parcelLineOf(String planId) {
+    for (final match in installmentMatches.values) {
+      if (match.plan?.id != planId) continue;
+      final line =
+          _houseLineOf(match.groupId) ?? _groupOf(match.groupId).firstOrNull;
+      if (line == null) continue;
+      final status = statusOf(line);
+      if (status == LineStatus.newLine || status == LineStatus.linked) {
+        return line;
+      }
+    }
+    return null;
+  }
+
+  /// Compras parceladas que um estorno desta fatura cancela.
+  Set<String> get cancelledPlanIds => {
+    for (final line in lines)
+      if (line.kind == StatementLineKind.refund) ?chosenRefund(line)?.plan?.id,
+  };
 
   RefundOption? chosenRefund(ImportedStatementLine refund) {
     final key = refundChoices[refund.id];
@@ -1003,7 +1245,11 @@ class ImportSession {
   int _refundedFromLine(String lineId, {String? except}) {
     var total = 0;
     for (final entry in refundChoices.entries) {
-      if (entry.key == except || entry.value != 'line:$lineId') continue;
+      if (entry.key == except ||
+          (entry.value != 'line:$lineId' &&
+              !entry.value.endsWith('|line:$lineId'))) {
+        continue;
+      }
       final refund = lines.where((l) => l.id == entry.key).firstOrNull;
       if (refund != null &&
           refund.kind == StatementLineKind.refund &&
@@ -1253,6 +1499,10 @@ class ImportSession {
   }
 
   String _titleOf(ImportedStatementLine line) {
+    final prepayment = chosenPrepayment(line);
+    if (prepayment != null) {
+      return '${prepayment.plan.title} (antecipação ${prepayment.rangeLabel})';
+    }
     final base = _baseTitleOf(line);
     return line.isInstallment
         ? '$base (${line.installmentNumber}/${line.installmentsTotal})'
@@ -1294,10 +1544,25 @@ class ImportSession {
     );
     final outOfPocket = ExpenseLaunchDefaults.paidOutOfPocket(source);
 
+    // Id das compras parceladas novas, pela linha original: o empréstimo do
+    // mês já aponta para o plano que nasce nesta importação
+    final newPlanIds = <String, String>{};
+    String? planIdOf(ImportedStatementLine line) {
+      final match = installmentMatchOf(line);
+      if (match == null || match.kind == InstallmentMatchKind.alreadyImported) {
+        return null;
+      }
+      return match.plan?.id ?? newPlanIds.putIfAbsent(match.groupId, newId);
+    }
+
     final newExpenses = <HouseExpense>[];
     final records = <ImportLineRecord>[];
     final skipped = <ImportedStatementLine>[];
-    final loanLines = <String, List<ImportedStatementLine>>{};
+    // Por devedor; à parte, as parcelas de compras que ele já aceitou, que
+    // formam um empréstimo que nasce aceito (uma parcela por compra)
+    final loanLines =
+        <({String debtor, bool accepted}), List<ImportedStatementLine>>{};
+    final acceptedGroupOfPlan = <String, String>{};
 
     for (final line in newLines) {
       // Estorno que cobriu a compra inteira: não sobra nada para lançar
@@ -1328,6 +1593,7 @@ class ImportSession {
               outcome: LineOutcome.created,
               title: title,
               expenseId: expenseId,
+              installmentPlanId: chosenPrepayment(line)?.plan.id,
             ),
           );
           newExpenses.add(
@@ -1359,7 +1625,18 @@ class ImportSession {
         case LineDestination.splitP2P:
           final debtor = line.assignedMemberId;
           if (debtor != null && canOwe(debtor)) {
-            loanLines.putIfAbsent(debtor, () => []).add(line);
+            final plan = installmentMatchOf(line)?.plan;
+            final group = line.splitFrom ?? line.id;
+            final accepted =
+                loansNeedAcceptance &&
+                plan != null &&
+                plan.isActive &&
+                plan.isAccepted &&
+                plan.assignedMemberId == debtor &&
+                acceptedGroupOfPlan.putIfAbsent(plan.id, () => group) == group;
+            loanLines
+                .putIfAbsent((debtor: debtor, accepted: accepted), () => [])
+                .add(line);
           }
         case LineDestination.cardOwnerPersonal:
         case LineDestination.ignored:
@@ -1379,6 +1656,7 @@ class ImportSession {
     final loans = <P2PLoan>[];
     for (final entry in loanLines.entries) {
       final loanId = newId();
+      final debtor = entry.key.debtor;
       for (final line in entry.value) {
         records.add(
           ImportLineRecord(
@@ -1386,14 +1664,19 @@ class ImportSession {
             outcome: LineOutcome.created,
             title: _titleOf(line),
             loanId: loanId,
+            installmentPlanId: chosenPrepayment(line)?.plan.id,
           ),
         );
       }
+      final planIds = <String>{
+        for (final line in entry.value) ?planIdOf(line),
+      }.toList();
       loans.add(
         P2PLoan(
           id: loanId,
           title:
-              '${source.name}$dueLabel — ${memberNames[entry.key] ?? 'morador'}',
+              '${source.name}$dueLabel — ${memberNames[debtor] ?? 'morador'}'
+              '${entry.key.accepted ? ' (parcelamentos aceitos)' : ''}',
           description: entry.value
               .map(
                 (line) =>
@@ -1407,7 +1690,7 @@ class ImportSession {
             ),
           ),
           lenderMemberId: lenderId,
-          borrowerMemberId: entry.key,
+          borrowerMemberId: debtor,
           installmentsCount: 1,
           createdAt: today,
           // Quem deve paga junto com a fatura
@@ -1416,6 +1699,7 @@ class ImportSession {
           // como ajuste, se esse ciclo já fechou)
           houseFunding: isHouseCard ? HouseLoanFunding.cycle : null,
           fundedOn: isHouseCard ? loanFundedOn : null,
+          installmentPlanIds: planIds,
         ),
       );
     }
@@ -1423,6 +1707,7 @@ class ImportSession {
     final updates = <HouseExpense>[];
     final extraActions = <({ImportedStatementLine line, ExtraAction action})>[];
     final refundedExpenses = <String, int>{};
+    final refundTargets = <String, HouseExpense>{};
     for (final line in lines) {
       final status = statusOf(line);
       // Pessoal, de terceiros, ignorada, pagamento, estorno e entrada: ficam só no histórico
@@ -1439,12 +1724,15 @@ class ImportSession {
             line: line,
             outcome: LineOutcome.linked,
             expenseId: refundTarget.expense?.id,
+            installmentPlanId: refundTarget.plan?.id,
           ),
         );
         final expense = refundTarget.expense;
-        if (expense != null)
+        if (expense != null) {
+          refundTargets[expense.id] = expense;
           refundedExpenses[expense.id] =
               (refundedExpenses[expense.id] ?? 0) + line.amount.cents;
+        }
         continue;
       }
       if (leftOut && !_wasImported(line)) {
@@ -1469,7 +1757,10 @@ class ImportSession {
             expenseId: forecast.id,
           ),
         );
-        if (forecast.settledAt != null) continue;
+        // Estornada por inteiro: a prevista sai (ver _installmentChanges)
+        if (forecast.settledAt != null || effectiveAmountOf(line).isZero) {
+          continue;
+        }
         final amount = canUpdateAmount(forecast) ? effectiveAmountOf(line) : null;
         if (forecast.isPending) {
           updates.add(
@@ -1522,7 +1813,7 @@ class ImportSession {
     // inteiro, excluídas
     final deletions = <HouseExpense>[];
     for (final entry in refundedExpenses.entries) {
-      final expense = knownExpenses.firstWhere((e) => e.id == entry.key);
+      final expense = refundTargets[entry.key]!;
       final updatedIndex = updates.indexWhere((e) => e.id == expense.id);
       final base = updatedIndex >= 0 ? updates[updatedIndex] : expense;
       final remaining = base.amount.cents - entry.value;
@@ -1540,6 +1831,7 @@ class ImportSession {
       skipped: {for (final line in skipped) line.id},
       members: members,
       categories: categories,
+      planIdOf: (groupId) => newPlanIds.putIfAbsent(groupId, newId),
       newId: newId,
     );
 
@@ -1613,11 +1905,13 @@ class ImportSession {
     required Set<String> skipped,
     required List<HouseMember> members,
     required List<ExpenseCategory> categories,
+    required String Function(String groupId) planIdOf,
     required String Function() newId,
   }) {
-    final plans = <InstallmentPlan>[];
+    // Um registro por plano: o que muda nele se soma (destino e situação)
+    final plans = <String, InstallmentPlan>{};
     final links = <InstallmentLink>[];
-    final forecastDeletions = <String>[];
+    final forecastDeletions = <String>{};
     final planOfGroup = <String, String>{};
     final createdExpenseOf = {
       for (final record in records)
@@ -1634,23 +1928,28 @@ class ImportSession {
 
     // A decisão desta fatura vale para a próxima parcela
     void remember(InstallmentPlan plan, ImportedStatementLine line) {
-      if (plan.destination == line.destination &&
-          plan.categoryId == categoryOf(line) &&
-          plan.assignedMemberId == debtorOf(line)) {
+      final current = plans[plan.id] ?? plan;
+      if (current.destination == line.destination &&
+          current.categoryId == categoryOf(line) &&
+          current.assignedMemberId == debtorOf(line)) {
         return;
       }
-      plans.add(
-        plan.copyWith(
-          destination: line.destination,
-          categoryId: categoryOf(line),
-          assignedMemberId: debtorOf(line),
-          clearAssignedMember: debtorOf(line) == null,
-        ),
+      plans[plan.id] = current.copyWith(
+        destination: line.destination,
+        categoryId: categoryOf(line),
+        assignedMemberId: debtorOf(line),
+        clearAssignedMember: debtorOf(line) == null,
       );
+    }
+
+    void close(InstallmentPlan plan, InstallmentPlanStatus status) {
+      plans[plan.id] = (plans[plan.id] ?? plan).copyWith(status: status);
     }
 
     for (final match in installmentMatches.values) {
       final group = _groupOf(match.groupId);
+      // Antecipação lida como parcela ("... 05/10 A 10/10"): não é compra nova
+      if (group.any((line) => chosenPrepayment(line) != null)) continue;
       final active = [
         for (final line in group)
           if (statusOf(line) == LineStatus.newLine && !skipped.contains(line.id))
@@ -1681,7 +1980,14 @@ class ImportSession {
         case InstallmentMatchKind.forecast:
           final plan = match.plan!;
           final forecast = plan.forecastOf(match.number)!;
-          if (carrier != null && confirmsForecast(carrier)) {
+          if (carrier != null &&
+              confirmsForecast(carrier) &&
+              effectiveAmountOf(carrier).isZero) {
+            // O estorno cobriu a parcela inteira: a prevista deixa de existir
+            if (forecast.isPending && forecast.settledAt == null) {
+              forecastDeletions.add(forecast.id);
+            }
+          } else if (carrier != null && confirmsForecast(carrier)) {
             links.add(
               InstallmentLink(
                 expenseId: forecast.id,
@@ -1719,7 +2025,7 @@ class ImportSession {
           if (!takesPart) continue;
           final first = group.first;
           final plan = InstallmentPlan(
-            id: newId(),
+            id: planIdOf(match.groupId),
             paymentMethodId: source.id,
             merchantKey: InstallmentMatcher.merchantKeyOf(first.description),
             title: _baseTitleOf(first),
@@ -1734,7 +2040,7 @@ class ImportSession {
             categoryId: categoryOf(lead),
             assignedMemberId: debtorOf(lead),
           );
-          plans.add(plan);
+          plans[plan.id] = plan;
           planOfGroup[match.groupId] = plan.id;
 
           if (carrierExpense == null) continue;
@@ -1793,6 +2099,36 @@ class ImportSession {
       }
     }
 
+    // Antecipação: as parcelas que a linha quitou deixam de ser previstas e a
+    // compra termina
+    for (final line in lines) {
+      final prepayment = chosenPrepayment(line);
+      if (prepayment == null) continue;
+      final status = statusOf(line);
+      if (status != LineStatus.newLine || skipped.contains(line.id)) continue;
+      final plan = prepayment.plan;
+      for (final number in prepayment.numbers) {
+        final forecast = plan.forecastOf(number);
+        if (forecast != null &&
+            forecast.isPending &&
+            forecast.settledAt == null) {
+          forecastDeletions.add(forecast.id);
+        }
+      }
+      close(plan, InstallmentPlanStatus.finished);
+    }
+
+    // Estorno da compra inteira: as previstas que esta fatura não confirmou saem
+    final confirmed = {for (final link in links) link.expenseId};
+    for (final planId in cancelledPlanIds) {
+      final plan = installmentPlans.where((p) => p.id == planId).firstOrNull;
+      if (plan == null) continue;
+      for (final id in _forecastsFrom(plan, 1)) {
+        if (!confirmed.contains(id)) forecastDeletions.add(id);
+      }
+      close(plan, InstallmentPlanStatus.cancelled);
+    }
+
     return (
       records: [
         for (final record in records)
@@ -1811,9 +2147,9 @@ class ImportSession {
           else
             record,
       ],
-      plans: plans,
+      plans: plans.values.toList(),
       links: links,
-      forecastDeletions: forecastDeletions,
+      forecastDeletions: forecastDeletions.toList(),
     );
   }
 }

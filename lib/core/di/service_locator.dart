@@ -282,7 +282,12 @@ Future<void> initServiceLocator() async {
   sl.registerLazySingleton<SettlementRepository>(() => SettlementRepositoryImpl(sl()));
   sl.registerFactory<SettlementCubit>(() => SettlementCubit(sl(), sl()));
   sl.registerFactory<ReportsCubit>(
-    () => ReportsCubit(sl(), p2pRepository: sl(), financeRepository: sl()),
+    () => ReportsCubit(
+      sl(),
+      p2pRepository: sl(),
+      financeRepository: sl(),
+      importRepository: sl(),
+    ),
   );
 
   // Shopping Feature (Fase 4: Organização do Lar)

@@ -44,6 +44,11 @@ Map<String, dynamic> p2pLoanPayload(P2PLoan loan, {required String houseId}) {
                 ? 'renegotiated'
                 : 'active',
     'created_at': loan.createdAt.toUtc().toIso8601String(),
+    if (loan.installmentPlanIds.isNotEmpty)
+      'installment_plan_ids': [
+        for (final id in loan.installmentPlanIds)
+          if (isUuid(id)) id,
+      ],
     'installments': [
       for (final inst in installments)
         {

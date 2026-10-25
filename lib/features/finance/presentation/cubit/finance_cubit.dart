@@ -27,6 +27,7 @@ import '../../domain/entities/import_params.dart';
 import '../../domain/entities/house_settings.dart';
 import '../../domain/entities/house_permissions.dart';
 import '../../domain/entities/income_split.dart';
+import '../../domain/entities/loan_acceptance.dart';
 import '../../domain/entities/member_settings.dart';
 import '../../domain/repositories/member_settings_repository.dart';
 import '../../../settlement/domain/services/open_invoice_choices.dart';
@@ -451,6 +452,7 @@ class FinanceCubit extends Cubit<FinanceState> {
     HousePermissions? permissions,
     int? approvalThresholdCents,
     bool clearApprovalThreshold = false,
+    LoanAcceptance? loanAcceptance,
     int? historyCycles,
     int? adjustPercent,
   }) async {
@@ -483,6 +485,8 @@ class FinanceCubit extends Cubit<FinanceState> {
         'approval_threshold_cents': null
       else
         'approval_threshold_cents': ?approvalThresholdCents,
+      // Aceite dos empréstimos por origem (0116), objeto inteiro
+      'loan_acceptance': ?loanAcceptance?.toJson(),
       'planner_history_cycles': ?historyCycles,
       'planner_adjust_percent': ?adjustPercent,
     };

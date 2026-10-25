@@ -7,9 +7,12 @@ import 'package:omni_lar/features/finance/data/datasources/mock_finance_datasour
 import 'package:omni_lar/features/finance/domain/entities/category.dart';
 import 'package:omni_lar/features/finance/domain/entities/house_expense.dart';
 import 'package:omni_lar/features/finance/domain/entities/house_member.dart';
+import 'package:omni_lar/features/finance/domain/entities/loan_acceptance.dart';
 import 'package:omni_lar/features/finance/domain/entities/payment_method.dart';
 import 'package:omni_lar/features/finance/domain/entities/split_rule.dart';
 import 'package:omni_lar/features/p2p/data/datasources/mock_p2p_datasource.dart';
+import 'package:omni_lar/features/p2p/domain/entities/p2p_loan.dart';
+import 'package:omni_lar/features/reports/domain/services/upcoming_cycles_builder.dart';
 import 'package:omni_lar/features/reconciliation/data/mock_import_repository.dart';
 import 'package:omni_lar/features/reconciliation/domain/entities/imported_statement_line.dart';
 import 'package:omni_lar/features/reconciliation/domain/entities/installment_plan.dart';
@@ -50,6 +53,17 @@ ImportedStatementLine _line(String id, DateTime date, String description, int ce
     installmentsTotal: installment?.total,
   );
 }
+
+/// Estorno como o leitor de CSV entrega (crédito na fatura).
+ImportedStatementLine _refund(String id, DateTime date, String description, int cents) =>
+    ImportedStatementLine(
+      id: id,
+      date: date,
+      description: description,
+      amount: Money(cents),
+      kind: StatementLineKind.refund,
+      signature: '${StatementParser.signatureContent(date, -cents, description)}#1',
+    );
 
 final _purchase = DateTime(2026, 8, 20);
 final _october = DateTime(2026, 10, 14);
@@ -424,6 +438,314 @@ void main() {
       final restored = (await repository.installmentPlans('pm_magalu')).single;
       expect(restored.destination, LineDestination.house);
       expect([for (var n = 4; n <= 10; n++) restored.forecastOf(n) != null], everyElement(isTrue));
+    });
+  });
+
+  /// Primeira fatura com a parcela 3/10 para [debtor] (empréstimo), ou da Casa.
+  Future<void> firstInvoice(PaymentMethod card, {String? debtor}) async {
+    var first = await review(card, _october, [_line('a', _purchase, 'MAGALU 03/10', 10000)]);
+    if (debtor != null) {
+      first = first.withLine(
+        lineOf(first, 'a').copyWith(destination: LineDestination.splitP2P, assignedMemberId: debtor),
+      );
+    }
+    await confirm(first);
+  }
+
+  group('aceite único do parcelamento', () {
+    test('o empréstimo da primeira fatura aponta para o plano novo, ainda não aceito', () async {
+      var first = await review(_card(), _october, [_line('a', _purchase, 'MAGALU 03/10', 10000)]);
+      first = first.withLine(
+        lineOf(first, 'a').copyWith(destination: LineDestination.splitP2P, assignedMemberId: 'cristiano'),
+      );
+      final result = plan(first);
+      final installment = result.installmentPlans.single;
+      expect(result.loans.single.installmentPlanIds, [installment.id]);
+      expect(installment.isAccepted, isFalse);
+      expect(result.loans.single.title, isNot(contains('aceitos')));
+    });
+
+    test('parcelamento aceito: a parcela seguinte vai num empréstimo próprio, que nasce aceito', () async {
+      await firstInvoice(_card(), debtor: 'cristiano');
+      final planId = (await repository.installmentPlans('pm_magalu')).single.id;
+      await repository.acceptInstallmentPlan(planId);
+
+      final next = await review(_card(), _november, [
+        _line('a', _purchase, 'MAGALU 04/10', 10000),
+        _line('b', DateTime(2026, 10, 30), 'PADARIA', 3000),
+      ]);
+      final withBakery = next.withLine(
+        lineOf(next, 'b').copyWith(destination: LineDestination.splitP2P, assignedMemberId: 'cristiano'),
+      );
+      expect(next.installmentMatchOf(lineOf(next, 'a'))!.plan!.isAccepted, isTrue);
+
+      final result = plan(withBakery);
+      expect(result.loans, hasLength(2));
+      final accepted = result.loans.firstWhere((l) => l.installmentPlanIds.isNotEmpty);
+      expect(accepted.title, contains('parcelamentos aceitos'));
+      expect(accepted.installmentPlanIds, [planId]);
+      expect(accepted.totalAmount.cents, 10000);
+      final other = result.loans.firstWhere((l) => l.installmentPlanIds.isEmpty);
+      expect(other.totalAmount.cents, 3000);
+    });
+
+    test('casa que dispensa o aceite da importação: um empréstimo só, como antes', () async {
+      await firstInvoice(_card(), debtor: 'cristiano');
+      await repository.acceptInstallmentPlan((await repository.installmentPlans('pm_magalu')).single.id);
+      var next = await review(_card(), _november, [
+        _line('a', _purchase, 'MAGALU 04/10', 10000),
+        _line('b', DateTime(2026, 10, 30), 'PADARIA', 3000),
+      ]);
+      next = next
+          .withParams(loansNeedAcceptance: false)
+          .withLine(lineOf(next, 'b').copyWith(destination: LineDestination.splitP2P, assignedMemberId: 'cristiano'));
+      final loan = plan(next).loans.single;
+      expect(loan.totalAmount.cents, 13000);
+      expect(loan.title, isNot(contains('aceitos')));
+    });
+
+    test('aceite por origem: chave ausente pede aceite, e o objeto vai inteiro', () {
+      expect(LoanAcceptance.fromJson(const {}), const LoanAcceptance());
+      final parsed = LoanAcceptance.fromJson(const {'import': false});
+      expect([parsed.manual, parsed.import, parsed.house], [true, false, true]);
+      expect(parsed.toJson(), {'manual': true, 'import': false, 'house': true});
+    });
+
+    test('outro devedor: o aceite de quem devia antes não vale', () async {
+      await firstInvoice(_card(), debtor: 'cristiano');
+      final planId = (await repository.installmentPlans('pm_magalu')).single.id;
+      await repository.acceptInstallmentPlan(planId);
+
+      var next = await review(_card(), _november, [_line('a', _purchase, 'MAGALU 04/10', 10000)]);
+      next = next.withLine(lineOf(next, 'a').copyWith(assignedMemberId: 'kelvynn'));
+      final result = await confirm(next);
+      expect(result.loans.single.title, isNot(contains('aceitos')));
+      final stored = (await repository.installmentPlans('pm_magalu')).single;
+      expect(stored.assignedMemberId, 'kelvynn');
+      expect(stored.isAccepted, isFalse);
+    });
+  });
+
+  group('estorno da compra parcelada', () {
+    test('cancelar a compra apaga as previstas, zera a parcela do mês e encerra o plano', () async {
+      await firstInvoice(_card());
+      var next = await review(_card(), _november, [
+        _line('a', _purchase, 'MAGALU 04/10', 10000),
+        _refund('r', DateTime(2026, 10, 25), 'ESTORNO MAGALU', 70000),
+      ]);
+      final refund = lineOf(next, 'r');
+      final option = next.refundOptionsOf(refund).firstWhere((o) => o.plan != null);
+      expect(option.suggested, isTrue);
+      expect(option.lineId, 'a');
+      next = next.withRefundChoice('r', option.key);
+      expect(next.effectiveAmountOf(lineOf(next, 'a')).isZero, isTrue);
+
+      final result = plan(next);
+      // A 4 (desta fatura) e as previstas 5 a 10
+      expect(result.forecastDeletions, hasLength(7));
+      expect(result.expenseUpdates, isEmpty);
+      expect(result.installmentLinks, isEmpty);
+      expect(result.installmentPlans.single.status, InstallmentPlanStatus.cancelled);
+      expect(result.lineRecords.firstWhere((r) => r.line.id == 'r').installmentPlanId, option.plan!.id);
+
+      await repository.confirmImport(next, result);
+      final cancelled = (await repository.installmentPlans('pm_magalu')).single;
+      expect(cancelled.status, InstallmentPlanStatus.cancelled);
+      expect([for (var n = 4; n <= 10; n++) cancelled.forecastOf(n)], everyElement(isNull));
+      expect(await repository.houseInstallmentPlans(), isEmpty);
+
+      // Desfazer devolve a compra e as previstas
+      await repository.undoImport((await repository.getHistory()).first.id);
+      final restored = (await repository.installmentPlans('pm_magalu')).single;
+      expect(restored.status, InstallmentPlanStatus.active);
+      expect([for (var n = 4; n <= 10; n++) restored.forecastOf(n) != null], everyElement(isTrue));
+    });
+
+    test('estorno menor que a parcela do mês: ela fica com o resto e as seguintes saem', () async {
+      await firstInvoice(_card());
+      var next = await review(_card(), _november, [
+        _line('a', _purchase, 'MAGALU 04/10', 10000),
+        _refund('r', DateTime(2026, 10, 25), 'ESTORNO MAGALU', 4000),
+      ]);
+      final option = next.refundOptionsOf(lineOf(next, 'r')).firstWhere((o) => o.plan != null);
+      next = next.withRefundChoice('r', option.key);
+      final result = plan(next);
+      expect(result.expenseUpdates.single.amount.cents, 6000);
+      expect(result.installmentLinks.single.number, 4);
+      expect(result.forecastDeletions, hasLength(6));
+    });
+
+    test('estorno de uma parcela já lançada abate só dela', () async {
+      await firstInvoice(_card());
+      final next = await review(_card(), _november, [
+        _line('a', _purchase, 'MAGALU 04/10', 10000),
+        _refund('r', DateTime(2026, 10, 25), 'ESTORNO MAGALU 03/10', 10000),
+      ]);
+      final parcel3 = (await repository.installmentPlans('pm_magalu')).single.parcels[3]!.expense;
+      final options = next.refundOptionsOf(lineOf(next, 'r'));
+      final option = options.firstWhere((o) => o.expense?.id == parcel3.id);
+      expect(option.suggested, isTrue);
+      expect(option.label, contains('parcela 3/10'));
+
+      final result = plan(next.withRefundChoice('r', option.key));
+      expect(result.expenseDeletions.single.id, parcel3.id);
+      expect(result.forecastDeletions, isEmpty);
+      expect(result.installmentPlans, isEmpty);
+    });
+
+    test('compra de morador: cancelar encerra o plano, sem previstas para apagar', () async {
+      await firstInvoice(_card(), debtor: 'cristiano');
+      final next = await review(_card(), _november, [
+        _refund('r', DateTime(2026, 10, 25), 'ESTORNO MAGALU', 70000),
+      ]);
+      final option = next.refundOptionsOf(lineOf(next, 'r')).single;
+      expect(option.label, contains('as próximas parcelas não vêm mais'));
+      final result = plan(next.withRefundChoice('r', option.key));
+      expect(result.isEmpty, isFalse);
+      expect(result.installmentPlans.single.status, InstallmentPlanStatus.cancelled);
+    });
+  });
+
+  group('antecipação', () {
+    test('uma linha só com o que faltava, com desconto: quita as previstas e encerra a compra', () async {
+      await firstInvoice(_card());
+      final next = await review(_card(), _november, [
+        _line('a', _purchase, 'MAGALU 04/10', 10000),
+        _line('b', DateTime(2026, 10, 28), 'ANTECIPACAO MAGALU', 54000),
+      ]);
+      final line = lineOf(next, 'b');
+      final option = next.prepaymentOptionsOf(line).single;
+      expect(option.numbers, [5, 6, 7, 8, 9, 10]);
+      expect(option.remaining.cents, 60000);
+      expect(next.chosenPrepayment(line), isNotNull);
+
+      final result = plan(next);
+      expect(result.newExpenses.single.title, 'Magalu (antecipação 5 a 10/10)');
+      expect(result.newExpenses.single.amount.cents, 54000);
+      expect(result.forecastDeletions, hasLength(6));
+      expect(result.installmentLinks.single.number, 4);
+      expect(result.installmentPlans.single.status, InstallmentPlanStatus.finished);
+
+      await repository.confirmImport(next, result);
+      expect(await repository.houseInstallmentPlans(), isEmpty);
+    });
+
+    test('sem a palavra antecipação e com valor que não bate: só sugere, e o usuário decide', () async {
+      await firstInvoice(_card());
+      var next = await review(_card(), _november, [
+        _line('a', _purchase, 'MAGALU 04/10', 10000),
+        _line('b', DateTime(2026, 10, 28), 'MAGALU', 50000),
+      ]);
+      final line = lineOf(next, 'b');
+      expect(next.prepaymentOptionsOf(line), hasLength(1));
+      expect(next.chosenPrepayment(line), isNull);
+      expect(plan(next).forecastDeletions, isEmpty);
+
+      next = next.withPrepaymentChoice('b', next.prepaymentOptionsOf(line).single.plan.id);
+      expect(plan(next).forecastDeletions, hasLength(6));
+      next = next.withPrepaymentChoice('b', null);
+      expect(plan(next).forecastDeletions, isEmpty);
+    });
+
+    test('"05/10 A 10/10" no fim da descrição não vira compra parcelada nova', () async {
+      await firstInvoice(_card());
+      final next = await review(_card(), _november, [
+        _line('a', _purchase, 'MAGALU 04/10', 10000),
+        _line('b', DateTime(2026, 10, 28), 'ANTECIPACAO MAGALU 05/10 A 10/10', 60000),
+      ]);
+      final line = lineOf(next, 'b');
+      expect(next.chosenPrepayment(line), isNotNull);
+      expect(next.installmentMatchOf(line), isNull);
+      expect(next.forecastsCreatedBy(line), 0);
+      final result = plan(next);
+      expect(result.installmentPlans.single.status, InstallmentPlanStatus.finished);
+      expect(result.newExpenses.single.title, 'Magalu (antecipação 5 a 10/10)');
+    });
+
+    test('parcelas antecipadas linha a linha: cada uma confirma a sua prevista nesta fatura', () async {
+      await firstInvoice(_card());
+      final next = await review(_card(), _november, [
+        for (var n = 4; n <= 10; n++) _line('p$n', _purchase, 'MAGALU ${n.toString().padLeft(2, '0')}/10', 10000),
+      ]);
+      final result = plan(next);
+      expect(result.newExpenses, isEmpty);
+      expect(result.expenseUpdates, hasLength(7));
+      expect(result.expenseUpdates.every((e) => e.dueDate == _november), isTrue);
+    });
+  });
+
+  group('projeção em Próximos ciclos', () {
+    test('a parcela do morador aparece em cada ciclo em que ainda vai ser cobrada', () async {
+      await firstInvoice(_card(), debtor: 'cristiano');
+      final plans = await repository.houseInstallmentPlans();
+      final forecast = const UpcomingCyclesBuilder().build(
+        schedule: schedule,
+        expensesByCycle: const {},
+        loans: const [],
+        members: _members,
+        paymentMethods: [_card()],
+        today: DateTime(2026, 10, 20),
+        installmentPlans: plans,
+      );
+      for (final cycle in forecast.cycles) {
+        final entry = cycle.projected.single;
+        expect(entry.payerId, 'cristiano');
+        expect(entry.receiverId, isNull, reason: 'cartão da Casa: deve ao Caixa');
+        expect(cycle.preview.memberById('cristiano')!.p2pToPay.cents, 10000);
+      }
+      expect(forecast.cycles.first.projected.single.title, 'Magalu 4/10');
+      final projection = forecast.installments.single;
+      expect(projection.remainingCount, 7);
+      expect(projection.remaining.cents, 70000);
+      expect(projection.lastDueDate, DateTime(2027, 5, 14));
+      expect(projection.accepted, isFalse);
+      expect(forecast.payoffs, isEmpty);
+    });
+
+    test('cartão de morador: a parcela é devida ao dono; da Casa não projeta (já é prevista)', () async {
+      await firstInvoice(_card(owner: 'kelvynn'), debtor: 'cristiano');
+      final forecast = const UpcomingCyclesBuilder().build(
+        schedule: schedule,
+        expensesByCycle: const {},
+        loans: const <P2PLoan>[],
+        members: _members,
+        paymentMethods: [_card(owner: 'kelvynn')],
+        today: DateTime(2026, 10, 20),
+        installmentPlans: await repository.houseInstallmentPlans(),
+      );
+      expect(forecast.cycles.first.projected.single.receiverId, 'kelvynn');
+      expect(forecast.cycles.first.preview.memberById('kelvynn')!.p2pToReceive.cents, 10000);
+
+      final house = MockImportRepository(finance: MockFinanceDataSource(), p2p: MockP2PDataSource());
+      repository = house;
+      await firstInvoice(_card());
+      final none = const UpcomingCyclesBuilder().build(
+        schedule: schedule,
+        expensesByCycle: const {},
+        loans: const <P2PLoan>[],
+        members: _members,
+        paymentMethods: [_card()],
+        today: DateTime(2026, 10, 20),
+        installmentPlans: await house.houseInstallmentPlans(),
+      );
+      expect(none.installments, isEmpty);
+    });
+
+    test('a parcela que a fatura já trouxe sai da projeção', () async {
+      await firstInvoice(_card(), debtor: 'cristiano');
+      await confirm(await review(_card(), _november, [_line('a', _purchase, 'MAGALU 04/10', 10000)]));
+      final forecast = const UpcomingCyclesBuilder().build(
+        schedule: schedule,
+        expensesByCycle: const {},
+        loans: const <P2PLoan>[],
+        members: _members,
+        paymentMethods: [_card()],
+        today: DateTime(2026, 10, 20),
+        installmentPlans: await repository.houseInstallmentPlans(),
+      );
+      expect(forecast.cycles.first.projected, isEmpty);
+      expect(forecast.cycles[1].projected.single.title, 'Magalu 5/10');
+      expect(forecast.installments.single.remainingCount, 6);
     });
   });
 
