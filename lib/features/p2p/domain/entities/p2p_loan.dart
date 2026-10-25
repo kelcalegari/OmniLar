@@ -76,7 +76,13 @@ class P2PLoan extends Equatable {
     this.awaitingApproval = false,
     this.houseFunding,
     this.fundedOn,
+    this.installmentPlanIds = const [],
   });
+
+  /// Compras parceladas do cartão que formam este empréstimo (importação da
+  /// fatura). Aceitar o empréstimo aceita também o parcelamento delas, e os
+  /// empréstimos das parcelas seguintes já nascem aceitos (migration 0116).
+  final List<String> installmentPlanIds;
 
   /// Empréstimo do Caixa da Casa: de onde o dinheiro saiu (null nos acordos
   /// antigos e nos criados pelo fechamento, que não tiram dinheiro do Caixa).
@@ -182,6 +188,7 @@ class P2PLoan extends Equatable {
     bool? awaitingApproval,
     HouseLoanFunding? houseFunding,
     DateTime? fundedOn,
+    List<String>? installmentPlanIds,
   }) {
     return P2PLoan(
       id: id,
@@ -203,6 +210,7 @@ class P2PLoan extends Equatable {
       awaitingApproval: awaitingApproval ?? this.awaitingApproval,
       houseFunding: houseFunding ?? this.houseFunding,
       fundedOn: fundedOn ?? this.fundedOn,
+      installmentPlanIds: installmentPlanIds ?? this.installmentPlanIds,
     );
   }
 
@@ -227,5 +235,6 @@ class P2PLoan extends Equatable {
         awaitingApproval,
         houseFunding,
         fundedOn,
+        installmentPlanIds,
       ];
 }

@@ -111,12 +111,33 @@ class MockImportRepository implements ImportRepository {
     final previousPlans = <InstallmentPlan>[];
     for (final installment in plan.installmentPlans) {
       final stored = _plans[installment.id];
+      // Como no banco: o aceite só muda pelo devedor, e plano novo nasce sem ele
       if (stored == null) {
-        _plans[installment.id] = _StoredPlan(installment);
+        _plans[installment.id] = _StoredPlan(InstallmentPlan(
+          id: installment.id,
+          paymentMethodId: installment.paymentMethodId,
+          merchantKey: installment.merchantKey,
+          title: installment.title,
+          total: installment.total,
+          installmentAmount: installment.installmentAmount,
+          anchorNumber: installment.anchorNumber,
+          anchorLineDate: installment.anchorLineDate,
+          anchorDueDate: installment.anchorDueDate,
+          destination: installment.destination,
+          categoryId: installment.categoryId,
+          assignedMemberId: installment.assignedMemberId,
+          status: installment.status,
+        ));
         createdPlanIds.add(installment.id);
       } else {
         previousPlans.add(stored.plan);
-        stored.plan = installment;
+        stored.plan = stored.plan.copyWith(
+          destination: installment.destination,
+          categoryId: installment.categoryId,
+          assignedMemberId: installment.assignedMemberId,
+          clearAssignedMember: installment.assignedMemberId == null,
+          status: installment.status,
+        );
       }
     }
     final expenses = <String, HouseExpense>{
@@ -163,31 +184,33 @@ class MockImportRepository implements ImportRepository {
   @override
   Future<List<InstallmentPlan>> installmentPlans(String paymentMethodId) async => [
         for (final stored in _plans.values)
-          if (stored.plan.paymentMethodId == paymentMethodId)
-            InstallmentPlan(
-              id: stored.plan.id,
-              paymentMethodId: stored.plan.paymentMethodId,
-              merchantKey: stored.plan.merchantKey,
-              title: stored.plan.title,
-              total: stored.plan.total,
-              installmentAmount: stored.plan.installmentAmount,
-              anchorNumber: stored.plan.anchorNumber,
-              anchorLineDate: stored.plan.anchorLineDate,
-              anchorDueDate: stored.plan.anchorDueDate,
-              destination: stored.plan.destination,
-              categoryId: stored.plan.categoryId,
-              assignedMemberId: stored.plan.assignedMemberId,
-              parcels: Map.of(stored.parcels),
-              importedNumbers: {
-                for (final other in _imports)
-                  if (!other.batch.isUndone)
-                    for (final record in other.records)
-                      if (record.installmentPlanId == stored.plan.id &&
-                          record.outcome != LineOutcome.skipped)
-                        ?record.installmentNumber,
-              },
-            ),
+          if (stored.plan.paymentMethodId == paymentMethodId) _snapshot(stored),
       ];
+
+  @override
+  Future<List<InstallmentPlan>> houseInstallmentPlans() async => [
+        for (final stored in _plans.values)
+          if (stored.plan.isActive) _snapshot(stored),
+      ];
+
+  @override
+  Future<void> acceptInstallmentPlan(String planId) async {
+    final stored = _plans[planId];
+    if (stored == null) throw const NotFoundFailure('Compra parcelada não encontrada.');
+    stored.plan = stored.plan.copyWith(acceptedBy: stored.plan.assignedMemberId);
+  }
+
+  /// O plano como o banco devolve: parcelas e o que as importações ativas trataram.
+  InstallmentPlan _snapshot(_StoredPlan stored) => stored.plan.copyWith(
+        parcels: Map.of(stored.parcels),
+        importedNumbers: {
+          for (final other in _imports)
+            if (!other.batch.isUndone)
+              for (final record in other.records)
+                if (record.installmentPlanId == stored.plan.id && record.outcome != LineOutcome.skipped)
+                  ?record.installmentNumber,
+        },
+      );
 
   @override
   Future<Set<String>> importedSignatures(String paymentMethodId) async => {
@@ -243,7 +266,14 @@ class MockImportRepository implements ImportRepository {
       }
     }
     for (final previous in stored.previousPlans) {
-      _plans[previous.id]?.plan = previous;
+      final target = _plans[previous.id];
+      target?.plan = target.plan.copyWith(
+        destination: previous.destination,
+        categoryId: previous.categoryId,
+        assignedMemberId: previous.assignedMemberId,
+        clearAssignedMember: previous.assignedMemberId == null,
+        status: previous.status,
+      );
     }
     for (final replaced in stored.replacedForecasts) {
       final target = _plans[replaced.planId];
@@ -329,4 +359,10 @@ class DynamicImportRepository implements ImportRepository {
   @override
   Future<List<InstallmentPlan>> installmentPlans(String paymentMethodId) =>
       _active.installmentPlans(paymentMethodId);
+
+  @override
+  Future<List<InstallmentPlan>> houseInstallmentPlans() => _active.houseInstallmentPlans();
+
+  @override
+  Future<void> acceptInstallmentPlan(String planId) => _active.acceptInstallmentPlan(planId);
 }

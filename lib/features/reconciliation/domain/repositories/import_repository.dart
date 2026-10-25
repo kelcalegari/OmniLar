@@ -92,4 +92,12 @@ abstract class ImportRepository {
   /// Compras parceladas de um cartão que ainda estão em curso, com as
   /// despesas das parcelas e as parcelas que as importações ativas já trataram.
   Future<List<InstallmentPlan>> installmentPlans(String paymentMethodId);
+
+  /// Compras parceladas em curso de todos os cartões da casa, para projetar
+  /// as parcelas que ainda vêm.
+  Future<List<InstallmentPlan>> houseInstallmentPlans();
+
+  /// O devedor aceita o parcelamento: os empréstimos mensais dele já nascem
+  /// aceitos.
+  Future<void> acceptInstallmentPlan(String planId);
 }

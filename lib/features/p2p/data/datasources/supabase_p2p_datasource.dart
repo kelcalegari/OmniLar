@@ -120,6 +120,9 @@ class SupabaseP2PDataSource implements P2PDataSource {
             _ => null,
           },
           fundedOn: DateTime.tryParse(r['funded_on'] as String? ?? ''),
+          installmentPlanIds: [
+            for (final id in (r['installment_plan_ids'] as List?) ?? const []) id as String,
+          ],
         );
       }).toList();
     } catch (e) {

@@ -1078,6 +1078,15 @@ class _AcceptanceBanner extends StatelessWidget {
                 : 'Aguardando $borrowerName aceitar. Até lá, ele fica fora do fechamento do ciclo.',
             style: const TextStyle(fontSize: 13),
           ),
+          if (isBorrower && loan.installmentPlanIds.isNotEmpty) ...[
+            const SizedBox(height: 6),
+            Text(
+              loan.installmentPlanIds.length == 1
+                  ? 'Tem parcela de uma compra parcelada no cartão. Aceitando, você aceita o parcelamento: as próximas parcelas dela já entram aceitas.'
+                  : 'Tem parcelas de ${loan.installmentPlanIds.length} compras parceladas no cartão. Aceitando, você aceita os parcelamentos: as próximas parcelas delas já entram aceitas.',
+              style: const TextStyle(fontSize: 12, color: Colors.grey),
+            ),
+          ],
           if (isBorrower) ...[
             const SizedBox(height: 10),
             Row(

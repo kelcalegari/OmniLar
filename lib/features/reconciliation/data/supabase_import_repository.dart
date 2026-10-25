@@ -21,6 +21,12 @@ String _destinationToDb(LineDestination destination) => switch (destination) {
       LineDestination.thirdParty => 'third_party',
     };
 
+InstallmentPlanStatus _planStatusFromDb(String? value) => switch (value) {
+      'finished' => InstallmentPlanStatus.finished,
+      'cancelled' => InstallmentPlanStatus.cancelled,
+      _ => InstallmentPlanStatus.active,
+    };
+
 LineDestination _destinationFromDb(String? value) => switch (value) {
       'p2p_loan' => LineDestination.splitP2P,
       'personal' => LineDestination.cardOwnerPersonal,
@@ -100,6 +106,7 @@ Map<String, dynamic> importPayload(
             'destination': _destinationToDb(installment.destination),
             if (isUuid(installment.categoryId)) 'category_id': installment.categoryId,
             if (isUuid(installment.assignedMemberId)) 'assigned_member_id': installment.assignedMemberId,
+            'status': installment.status.name,
           },
     ],
     'installment_links': [
@@ -228,12 +235,27 @@ class SupabaseImportRepository implements ImportRepository {
   @override
   Future<List<InstallmentPlan>> installmentPlans(String paymentMethodId) async {
     if (!isUuid(paymentMethodId)) return const [];
+    return _installmentPlans(paymentMethodId: paymentMethodId);
+  }
+
+  @override
+  Future<List<InstallmentPlan>> houseInstallmentPlans() => _installmentPlans(activeOnly: true);
+
+  @override
+  Future<void> acceptInstallmentPlan(String planId) async {
     try {
-      final planRows = await client
-          .from('installment_plans')
-          .select()
-          .eq('house_id', _houseId)
-          .eq('payment_method_id', paymentMethodId);
+      await client.rpc('accept_installment_plan', params: {'p_plan_id': planId});
+    } catch (e) {
+      throw _failure('Erro ao aceitar o parcelamento', e);
+    }
+  }
+
+  Future<List<InstallmentPlan>> _installmentPlans({String? paymentMethodId, bool activeOnly = false}) async {
+    try {
+      var query = client.from('installment_plans').select().eq('house_id', _houseId);
+      if (paymentMethodId != null) query = query.eq('payment_method_id', paymentMethodId);
+      if (activeOnly) query = query.eq('status', 'active');
+      final planRows = await query;
       // Plano cuja última parcela venceu há mais de dois meses já terminou
       final cutoff = DateTime.now().subtract(const Duration(days: 60));
       final rows = [
@@ -289,6 +311,8 @@ class SupabaseImportRepository implements ImportRepository {
             destination: _destinationFromDb(row['destination'] as String?),
             categoryId: row['category_id'] as String?,
             assignedMemberId: row['assigned_member_id'] as String?,
+            status: _planStatusFromDb(row['status'] as String?),
+            acceptedBy: row['accepted_by'] as String?,
             parcels: parcels[row['id']] ?? const {},
             importedNumbers: imported[row['id']] ?? const {},
           ),

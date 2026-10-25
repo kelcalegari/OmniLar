@@ -247,6 +247,13 @@ class _ReportsPageContent extends StatelessWidget {
                                   context.read<FinanceCubit>().state,
                                   context.read<FinanceCubit>().cycleSchedule,
                                 ),
+                            onAcceptInstallment: (planId) => context
+                                .read<ReportsCubit>()
+                                .acceptInstallmentPlan(
+                                  planId,
+                                  context.read<FinanceCubit>().state,
+                                  context.read<FinanceCubit>().cycleSchedule,
+                                ),
                           ),
                         ],
                       ),

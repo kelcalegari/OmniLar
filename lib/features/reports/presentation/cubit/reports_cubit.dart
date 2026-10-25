@@ -7,6 +7,8 @@ import '../../../finance/domain/repositories/finance_repository.dart';
 import '../../../finance/presentation/cubit/finance_state.dart';
 import '../../../p2p/domain/entities/p2p_loan.dart';
 import '../../../p2p/domain/repositories/p2p_repository.dart';
+import '../../../reconciliation/domain/entities/installment_plan.dart';
+import '../../../reconciliation/domain/repositories/import_repository.dart';
 import '../../../settlement/domain/entities/settlement_summary.dart';
 import '../../../settlement/domain/repositories/settlement_repository.dart';
 import '../../domain/entities/cycle_insights.dart';
@@ -125,6 +127,7 @@ class ReportsCubit extends Cubit<ReportsState> {
   final SettlementRepository _settlementRepository;
   final P2PRepository? _p2pRepository;
   final FinanceRepository? _financeRepository;
+  final ImportRepository? _importRepository;
   final CyclePreviewBuilder _builder = const CyclePreviewBuilder();
   final PaymentCalendarBuilder _calendarBuilder =
       const PaymentCalendarBuilder();
@@ -136,9 +139,11 @@ class ReportsCubit extends Cubit<ReportsState> {
     this._settlementRepository, {
     P2PRepository? p2pRepository,
     FinanceRepository? financeRepository,
+    ImportRepository? importRepository,
     DateTime Function()? now,
   }) : _p2pRepository = p2pRepository,
        _financeRepository = financeRepository,
+       _importRepository = importRepository,
        _now = now ?? DateTime.now,
        super(const ReportsState());
 
@@ -158,6 +163,14 @@ class ReportsCubit extends Cubit<ReportsState> {
   Future<List<P2PLoan>> _loans() => Future<List<P2PLoan>>.sync(
     () => _p2pRepository?.getLoans() ?? Future.value(const <P2PLoan>[]),
   ).catchError((_) => const <P2PLoan>[]);
+
+  /// Compras parceladas em curso; sem elas os próximos ciclos saem sem projeção.
+  Future<List<InstallmentPlan>> _installmentPlans() =>
+      Future<List<InstallmentPlan>>.sync(
+        () =>
+            _importRepository?.houseInstallmentPlans() ??
+            Future.value(const <InstallmentPlan>[]),
+      ).catchError((_) => const <InstallmentPlan>[]);
 
   /// Monta a prévia do ciclo que o painel financeiro carregou. Com
   /// [schedule], lê também o ciclo anterior para a comparação.
@@ -277,7 +290,9 @@ class ReportsCubit extends Cubit<ReportsState> {
       final expensesFutures = {
         for (final c in cycles) c: finances.getExpensesForCycle(c),
       };
+      final plansFuture = _installmentPlans();
       final loans = await _loans();
+      final plans = await plansFuture;
       final expensesByCycle = <FinancialCycle, List<HouseExpense>>{
         for (final entry in expensesFutures.entries)
           entry.key: await entry.value,
@@ -292,6 +307,7 @@ class ReportsCubit extends Cubit<ReportsState> {
         invoiceCodes: finance.cardInvoiceCodes,
         today: today,
         cashLabel: finance.houseSettings.cashName,
+        installmentPlans: plans,
       );
       emit(state.copyWith(upcoming: upcoming, upcomingLoading: false));
     } catch (e) {
@@ -303,6 +319,24 @@ class ReportsCubit extends Cubit<ReportsState> {
         ),
       );
     }
+  }
+
+  /// O devedor aceita o parcelamento de uma compra no cartão; os próximos
+  /// ciclos são lidos de novo. Devolve se deu certo.
+  Future<bool> acceptInstallmentPlan(
+    String planId,
+    FinanceState finance,
+    CycleSchedule schedule,
+  ) async {
+    final imports = _importRepository;
+    if (imports == null) return false;
+    try {
+      await imports.acceptInstallmentPlan(planId);
+    } catch (_) {
+      return false;
+    }
+    await loadUpcoming(finance, schedule);
+    return true;
   }
 
   /// Total dos últimos [count] ciclos até o que o painel mostra (uma leitura

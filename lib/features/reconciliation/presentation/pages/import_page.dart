@@ -2131,7 +2131,54 @@ class _ImportPageState extends State<ImportPage> {
             LineStatus.newLine ||
             LineStatus.ignored => _destinationRow(state, session, line),
           },
+          if (status == LineStatus.newLine || status == LineStatus.ignored)
+            for (final option in session.prepaymentOptionsOf(line))
+              _prepaymentRow(session, line, option),
         ],
+      ),
+    );
+  }
+
+  /// Linha que pode estar quitando de uma vez as parcelas que faltavam.
+  Widget _prepaymentRow(
+    ImportSession session,
+    ImportedStatementLine line,
+    PrepaymentOption option,
+  ) {
+    final chosen = session.chosenPrepayment(line)?.plan.id == option.plan.id;
+    final forecasts = [
+      for (final n in option.numbers)
+        if (option.plan.forecastOf(n) != null) n,
+    ].length;
+    return CheckboxListTile(
+      key: Key('import_prepayment_${line.id}_${option.plan.id}'),
+      contentPadding: EdgeInsets.zero,
+      dense: true,
+      controlAffinity: ListTileControlAffinity.leading,
+      value: chosen,
+      onChanged: _busy
+          ? null
+          : (value) => _update(
+              session.withPrepaymentChoice(
+                line.id,
+                value == true ? option.plan.id : null,
+              ),
+            ),
+      title: Text(
+        'Antecipação: quita as parcelas ${option.rangeLabel} de "${option.plan.title}"',
+        style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+      ),
+      subtitle: Text(
+        [
+          'Faltavam ${option.remaining.format()}.',
+          if (forecasts > 0)
+            forecasts == 1
+                ? 'A parcela prevista sai e a compra termina.'
+                : 'As $forecasts parcelas previstas saem e a compra termina.'
+          else
+            'A compra termina e não é mais projetada.',
+        ].join(' '),
+        style: const TextStyle(fontSize: 11),
       ),
     );
   }
@@ -2398,6 +2445,13 @@ class _ImportPageState extends State<ImportPage> {
     if (match.kind == InstallmentMatchKind.forecast &&
         session.statusOf(line) == LineStatus.newLine) {
       return '$parcel • tira esta e as próximas previstas da Casa';
+    }
+    final plan = match.plan;
+    if (plan != null &&
+        plan.isAccepted &&
+        line.destination == LineDestination.splitP2P &&
+        line.assignedMemberId == plan.assignedMemberId) {
+      return '$parcel • parcelamento já aceito por ${_memberName(plan.assignedMemberId!)}';
     }
     return parcel;
   }
