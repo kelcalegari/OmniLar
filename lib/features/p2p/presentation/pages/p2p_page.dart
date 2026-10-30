@@ -6,8 +6,10 @@ import '../../../../core/utils/responsive.dart';
 import '../../../../core/widgets/privacy_toggle.dart';
 import '../../../../core/widgets/responsive_container.dart';
 import '../../domain/entities/p2p_loan.dart';
+import '../../domain/services/installment_loan_groups.dart';
 import '../cubit/p2p_cubit.dart';
 import '../cubit/p2p_state.dart';
+import '../widgets/installment_group_card.dart';
 import '../widgets/loan_card.dart';
 import 'create_loan_page.dart';
 
@@ -157,7 +159,7 @@ class _P2PPageContentState extends State<_P2PPageContent> {
                                       child: Center(child: Text('Você não tem nenhuma dívida pendente 🎉')),
                                     )
                                   else
-                                    ...state.loansIDowe.map((l) => LoanCard(loan: l, isDebtor: true)),
+                                    ..._loanTiles(state.loansIDowe, all: state.allLoans, isDebtor: (_) => true),
                                 ],
                               ),
                             ),
@@ -200,7 +202,7 @@ class _P2PPageContentState extends State<_P2PPageContent> {
                                       child: Center(child: Text('Nenhum valor a receber no momento')),
                                     )
                                   else
-                                    ...state.loansTheyOweMe.map((l) => LoanCard(loan: l, isDebtor: false)),
+                                    ..._loanTiles(state.loansTheyOweMe, all: state.allLoans, isDebtor: (_) => false),
                                 ],
                               ),
                             ),
@@ -237,18 +239,19 @@ class _P2PPageContentState extends State<_P2PPageContent> {
                                 ],
                               ),
                               const SizedBox(height: 12),
-                              ...state.allLoans
-                                  .where((l) =>
-                                      l.status != LoanStatus.paid &&
-                                      l.status != LoanStatus.forgiven &&
-                                      l.remainingAmount.cents > 0 &&
-                                      l.borrowerMemberId != state.currentUserId &&
-                                      l.lenderMemberId != state.currentUserId)
-                                  .map((l) => LoanCard(
-                                        loan: l,
-                                        isDebtor: false,
-                                        showBothParties: true,
-                                      )),
+                              ..._loanTiles(
+                                state.allLoans
+                                    .where((l) =>
+                                        l.status != LoanStatus.paid &&
+                                        l.status != LoanStatus.forgiven &&
+                                        l.remainingAmount.cents > 0 &&
+                                        l.borrowerMemberId != state.currentUserId &&
+                                        l.lenderMemberId != state.currentUserId)
+                                    .toList(),
+                                all: state.allLoans,
+                                isDebtor: (_) => false,
+                                showBothParties: true,
+                              ),
                             ],
                           ),
                         ),
@@ -278,10 +281,11 @@ class _P2PPageContentState extends State<_P2PPageContent> {
                                 ],
                               ),
                               const SizedBox(height: 12),
-                              ...state.settledLoans.map((l) => LoanCard(
-                                    loan: l,
-                                    isDebtor: l.borrowerMemberId == state.currentUserId,
-                                  )),
+                              ..._loanTiles(
+                                state.settledLoans,
+                                all: state.allLoans,
+                                isDebtor: (l) => l.borrowerMemberId == state.currentUserId,
+                              ),
                             ],
                           ),
                         ),
@@ -522,22 +526,46 @@ class _P2PPageContentState extends State<_P2PPageContent> {
       );
     }
 
-    final currentUserId = context.read<P2PCubit>().state.currentUserId;
+    final state = context.read<P2PCubit>().state;
+    final tiles = _loanTiles(
+      loans,
+      all: state.allLoans,
+      isDebtor: (l) => showParties ? (l.borrowerMemberId == state.currentUserId) : isDebtor,
+      showBothParties: showParties,
+    );
 
     return RefreshIndicator(
       onRefresh: () => context.read<P2PCubit>().loadLoans(),
       child: ListView.builder(
         padding: const EdgeInsets.all(16),
-        itemCount: loans.length,
-        itemBuilder: (context, index) {
-          final l = loans[index];
-          return LoanCard(
-            loan: l,
-            isDebtor: showParties ? (l.borrowerMemberId == currentUserId) : isDebtor,
-            showBothParties: showParties,
-          );
-        },
+        itemCount: tiles.length,
+        itemBuilder: (context, index) => tiles[index],
       ),
     );
+  }
+
+  /// Cards da lista, com as parcelas de uma mesma compra parcelada no cartão
+  /// juntas em um card só.
+  List<Widget> _loanTiles(
+    List<P2PLoan> loans, {
+    required List<P2PLoan> all,
+    required bool Function(P2PLoan loan) isDebtor,
+    bool showBothParties = false,
+  }) {
+    return [
+      for (final entry in groupInstallmentLoans(loans, all: all))
+        switch (entry) {
+          SingleLoanEntry(:final loan) => LoanCard(
+              loan: loan,
+              isDebtor: isDebtor(loan),
+              showBothParties: showBothParties,
+            ),
+          InstallmentLoanGroup() => InstallmentGroupCard(
+              group: entry,
+              isDebtor: isDebtor(entry.first),
+              showBothParties: showBothParties,
+            ),
+        },
+    ];
   }
 }

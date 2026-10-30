@@ -26,6 +26,47 @@ Future<void> showLoanDetails(BuildContext context, P2PLoan loan, {required bool 
   );
 }
 
+/// Com quem é o empréstimo, como aparece abaixo do título no card.
+String loanCounterpartyLabel(
+  BuildContext context,
+  P2PLoan loan, {
+  required bool isDebtor,
+  bool showBothParties = false,
+}) {
+  final isDemo = sl<AuthRepository>().isDemoMode;
+  List<HouseMember> members = [];
+  try {
+    members = context.read<FinanceCubit>().state.members;
+  } catch (_) {}
+
+  String resolveMemberName(String memberId) {
+    if (memberId == P2PLoan.houseLenderId) return 'Caixa da Casa';
+    if (isDemo) {
+      if (memberId == 'member_carlos') return 'Carlos';
+      if (memberId == 'member_marina') return 'Marina';
+    }
+    final matched = members.where((m) => m.id == memberId).firstOrNull;
+    if (matched != null) return matched.name;
+    final currentUserId = sl<AuthRepository>().currentUser?.id;
+    if (memberId == currentUserId) return 'Você';
+    return 'Membro';
+  }
+
+  if (loan.isHouseLender) {
+    final borrowerName = resolveMemberName(loan.borrowerMemberId);
+    final isSelf = loan.borrowerMemberId == sl<AuthRepository>().currentUser?.id;
+    return isSelf
+        ? '🏛️ Acordo com o Lar • Você deve à Casa'
+        : '🏛️ Acordo com o Lar • Devedor: $borrowerName';
+  } else if (showBothParties) {
+    return '${resolveMemberName(loan.lenderMemberId)} ➔ ${resolveMemberName(loan.borrowerMemberId)}';
+  } else {
+    final targetId = isDebtor ? loan.lenderMemberId : loan.borrowerMemberId;
+    final name = resolveMemberName(targetId);
+    return isDebtor ? 'Credor: $name' : 'Devedor: $name';
+  }
+}
+
 class LoanCard extends StatelessWidget {
   final P2PLoan loan;
   final bool isDebtor; // true se eu devo, false se me devem
@@ -48,39 +89,12 @@ class LoanCard extends StatelessWidget {
 
     final progress = loan.progressPercentage;
 
-    final isDemo = sl<AuthRepository>().isDemoMode;
-    List<HouseMember> members = [];
-    try {
-      members = context.read<FinanceCubit>().state.members;
-    } catch (_) {}
-
-    String resolveMemberName(String memberId) {
-      if (memberId == P2PLoan.houseLenderId) return 'Caixa da Casa';
-      if (isDemo) {
-        if (memberId == 'member_carlos') return 'Carlos';
-        if (memberId == 'member_marina') return 'Marina';
-      }
-      final matched = members.where((m) => m.id == memberId).firstOrNull;
-      if (matched != null) return matched.name;
-      final currentUserId = sl<AuthRepository>().currentUser?.id;
-      if (memberId == currentUserId) return 'Você';
-      return 'Membro';
-    }
-
-    String counterpartyLabel;
-    if (loan.isHouseLender) {
-      final borrowerName = resolveMemberName(loan.borrowerMemberId);
-      final isSelf = loan.borrowerMemberId == sl<AuthRepository>().currentUser?.id;
-      counterpartyLabel = isSelf
-          ? '🏛️ Acordo com o Lar • Você deve à Casa'
-          : '🏛️ Acordo com o Lar • Devedor: $borrowerName';
-    } else if (showBothParties) {
-      counterpartyLabel = '${resolveMemberName(loan.lenderMemberId)} ➔ ${resolveMemberName(loan.borrowerMemberId)}';
-    } else {
-      final targetId = isDebtor ? loan.lenderMemberId : loan.borrowerMemberId;
-      final name = resolveMemberName(targetId);
-      counterpartyLabel = isDebtor ? 'Credor: $name' : 'Devedor: $name';
-    }
+    final counterpartyLabel = loanCounterpartyLabel(
+      context,
+      loan,
+      isDebtor: isDebtor,
+      showBothParties: showBothParties,
+    );
 
     final isHouse = loan.isHouseLender && !isDebtor;
     final cardAccentColor = isHouse
