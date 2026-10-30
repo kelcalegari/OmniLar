@@ -6,6 +6,7 @@ import '../../p2p/data/datasources/p2p_datasource.dart';
 import '../domain/entities/installment_plan.dart';
 import '../domain/repositories/import_repository.dart';
 import '../domain/services/import_session.dart';
+import '../domain/services/installment_purchase.dart';
 
 class _StoredImport {
   final ImportBatch batch;
@@ -200,6 +201,19 @@ class MockImportRepository implements ImportRepository {
     stored.plan = stored.plan.copyWith(acceptedBy: stored.plan.assignedMemberId);
   }
 
+  @override
+  Future<void> createInstallmentPurchase(InstallmentPurchase purchase) async {
+    final stored = _StoredPlan(purchase.plan);
+    for (final (index, expense) in purchase.expenses.indexed) {
+      await finance.addExpense(expense);
+      stored.parcels[purchase.firstNumber + index] = InstallmentParcel(expense: expense, isForecast: true);
+    }
+    for (final loan in purchase.loans) {
+      await p2p.createLoan(loan);
+    }
+    _plans[purchase.plan.id] = stored;
+  }
+
   /// O plano como o banco devolve: parcelas e o que as importações ativas trataram.
   InstallmentPlan _snapshot(_StoredPlan stored) => stored.plan.copyWith(
         parcels: Map.of(stored.parcels),
@@ -359,6 +373,10 @@ class DynamicImportRepository implements ImportRepository {
   @override
   Future<List<InstallmentPlan>> installmentPlans(String paymentMethodId) =>
       _active.installmentPlans(paymentMethodId);
+
+  @override
+  Future<void> createInstallmentPurchase(InstallmentPurchase purchase) =>
+      _active.createInstallmentPurchase(purchase);
 
   @override
   Future<List<InstallmentPlan>> houseInstallmentPlans() => _active.houseInstallmentPlans();

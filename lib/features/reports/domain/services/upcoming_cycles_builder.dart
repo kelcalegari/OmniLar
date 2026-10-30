@@ -75,7 +75,9 @@ class UpcomingCyclesBuilder {
     final projectedLoans = <P2PLoan>[];
     for (final plan in installmentPlans) {
       final borrower = plan.assignedMemberId;
+      // Lançada à mão: os empréstimos das parcelas já existem e entram como tais
       if (!plan.isActive ||
+          plan.coveredByLoans ||
           plan.destination != LineDestination.splitP2P ||
           borrower == null ||
           !memberIds.contains(borrower)) {

@@ -24,6 +24,10 @@ import '../../../../core/widgets/save_feedback.dart';
 import '../../../admin/presentation/cubit/account_access_cubit.dart';
 import '../../domain/services/receipt_attachment_service.dart';
 import '../widgets/receipt_attachment_viewer.dart';
+import '../../../reconciliation/domain/repositories/import_repository.dart';
+import '../../../reconciliation/domain/entities/installment_plan.dart';
+import '../../../reconciliation/domain/services/installment_purchase.dart';
+import '../../../p2p/domain/entities/p2p_loan.dart';
 
 class _DraftExpenseItem {
   final TextEditingController titleController;
@@ -108,6 +112,13 @@ class _AddExpensePageState extends State<AddExpensePage> {
   int _amountFieldVersion = 0;
 
   bool _isItemized = false;
+
+  /// Compra no cartão em várias faturas; sem [_installmentDebtorId] é da Casa.
+  bool _isInstallment = false;
+  int _installmentsCount = 2;
+  /// Compra já em andamento: a parcela que vem na próxima fatura.
+  int _installmentFirstNumber = 1;
+  String? _installmentDebtorId;
   final List<_DraftExpenseItem> _draftItems = [];
   ReceiptAttachmentFile? _pendingAttachmentFile;
   String? _existingAttachmentPath;
@@ -571,6 +582,17 @@ class _AddExpensePageState extends State<AddExpensePage> {
       return;
     }
 
+    if (_installmentApplies(selectedPm)) {
+      await _submitInstallmentPurchase(
+        state: state,
+        card: selectedPm!,
+        categoryId: catId,
+        paidById: paidById,
+        rule: rule,
+      );
+      return;
+    }
+
     if (_isSaving) return;
     setState(() => _isSaving = true);
 
@@ -662,6 +684,287 @@ class _AddExpensePageState extends State<AddExpensePage> {
               ? 'Boleto composto lançado com ${items.length} sub-itens! 🏢'
               : 'Gasto da casa lançado com sucesso! 🎉'),
       failure: cubit.state.errorMessage,
+    );
+  }
+
+  /// Compra nova no cartão, fora de projeto, que dá para parcelar: o cartão
+  /// tem os dias de fechamento e vencimento para saber a fatura de cada parcela.
+  bool _canBeInstallment(PaymentMethod? pm) =>
+      widget.expenseToEdit == null &&
+      !_isRecurring &&
+      _selectedProjectId == null &&
+      pm != null &&
+      pm.isCreditCard &&
+      pm.closingDay != null &&
+      pm.dueDay != null &&
+      ExpenseLaunchDefaults.waitsForInvoice(pm);
+
+  bool _installmentApplies(PaymentMethod? pm) => _isInstallment && _canBeInstallment(pm);
+
+  /// Quem empresta na compra do morador: o dono do cartão ou o Caixa da Casa.
+  String _installmentLenderOf(PaymentMethod card) => card.ownerMemberId ?? P2PLoan.houseLenderId;
+
+  Future<void> _submitInstallmentPurchase({
+    required FinanceState state,
+    required PaymentMethod card,
+    required String categoryId,
+    required String paidById,
+    required SplitRule rule,
+  }) async {
+    void fail(String message) => ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(backgroundColor: Colors.red.shade700, content: Text(message)),
+        );
+    final debtorId = _installmentDebtorId;
+    if (_isItemized) {
+      fail('A compra parcelada não aceita sub-itens. Desative o boleto composto.');
+      return;
+    }
+    if (debtorId == null && rule.type == SplitType.fixed) {
+      fail('Na compra parcelada, divida por percentual ou por responsável, e não por valores fixos.');
+      return;
+    }
+    if (debtorId != null && debtorId == _installmentLenderOf(card)) {
+      fail('O dono do cartão não deve a compra para ele mesmo: escolha outro morador ou a Casa.');
+      return;
+    }
+    if (_isSaving) return;
+    setState(() => _isSaving = true);
+
+    var purchase = InstallmentPurchase.build(
+      title: _titleController.text.trim(),
+      total: Money(_cents),
+      count: _installmentsCount,
+      purchaseDate: _selectedDate,
+      card: card,
+      categoryId: categoryId,
+      paidByMemberId: paidById,
+      splitRule: rule,
+      firstNumber: _installmentFirstNumber,
+      debtorMemberId: debtorId,
+      debtorName: state.members.where((m) => m.id == debtorId).firstOrNull?.name,
+      createdBy: sl<AuthRepository>().currentUser?.id,
+    );
+
+    // O comprovante fica com a primeira parcela
+    if (_pendingAttachmentFile != null && purchase.expenses.isNotEmpty) {
+      final first = purchase.expenses.first;
+      try {
+        final path = await sl<ReceiptAttachmentService>().uploadReceipt(
+          houseId: sl<AuthRepository>().currentHouse?.id ?? '',
+          file: _pendingAttachmentFile!,
+          expenseId: first.id,
+        );
+        purchase = InstallmentPurchase(
+          plan: purchase.plan,
+          firstNumber: purchase.firstNumber,
+          expenses: [
+            first.copyWith(
+              attachmentPath: path,
+              attachmentName: _pendingAttachmentFile!.name,
+              attachmentContentType: _pendingAttachmentFile!.contentType,
+              attachmentSizeBytes: _pendingAttachmentFile!.sizeBytes,
+            ),
+            ...purchase.expenses.skip(1),
+          ],
+        );
+      } catch (e) {
+        if (mounted) {
+          setState(() => _isSaving = false);
+          fail('Erro ao enviar comprovante: $e');
+        }
+        return;
+      }
+    }
+
+    final cubit = context.read<FinanceCubit>();
+    String? error;
+    try {
+      await sl<ImportRepository>().createInstallmentPurchase(purchase);
+      await cubit.loadCycleData(cycle: cubit.state.currentCycle);
+    } catch (e) {
+      error = e.toString();
+    }
+    if (!mounted) return;
+    setState(() => _isSaving = false);
+    // Falhou: o formulário fica aberto, com o que foi digitado
+    if (error == null) Navigator.pop(context);
+    showSaveFeedback(
+      ScaffoldMessenger.of(context),
+      ok: error == null,
+      success: debtorId == null
+          ? 'Compra parcelada em $_installmentsCount vezes lançada! As parcelas ficam previstas até cada fatura. 💳'
+          : 'Compra parcelada lançada como empréstimo! 💳',
+      failure: error,
+    );
+  }
+
+  /// Parcelas da compra no cartão: quantas vezes e de quem é a compra.
+  Widget _buildInstallmentSection(ThemeData theme, FinanceState state, PaymentMethod card) {
+    final lender = _installmentLenderOf(card);
+    final debtors = [
+      for (final m in state.members)
+        if (m.id != lender) m,
+    ];
+    if (_installmentDebtorId != null && !debtors.any((m) => m.id == _installmentDebtorId)) {
+      _installmentDebtorId = null;
+    }
+    final parts = _cents > 0 ? Money(_cents).splitEqually(_installmentsCount) : const <Money>[];
+    final purchaseDue = CreditCardInvoiceCalculator.calculateInvoiceDueDate(
+      purchaseDate: _selectedDate,
+      closingDay: card.closingDay!,
+      dueDay: card.dueDay!,
+    );
+    final first = _installmentFirstNumber;
+    final firstDue = addMonths(purchaseDue, first - 1);
+    final lenderName = lender == P2PLoan.houseLenderId
+        ? 'o Caixa da Casa'
+        : (state.members.where((m) => m.id == lender).firstOrNull?.name ?? 'o dono do cartão');
+    final debtorName = state.members.where((m) => m.id == _installmentDebtorId).firstOrNull?.name;
+
+    return Material(
+      color: _isInstallment ? AppColors.primary.withValues(alpha: 0.06) : theme.cardColor,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(16),
+        side: BorderSide(
+          color: _isInstallment ? AppColors.primary.withValues(alpha: 0.4) : theme.dividerColor,
+          width: _isInstallment ? 1.5 : 1,
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          SwitchListTile(
+            key: const Key('expense_installment_switch'),
+            secondary: Icon(
+              Icons.credit_score_rounded,
+              color: _isInstallment ? AppColors.primary : Colors.grey,
+            ),
+            title: const Text(
+              'Compra parcelada',
+              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+            ),
+            subtitle: const Text(
+              'Uma parcela em cada fatura; a importação só confirma',
+              style: TextStyle(fontSize: 12),
+            ),
+            value: _isInstallment,
+            onChanged: (val) => setState(() => _isInstallment = val),
+          ),
+          if (_isInstallment) ...[
+            const Divider(height: 1),
+            Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Text(
+                        'Número de parcelas',
+                        style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
+                      ),
+                      DropdownButton<int>(
+                        key: const Key('expense_installments_count'),
+                        value: _installmentsCount,
+                        isDense: true,
+                        items: [
+                          for (var n = 2; n <= 48; n++)
+                            DropdownMenuItem(
+                              value: n,
+                              child: Text('${n}x', style: const TextStyle(fontWeight: FontWeight.bold)),
+                            ),
+                        ],
+                        onChanged: (val) {
+                          if (val == null) return;
+                          setState(() {
+                            _installmentsCount = val;
+                            if (_installmentFirstNumber > val) _installmentFirstNumber = val;
+                          });
+                        },
+                      ),
+                    ],
+                  ),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Expanded(
+                        child: Text(
+                          'Próxima parcela',
+                          style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
+                        ),
+                      ),
+                      DropdownButton<int>(
+                        key: const Key('expense_installment_first_number'),
+                        value: _installmentFirstNumber,
+                        isDense: true,
+                        items: [
+                          for (var n = 1; n <= _installmentsCount; n++)
+                            DropdownMenuItem(
+                              value: n,
+                              child: Text(
+                                '$n de $_installmentsCount',
+                                style: const TextStyle(fontWeight: FontWeight.bold),
+                              ),
+                            ),
+                        ],
+                        onChanged: (val) {
+                          if (val != null) setState(() => _installmentFirstNumber = val);
+                        },
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    parts.isEmpty
+                        ? 'Digite o valor total da compra.'
+                        : '$_installmentsCount x de ${parts.last.format()} '
+                            '(valor total ${Money(_cents).format()}). '
+                            '${first == 1 ? 'A 1ª parcela' : 'Lança da $firstª à ${_installmentsCount}ª; a $firstª'} '
+                            'vem na fatura de ${DateFormat('dd/MM/yyyy').format(firstDue)}.'
+                            '${first == 1 ? '' : ' Use a data da compra original.'}',
+                    style: const TextStyle(fontSize: 12),
+                  ),
+                  const SizedBox(height: 14),
+                  const Text(
+                    'De quem é a compra',
+                    style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
+                  ),
+                  const SizedBox(height: 8),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 4,
+                    children: [
+                      ChoiceChip(
+                        label: const Text('Da Casa'),
+                        selected: _installmentDebtorId == null,
+                        onSelected: (_) => setState(() => _installmentDebtorId = null),
+                      ),
+                      for (final m in debtors)
+                        ChoiceChip(
+                          label: Text(m.name),
+                          selected: _installmentDebtorId == m.id,
+                          onSelected: (_) => setState(() => _installmentDebtorId = m.id),
+                        ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    debtorName == null
+                        ? 'Cada parcela entra como despesa prevista da Casa no ciclo da fatura dela.'
+                        : lender == P2PLoan.houseLenderId
+                            ? '$debtorName deve cada parcela para $lenderName: um empréstimo por fatura, '
+                                'aceito de uma vez. Não entra nas despesas da Casa.'
+                            : '$debtorName deve a compra para $lenderName: um empréstimo em '
+                                '$_installmentsCount parcelas, uma por fatura. Não entra nas despesas da Casa.',
+                    style: const TextStyle(fontSize: 12),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ],
+      ),
     );
   }
 
@@ -1642,6 +1945,20 @@ class _AddExpensePageState extends State<AddExpensePage> {
               ),
               const SizedBox(height: 16),
 
+              // Compra parcelada no cartão
+              Builder(
+                builder: (context) {
+                  final pm = state.paymentMethods
+                      .where((p) => p.id == _selectedPaymentMethodId)
+                      .firstOrNull;
+                  if (!_canBeInstallment(pm)) return const SizedBox.shrink();
+                  return Padding(
+                    padding: const EdgeInsets.only(bottom: 16),
+                    child: _buildInstallmentSection(theme, state, pm!),
+                  );
+                },
+              ),
+
               // Comprovante ou Cupom Fiscal (Fase 4.1)
               _buildReceiptAttachmentSection(theme),
 
@@ -1661,7 +1978,13 @@ class _AddExpensePageState extends State<AddExpensePage> {
                   child: Text(
                     widget.expenseToEdit != null
                         ? 'Salvar Alterações'
-                        : (_isRecurring ? 'Salvar Despesa Recorrente' : 'Lançar Gasto da Casa'),
+                        : (_isRecurring
+                            ? 'Salvar Despesa Recorrente'
+                            : (_installmentApplies(state.paymentMethods
+                                    .where((p) => p.id == _selectedPaymentMethodId)
+                                    .firstOrNull)
+                                ? 'Lançar Compra Parcelada'
+                                : 'Lançar Gasto da Casa')),
                     style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
                   ),
                 ),

@@ -49,3 +49,8 @@ app.*.map.json
 
 # Cache do Firebase CLI
 .firebase/
+
+# Variáveis de ambiente locais: nunca vão para o repositório
+.env
+.env.*
+!.env.example
