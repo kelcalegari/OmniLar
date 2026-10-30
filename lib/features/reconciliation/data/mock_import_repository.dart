@@ -206,7 +206,7 @@ class MockImportRepository implements ImportRepository {
     final stored = _StoredPlan(purchase.plan);
     for (final (index, expense) in purchase.expenses.indexed) {
       await finance.addExpense(expense);
-      stored.parcels[index + 1] = InstallmentParcel(expense: expense, isForecast: true);
+      stored.parcels[purchase.firstNumber + index] = InstallmentParcel(expense: expense, isForecast: true);
     }
     for (final loan in purchase.loans) {
       await p2p.createLoan(loan);

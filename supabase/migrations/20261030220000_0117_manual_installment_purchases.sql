@@ -23,7 +23,8 @@ alter table public.installment_plans
 -- 2. Lança a compra parcelada
 --    {
 --      "plan": {id, house_id, payment_method_id, merchant_key, title,
---               installments_total, installment_cents, anchor_line_date,
+--               installments_total, installment_cents, anchor_number (a
+--               próxima parcela, numa compra já em andamento), anchor_line_date,
 --               anchor_due_date, destination, category_id?, assigned_member_id?},
 --      "expenses": [payload de create_house_expense + "installment_number"],
 --      "loans": [payload de create_p2p_loan]
@@ -64,7 +65,7 @@ begin
     v_plan->>'title',
     (v_plan->>'installments_total')::integer,
     (v_plan->>'installment_cents')::bigint,
-    1,
+    coalesce((v_plan->>'anchor_number')::integer, 1),
     (v_plan->>'anchor_line_date')::date,
     (v_plan->>'anchor_due_date')::date,
     v_destination,

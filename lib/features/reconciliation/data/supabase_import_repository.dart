@@ -266,6 +266,7 @@ class SupabaseImportRepository implements ImportRepository {
             'title': plan.title,
             'installments_total': plan.total,
             'installment_cents': plan.installmentAmount.cents,
+            'anchor_number': plan.anchorNumber,
             'anchor_line_date': _dateOnly(plan.anchorLineDate),
             if (plan.anchorDueDate != null) 'anchor_due_date': _dateOnly(plan.anchorDueDate!),
             'destination': _destinationToDb(plan.destination),
@@ -276,7 +277,7 @@ class SupabaseImportRepository implements ImportRepository {
             for (final (index, expense) in purchase.expenses.indexed)
               {
                 ...houseExpensePayload(expense, houseId: _houseId, currentUserId: userId),
-                'installment_number': index + 1,
+                'installment_number': purchase.firstNumber + index,
               },
           ],
           'loans': [for (final loan in purchase.loans) p2pLoanPayload(loan, houseId: _houseId)],

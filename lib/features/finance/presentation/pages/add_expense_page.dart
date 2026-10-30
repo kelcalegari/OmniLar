@@ -25,6 +25,7 @@ import '../../../admin/presentation/cubit/account_access_cubit.dart';
 import '../../domain/services/receipt_attachment_service.dart';
 import '../widgets/receipt_attachment_viewer.dart';
 import '../../../reconciliation/domain/repositories/import_repository.dart';
+import '../../../reconciliation/domain/entities/installment_plan.dart';
 import '../../../reconciliation/domain/services/installment_purchase.dart';
 import '../../../p2p/domain/entities/p2p_loan.dart';
 
@@ -115,6 +116,8 @@ class _AddExpensePageState extends State<AddExpensePage> {
   /// Compra no cartão em várias faturas; sem [_installmentDebtorId] é da Casa.
   bool _isInstallment = false;
   int _installmentsCount = 2;
+  /// Compra já em andamento: a parcela que vem na próxima fatura.
+  int _installmentFirstNumber = 1;
   String? _installmentDebtorId;
   final List<_DraftExpenseItem> _draftItems = [];
   ReceiptAttachmentFile? _pendingAttachmentFile;
@@ -736,6 +739,7 @@ class _AddExpensePageState extends State<AddExpensePage> {
       categoryId: categoryId,
       paidByMemberId: paidById,
       splitRule: rule,
+      firstNumber: _installmentFirstNumber,
       debtorMemberId: debtorId,
       debtorName: state.members.where((m) => m.id == debtorId).firstOrNull?.name,
       createdBy: sl<AuthRepository>().currentUser?.id,
@@ -752,6 +756,7 @@ class _AddExpensePageState extends State<AddExpensePage> {
         );
         purchase = InstallmentPurchase(
           plan: purchase.plan,
+          firstNumber: purchase.firstNumber,
           expenses: [
             first.copyWith(
               attachmentPath: path,
@@ -804,11 +809,13 @@ class _AddExpensePageState extends State<AddExpensePage> {
       _installmentDebtorId = null;
     }
     final parts = _cents > 0 ? Money(_cents).splitEqually(_installmentsCount) : const <Money>[];
-    final firstDue = CreditCardInvoiceCalculator.calculateInvoiceDueDate(
+    final purchaseDue = CreditCardInvoiceCalculator.calculateInvoiceDueDate(
       purchaseDate: _selectedDate,
       closingDay: card.closingDay!,
       dueDay: card.dueDay!,
     );
+    final first = _installmentFirstNumber;
+    final firstDue = addMonths(purchaseDue, first - 1);
     final lenderName = lender == P2PLoan.houseLenderId
         ? 'o Caixa da Casa'
         : (state.members.where((m) => m.id == lender).firstOrNull?.name ?? 'o dono do cartão');
@@ -869,7 +876,40 @@ class _AddExpensePageState extends State<AddExpensePage> {
                             ),
                         ],
                         onChanged: (val) {
-                          if (val != null) setState(() => _installmentsCount = val);
+                          if (val == null) return;
+                          setState(() {
+                            _installmentsCount = val;
+                            if (_installmentFirstNumber > val) _installmentFirstNumber = val;
+                          });
+                        },
+                      ),
+                    ],
+                  ),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Expanded(
+                        child: Text(
+                          'Próxima parcela',
+                          style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
+                        ),
+                      ),
+                      DropdownButton<int>(
+                        key: const Key('expense_installment_first_number'),
+                        value: _installmentFirstNumber,
+                        isDense: true,
+                        items: [
+                          for (var n = 1; n <= _installmentsCount; n++)
+                            DropdownMenuItem(
+                              value: n,
+                              child: Text(
+                                '$n de $_installmentsCount',
+                                style: const TextStyle(fontWeight: FontWeight.bold),
+                              ),
+                            ),
+                        ],
+                        onChanged: (val) {
+                          if (val != null) setState(() => _installmentFirstNumber = val);
                         },
                       ),
                     ],
@@ -880,7 +920,9 @@ class _AddExpensePageState extends State<AddExpensePage> {
                         ? 'Digite o valor total da compra.'
                         : '$_installmentsCount x de ${parts.last.format()} '
                             '(valor total ${Money(_cents).format()}). '
-                            'A 1ª parcela vem na fatura de ${DateFormat('dd/MM/yyyy').format(firstDue)}.',
+                            '${first == 1 ? 'A 1ª parcela' : 'Lança da $firstª à ${_installmentsCount}ª; a $firstª'} '
+                            'vem na fatura de ${DateFormat('dd/MM/yyyy').format(firstDue)}.'
+                            '${first == 1 ? '' : ' Use a data da compra original.'}',
                     style: const TextStyle(fontSize: 12),
                   ),
                   const SizedBox(height: 14),

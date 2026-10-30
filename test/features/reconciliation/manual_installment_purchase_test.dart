@@ -64,6 +64,7 @@ InstallmentPurchase _build({
   DateTime? date,
   PaymentMethod? card,
   String? debtor,
+  int firstNumber = 1,
 }) =>
     InstallmentPurchase.build(
       title: title,
@@ -74,6 +75,7 @@ InstallmentPurchase _build({
       categoryId: 'cat_casa',
       paidByMemberId: 'kelvynn',
       splitRule: const SplitRule.percentage({'kelvynn': 60, 'cristiano': 40}),
+      firstNumber: firstNumber,
       debtorMemberId: debtor,
       debtorName: debtor == null ? null : 'Cristiano',
       now: DateTime(2026, 10, 5),
@@ -171,6 +173,32 @@ void main() {
       expect(purchase.loans.first.title, 'Geladeira (1/10) — Cristiano');
     });
 
+    test('compra já em andamento: só as parcelas que faltam, na fatura de cada uma', () {
+      // Compra de agosto em 3x: a 1/3 já veio em setembro, a próxima é a 2/3
+      final purchase = _build(cents: 30000, count: 3, date: DateTime(2026, 8, 20), firstNumber: 2);
+      expect(purchase.firstNumber, 2);
+      expect(purchase.expenses.map((e) => e.title), ['Geladeira (2/3)', 'Geladeira (3/3)']);
+      expect(purchase.expenses.map((e) => e.dueDate), [_october, _november]);
+      expect(purchase.plan.anchorNumber, 2);
+      expect(purchase.plan.anchorDueDate, _october);
+      expect(purchase.plan.anchorLineDate, DateTime(2026, 8, 20));
+    });
+
+    test('compra do morador já em andamento: o empréstimo é do que falta', () {
+      final purchase = _build(
+        cents: 30000,
+        count: 3,
+        date: DateTime(2026, 8, 20),
+        firstNumber: 2,
+        card: _card(owner: 'kelvynn'),
+        debtor: 'cristiano',
+      );
+      final loan = purchase.loans.single;
+      expect(loan.totalAmount.cents, 20000);
+      expect(loan.installmentsCount, 2);
+      expect(loan.firstDueDate, _october);
+    });
+
     test('cartão sem fechamento e vencimento não parcela', () {
       expect(
         () => _build(
@@ -201,6 +229,18 @@ void main() {
       ]);
       expect(next.confirmedForecastOf(lineOf(next, 'a'))!.title, 'Geladeira (2/10)');
       expect(plan(next).newExpenses, isEmpty);
+    });
+
+    test('compra já em andamento: a fatura confirma a parcela que veio', () async {
+      final august = DateTime(2026, 8, 20);
+      await repository.createInstallmentPurchase(
+        _build(cents: 30000, count: 3, date: august, firstNumber: 2),
+      );
+      final session = await review(_card(), _october, [
+        _line('a', august, 'MAGAZINE LUIZA 02/03', 10000),
+      ]);
+      expect(session.confirmedForecastOf(lineOf(session, 'a'))!.title, 'Geladeira (2/3)');
+      expect(plan(session).newExpenses, isEmpty);
     });
 
     test('duas compras iguais em lojas diferentes: o nome desempata', () async {
