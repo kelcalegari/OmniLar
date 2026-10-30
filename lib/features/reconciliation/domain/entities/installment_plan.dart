@@ -24,6 +24,15 @@ enum InstallmentPlanStatus {
   cancelled,
 }
 
+/// De onde a compra parcelada veio.
+enum InstallmentPlanOrigin {
+  /// Nasceu na importação de uma fatura.
+  import,
+
+  /// Lançada à mão na Nova despesa.
+  manual,
+}
+
 /// Compra parcelada de um cartão ("MAGALU 03/10"): liga as parcelas de uma
 /// fatura às das seguintes e lembra o que a casa decidiu sobre ela.
 class InstallmentPlan {
@@ -47,6 +56,7 @@ class InstallmentPlan {
   final String? assignedMemberId;
 
   final InstallmentPlanStatus status;
+  final InstallmentPlanOrigin origin;
 
   /// Morador que aceitou o parcelamento: os empréstimos mensais dele nascem
   /// aceitos enquanto ele for quem deve.
@@ -73,12 +83,20 @@ class InstallmentPlan {
     this.categoryId,
     this.assignedMemberId,
     this.status = InstallmentPlanStatus.active,
+    this.origin = InstallmentPlanOrigin.import,
     this.acceptedBy,
     this.parcels = const {},
     this.importedNumbers = const {},
   });
 
   bool get isActive => status == InstallmentPlanStatus.active;
+
+  bool get isManual => origin == InstallmentPlanOrigin.manual;
+
+  /// Lançada à mão para um morador: os empréstimos de todas as parcelas já
+  /// existem, então a fatura não lança mais nenhum.
+  bool get coveredByLoans =>
+      isManual && destination == LineDestination.splitP2P;
 
   /// Quem deve hoje já aceitou o parcelamento.
   bool get isAccepted =>
@@ -148,6 +166,7 @@ class InstallmentPlan {
         ? null
         : (assignedMemberId ?? this.assignedMemberId),
     status: status ?? this.status,
+    origin: origin,
     acceptedBy: acceptedBy ?? this.acceptedBy,
     parcels: parcels ?? this.parcels,
     importedNumbers: importedNumbers ?? this.importedNumbers,

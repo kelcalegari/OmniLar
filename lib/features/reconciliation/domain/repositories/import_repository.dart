@@ -2,6 +2,7 @@ import '../../../../core/domain/value_objects/money.dart';
 import '../entities/imported_statement_line.dart';
 import '../entities/installment_plan.dart';
 import '../services/import_session.dart';
+import '../services/installment_purchase.dart';
 
 /// Uma importação já confirmada, para o histórico.
 class ImportBatch {
@@ -100,4 +101,8 @@ abstract class ImportRepository {
   /// O devedor aceita o parcelamento: os empréstimos mensais dele já nascem
   /// aceitos.
   Future<void> acceptInstallmentPlan(String planId);
+
+  /// Grava a compra parcelada lançada à mão: o plano com as parcelas da Casa
+  /// ou os empréstimos do morador. Se algo falha, nada é gravado.
+  Future<void> createInstallmentPurchase(InstallmentPurchase purchase);
 }

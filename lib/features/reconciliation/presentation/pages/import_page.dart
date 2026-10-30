@@ -2436,7 +2436,11 @@ class _ImportPageState extends State<ImportPage> {
     final parcel = ' • parcela ${line.installmentNumber}/${line.installmentsTotal}';
     final match = session.installmentMatchOf(line);
     if (match == null) return parcel;
-    if (session.confirmsForecast(line)) return '$parcel (prevista)';
+    if (session.confirmsForecast(line)) {
+      return match.plan?.isManual ?? false
+          ? '$parcel (prevista, lançada à mão)'
+          : '$parcel (prevista)';
+    }
     final forecasts = session.forecastsCreatedBy(line);
     if (forecasts > 0) {
       return forecasts == 1
@@ -2487,9 +2491,11 @@ class _ImportPageState extends State<ImportPage> {
       crossAxisAlignment: WrapCrossAlignment.center,
       spacing: 4,
       children: [
-        const Text(
-          'Já veio em uma importação anterior. Não será lançada de novo.',
-          style: TextStyle(
+        Text(
+          session.installmentMatchOf(line)?.plan?.coveredByLoans ?? false
+              ? 'Parcela de "${session.installmentMatchOf(line)!.plan!.title}", lançada à mão como empréstimo. Não será lançada de novo.'
+              : 'Já veio em uma importação anterior. Não será lançada de novo.',
+          style: const TextStyle(
             fontSize: 12,
             color: AppColors.creditGreen,
             fontWeight: FontWeight.w600,

@@ -10,6 +10,7 @@ import '../domain/entities/imported_statement_line.dart';
 import '../domain/entities/installment_plan.dart';
 import '../domain/repositories/import_repository.dart';
 import '../domain/services/import_session.dart';
+import '../domain/services/installment_purchase.dart';
 
 String _dateOnly(DateTime date) => date.toIso8601String().split('T')[0];
 
@@ -250,6 +251,42 @@ class SupabaseImportRepository implements ImportRepository {
     }
   }
 
+  @override
+  Future<void> createInstallmentPurchase(InstallmentPurchase purchase) async {
+    final plan = purchase.plan;
+    final userId = client.auth.currentUser?.id;
+    try {
+      await client.rpc('create_installment_purchase', params: {
+        'p_purchase': {
+          'plan': {
+            'id': plan.id,
+            'house_id': _houseId,
+            'payment_method_id': plan.paymentMethodId,
+            'merchant_key': plan.merchantKey,
+            'title': plan.title,
+            'installments_total': plan.total,
+            'installment_cents': plan.installmentAmount.cents,
+            'anchor_line_date': _dateOnly(plan.anchorLineDate),
+            if (plan.anchorDueDate != null) 'anchor_due_date': _dateOnly(plan.anchorDueDate!),
+            'destination': _destinationToDb(plan.destination),
+            if (isUuid(plan.categoryId)) 'category_id': plan.categoryId,
+            if (isUuid(plan.assignedMemberId)) 'assigned_member_id': plan.assignedMemberId,
+          },
+          'expenses': [
+            for (final (index, expense) in purchase.expenses.indexed)
+              {
+                ...houseExpensePayload(expense, houseId: _houseId, currentUserId: userId),
+                'installment_number': index + 1,
+              },
+          ],
+          'loans': [for (final loan in purchase.loans) p2pLoanPayload(loan, houseId: _houseId)],
+        },
+      });
+    } catch (e) {
+      throw _failure('Erro ao lançar a compra parcelada', e);
+    }
+  }
+
   Future<List<InstallmentPlan>> _installmentPlans({String? paymentMethodId, bool activeOnly = false}) async {
     try {
       var query = client.from('installment_plans').select().eq('house_id', _houseId);
@@ -312,6 +349,7 @@ class SupabaseImportRepository implements ImportRepository {
             categoryId: row['category_id'] as String?,
             assignedMemberId: row['assigned_member_id'] as String?,
             status: _planStatusFromDb(row['status'] as String?),
+            origin: row['origin'] == 'manual' ? InstallmentPlanOrigin.manual : InstallmentPlanOrigin.import,
             acceptedBy: row['accepted_by'] as String?,
             parcels: parcels[row['id']] ?? const {},
             importedNumbers: imported[row['id']] ?? const {},

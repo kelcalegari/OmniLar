@@ -91,7 +91,9 @@ class InstallmentMatcher {
   /// Uma resposta por linha parcelada do arquivo, pela linha original (as
   /// partes de uma divisão contam como a linha que foi dividida). Cada parcela
   /// de um plano casa com uma linha só, então duas compras iguais no mesmo
-  /// lugar não se confundem.
+  /// lugar não se confundem. A compra lançada à mão casa pelo número de
+  /// parcelas, valor e data mesmo com outro nome; a lançada para um morador
+  /// já tem os empréstimos, então a parcela dela conta como já importada.
   static Map<String, InstallmentMatch> match({
     required List<ImportedStatementLine> lines,
     required List<InstallmentPlan> plans,
@@ -111,16 +113,24 @@ class InstallmentMatcher {
       final merchant = merchantKeyOf(first.description);
       for (final plan in plans) {
         if (plan.total != first.installmentsTotal) continue;
-        if (!_sameMerchant(merchant, plan.merchantKey)) continue;
         if (!_closeAmount(cents, plan.installmentAmount.cents)) continue;
+        final sameMerchant = _sameMerchant(merchant, plan.merchantKey);
         final dateFits = _dateFits(plan, number, first.date, invoiceDueDate);
         final expected = plan.forecastOf(number) != null;
-        // Sem data que bata, só a parcela prevista dá certeza de que é a mesma compra
-        if (!dateFits && !expected) continue;
+        if (sameMerchant) {
+          // Sem data que bata, só a parcela prevista dá certeza de que é a mesma compra
+          if (!dateFits && !expected) continue;
+        } else if (!plan.isManual || !dateFits) {
+          // O nome digitado à mão pode não ser o do banco: vale a compra lançada
+          // à mão com o mesmo número de parcelas, valor e data
+          continue;
+        }
         candidates.add((
           groupId: entry.key,
           plan: plan,
-          score: (dateFits ? 4 : 0) +
+          // O nome que bate vence: duas compras iguais em lojas diferentes não se trocam
+          score: (sameMerchant ? 8 : 0) +
+              (dateFits ? 4 : 0) +
               (expected ? 2 : 0) +
               (cents == plan.installmentAmount.cents ? 1 : 0),
         ));
@@ -143,7 +153,7 @@ class InstallmentMatcher {
         plan: plan,
         number: number,
         total: plan.total,
-        kind: plan.handled(number)
+        kind: plan.coveredByLoans || plan.handled(number)
             ? InstallmentMatchKind.alreadyImported
             : plan.forecastOf(number) != null
             ? InstallmentMatchKind.forecast
