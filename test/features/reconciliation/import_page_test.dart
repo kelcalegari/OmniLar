@@ -75,11 +75,15 @@ void main() {
 
     // Conforme o dia, uma despesa da casa demo tem o mesmo valor de uma linha
     // do exemplo: aqui todas são compras novas
-    while (find.text('É a mesma').evaluate().isNotEmpty) {
-      final row = find.ancestor(of: find.text('É a mesma').first, matching: find.byType(Wrap)).first;
-      await tester.tap(find.descendant(of: row, matching: find.text('São diferentes')));
-      await tester.pumpAndSettle();
+    Future<void> allDifferent() async {
+      while (find.text('É a mesma').evaluate().isNotEmpty) {
+        final row = find.ancestor(of: find.text('É a mesma').first, matching: find.byType(Wrap)).first;
+        await tester.tap(find.descendant(of: row, matching: find.text('São diferentes')));
+        await tester.pumpAndSettle();
+      }
     }
+
+    await allDifferent();
 
     // A linha da Farm passa a ser dívida da Marina (a única outra moradora)
     final farmRow = find.ancestor(of: find.text('Farm Rio'), matching: find.byType(Padding)).first;
@@ -123,6 +127,8 @@ void main() {
     expect(sl<P2PCubit>().state.allLoans.length, loansBefore);
     expect(find.textContaining('desfeita'), findsWidgets);
     // Com a importação desfeita, as linhas do arquivo aberto voltam a ser novas
+    // (e a parecida com a despesa demo volta a perguntar)
+    await allDifferent();
     expect(find.text('Novas (5)'), findsOneWidget);
   });
 
