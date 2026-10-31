@@ -351,7 +351,9 @@ class _AddExpensePageState extends State<AddExpensePage> {
     final guestPayer = selectedProj?.participants.where((p) => p.isExternal && p.id == paidById).firstOrNull;
     final paidByParticipantId = guestPayer?.id;
     final pmId = _selectedPaymentMethodId ?? state.paymentMethods.firstOrNull?.id ?? '';
-    final splitChoice = _splitChoiceApplies(state) ? _selectedSplitType : SplitType.percentage;
+    // Compra de um morador vira empréstimo: a divisão da casa não vale
+    final splitChoice =
+        _splitChoiceApplies(state) && !_cardForDebtor(state) ? _selectedSplitType : SplitType.percentage;
 
     if (splitChoice == SplitType.fixed) {
       final fixedSum = state.members.fold<int>(0, (acc, m) => acc + (_fixedCents[m.id] ?? 0));
@@ -707,6 +709,13 @@ class _AddExpensePageState extends State<AddExpensePage> {
   bool _upfrontForDebtor(PaymentMethod? pm) =>
       !_isInstallment && _installmentDebtorId != null && _canBeInstallment(pm);
 
+  PaymentMethod? _selectedMethod(FinanceState state) =>
+      state.paymentMethods.where((p) => p.id == _selectedPaymentMethodId).firstOrNull;
+
+  /// Compra no cartão escolhida como de um morador (empréstimo, não despesa da Casa).
+  bool _cardForDebtor(FinanceState state) =>
+      _installmentDebtorId != null && _canBeInstallment(_selectedMethod(state));
+
   /// Quem empresta na compra do morador: o dono do cartão ou o Caixa da Casa.
   String _installmentLenderOf(PaymentMethod card) => card.ownerMemberId ?? P2PLoan.houseLenderId;
 
@@ -809,8 +818,37 @@ class _AddExpensePageState extends State<AddExpensePage> {
     );
   }
 
-  /// Compra no cartão: em quantas vezes e de quem é a compra.
-  Widget _buildInstallmentSection(ThemeData theme, FinanceState state, PaymentMethod card) {
+  /// Na compra no cartão quem pagou só se sabe no pagamento da fatura: no
+  /// lugar dos moradores, avisa isso.
+  Widget _buildCardPayerNote(ThemeData theme, FinanceState state, PaymentMethod card) {
+    final owner = state.members.where((m) => m.id == card.ownerMemberId).firstOrNull?.name;
+    return Container(
+      key: const Key('expense_card_payer_note'),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: AppColors.primary.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppColors.primary.withValues(alpha: 0.2)),
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.credit_card_rounded, color: AppColors.primary, size: 20),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              'Compra no cartão: quem paga é definido no pagamento da fatura '
+              '(${owner ?? 'cartão da Casa'}).',
+              style: const TextStyle(fontSize: 13),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Compra no cartão: de quem é. Da Casa entra nas despesas com a divisão
+  /// escolhida aqui; de um morador vira empréstimo para quem empresta o cartão.
+  Widget _buildCardOwnerSection(ThemeData theme, FinanceState state, PaymentMethod card) {
     final lender = _installmentLenderOf(card);
     final debtors = [
       for (final m in state.members)
@@ -819,6 +857,84 @@ class _AddExpensePageState extends State<AddExpensePage> {
     if (_installmentDebtorId != null && !debtors.any((m) => m.id == _installmentDebtorId)) {
       _installmentDebtorId = null;
     }
+    final purchaseDue = CreditCardInvoiceCalculator.calculateInvoiceDueDate(
+      purchaseDate: _selectedDate,
+      closingDay: card.closingDay!,
+      dueDay: card.dueDay!,
+    );
+    final lenderName = lender == P2PLoan.houseLenderId
+        ? 'o Caixa da Casa'
+        : (state.members.where((m) => m.id == lender).firstOrNull?.name ?? 'o dono do cartão');
+    final debtorName = state.members.where((m) => m.id == _installmentDebtorId).firstOrNull?.name;
+    final houseSplit = debtorName == null && _splitChoiceApplies(state);
+
+    return Material(
+      color: theme.cardColor,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(16),
+        side: BorderSide(color: theme.dividerColor),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                const Expanded(
+                  child: Text(
+                    'De quem é a compra',
+                    style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
+                  ),
+                ),
+                if (houseSplit) _buildSplitMenu(theme, state),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 8,
+              runSpacing: 4,
+              children: [
+                ChoiceChip(
+                  key: const Key('expense_card_debtor_house'),
+                  label: const Text('Da Casa'),
+                  selected: _installmentDebtorId == null,
+                  onSelected: (_) => setState(() => _installmentDebtorId = null),
+                ),
+                for (final m in debtors)
+                  ChoiceChip(
+                    key: Key('expense_card_debtor_${m.id}'),
+                    label: Text(m.name),
+                    selected: _installmentDebtorId == m.id,
+                    onSelected: (_) => setState(() => _installmentDebtorId = m.id),
+                  ),
+              ],
+            ),
+            if (houseSplit && _selectedSplitType != SplitType.percentage) _buildSplitDetails(theme, state),
+            const SizedBox(height: 8),
+            Text(
+              debtorName == null
+                  ? (_isInstallment
+                      ? 'Cada parcela entra como despesa prevista da Casa no ciclo da fatura dela.'
+                      : 'Entra como despesa da Casa, com a divisão escolhida.')
+                  : !_isInstallment
+                      ? '$debtorName deve a compra para $lenderName: um empréstimo que vence com a '
+                          'fatura de ${DateFormat('dd/MM/yyyy').format(purchaseDue)}. Não entra nas despesas da Casa.'
+                      : lender == P2PLoan.houseLenderId
+                          ? '$debtorName deve cada parcela para $lenderName: um empréstimo por fatura, '
+                              'aceito de uma vez. Não entra nas despesas da Casa.'
+                          : '$debtorName deve a compra para $lenderName: um empréstimo em '
+                              '$_installmentsCount parcelas, uma por fatura. Não entra nas despesas da Casa.',
+              style: const TextStyle(fontSize: 12),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// Compra no cartão: em quantas vezes.
+  Widget _buildInstallmentSection(ThemeData theme, FinanceState state, PaymentMethod card) {
     final parts = _cents > 0 ? Money(_cents).splitEqually(_installmentsCount) : const <Money>[];
     final purchaseDue = CreditCardInvoiceCalculator.calculateInvoiceDueDate(
       purchaseDate: _selectedDate,
@@ -827,10 +943,6 @@ class _AddExpensePageState extends State<AddExpensePage> {
     );
     final first = _installmentFirstNumber;
     final firstDue = addMonths(purchaseDue, first - 1);
-    final lenderName = lender == P2PLoan.houseLenderId
-        ? 'o Caixa da Casa'
-        : (state.members.where((m) => m.id == lender).firstOrNull?.name ?? 'o dono do cartão');
-    final debtorName = state.members.where((m) => m.id == _installmentDebtorId).firstOrNull?.name;
 
     return Material(
       color: _isInstallment ? AppColors.primary.withValues(alpha: 0.06) : theme.cardColor,
@@ -940,55 +1052,6 @@ class _AddExpensePageState extends State<AddExpensePage> {
               ),
             ),
           ],
-          const Divider(height: 1),
-          Padding(
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text(
-                  'De quem é a compra',
-                  style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
-                ),
-                const SizedBox(height: 8),
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 4,
-                  children: [
-                    ChoiceChip(
-                      key: const Key('expense_card_debtor_house'),
-                      label: const Text('Da Casa'),
-                      selected: _installmentDebtorId == null,
-                      onSelected: (_) => setState(() => _installmentDebtorId = null),
-                    ),
-                    for (final m in debtors)
-                      ChoiceChip(
-                        key: Key('expense_card_debtor_${m.id}'),
-                        label: Text(m.name),
-                        selected: _installmentDebtorId == m.id,
-                        onSelected: (_) => setState(() => _installmentDebtorId = m.id),
-                      ),
-                  ],
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  debtorName == null
-                      ? (_isInstallment
-                          ? 'Cada parcela entra como despesa prevista da Casa no ciclo da fatura dela.'
-                          : 'Entra como despesa da Casa, dividida como abaixo.')
-                      : !_isInstallment
-                          ? '$debtorName deve a compra para $lenderName: um empréstimo que vence com a '
-                              'fatura de ${DateFormat('dd/MM/yyyy').format(purchaseDue)}. Não entra nas despesas da Casa.'
-                          : lender == P2PLoan.houseLenderId
-                              ? '$debtorName deve cada parcela para $lenderName: um empréstimo por fatura, '
-                                  'aceito de uma vez. Não entra nas despesas da Casa.'
-                              : '$debtorName deve a compra para $lenderName: um empréstimo em '
-                                  '$_installmentsCount parcelas, uma por fatura. Não entra nas despesas da Casa.',
-                  style: const TextStyle(fontSize: 12),
-                ),
-              ],
-            ),
-          ),
         ],
       ),
     );
@@ -1348,6 +1411,8 @@ class _AddExpensePageState extends State<AddExpensePage> {
       builder: (context, state) {
         _applyLaunchDefaults(context, state);
         final selectedProjForPayer = _availableProjects.where((p) => p.id == _selectedProjectId).firstOrNull;
+        // Compra nova no cartão: quem pagou sai da fatura e de quem é a compra fica abaixo da forma
+        final cardPurchase = _canBeInstallment(_selectedMethod(state));
         final isSelectedPaidByGuest = selectedProjForPayer?.participants.any((p) => p.isExternal && p.id == _selectedPaidByMemberId) ?? false;
         if (state.members.isNotEmpty &&
             (_selectedPaidByMemberId == null ||
@@ -1826,15 +1891,18 @@ class _AddExpensePageState extends State<AddExpensePage> {
               ],
               const SizedBox(height: 20),
 
-              // Quem Pagou (e, ao lado, como dividir a despesa nova da casa)
+              // Quem Pagou (e, ao lado, como dividir a despesa nova da casa;
+              // na compra no cartão a divisão fica em "De quem é a compra")
               Row(
                 children: [
-                  Expanded(child: Text('Quem Pagou / É Responsável?', style: theme.textTheme.titleSmall)),
-                  if (_splitChoiceApplies(state)) _buildSplitMenu(theme, state),
+                  Expanded(child: Text('Quem pagou?', style: theme.textTheme.titleSmall)),
+                  if (_splitChoiceApplies(state) && !cardPurchase) _buildSplitMenu(theme, state),
                 ],
               ),
               const SizedBox(height: 8),
-              if (state.members.isEmpty)
+              if (cardPurchase)
+                _buildCardPayerNote(theme, state, _selectedMethod(state)!)
+              else if (state.members.isEmpty)
                 Container(
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
@@ -1916,7 +1984,7 @@ class _AddExpensePageState extends State<AddExpensePage> {
                     );
                   }).toList(),
                 ),
-              if (_splitChoiceApplies(state) && _selectedSplitType != SplitType.percentage)
+              if (_splitChoiceApplies(state) && !cardPurchase && _selectedSplitType != SplitType.percentage)
                 _buildSplitDetails(theme, state),
 
               if (_availableProjects.isNotEmpty || _selectedProjectId != null) ...[
@@ -2024,7 +2092,14 @@ class _AddExpensePageState extends State<AddExpensePage> {
                   if (!_canBeInstallment(pm)) return const SizedBox.shrink();
                   return Padding(
                     padding: const EdgeInsets.only(bottom: 16),
-                    child: _buildInstallmentSection(theme, state, pm!),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        _buildCardOwnerSection(theme, state, pm!),
+                        const SizedBox(height: 12),
+                        _buildInstallmentSection(theme, state, pm),
+                      ],
+                    ),
                   );
                 },
               ),
