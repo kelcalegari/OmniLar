@@ -737,7 +737,8 @@ class _ReportsPageContent extends StatelessWidget {
                   .where((c) => c.memberId == member.id)
                   .fold<int>(0, (acc, c) => acc + c.amount.cents);
 
-              // Amortizações de empréstimo pagas no ciclo por este membro
+              // Amortizações de empréstimo com o Lar pagas no ciclo por este
+              // membro (o que ele paga a outro morador não é dinheiro da Casa)
               int paidLoansCents = 0;
               final currentCycle = state.currentCycle;
               List<P2PLoan> allLoans = const [];
@@ -745,7 +746,7 @@ class _ReportsPageContent extends StatelessWidget {
                 allLoans = context.watch<P2PCubit>().state.allLoans;
               } catch (_) {}
               for (final loan in allLoans) {
-                if (loan.borrowerMemberId != member.id) continue;
+                if (loan.borrowerMemberId != member.id || !loan.isHouseLender) continue;
                 for (final inst in loan.installments) {
                   final paidAt = inst.paidAt;
                   final wasPaid = (paidAt != null && currentCycle.contains(paidAt)) ||

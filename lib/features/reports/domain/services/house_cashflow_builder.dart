@@ -57,11 +57,13 @@ class HouseCashflowBuilder {
   const HouseCashflowBuilder();
 
   /// Dinheiro no Caixa hoje: a sobra do ciclo anterior, mais os aportes, menos
-  /// o que o Caixa já pagou neste ciclo (despesa paga do bolso não sai dele).
+  /// o que o Caixa já pagou neste ciclo (despesa paga do bolso não sai dele) e
+  /// o que ele emprestou aos moradores (0086).
   static Money startingBalance({
     required Money openingBalance,
     required Money contributions,
     required List<HouseExpense> expenses,
+    Money houseLoansFunded = const Money.zero(),
   }) {
     final paidByHouse = expenses
         .where(
@@ -71,7 +73,7 @@ class HouseCashflowBuilder {
               (!e.paidOutOfPocket || e.paymentMethodId == 'pm_caixa'),
         )
         .fold<int>(0, (acc, e) => acc + e.amount.cents);
-    return Money(openingBalance.cents + contributions.cents - paidByHouse);
+    return Money(openingBalance.cents + contributions.cents - paidByHouse - houseLoansFunded.cents);
   }
 
   HouseCashflow build({

@@ -240,6 +240,7 @@ class ReportsCubit extends Cubit<ReportsState> {
                 openingBalance: cycleSummary.openingBalance,
                 contributions: cycleSummary.totalContributions,
                 expenses: finance.expenses,
+                houseLoansFunded: cycleSummary.houseLoansFunded,
               ),
             )
           : null;

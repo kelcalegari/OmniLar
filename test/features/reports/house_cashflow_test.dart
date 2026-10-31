@@ -82,6 +82,17 @@ void main() {
     expect(balance.cents, 20000 + 300000 - 150000 - 12000);
   });
 
+  test('saldo de hoje desconta o que o Caixa emprestou no ciclo', () {
+    // Ciclo 07/10 a 06/11/2026: Reserva 1.799,58 + entradas de fora 187,00
+    final balance = HouseCashflowBuilder.startingBalance(
+      openingBalance: const Money(198658),
+      contributions: const Money(382079),
+      expenses: [paid('contas', 385911)],
+      houseLoansFunded: const Money(173409),
+    );
+    expect(balance.cents, 21417);
+  });
+
   test('o Caixa desconta o que paga e soma o Super Pix que recebe', () {
     final calendar = PaymentCalendar(
       cycle: cycle,
