@@ -1298,34 +1298,44 @@ class _SettlementHubContent extends StatelessWidget {
         vaultsWithBalance.any((v) => v.id == state.options.deficitVaultId)
         ? state.options.deficitVaultId
         : null;
+    // Cada um já aportou o devido, com a parte do excedente: ninguém paga a mais
+    final paidByContributions = summary.memberBalances.isNotEmpty &&
+        summary.memberBalances.every(
+          (m) => m.contributionPaid.cents >= m.contributionDue.cents,
+        );
+    final accent = paidByContributions ? AppColors.creditGreen : AppColors.debtRed;
 
     return Padding(
       padding: const EdgeInsets.only(top: 16),
       child: Container(
         padding: const EdgeInsets.all(12),
         decoration: BoxDecoration(
-          color: AppColors.debtRed.withValues(alpha: 0.05),
+          color: accent.withValues(alpha: 0.05),
           borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: AppColors.debtRed.withValues(alpha: 0.25)),
+          border: Border.all(color: accent.withValues(alpha: 0.25)),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Row(
               children: [
-                const Icon(
-                  Icons.warning_amber_rounded,
-                  color: AppColors.debtRed,
+                Icon(
+                  paidByContributions
+                      ? Icons.check_circle_outline
+                      : Icons.warning_amber_rounded,
+                  color: accent,
                   size: 18,
                 ),
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
-                    'Os gastos passaram do balde em ${summary.bucketDeficit.formatted}',
-                    style: const TextStyle(
+                    paidByContributions
+                        ? 'Excedente de ${summary.bucketDeficit.formatted} já coberto pelos aportes'
+                        : 'Os gastos passaram do balde em ${summary.bucketDeficit.formatted}',
+                    style: TextStyle(
                       fontWeight: FontWeight.bold,
                       fontSize: 13,
-                      color: AppColors.debtRed,
+                      color: accent,
                     ),
                   ),
                 ),
@@ -1333,7 +1343,11 @@ class _SettlementHubContent extends StatelessWidget {
             ),
             const SizedBox(height: 4),
             Text(
-              'Escolha como cobrir o excedente deste ciclo.',
+              paidByContributions
+                  ? 'Os gastos passaram do balde, mas cada um já aportou a sua parte: '
+                      'ninguém precisa pagar a mais. A divisão abaixo só muda quanto '
+                      'do aporte extra fica de crédito para cada um.'
+                  : 'Escolha como cobrir o excedente deste ciclo.',
               style: TextStyle(color: Colors.grey.shade600, fontSize: 12),
             ),
             if (vaultsWithBalance.isNotEmpty) ...[
