@@ -3032,7 +3032,7 @@ class _LoanAcceptanceBlockState extends State<_LoanAcceptanceBlock> {
             toggle(
               'manual',
               'Lançado à mão',
-              'Empréstimo entre moradores criado no app.',
+              'Empréstimo entre moradores e compra no cartão de um morador lançados no app.',
               acceptance.manual,
               (v) => acceptance.copyWith(manual: v),
             ),
@@ -3046,7 +3046,7 @@ class _LoanAcceptanceBlockState extends State<_LoanAcceptanceBlock> {
             toggle(
               'house',
               'Do Caixa da Casa',
-              'Empréstimo do Caixa lançado à mão.',
+              'Empréstimo do Caixa, saindo do ciclo ou de uma caixinha.',
               acceptance.house,
               (v) => acceptance.copyWith(house: v),
             ),
