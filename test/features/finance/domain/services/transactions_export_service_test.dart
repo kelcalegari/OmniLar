@@ -48,7 +48,7 @@ void main() {
       expect(csv.contains('EXTRATO DE TRANSAÇÕES'), isTrue);
       expect(csv.contains('República Modelo'), isTrue);
       expect(csv.contains('Ciclo Outubro/2026'), isTrue);
-      expect(csv.contains('Data;Tipo;Título;Categoria;Valor (R\$);Quem Pagou/Aportou;Forma de Pagamento;Status;Observações'), isTrue);
+      expect(csv.contains('Data;Tipo;Título;Categoria;Valor (R\$);Quem Pagou/Aportou;Forma de Pagamento;Status;Descrição;Observações'), isTrue);
 
       // Verify Transaction Lines
       expect(csv.contains('Almoço Restaurante'), isTrue);

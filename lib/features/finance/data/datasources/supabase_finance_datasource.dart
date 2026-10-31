@@ -792,6 +792,7 @@ class SupabaseFinanceDataSource implements FinanceDataSource {
         'is_variable': expense.isVariable,
         'due_day': expense.dueDay,
         'is_active': expense.isActive,
+        'description': expense.description,
         'notes': expense.notes,
         // Nulo desvincula a despesa do projeto
         'project_id': expense.projectId,
@@ -836,6 +837,7 @@ class SupabaseFinanceDataSource implements FinanceDataSource {
         final seriesId = expense.recurringSeriesId ?? expense.id;
         final recurringUpdate = <String, dynamic>{
           'title': expense.title,
+          'description': expense.description,
           'amount_cents': expense.amount.cents,
           if (_isUuid(expense.categoryId)) 'category_id': expense.categoryId,
           if (_isUuid(expense.paymentMethodId)) 'payment_method_id': expense.paymentMethodId,

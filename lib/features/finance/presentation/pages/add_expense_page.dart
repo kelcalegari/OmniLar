@@ -105,6 +105,7 @@ class _AddExpensePageState extends State<AddExpensePage> {
 
   /// Código do boleto colado no formulário (linha digitável conferida).
   final _barcodeController = TextEditingController();
+  final _descriptionController = TextEditingController();
   String? _barcode;
   String? _barcodeInfo;
   String? _barcodeError;
@@ -167,6 +168,7 @@ class _AddExpensePageState extends State<AddExpensePage> {
       _expenseStatus = edit.status;
       _barcode = edit.barcode;
       _barcodeController.text = edit.barcode ?? '';
+      _descriptionController.text = edit.description ?? '';
       _isItemized = edit.items.isNotEmpty;
       if (edit.items.isNotEmpty) {
         _draftItems.addAll(edit.items.map((it) => _DraftExpenseItem(
@@ -260,10 +262,17 @@ class _AddExpensePageState extends State<AddExpensePage> {
     } catch (_) {}
   }
 
+  /// Descrição digitada, sem espaços nas pontas; vazia vira nula.
+  String? get _descriptionText {
+    final text = _descriptionController.text.trim();
+    return text.isEmpty ? null : text;
+  }
+
   @override
   void dispose() {
     _titleController.dispose();
     _barcodeController.dispose();
+    _descriptionController.dispose();
     for (final item in _draftItems) {
       item.dispose();
     }
@@ -532,6 +541,8 @@ class _AddExpensePageState extends State<AddExpensePage> {
 
       final updatedExpense = oldExpense.copyWith(
         title: _titleController.text.trim(),
+        description: _descriptionText,
+        clearDescription: _descriptionText == null,
         amount: Money(_cents),
         date: expenseDate,
         dueDate: dueDate,
@@ -647,6 +658,7 @@ class _AddExpensePageState extends State<AddExpensePage> {
     final expense = HouseExpense(
       id: expenseId,
       title: _titleController.text.trim(),
+      description: _descriptionText,
       amount: Money(_cents),
       date: expenseDate,
       dueDate: dueDate,
@@ -741,6 +753,7 @@ class _AddExpensePageState extends State<AddExpensePage> {
 
     var purchase = InstallmentPurchase.build(
       title: _titleController.text.trim(),
+      description: _descriptionText,
       total: Money(_cents),
       count: count,
       purchaseDate: _selectedDate,
@@ -1449,6 +1462,24 @@ class _AddExpensePageState extends State<AddExpensePage> {
                   labelText: 'O que foi pago?',
                   hintText: 'Ex: Supermercado, Aluguel, Luz, Netflix',
                   prefixIcon: const Icon(Icons.receipt_long_outlined),
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                ),
+              ),
+              const SizedBox(height: 12),
+
+              // Descrição livre: detalhes que não cabem no título
+              TextField(
+                key: const Key('expense_description'),
+                controller: _descriptionController,
+                minLines: 1,
+                maxLines: 4,
+                maxLength: 500,
+                textCapitalization: TextCapitalization.sentences,
+                decoration: InputDecoration(
+                  labelText: 'Descrição (opcional)',
+                  hintText: 'Ex: compra do mês com itens da festa',
+                  prefixIcon: const Icon(Icons.notes_rounded),
+                  counterText: '',
                   border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
                 ),
               ),

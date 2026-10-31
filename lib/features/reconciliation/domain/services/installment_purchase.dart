@@ -43,8 +43,12 @@ class InstallmentPurchase {
   /// Compra já em andamento: [firstNumber] é a próxima parcela que vem. As
   /// faturas continuam contadas da [purchaseDate] (a parcela 2 vem um mês
   /// depois da 1), e só entram as parcelas de [firstNumber] em diante.
+  ///
+  /// [description] é o texto livre do morador: vai em cada parcela da Casa
+  /// e, na compra do morador, abaixo da descrição do empréstimo.
   static InstallmentPurchase build({
     required String title,
+    String? description,
     required Money total,
     required int count,
     required DateTime purchaseDate,
@@ -66,6 +70,9 @@ class InstallmentPurchase {
     if (firstNumber < 1 || firstNumber > count) {
       throw ArgumentError('A próxima parcela fica entre 1 e $count.');
     }
+    final note = description?.trim();
+    final hasNote = note != null && note.isNotEmpty;
+    String loanDescription(String auto) => hasNote ? '$auto\n$note' : auto;
     final closingDay = card.closingDay;
     final dueDay = card.dueDay;
     if (!card.isCreditCard || closingDay == null || dueDay == null) {
@@ -105,6 +112,7 @@ class InstallmentPurchase {
             HouseExpense(
               id: newId(),
               title: '$title ($number/$count)',
+              description: hasNote ? note : null,
               amount: parts[number - 1],
               date: addMonths(purchaseDate, number - 1),
               dueDate: addMonths(firstDue, number - 1),
@@ -140,9 +148,9 @@ class InstallmentPurchase {
                 : firstNumber == 1
                 ? '$title ($count× no ${card.name})$who'
                 : '$title (parcelas $firstNumber a $count no ${card.name})$who',
-            description: upfront
+            description: loanDescription(upfront
                 ? 'Compra à vista no ${card.name}'
-                : 'Compra parcelada em $count vezes no ${card.name}',
+                : 'Compra parcelada em $count vezes no ${card.name}'),
             totalAmount: Money(remaining),
             lenderMemberId: lender,
             borrowerMemberId: debtorMemberId,
@@ -163,9 +171,9 @@ class InstallmentPurchase {
           P2PLoan(
             id: newId(),
             title: upfront ? '$title (à vista no ${card.name})$who' : '$title ($number/$count)$who',
-            description: upfront
+            description: loanDescription(upfront
                 ? 'Compra à vista no ${card.name}'
-                : 'Parcela $number de $count no ${card.name}',
+                : 'Parcela $number de $count no ${card.name}'),
             totalAmount: parts[number - 1],
             lenderMemberId: lender,
             borrowerMemberId: debtorMemberId,

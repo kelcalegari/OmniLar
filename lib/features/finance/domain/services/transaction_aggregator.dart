@@ -78,6 +78,7 @@ class TransactionAggregator {
           paymentMethodId: e.paymentMethodId,
           paymentMethodName: method?.name,
           isPending: e.status == ExpenseStatus.pending,
+          description: e.description,
           notes: e.notes,
           rawEntity: e,
         ),
@@ -243,16 +244,17 @@ class TransactionAggregator {
         if (!t.isPending) return false;
       }
 
-      // 7. Busca textual (título, notas, morador, categoria)
+      // 7. Busca textual (título, descrição, notas, morador, categoria)
       if (filter.searchQuery.trim().isNotEmpty) {
         final query = filter.searchQuery.toLowerCase().trim();
         final matchTitle = t.title.toLowerCase().contains(query);
         final matchCat = t.categoryName?.toLowerCase().contains(query) ?? false;
         final matchMember = t.memberName?.toLowerCase().contains(query) ?? false;
         final matchMethod = t.paymentMethodName?.toLowerCase().contains(query) ?? false;
+        final matchDescription = t.description?.toLowerCase().contains(query) ?? false;
         final matchNotes = t.notes?.toLowerCase().contains(query) ?? false;
 
-        if (!matchTitle && !matchCat && !matchMember && !matchMethod && !matchNotes) {
+        if (!matchTitle && !matchDescription && !matchCat && !matchMember && !matchMethod && !matchNotes) {
           return false;
         }
       }

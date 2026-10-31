@@ -106,6 +106,10 @@ class _TransactionsPageState extends State<TransactionsPage> {
                 const SizedBox(height: 6),
                 Text('Forma de Pagamento: ${transaction.paymentMethodName}'),
               ],
+              if (transaction.description != null && transaction.description!.isNotEmpty) ...[
+                const SizedBox(height: 6),
+                Text('Descrição: ${transaction.description}'),
+              ],
               if (transaction.notes != null && transaction.notes!.isNotEmpty) ...[
                 const SizedBox(height: 6),
                 Text('Observações: ${transaction.notes}'),

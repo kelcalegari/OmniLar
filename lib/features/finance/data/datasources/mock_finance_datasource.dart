@@ -393,6 +393,7 @@ class MockFinanceDataSource implements FinanceDataSource {
           HouseExpense(
             id: newId,
             title: template.title,
+            description: template.description,
             amount: template.amount,
             date: nextDue,
             dueDate: nextDue,
@@ -606,6 +607,8 @@ class MockFinanceDataSource implements FinanceDataSource {
             if (matches && !(e.dueDate ?? e.date).isBefore(fromDate)) {
               _expenses[i] = e.copyWith(
                 title: expense.title,
+                description: expense.description,
+                clearDescription: expense.description == null,
                 amount: expense.amount,
                 categoryId: expense.categoryId,
                 paymentMethodId: expense.paymentMethodId,
@@ -629,6 +632,8 @@ class MockFinanceDataSource implements FinanceDataSource {
             if (matches) {
               _expenses[i] = e.copyWith(
                 title: expense.title,
+                description: expense.description,
+                clearDescription: expense.description == null,
                 amount: expense.amount,
                 categoryId: expense.categoryId,
                 paymentMethodId: expense.paymentMethodId,

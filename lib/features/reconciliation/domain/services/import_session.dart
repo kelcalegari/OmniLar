@@ -638,6 +638,7 @@ class ImportSession {
       externalId: parts.first.externalId,
       signature: parts.first.signature,
       title: parts.first.title,
+      note: parts.first.note,
       categoryId: parts.first.categoryId,
       assignedMemberId: parts.first.assignedMemberId,
       installmentNumber: parts.first.installmentNumber,
@@ -1498,6 +1499,12 @@ class ImportSession {
         : StatementText.cleanTitle(line.description);
   }
 
+  /// Descrição livre da linha, sem espaços nas pontas; vazia vira nula.
+  String? _noteOf(ImportedStatementLine line) {
+    final note = line.note?.trim();
+    return note == null || note.isEmpty ? null : note;
+  }
+
   String _titleOf(ImportedStatementLine line) {
     final prepayment = chosenPrepayment(line);
     if (prepayment != null) {
@@ -1602,6 +1609,7 @@ class ImportSession {
               title: inClosedCycle
                   ? '$title (ajuste de ${_dayMonth.format(line.date)})'
                   : title,
+              description: _noteOf(line),
               amount: effectiveAmountOf(line),
               // Ajuste de ciclo fechado conta hoje, e não na data da compra
               date: inClosedCycle ? today : line.date,
@@ -1679,8 +1687,11 @@ class ImportSession {
               '${entry.key.accepted ? ' (parcelamentos aceitos)' : ''}',
           description: entry.value
               .map(
-                (line) =>
-                    '${_titleOf(line)} ${effectiveAmountOf(line).formatted}',
+                (line) => [
+                  _titleOf(line),
+                  if (_noteOf(line) case final note?) '($note)',
+                  effectiveAmountOf(line).formatted,
+                ].join(' '),
               )
               .join('; '),
           totalAmount: Money(
@@ -2074,6 +2085,7 @@ class ImportSession {
               HouseExpense(
                 id: forecastId,
                 title: '${_baseTitleOf(carrier)} ($number/${match.total})',
+                description: carrierExpense.description,
                 amount: Money(houseCents),
                 date: addMonths(periodDate, offset),
                 dueDate: addMonths(invoiceDueDate!, offset),

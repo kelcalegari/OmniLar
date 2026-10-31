@@ -11,6 +11,7 @@ enum ExpenseStatus {
 class HouseExpense extends Equatable {
   final String id;
   final String title;
+  final String? description; // Texto livre do morador sobre o gasto (notes fica para marcações do sistema)
   final Money amount;
   final DateTime date;
   final DateTime? dueDate;
@@ -43,6 +44,7 @@ class HouseExpense extends Equatable {
   const HouseExpense({
     required this.id,
     required this.title,
+    this.description,
     required this.amount,
     required this.date,
     this.dueDate,
@@ -123,6 +125,8 @@ class HouseExpense extends Equatable {
   HouseExpense copyWith({
     String? id,
     String? title,
+    String? description,
+    bool clearDescription = false,
     Money? amount,
     DateTime? date,
     DateTime? dueDate,
@@ -160,6 +164,7 @@ class HouseExpense extends Equatable {
     return HouseExpense(
       id: id ?? this.id,
       title: title ?? this.title,
+      description: clearDescription ? null : (description ?? this.description),
       amount: amount ?? this.amount,
       date: date ?? this.date,
       dueDate: dueDate ?? this.dueDate,
@@ -195,6 +200,7 @@ class HouseExpense extends Equatable {
   List<Object?> get props => [
         id,
         title,
+        description,
         amount,
         date,
         dueDate,
