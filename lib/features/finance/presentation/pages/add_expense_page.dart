@@ -115,6 +115,7 @@ class _AddExpensePageState extends State<AddExpensePage> {
   bool _isItemized = false;
 
   /// Compra no cartão em várias faturas; sem [_installmentDebtorId] é da Casa.
+  /// Com ele, mesmo a compra à vista vira empréstimo do morador.
   bool _isInstallment = false;
   int _installmentsCount = 2;
   /// Compra já em andamento: a parcela que vem na próxima fatura.
@@ -583,7 +584,7 @@ class _AddExpensePageState extends State<AddExpensePage> {
       return;
     }
 
-    if (_installmentApplies(selectedPm)) {
+    if (_installmentApplies(selectedPm) || _upfrontForDebtor(selectedPm)) {
       await _submitInstallmentPurchase(
         state: state,
         card: selectedPm!,
@@ -702,6 +703,10 @@ class _AddExpensePageState extends State<AddExpensePage> {
 
   bool _installmentApplies(PaymentMethod? pm) => _isInstallment && _canBeInstallment(pm);
 
+  /// Compra à vista no cartão que um morador deve: um empréstimo, como a parcelada.
+  bool _upfrontForDebtor(PaymentMethod? pm) =>
+      !_isInstallment && _installmentDebtorId != null && _canBeInstallment(pm);
+
   /// Quem empresta na compra do morador: o dono do cartão ou o Caixa da Casa.
   String _installmentLenderOf(PaymentMethod card) => card.ownerMemberId ?? P2PLoan.houseLenderId;
 
@@ -716,8 +721,11 @@ class _AddExpensePageState extends State<AddExpensePage> {
           SnackBar(backgroundColor: Colors.red.shade700, content: Text(message)),
         );
     final debtorId = _installmentDebtorId;
+    final count = _isInstallment ? _installmentsCount : 1;
     if (_isItemized) {
-      fail('A compra parcelada não aceita sub-itens. Desative o boleto composto.');
+      fail(_isInstallment
+          ? 'A compra parcelada não aceita sub-itens. Desative o boleto composto.'
+          : 'A compra de um morador não aceita sub-itens. Desative o boleto composto.');
       return;
     }
     if (debtorId == null && rule.type == SplitType.fixed) {
@@ -734,13 +742,13 @@ class _AddExpensePageState extends State<AddExpensePage> {
     var purchase = InstallmentPurchase.build(
       title: _titleController.text.trim(),
       total: Money(_cents),
-      count: _installmentsCount,
+      count: count,
       purchaseDate: _selectedDate,
       card: card,
       categoryId: categoryId,
       paidByMemberId: paidById,
       splitRule: rule,
-      firstNumber: _installmentFirstNumber,
+      firstNumber: _isInstallment ? _installmentFirstNumber : 1,
       debtorMemberId: debtorId,
       debtorName: state.members.where((m) => m.id == debtorId).firstOrNull?.name,
       createdBy: sl<AuthRepository>().currentUser?.id,
@@ -793,13 +801,15 @@ class _AddExpensePageState extends State<AddExpensePage> {
       ScaffoldMessenger.of(context),
       ok: error == null,
       success: debtorId == null
-          ? 'Compra parcelada em $_installmentsCount vezes lançada! As parcelas ficam previstas até cada fatura. 💳'
-          : 'Compra parcelada lançada como empréstimo! 💳',
+          ? 'Compra parcelada em $count vezes lançada! As parcelas ficam previstas até cada fatura. 💳'
+          : count == 1
+              ? 'Compra lançada como empréstimo! 💳'
+              : 'Compra parcelada lançada como empréstimo! 💳',
       failure: error,
     );
   }
 
-  /// Parcelas da compra no cartão: quantas vezes e de quem é a compra.
+  /// Compra no cartão: em quantas vezes e de quem é a compra.
   Widget _buildInstallmentSection(ThemeData theme, FinanceState state, PaymentMethod card) {
     final lender = _installmentLenderOf(card);
     final debtors = [
@@ -926,44 +936,59 @@ class _AddExpensePageState extends State<AddExpensePage> {
                             '${first == 1 ? '' : ' Use a data da compra original.'}',
                     style: const TextStyle(fontSize: 12),
                   ),
-                  const SizedBox(height: 14),
-                  const Text(
-                    'De quem é a compra',
-                    style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
-                  ),
-                  const SizedBox(height: 8),
-                  Wrap(
-                    spacing: 8,
-                    runSpacing: 4,
-                    children: [
-                      ChoiceChip(
-                        label: const Text('Da Casa'),
-                        selected: _installmentDebtorId == null,
-                        onSelected: (_) => setState(() => _installmentDebtorId = null),
-                      ),
-                      for (final m in debtors)
-                        ChoiceChip(
-                          label: Text(m.name),
-                          selected: _installmentDebtorId == m.id,
-                          onSelected: (_) => setState(() => _installmentDebtorId = m.id),
-                        ),
-                    ],
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    debtorName == null
-                        ? 'Cada parcela entra como despesa prevista da Casa no ciclo da fatura dela.'
-                        : lender == P2PLoan.houseLenderId
-                            ? '$debtorName deve cada parcela para $lenderName: um empréstimo por fatura, '
-                                'aceito de uma vez. Não entra nas despesas da Casa.'
-                            : '$debtorName deve a compra para $lenderName: um empréstimo em '
-                                '$_installmentsCount parcelas, uma por fatura. Não entra nas despesas da Casa.',
-                    style: const TextStyle(fontSize: 12),
-                  ),
                 ],
               ),
             ),
           ],
+          const Divider(height: 1),
+          Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'De quem é a compra',
+                  style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
+                ),
+                const SizedBox(height: 8),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 4,
+                  children: [
+                    ChoiceChip(
+                      key: const Key('expense_card_debtor_house'),
+                      label: const Text('Da Casa'),
+                      selected: _installmentDebtorId == null,
+                      onSelected: (_) => setState(() => _installmentDebtorId = null),
+                    ),
+                    for (final m in debtors)
+                      ChoiceChip(
+                        key: Key('expense_card_debtor_${m.id}'),
+                        label: Text(m.name),
+                        selected: _installmentDebtorId == m.id,
+                        onSelected: (_) => setState(() => _installmentDebtorId = m.id),
+                      ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  debtorName == null
+                      ? (_isInstallment
+                          ? 'Cada parcela entra como despesa prevista da Casa no ciclo da fatura dela.'
+                          : 'Entra como despesa da Casa, dividida como abaixo.')
+                      : !_isInstallment
+                          ? '$debtorName deve a compra para $lenderName: um empréstimo que vence com a '
+                              'fatura de ${DateFormat('dd/MM/yyyy').format(purchaseDue)}. Não entra nas despesas da Casa.'
+                          : lender == P2PLoan.houseLenderId
+                              ? '$debtorName deve cada parcela para $lenderName: um empréstimo por fatura, '
+                                  'aceito de uma vez. Não entra nas despesas da Casa.'
+                              : '$debtorName deve a compra para $lenderName: um empréstimo em '
+                                  '$_installmentsCount parcelas, uma por fatura. Não entra nas despesas da Casa.',
+                  style: const TextStyle(fontSize: 12),
+                ),
+              ],
+            ),
+          ),
         ],
       ),
     );
@@ -2029,7 +2054,11 @@ class _AddExpensePageState extends State<AddExpensePage> {
                                     .where((p) => p.id == _selectedPaymentMethodId)
                                     .firstOrNull)
                                 ? 'Lançar Compra Parcelada'
-                                : 'Lançar Gasto da Casa')),
+                                : _upfrontForDebtor(state.paymentMethods
+                                        .where((p) => p.id == _selectedPaymentMethodId)
+                                        .firstOrNull)
+                                    ? 'Lançar como Empréstimo'
+                                    : 'Lançar Gasto da Casa')),
                     style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
                   ),
                 ),

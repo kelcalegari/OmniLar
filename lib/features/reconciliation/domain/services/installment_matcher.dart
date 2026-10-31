@@ -94,29 +94,43 @@ class InstallmentMatcher {
   /// lugar não se confundem. A compra lançada à mão casa pelo número de
   /// parcelas, valor e data mesmo com outro nome; a lançada para um morador
   /// já tem os empréstimos, então a parcela dela conta como já importada.
+  ///
+  /// A compra à vista lançada à mão para um morador é um plano de 1 parcela:
+  /// casa com a linha sem parcela de mesmo valor e data da compra.
   static Map<String, InstallmentMatch> match({
     required List<ImportedStatementLine> lines,
     required List<InstallmentPlan> plans,
     DateTime? invoiceDueDate,
   }) {
+    final upfrontPlans = plans.any((p) => p.total == 1);
     final groups = <String, List<ImportedStatementLine>>{};
     for (final line in lines) {
-      if (!line.isPurchase || !line.isInstallment) continue;
+      if (!line.isPurchase || (!line.isInstallment && !upfrontPlans)) continue;
       groups.putIfAbsent(line.splitFrom ?? line.id, () => []).add(line);
     }
 
     final candidates = <({String groupId, InstallmentPlan plan, int score})>[];
     for (final entry in groups.entries) {
       final first = entry.value.first;
-      final number = first.installmentNumber!;
+      final number = first.installmentNumber ?? 1;
       final cents = entry.value.fold<int>(0, (acc, l) => acc + l.amount.cents);
       final merchant = merchantKeyOf(first.description);
       for (final plan in plans) {
-        if (plan.total != first.installmentsTotal) continue;
+        if (plan.total != (first.installmentsTotal ?? 1)) continue;
         if (!_closeAmount(cents, plan.installmentAmount.cents)) continue;
         final sameMerchant = _sameMerchant(merchant, plan.merchantKey);
-        final dateFits = _dateFits(plan, number, first.date, invoiceDueDate);
         final expected = plan.forecastOf(number) != null;
+        if (!first.isInstallment) {
+          // À vista: sem parcela para conferir, só a data da compra dá certeza
+          if (_daysApart(first.date, plan.anchorLineDate) > lineDateDays) continue;
+          candidates.add((
+            groupId: entry.key,
+            plan: plan,
+            score: (sameMerchant ? 8 : 0) + 4 + (cents == plan.installmentAmount.cents ? 1 : 0),
+          ));
+          continue;
+        }
+        final dateFits = _dateFits(plan, number, first.date, invoiceDueDate);
         if (sameMerchant) {
           // Sem data que bata, só a parcela prevista dá certeza de que é a mesma compra
           if (!dateFits && !expected) continue;
@@ -143,7 +157,7 @@ class InstallmentMatcher {
     for (final candidate in candidates) {
       if (result.containsKey(candidate.groupId)) continue;
       final first = groups[candidate.groupId]!.first;
-      final number = first.installmentNumber!;
+      final number = first.installmentNumber ?? 1;
       final parcelKey = '${candidate.plan.id}#$number';
       if (usedParcels.contains(parcelKey)) continue;
       usedParcels.add(parcelKey);
@@ -164,6 +178,8 @@ class InstallmentMatcher {
     for (final entry in groups.entries) {
       if (result.containsKey(entry.key)) continue;
       final first = entry.value.first;
+      // Linha à vista que não é de nenhuma compra lançada à mão: não é parcela
+      if (!first.isInstallment) continue;
       result[entry.key] = InstallmentMatch(
         groupId: entry.key,
         kind: InstallmentMatchKind.newPlan,

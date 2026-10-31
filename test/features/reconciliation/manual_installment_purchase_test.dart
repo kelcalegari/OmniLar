@@ -293,6 +293,63 @@ void main() {
     });
   });
 
+  group('compra à vista que um morador deve', () {
+    test('no cartão de outro morador: um empréstimo do dono, com a fatura da compra', () {
+      final purchase = _build(count: 1, card: _card(owner: 'kelvynn'), debtor: 'cristiano');
+      expect(purchase.expenses, isEmpty);
+      final loan = purchase.loans.single;
+      expect(loan.lenderMemberId, 'kelvynn');
+      expect(loan.borrowerMemberId, 'cristiano');
+      expect(loan.installmentsCount, 1);
+      expect(loan.totalAmount.cents, 100000);
+      expect(loan.firstDueDate, _october);
+      expect(loan.title, 'Geladeira (à vista no Cartão Magalu) — Cristiano');
+      expect(purchase.plan.total, 1);
+      expect(purchase.plan.coveredByLoans, isTrue);
+    });
+
+    test('no cartão da Casa: um empréstimo do Caixa do ciclo da fatura', () {
+      final loan = _build(count: 1, debtor: 'cristiano').loans.single;
+      expect(loan.isHouseLender, isTrue);
+      expect(loan.houseFunding, HouseLoanFunding.cycle);
+      expect(loan.fundedOn, _october);
+      expect(loan.title, 'Geladeira (à vista no Cartão Magalu) — Cristiano');
+    });
+
+    test('da Casa não vira compra de 1 parcela: é despesa comum', () {
+      expect(() => _build(count: 1), throwsArgumentError);
+    });
+
+    test('a fatura reconhece a compra e não lança de novo, mesmo com outro nome', () async {
+      final card = _card(owner: 'kelvynn');
+      await repository.createInstallmentPurchase(
+        _build(count: 1, card: card, debtor: 'cristiano'),
+      );
+
+      final session = await review(card, _october, [
+        _line('a', _purchase.add(const Duration(days: 1)), 'MAGAZINE LUIZA', 100000),
+        _line('b', _purchase, 'PADARIA', 2500),
+      ]);
+      expect(session.statusOf(lineOf(session, 'a')), LineStatus.alreadyImported);
+      expect(session.installmentMatchOf(lineOf(session, 'b')), isNull);
+      final result = plan(session);
+      expect(result.loans, isEmpty);
+      expect(result.newExpenses.map((e) => e.title), ['Padaria']);
+    });
+
+    test('mesmo valor em outra data é outra compra', () async {
+      final card = _card(owner: 'kelvynn');
+      await repository.createInstallmentPurchase(
+        _build(count: 1, card: card, debtor: 'cristiano'),
+      );
+      final session = await review(card, _october, [
+        _line('a', DateTime(2026, 9, 25), 'MAGAZINE LUIZA', 100000),
+      ]);
+      expect(session.installmentMatchOf(lineOf(session, 'a')), isNull);
+      expect(plan(session).newExpenses, hasLength(1));
+    });
+  });
+
   group('excluir a compra parcelada lançada errado', () {
     test('da Casa: some a compra e a fatura não casa mais com ela', () async {
       final purchase = _build();
