@@ -24,6 +24,7 @@ import '../../domain/entities/budget_alert_stages.dart';
 import '../../domain/entities/category_default_split.dart';
 import '../../domain/entities/split_rule.dart';
 import '../../domain/entities/audit_entry.dart';
+import '../../domain/services/self_funded_expenses.dart';
 import '../../domain/services/cycle_expense_filter.dart';
 import '../../domain/services/credit_card_invoice_calculator.dart';
 import 'finance_datasource.dart';
@@ -281,6 +282,8 @@ class SupabaseFinanceDataSource implements FinanceDataSource {
             dueDay: (r['due_day'] ?? r['card_due_day'] as num?)?.toInt(),
             usualInvoicePayerId: r['usual_invoice_payer'] as String?,
             cycleAssignment: CardCycleAssignment.fromDb(r['cycle_assignment']),
+            // Banco sem a 0122: toda forma consome aportes, como antes
+            consumesContributions: r['consumes_contributions'] as bool? ?? true,
           );
         }).toList();
       }
@@ -673,11 +676,22 @@ class SupabaseFinanceDataSource implements FinanceDataSource {
       int committedFutureExpensesCents = 0;
       final memberExpensesPaid = <String, Money>{};
 
+      // Despesa paga com saldo próprio (VA, 0122) não sai do Caixa: fica fora do Fôlego
+      Set<String> selfFundedMethodIds;
+      try {
+        selfFundedMethodIds = SelfFundedExpenses.methodIds(await getPaymentMethods());
+      } catch (_) {
+        selfFundedMethodIds = const {};
+      }
+
       for (final exp in cycleExpenses) {
         if (exp.isPaid) {
-          totalExpensesPaidCents += exp.amount.cents;
           final current = memberExpensesPaid[exp.paidByMemberId]?.cents ?? 0;
           memberExpensesPaid[exp.paidByMemberId] = Money(current + exp.amount.cents);
+        }
+        if (SelfFundedExpenses.isSelfFunded(exp, selfFundedMethodIds)) continue;
+        if (exp.isPaid) {
+          totalExpensesPaidCents += exp.amount.cents;
         } else {
           committedFutureExpensesCents += exp.amount.cents;
         }
@@ -1201,15 +1215,22 @@ class SupabaseFinanceDataSource implements FinanceDataSource {
           paymentMethod.cycleAssignment != CardCycleAssignment.invoiceDue) {
         payload['cycle_assignment'] = paymentMethod.cycleAssignment.dbValue;
       }
+      // Saldo próprio que não consome aportes (0122): só quando foge do padrão
+      if (!paymentMethod.consumesContributions) {
+        payload['consumes_contributions'] = false;
+      }
       try {
         await client.from('payment_methods').insert(payload);
       } catch (e) {
-        // Banco sem a 0100/0104: cria sem os parâmetros que ele não conhece
-        if (!payload.containsKey('usual_invoice_payer') && !payload.containsKey('cycle_assignment')) {
+        // Banco sem a 0100/0104/0122: cria sem os parâmetros que ele não conhece
+        if (!payload.containsKey('usual_invoice_payer') &&
+            !payload.containsKey('cycle_assignment') &&
+            !payload.containsKey('consumes_contributions')) {
           rethrow;
         }
         payload.remove('usual_invoice_payer');
         payload.remove('cycle_assignment');
+        payload.remove('consumes_contributions');
         await client.from('payment_methods').insert(payload);
       }
     } catch (e) {
@@ -1244,14 +1265,20 @@ class SupabaseFinanceDataSource implements FinanceDataSource {
       payload['cycle_assignment'] = paymentMethod.isCreditCard
           ? paymentMethod.cycleAssignment.dbValue
           : CardCycleAssignment.invoiceDue.dbValue;
+      payload['consumes_contributions'] = paymentMethod.consumesContributions;
       try {
         await save();
       } catch (e) {
-        // Banco sem a 0100/0104: grava o resto e deixa os parâmetros de fora
+        // Banco sem a 0100/0104/0122: grava o resto e deixa os parâmetros de fora
         final text = e.toString();
-        if (!text.contains('usual_invoice_payer') && !text.contains('cycle_assignment')) rethrow;
+        if (!text.contains('usual_invoice_payer') &&
+            !text.contains('cycle_assignment') &&
+            !text.contains('consumes_contributions')) {
+          rethrow;
+        }
         payload.remove('usual_invoice_payer');
         payload.remove('cycle_assignment');
+        payload.remove('consumes_contributions');
         await save();
       }
     } catch (e) {

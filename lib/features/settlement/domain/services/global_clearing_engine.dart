@@ -17,6 +17,7 @@ import '../entities/settlement_options.dart';
 import '../entities/settlement_summary.dart';
 import '../entities/super_pix_transfer.dart';
 import '../../../finance/domain/services/exclusive_charges.dart';
+import '../../../finance/domain/services/self_funded_expenses.dart';
 
 class GlobalClearingEngine {
   const GlobalClearingEngine();
@@ -58,14 +59,22 @@ class GlobalClearingEngine {
     // (ProjectSettlementService). Filtramos aqui por defesa em profundidade para
     // impedir contagem dupla mesmo que o chamador as envie.
     final houseExpenses = expenses.where((e) => !e.isProjectExpense && !e.isReconciliationAdjustment).toList();
-    expenses = houseExpenses;
 
-    // 1. Total de despesas da casa no ciclo
+    // Despesas pagas com saldo próprio (VA, 0122) contam como despesa da casa,
+    // mas não entram no rateio, no reembolso nem no Caixa: daqui em diante o
+    // cálculo só vê as que saem dos aportes.
+    final selfFundedMethodIds = SelfFundedExpenses.methodIds(paymentMethods);
+    expenses = SelfFundedExpenses.funded(houseExpenses, selfFundedMethodIds);
+    final selfFundedCents = houseExpenses
+        .where((e) => SelfFundedExpenses.isSelfFunded(e, selfFundedMethodIds))
+        .fold<int>(0, (acc, e) => acc + e.amount.cents);
+
+    // 1. Total de despesas da casa no ciclo (as que saem dos aportes)
     final totalExpensesCents = expenses.fold<int>(
       0,
       (acc, e) => acc + e.amount.cents,
     );
-    final totalHouseExpenses = Money(totalExpensesCents);
+    final totalHouseExpenses = Money(totalExpensesCents + selfFundedCents);
 
     // 2. Total de aportes realizados no ciclo
     final totalContributionsCents = contributions.fold<int>(
@@ -791,6 +800,7 @@ class GlobalClearingEngine {
       surplusRefunded: Money(surplusRefundedCents),
       houseLoanReceipts: Money(houseLoanReceiptsCents),
       houseLoansFunded: Money(houseLoansFundedCents),
+      selfFundedExpenses: Money(selfFundedCents),
     );
   }
 

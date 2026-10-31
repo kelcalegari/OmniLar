@@ -15,6 +15,7 @@ import '../../domain/entities/cycle_insights.dart';
 import '../../domain/entities/cycle_preview.dart';
 import '../../domain/entities/payment_due_entry.dart';
 import '../../domain/entities/upcoming_forecast.dart';
+import '../../../finance/domain/services/self_funded_expenses.dart';
 import '../../domain/services/cycle_insights_builder.dart';
 import '../../domain/services/cycle_preview_builder.dart';
 import '../../domain/services/house_cashflow_builder.dart';
@@ -239,7 +240,11 @@ class ReportsCubit extends Cubit<ReportsState> {
               startingBalance: HouseCashflowBuilder.startingBalance(
                 openingBalance: cycleSummary.openingBalance,
                 contributions: cycleSummary.totalContributions,
-                expenses: finance.expenses,
+                // Despesa paga com saldo próprio (VA, 0122) não sai do Caixa
+                expenses: SelfFundedExpenses.funded(
+                  finance.expenses,
+                  SelfFundedExpenses.methodIds(finance.paymentMethods),
+                ),
                 houseLoansFunded: cycleSummary.houseLoansFunded,
               ),
             )

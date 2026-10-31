@@ -22,6 +22,7 @@ import '../../../../core/domain/value_objects/money.dart';
 import '../../../../core/domain/value_objects/financial_cycle.dart';
 import '../../domain/services/credit_card_invoice_calculator.dart';
 import '../../domain/services/cycle_expense_filter.dart';
+import '../../domain/services/self_funded_expenses.dart';
 import 'finance_datasource.dart';
 
 class MockFinanceDataSource implements FinanceDataSource {
@@ -511,10 +512,15 @@ class MockFinanceDataSource implements FinanceDataSource {
     Money committedFuture = const Money.zero();
     final memberPaid = <String, Money>{};
 
+    // Despesa paga com saldo próprio (VA, 0122) não sai do Caixa: fica fora do Fôlego
+    final selfFundedMethodIds = SelfFundedExpenses.methodIds(await getPaymentMethods());
     for (final exp in cycleExpenses) {
       if (exp.isPaid) {
-        totalPaid += exp.amount;
         memberPaid[exp.paidByMemberId] = (memberPaid[exp.paidByMemberId] ?? const Money.zero()) + exp.amount;
+      }
+      if (SelfFundedExpenses.isSelfFunded(exp, selfFundedMethodIds)) continue;
+      if (exp.isPaid) {
+        totalPaid += exp.amount;
       } else {
         committedFuture += exp.amount;
       }
