@@ -36,6 +36,9 @@ class _StoredPlan {
   InstallmentPlan plan;
   final Map<int, InstallmentParcel> parcels = {};
 
+  /// Empréstimos da compra lançada à mão.
+  final List<String> loanIds = [];
+
   _StoredPlan(this.plan);
 }
 
@@ -210,8 +213,27 @@ class MockImportRepository implements ImportRepository {
     }
     for (final loan in purchase.loans) {
       await p2p.createLoan(loan);
+      stored.loanIds.add(loan.id);
     }
     _plans[purchase.plan.id] = stored;
+  }
+
+  @override
+  Future<void> deleteInstallmentPurchase(String planId) async {
+    final stored = _plans[planId];
+    if (stored == null) throw const NotFoundFailure('Compra parcelada não encontrada.');
+    if (stored.parcels.values.any((p) => !p.isForecast)) {
+      throw const ServerFailure(
+        'Uma fatura importada já confirmou parcela desta compra. Desfaça antes a importação dessa fatura.',
+      );
+    }
+    for (final parcel in stored.parcels.values) {
+      await finance.deleteExpense(parcel.expense.id);
+    }
+    for (final loanId in stored.loanIds) {
+      await p2p.deleteLoan(loanId);
+    }
+    _plans.remove(planId);
   }
 
   /// O plano como o banco devolve: parcelas e o que as importações ativas trataram.
@@ -380,6 +402,9 @@ class DynamicImportRepository implements ImportRepository {
 
   @override
   Future<List<InstallmentPlan>> houseInstallmentPlans() => _active.houseInstallmentPlans();
+
+  @override
+  Future<void> deleteInstallmentPurchase(String planId) => _active.deleteInstallmentPurchase(planId);
 
   @override
   Future<void> acceptInstallmentPlan(String planId) => _active.acceptInstallmentPlan(planId);

@@ -27,6 +27,7 @@ import '../widgets/receipt_attachment_viewer.dart';
 import '../../../reconciliation/domain/repositories/import_repository.dart';
 import '../../../reconciliation/domain/entities/installment_plan.dart';
 import '../../../reconciliation/domain/services/installment_purchase.dart';
+import '../../../reconciliation/presentation/widgets/delete_installment_purchase_dialog.dart';
 import '../../../p2p/domain/entities/p2p_loan.dart';
 
 class _DraftExpenseItem {
@@ -972,6 +973,50 @@ class _AddExpensePageState extends State<AddExpensePage> {
     final exp = widget.expenseToEdit;
     if (exp == null) return;
 
+    // Parcela de compra parcelada: o normal é desfazer a compra inteira
+    final planId = exp.installmentPlanId;
+    if (planId != null) {
+      final purchaseTitle = exp.title.replaceFirst(RegExp(r' \(\d+/\d+\)$'), '');
+      final choice = await showDialog<String>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('Excluir parcela'),
+          content: Text(
+            '"${exp.title}" é uma parcela da compra parcelada "$purchaseTitle". '
+            'Se a compra foi lançada errado, exclua a compra inteira: só esta parcela '
+            'deixa as outras e a compra para trás.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('Cancelar'),
+            ),
+            TextButton(
+              key: const Key('delete_installment_parcel_only'),
+              onPressed: () => Navigator.pop(ctx, 'parcel'),
+              child: const Text('Só esta parcela'),
+            ),
+            ElevatedButton(
+              key: const Key('delete_installment_purchase'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.debtRed,
+                foregroundColor: Colors.white,
+              ),
+              onPressed: () => Navigator.pop(ctx, 'purchase'),
+              child: const Text('A compra inteira'),
+            ),
+          ],
+        ),
+      );
+      if (choice == null || !mounted) return;
+      if (choice == 'purchase') {
+        final nav = Navigator.of(context);
+        final ok = await confirmDeleteInstallmentPurchase(context, planId: planId, title: purchaseTitle);
+        if (ok && mounted) nav.pop();
+        return;
+      }
+    }
+
     RecurrenceScope scope = RecurrenceScope.thisInstanceOnly;
     if (exp.isRecurring) {
       final chosenScope = await showRecurrenceScopeDialog(
@@ -982,7 +1027,7 @@ class _AddExpensePageState extends State<AddExpensePage> {
       );
       if (chosenScope == null) return;
       scope = chosenScope;
-    } else {
+    } else if (planId == null) {
       final confirmed = await showDialog<bool>(
         context: context,
         builder: (ctx) => AlertDialog(

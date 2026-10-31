@@ -17,6 +17,7 @@ import '../../../finance/domain/entities/savings_vault.dart';
 import '../../../finance/presentation/cubit/finance_cubit.dart';
 import '../../../reconciliation/domain/repositories/import_repository.dart';
 import '../cubit/p2p_cubit.dart';
+import '../../../reconciliation/presentation/widgets/delete_installment_purchase_dialog.dart';
 import 'loan_payment_dialog.dart';
 import 'partial_payment_dialog.dart';
 import 'renegotiate_loan_sheet.dart';
@@ -115,6 +116,23 @@ class LoanDetailsSheet extends StatelessWidget {
             onPressed: () => Navigator.pop(ctx),
             child: const Text('Cancelar'),
           ),
+          // Empréstimo de uma compra parcelada só: dá para desfazer a compra inteira
+          if (loan.installmentPlanIds.length == 1)
+            TextButton(
+              key: const Key('loan_delete_installment_purchase'),
+              style: TextButton.styleFrom(foregroundColor: AppColors.debtRed),
+              onPressed: () async {
+                Navigator.pop(ctx);
+                final nav = Navigator.of(context);
+                final ok = await confirmDeleteInstallmentPurchase(
+                  context,
+                  planId: loan.installmentPlanIds.single,
+                  title: loan.title.replaceFirst(RegExp(r' \(.*$'), ''),
+                );
+                if (ok) nav.pop();
+              },
+              child: const Text('A compra inteira'),
+            ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(
               backgroundColor: AppColors.debtRed,
@@ -129,7 +147,7 @@ class LoanDetailsSheet extends StatelessWidget {
                 closeOnSuccess: true,
               );
             },
-            child: const Text('Excluir'),
+            child: Text(loan.installmentPlanIds.length == 1 ? 'Só este empréstimo' : 'Excluir'),
           ),
         ],
       ),

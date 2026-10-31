@@ -5,6 +5,7 @@ import '../../../../core/domain/value_objects/money.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/utils/responsive.dart';
 import '../../domain/entities/p2p_loan.dart';
+import '../../../reconciliation/presentation/widgets/delete_installment_purchase_dialog.dart';
 import '../../domain/services/installment_loan_groups.dart';
 import '../cubit/p2p_cubit.dart';
 import '../cubit/p2p_state.dart';
@@ -197,6 +198,7 @@ Future<void> showInstallmentGroupDetails(
           for (final l in group.siblings) state.allLoans.where((x) => x.id == l.id).firstOrNull ?? l,
         ];
         return _InstallmentGroupSheet(
+          planId: group.planId,
           title: group.title,
           purchaseInstallments: group.purchaseInstallments,
           loans: current,
@@ -209,6 +211,7 @@ Future<void> showInstallmentGroupDetails(
 }
 
 class _InstallmentGroupSheet extends StatelessWidget {
+  final String planId;
   final String title;
   final int purchaseInstallments;
   final List<P2PLoan> loans;
@@ -216,6 +219,7 @@ class _InstallmentGroupSheet extends StatelessWidget {
   final bool showBothParties;
 
   const _InstallmentGroupSheet({
+    required this.planId,
     required this.title,
     required this.purchaseInstallments,
     required this.loans,
@@ -280,6 +284,25 @@ class _InstallmentGroupSheet extends StatelessWidget {
               ),
               onTap: () => showLoanDetails(context, l, isDebtor: isDebtor),
             ),
+          const SizedBox(height: 8),
+          Align(
+            alignment: Alignment.centerLeft,
+            child: TextButton.icon(
+              key: const Key('installment_group_delete'),
+              style: TextButton.styleFrom(foregroundColor: AppColors.debtRed),
+              icon: const Icon(Icons.delete_outline_rounded, size: 18),
+              label: const Text('Excluir compra parcelada'),
+              onPressed: () async {
+                final nav = Navigator.of(context);
+                final ok = await confirmDeleteInstallmentPurchase(
+                  context,
+                  planId: planId,
+                  title: title.replaceFirst(RegExp(r' — .*$'), ''),
+                );
+                if (ok) nav.pop();
+              },
+            ),
+          ),
         ],
       ),
     );

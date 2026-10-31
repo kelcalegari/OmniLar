@@ -38,6 +38,7 @@ class HouseExpense extends Equatable {
   final int? attachmentSizeBytes; // Tamanho em bytes
   final DateTime? attachmentPurgedAt; // Data em que o anexo físico foi expurgado (Modelo A)
   final String? paidByParticipantId; // Quando o pagador é um participante externo do projeto (project_participants)
+  final String? installmentPlanId; // Parcela de uma compra parcelada no cartão (installment_plans)
 
   const HouseExpense({
     required this.id,
@@ -69,6 +70,7 @@ class HouseExpense extends Equatable {
     this.attachmentContentType,
     this.attachmentSizeBytes,
     this.attachmentPurgedAt,
+    this.installmentPlanId,
   });
 
   bool get isPaid => status == ExpenseStatus.paid;
@@ -153,6 +155,7 @@ class HouseExpense extends Equatable {
     String? attachmentContentType,
     int? attachmentSizeBytes,
     DateTime? attachmentPurgedAt,
+    String? installmentPlanId,
   }) {
     return HouseExpense(
       id: id ?? this.id,
@@ -184,6 +187,7 @@ class HouseExpense extends Equatable {
       attachmentContentType: clearAttachment ? null : (attachmentContentType ?? this.attachmentContentType),
       attachmentSizeBytes: clearAttachment ? null : (attachmentSizeBytes ?? this.attachmentSizeBytes),
       attachmentPurgedAt: clearAttachment ? null : (attachmentPurgedAt ?? this.attachmentPurgedAt),
+      installmentPlanId: installmentPlanId ?? this.installmentPlanId,
     );
   }
 
@@ -218,5 +222,6 @@ class HouseExpense extends Equatable {
         attachmentContentType,
         attachmentSizeBytes,
         attachmentPurgedAt,
+        installmentPlanId,
       ];
 }

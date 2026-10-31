@@ -252,6 +252,15 @@ class SupabaseImportRepository implements ImportRepository {
   }
 
   @override
+  Future<void> deleteInstallmentPurchase(String planId) async {
+    try {
+      await client.rpc('delete_installment_purchase', params: {'p_plan_id': planId});
+    } catch (e) {
+      throw _failure('Erro ao excluir a compra parcelada', e);
+    }
+  }
+
+  @override
   Future<void> createInstallmentPurchase(InstallmentPurchase purchase) async {
     final plan = purchase.plan;
     final userId = client.auth.currentUser?.id;
