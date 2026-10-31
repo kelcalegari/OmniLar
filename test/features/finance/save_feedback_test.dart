@@ -59,7 +59,7 @@ void main() {
     await tester.pumpAndSettle();
 
     final submit = find.text('Lançar Gasto da Casa');
-    await tester.ensureVisible(submit);
+    await tester.scrollUntilVisible(submit, 300, scrollable: find.byType(Scrollable).first);
     await tester.tap(submit);
     await tester.pumpAndSettle();
 

@@ -494,6 +494,10 @@ class ExpenseTimelineItem extends StatelessWidget {
                           Text(_getSplitBadgeText(), style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
                         ],
                       ),
+                      if (expense.description != null && expense.description!.isNotEmpty) ...[
+                        const Divider(height: 16),
+                        Text(expense.description!, style: const TextStyle(fontSize: 13)),
+                      ],
                       if (expense.notes != null && expense.notes!.isNotEmpty) ...[
                         const Divider(height: 16),
                         Text('Observações: ${expense.notes!}', style: const TextStyle(fontSize: 12, fontStyle: FontStyle.italic)),

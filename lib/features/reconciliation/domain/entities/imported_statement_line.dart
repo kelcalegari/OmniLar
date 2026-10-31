@@ -38,6 +38,9 @@ class ImportedStatementLine {
 
   /// Nome dado pelo usuário na revisão (null = usa a descrição limpa).
   final String? title;
+
+  /// Descrição livre dada na revisão: vira a descrição do gasto lançado.
+  final String? note;
   final String? categoryId;
   final String? assignedMemberId; // Devedor no caso de splitP2P
   final int? installmentNumber;
@@ -58,6 +61,7 @@ class ImportedStatementLine {
     this.externalId,
     this.signature,
     this.title,
+    this.note,
     this.categoryId,
     this.assignedMemberId,
     this.installmentNumber,
@@ -73,6 +77,8 @@ class ImportedStatementLine {
     DateTime? date,
     LineDestination? destination,
     String? title,
+    String? note,
+    bool clearNote = false,
     String? categoryId,
     String? assignedMemberId,
     bool clearAssignedMember = false,
@@ -88,6 +94,7 @@ class ImportedStatementLine {
       externalId: externalId,
       signature: signature,
       title: title ?? this.title,
+      note: clearNote ? null : (note ?? this.note),
       categoryId: categoryId ?? this.categoryId,
       assignedMemberId: clearAssignedMember ? null : (assignedMemberId ?? this.assignedMemberId),
       installmentNumber: installmentNumber,
@@ -109,6 +116,7 @@ class ImportedStatementLine {
         externalId: externalId,
         signature: signature,
         title: title,
+        note: note,
         categoryId: categoryId,
         assignedMemberId: assignedMemberId,
         installmentNumber: installmentNumber,

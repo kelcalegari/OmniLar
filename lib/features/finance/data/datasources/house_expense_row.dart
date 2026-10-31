@@ -72,6 +72,7 @@ HouseExpense houseExpenseFromRow(Map<String, dynamic> r) {
     settledAt: r['settled_at'] != null ? DateTime.tryParse(r['settled_at'] as String)?.toLocal() : null,
     paidAt: r['paid_at'] != null ? DateTime.tryParse(r['paid_at'] as String)?.toLocal() : null,
     paidOutOfPocket: r['paid_out_of_pocket'] as bool? ?? false,
+    description: r['description'] as String?,
     notes: r['notes'] as String?,
     barcode: r['barcode'] as String?,
     createdBy: r['created_by'] as String?,

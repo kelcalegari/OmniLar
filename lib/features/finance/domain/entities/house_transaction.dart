@@ -32,6 +32,7 @@ class HouseTransaction {
   final String? paymentMethodId;
   final String? paymentMethodName;
   final bool isPending;
+  final String? description; // Texto livre do morador (só despesas da Casa)
   final String? notes;
   final dynamic rawEntity;
 
@@ -52,6 +53,7 @@ class HouseTransaction {
     this.paymentMethodId,
     this.paymentMethodName,
     this.isPending = false,
+    this.description,
     this.notes,
     this.rawEntity,
   });

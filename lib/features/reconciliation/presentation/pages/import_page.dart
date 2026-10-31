@@ -1063,6 +1063,7 @@ class _ImportPageState extends State<ImportPage> {
     final controller = TextEditingController(
       text: line.title ?? StatementText.cleanTitle(line.description),
     );
+    final noteController = TextEditingController(text: line.note ?? '');
     var date = line.date;
 
     final saved = await showDialog<bool>(
@@ -1086,6 +1087,19 @@ class _ImportPageState extends State<ImportPage> {
                 controller: controller,
                 decoration: const InputDecoration(
                   labelText: 'Nome do lançamento',
+                ),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                key: const Key('import_line_note'),
+                controller: noteController,
+                minLines: 1,
+                maxLines: 3,
+                maxLength: 500,
+                textCapitalization: TextCapitalization.sentences,
+                decoration: const InputDecoration(
+                  labelText: 'Descrição (opcional)',
+                  counterText: '',
                 ),
               ),
               const SizedBox(height: 12),
@@ -1134,12 +1148,23 @@ class _ImportPageState extends State<ImportPage> {
       ),
     );
     final title = controller.text.trim();
+    final note = noteController.text.trim();
     controller.dispose();
+    noteController.dispose();
     if (saved != true || !mounted || _session == null) return;
 
     final dateChanged = date != line.date;
     final current = _session!.lines.firstWhere((l) => l.id == line.id);
-    _update(_session!.withLine(current.copyWith(title: title, date: date)));
+    _update(
+      _session!.withLine(
+        current.copyWith(
+          title: title,
+          date: date,
+          note: note.isEmpty ? null : note,
+          clearNote: note.isEmpty,
+        ),
+      ),
+    );
     // Outra data pode casar com outra despesa ou cair em outro ciclo
     if (dateChanged) await _refresh();
   }
@@ -2059,6 +2084,13 @@ class _ImportPageState extends State<ImportPage> {
                         color: muted ? Colors.grey : null,
                       ),
                     ),
+                    if (line.note?.trim().isNotEmpty == true)
+                      Text(
+                        line.note!.trim(),
+                        style: const TextStyle(fontSize: 12),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                      ),
                     Text(
                       '${_shortDay.format(line.date)} • ${line.description}$installment',
                       style: const TextStyle(fontSize: 11, color: Colors.grey),

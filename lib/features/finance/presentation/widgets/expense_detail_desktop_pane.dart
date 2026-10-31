@@ -262,6 +262,10 @@ class _ExpenseDetailDesktopPaneState extends State<ExpenseDetailDesktopPane> {
                     const SizedBox(height: 8),
                     _buildMetaRow('Recorrência:', expense.isVariable ? 'Mensal (Variável)' : 'Mensal (Fixa)'),
                   ],
+                  if (expense.description != null && expense.description!.isNotEmpty) ...[
+                    const Divider(height: 16),
+                    Text(expense.description!, style: const TextStyle(fontSize: 13)),
+                  ],
                   if (expense.notes != null && expense.notes!.isNotEmpty) ...[
                     const Divider(height: 16),
                     Text('Notas: ${expense.notes!}', style: const TextStyle(fontSize: 12, fontStyle: FontStyle.italic)),

@@ -35,7 +35,7 @@ class TransactionsExportService {
     b.writeln('Saldo Líquido;R\$ ${_formatMoney(metrics.netBalance)}');
     b.writeln('');
 
-    b.writeln('Data;Tipo;Título;Categoria;Valor (R\$);Quem Pagou/Aportou;Forma de Pagamento;Status;Observações');
+    b.writeln('Data;Tipo;Título;Categoria;Valor (R\$);Quem Pagou/Aportou;Forma de Pagamento;Status;Descrição;Observações');
     for (final t in transactions) {
       final typeLabel = t.isExpense ? 'Saída' : 'Entrada';
       final statusLabel = t.isPending ? 'Pendente' : 'Concluído';
@@ -48,6 +48,7 @@ class TransactionsExportService {
         _escapeText(t.memberName ?? '-'),
         _escapeText(t.paymentMethodName ?? '-'),
         statusLabel,
+        _escapeText(t.description ?? ''),
         _escapeText(t.notes ?? ''),
       ].join(';'));
     }

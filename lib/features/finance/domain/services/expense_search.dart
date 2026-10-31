@@ -17,6 +17,7 @@ bool expenseMatchesSearch(
 
   final text = StatementText.normalize([
     expense.title,
+    expense.description ?? '',
     categoryName ?? '',
     payerName ?? '',
     paymentMethodName ?? '',
