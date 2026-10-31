@@ -67,6 +67,42 @@ void main() {
     });
   });
 
+  testWidgets('mostra saldo anterior e empréstimos que entram na conta do fôlego', (tester) async {
+    final cycle = CycleSchedule(5).cycleFor(DateTime.now());
+    Future<void> show({required Money loans, required Money folego}) => tester.pumpWidget(MaterialApp(
+          home: Scaffold(
+            body: SingleChildScrollView(
+              child: FolegoGaugeCard(
+                summary: FinancialCycleSummary(
+                  cycle: cycle,
+                  totalContributions: const Money.zero(),
+                  totalExpensesPaid: const Money.zero(),
+                  committedFutureExpenses: const Money(127758),
+                  folego: folego,
+                  memberContributions: const {},
+                  memberExpensesPaid: const {},
+                  houseLoansFunded: loans,
+                ),
+                cycle: cycle,
+                onPreviousCycle: () {},
+                onNextCycle: () {},
+              ),
+            ),
+          ),
+        ));
+
+    // Sem sobra nem empréstimos, as linhas extras não aparecem
+    await show(loans: const Money.zero(), folego: const Money(-127758));
+    expect(find.byKey(const Key('folego_extra_metrics')), findsNothing);
+
+    // -1.277,58 a vencer - 1.325,28 de empréstimos = -2.602,86
+    await show(loans: const Money(132528), folego: const Money(-260286));
+    expect(find.byKey(const Key('folego_extra_metrics')), findsOneWidget);
+    expect(find.text('Empréstimos'), findsOneWidget);
+    expect(find.text(const Money(132528).format()), findsOneWidget);
+    expect(find.text('Saldo Anterior'), findsOneWidget);
+  });
+
   testWidgets('em tela estreita o valor e o "Pagar" descem para baixo do título', (tester) async {
     tester.view.devicePixelRatio = 1.0;
     addTearDown(tester.view.resetPhysicalSize);
