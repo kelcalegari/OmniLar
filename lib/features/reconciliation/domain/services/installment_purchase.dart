@@ -114,6 +114,7 @@ class InstallmentPurchase {
               status: ExpenseStatus.pending,
               createdBy: createdBy,
               notes: 'Compra parcelada em $count vezes no ${card.name}, lançada à mão',
+              installmentPlanId: planId,
             ),
         ],
       );

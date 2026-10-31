@@ -105,4 +105,9 @@ abstract class ImportRepository {
   /// Grava a compra parcelada lançada à mão: o plano com as parcelas da Casa
   /// ou os empréstimos do morador. Se algo falha, nada é gravado.
   Future<void> createInstallmentPurchase(InstallmentPurchase purchase);
+
+  /// Exclui a compra parcelada lançada à mão: as parcelas previstas da Casa,
+  /// os empréstimos dela e o plano. Recusa se uma fatura importada já usou a
+  /// compra ou se um empréstimo dela já teve pagamento.
+  Future<void> deleteInstallmentPurchase(String planId);
 }

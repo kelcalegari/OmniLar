@@ -83,5 +83,6 @@ HouseExpense houseExpenseFromRow(Map<String, dynamic> r) {
     attachmentContentType: r['attachment_content_type'] as String?,
     attachmentSizeBytes: (r['attachment_size_bytes'] as num?)?.toInt(),
     attachmentPurgedAt: r['attachment_purged_at'] != null ? DateTime.tryParse(r['attachment_purged_at'] as String)?.toLocal() : null,
+    installmentPlanId: r['installment_plan_id'] as String?,
   );
 }

@@ -84,9 +84,11 @@ InstallmentPurchase _build({
 void main() {
   const schedule = CycleSchedule(1);
   late MockImportRepository repository;
+  late MockP2PDataSource p2p;
 
   setUp(() {
-    repository = MockImportRepository(finance: MockFinanceDataSource(), p2p: MockP2PDataSource());
+    p2p = MockP2PDataSource();
+    repository = MockImportRepository(finance: MockFinanceDataSource(), p2p: p2p);
   });
 
   Future<ImportSession> review(
@@ -288,6 +290,45 @@ void main() {
       final result = plan(session);
       expect(result.loans, isEmpty);
       expect(result.newExpenses, isEmpty);
+    });
+  });
+
+  group('excluir a compra parcelada lançada errado', () {
+    test('da Casa: some a compra e a fatura não casa mais com ela', () async {
+      final purchase = _build();
+      await repository.createInstallmentPurchase(purchase);
+      expect(purchase.expenses.every((e) => e.installmentPlanId == purchase.plan.id), isTrue);
+
+      await repository.deleteInstallmentPurchase(purchase.plan.id);
+
+      expect(await repository.installmentPlans(_card().id), isEmpty);
+      final session = await review(_card(), _october, [
+        _line('a', _purchase, 'MAGAZINE LUIZA 01/10', 10000),
+      ]);
+      expect(session.confirmedForecastOf(lineOf(session, 'a')), isNull);
+    });
+
+    test('do morador no cartão da Casa: os empréstimos da compra vão junto', () async {
+      final before = (await p2p.getLoans()).length;
+      final purchase = _build(debtor: 'cristiano');
+      await repository.createInstallmentPurchase(purchase);
+      expect((await p2p.getLoans()).length, before + 10);
+
+      await repository.deleteInstallmentPurchase(purchase.plan.id);
+
+      expect((await p2p.getLoans()).length, before);
+    });
+
+    test('depois que uma fatura confirmou parcela, recusa', () async {
+      final purchase = _build();
+      await repository.createInstallmentPurchase(purchase);
+      final session = await review(_card(), _october, [
+        _line('a', _purchase, 'MAGAZINE LUIZA 01/10', 10000),
+      ]);
+      await repository.confirmImport(session, plan(session));
+
+      await expectLater(repository.deleteInstallmentPurchase(purchase.plan.id), throwsA(anything));
+      expect(await repository.installmentPlans(_card().id), isNotEmpty);
     });
   });
 
