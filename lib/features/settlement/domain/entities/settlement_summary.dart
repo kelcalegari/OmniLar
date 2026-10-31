@@ -41,6 +41,9 @@ class SettlementSummary {
   /// Parcelas de acordos com o Lar que entram no Caixa neste ciclo.
   final Money houseLoanReceipts;
 
+  /// Empréstimos que o Caixa liberou neste ciclo (0086): saem do saldo.
+  final Money houseLoansFunded;
+
   /// O ciclo já foi fechado antes e está reaberto: só entra no acerto o que
   /// mudou desde o último fechamento.
   final bool isReopened;
@@ -67,6 +70,7 @@ class SettlementSummary {
     this.thirdPartyInflows = const Money.zero(),
     this.surplusRefunded = const Money.zero(),
     this.houseLoanReceipts = const Money.zero(),
+    this.houseLoansFunded = const Money.zero(),
     this.isReopened = false,
     this.dataVersion,
   });
@@ -113,6 +117,7 @@ class SettlementSummary {
     Money? thirdPartyInflows,
     Money? surplusRefunded,
     Money? houseLoanReceipts,
+    Money? houseLoansFunded,
     bool? isReopened,
     String? dataVersion,
   }) {
@@ -134,6 +139,7 @@ class SettlementSummary {
       thirdPartyInflows: thirdPartyInflows ?? this.thirdPartyInflows,
       surplusRefunded: surplusRefunded ?? this.surplusRefunded,
       houseLoanReceipts: houseLoanReceipts ?? this.houseLoanReceipts,
+      houseLoansFunded: houseLoansFunded ?? this.houseLoansFunded,
       isReopened: isReopened ?? this.isReopened,
       dataVersion: dataVersion ?? this.dataVersion,
     );
