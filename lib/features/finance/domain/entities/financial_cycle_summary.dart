@@ -26,6 +26,11 @@ class FinancialCycleSummary extends Equatable {
   /// Empréstimos que o Caixa liberou neste ciclo (já descontados do fôlego).
   final Money houseLoansFunded;
 
+  /// Parte da sobra inicial que é pagamento de empréstimo do Caixa voltando
+  /// para ele (0088, inclusive o que passou por uma caixinha antes). Já está
+  /// somada ao fôlego; serve para mostrar o empréstimo líquido num lugar só.
+  final Money houseLoansReturned;
+
   /// O dinheiro do início do ciclo separado por origem (sobra, empréstimos
   /// pagos de volta, resgates por caixinha). Nulo quando não se sabe.
   final OpeningInflows? openingInflows;
@@ -40,6 +45,7 @@ class FinancialCycleSummary extends Equatable {
     required this.memberExpensesPaid,
     this.vaultReturns = const Money.zero(),
     this.houseLoansFunded = const Money.zero(),
+    this.houseLoansReturned = const Money.zero(),
     this.openingInflows,
   });
 
@@ -59,6 +65,17 @@ class FinancialCycleSummary extends Equatable {
         totalContributions.cents;
     return Money(cents > 0 ? cents : 0);
   }
+
+  /// O que entrou no Caixa sem ser aporte, fora os empréstimos pagos de volta
+  /// (esses aparecem em [houseLoansNet]). É o "Saldo Anterior" do card.
+  Money get previousBalance {
+    final cents = openingBalance.cents - houseLoansReturned.cents;
+    return Money(cents > 0 ? cents : 0);
+  }
+
+  /// Empréstimos que o Caixa liberou menos o que já voltou para ele. Negativo
+  /// quando voltou mais do que saiu no ciclo.
+  Money get houseLoansNet => Money(houseLoansFunded.cents - houseLoansReturned.cents);
 
   /// Sobra do ciclo anterior sem o que voltou das caixinhas: o que pode abater
   /// os aportes do ciclo.
@@ -97,6 +114,7 @@ class FinancialCycleSummary extends Equatable {
         memberExpensesPaid,
         vaultReturns,
         houseLoansFunded,
+        houseLoansReturned,
         openingInflows,
       ];
 }

@@ -443,6 +443,29 @@ class SupabaseFinanceDataSource implements FinanceDataSource {
     }
   }
 
+  /// Pagamentos de empréstimo do ciclo que caíram numa caixinha antes da 0088
+  /// e voltaram ao Caixa como retirada para o ciclo. Já estão nos resgates;
+  /// aqui só para mostrar que são empréstimo, não sobra.
+  Future<Money> _legacyLoanReturnsToCycle(FinancialCycle cycle) async {
+    String dateOnly(DateTime d) => d.toIso8601String().split('T')[0];
+    try {
+      final rows = await OfflineSnapshot.instance.rows(
+        'legacy_loan_returns_${_houseId}_${dateOnly(cycle.startDate)}',
+        () async => await client
+            .from('savings_transactions')
+            .select('amount_cents')
+            .eq('house_id', _houseId)
+            .eq('type', 'withdraw')
+            .like('description', 'Volta ao Caixa do ciclo: %')
+            .gte('cycle_start_date', dateOnly(cycle.startDate))
+            .lte('cycle_start_date', dateOnly(cycle.endDate)),
+      );
+      return Money(rows.fold<int>(0, (acc, r) => acc + ((r['amount_cents'] as num?)?.toInt() ?? 0)));
+    } catch (_) {
+      return const Money.zero();
+    }
+  }
+
   /// Empréstimos que o Caixa do ciclo liberou (0086), fora os recusados.
   Future<Money> _houseLoansFunded(FinancialCycle cycle) async {
     String dateOnly(DateTime d) => d.toIso8601String().split('T')[0];
@@ -644,6 +667,7 @@ class SupabaseFinanceDataSource implements FinanceDataSource {
       final loansFundedFuture = _houseLoansFunded(cycle);
       final loansRepaidFuture = _houseLoansRepaidToCycle(cycle);
       final thirdPartyFuture = _houseInflowsTotal(cycle);
+      final legacyLoanReturnsFuture = _legacyLoanReturnsToCycle(cycle);
       await Future.wait<void>([
         expensesFuture,
         contributionsFuture,
@@ -652,6 +676,7 @@ class SupabaseFinanceDataSource implements FinanceDataSource {
         loansFundedFuture,
         loansRepaidFuture,
         thirdPartyFuture,
+        legacyLoanReturnsFuture,
       ]);
       final loansFunded = await loansFundedFuture;
       final cycleExpenses = await expensesFuture;
@@ -717,6 +742,7 @@ class SupabaseFinanceDataSource implements FinanceDataSource {
         memberExpensesPaid: memberExpensesPaid,
         vaultReturns: vaultReturns,
         houseLoansFunded: loansFunded,
+        houseLoansReturned: inflows.houseLoansRepaid + await legacyLoanReturnsFuture,
         openingInflows: inflows,
       );
     } catch (e) {
