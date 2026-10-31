@@ -866,10 +866,10 @@ class ImportSession {
   }
 
   /// A parcela da linha em relação às compras parceladas. Null para linha sem
-  /// parcela e para a que o usuário mandou lançar de novo.
+  /// parcela (a não ser a compra à vista lançada à mão para um morador) e
+  /// para a que o usuário mandou lançar de novo.
   InstallmentMatch? installmentMatchOf(ImportedStatementLine line) {
     if (!line.isPurchase ||
-        !line.isInstallment ||
         forcedLineIds.contains(line.id) ||
         chosenPrepayment(line) != null) {
       return null;

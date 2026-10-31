@@ -2493,7 +2493,7 @@ class _ImportPageState extends State<ImportPage> {
       children: [
         Text(
           session.installmentMatchOf(line)?.plan?.coveredByLoans ?? false
-              ? 'Parcela de "${session.installmentMatchOf(line)!.plan!.title}", lançada à mão como empréstimo. Não será lançada de novo.'
+              ? '${line.isInstallment ? 'Parcela de' : 'Compra à vista'} "${session.installmentMatchOf(line)!.plan!.title}", lançada à mão como empréstimo. Não será lançada de novo.'
               : 'Já veio em uma importação anterior. Não será lançada de novo.',
           style: const TextStyle(
             fontSize: 12,

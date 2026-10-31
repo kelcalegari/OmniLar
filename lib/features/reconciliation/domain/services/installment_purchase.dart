@@ -37,6 +37,8 @@ class InstallmentPurchase {
   /// Com [debtorMemberId], a compra é do morador: no cartão de um morador
   /// vira um empréstimo do dono com [count] parcelas; no da Casa, um
   /// empréstimo por fatura, cada um saindo do Caixa do ciclo em que ela vence.
+  /// A compra à vista do morador é a de [count] 1: um empréstimo só, e o
+  /// plano de 1 parcela faz a fatura reconhecer a linha.
   ///
   /// Compra já em andamento: [firstNumber] é a próxima parcela que vem. As
   /// faturas continuam contadas da [purchaseDate] (a parcela 2 vem um mês
@@ -57,7 +59,8 @@ class InstallmentPurchase {
     DateTime? now,
     String Function() newId = generateUuidV4,
   }) {
-    if (count < 2 || count > 99) {
+    // À vista (1 vez) só para o morador: a da Casa é uma despesa comum
+    if (count < (debtorMemberId == null ? 2 : 1) || count > 99) {
       throw ArgumentError('A compra parcelada tem de 2 a 99 parcelas.');
     }
     if (firstNumber < 1 || firstNumber > count) {
@@ -123,6 +126,7 @@ class InstallmentPurchase {
     final createdAt = now ?? DateTime.now();
     final lender = card.ownerMemberId ?? P2PLoan.houseLenderId;
     final who = debtorName == null ? '' : ' — $debtorName';
+    final upfront = count == 1;
     if (lender != P2PLoan.houseLenderId) {
       final remaining = numbers.fold<int>(0, (acc, n) => acc + parts[n - 1].cents);
       return InstallmentPurchase(
@@ -131,10 +135,14 @@ class InstallmentPurchase {
         loans: [
           P2PLoan(
             id: newId(),
-            title: firstNumber == 1
+            title: upfront
+                ? '$title (à vista no ${card.name})$who'
+                : firstNumber == 1
                 ? '$title ($count× no ${card.name})$who'
                 : '$title (parcelas $firstNumber a $count no ${card.name})$who',
-            description: 'Compra parcelada em $count vezes no ${card.name}',
+            description: upfront
+                ? 'Compra à vista no ${card.name}'
+                : 'Compra parcelada em $count vezes no ${card.name}',
             totalAmount: Money(remaining),
             lenderMemberId: lender,
             borrowerMemberId: debtorMemberId,
@@ -154,8 +162,10 @@ class InstallmentPurchase {
         for (final number in numbers)
           P2PLoan(
             id: newId(),
-            title: '$title ($number/$count)$who',
-            description: 'Parcela $number de $count no ${card.name}',
+            title: upfront ? '$title (à vista no ${card.name})$who' : '$title ($number/$count)$who',
+            description: upfront
+                ? 'Compra à vista no ${card.name}'
+                : 'Parcela $number de $count no ${card.name}',
             totalAmount: parts[number - 1],
             lenderMemberId: lender,
             borrowerMemberId: debtorMemberId,
