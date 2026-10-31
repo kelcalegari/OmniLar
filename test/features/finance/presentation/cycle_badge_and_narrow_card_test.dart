@@ -103,6 +103,44 @@ void main() {
     expect(find.text('Saldo Anterior'), findsOneWidget);
   });
 
+  testWidgets('empréstimo pago de volta fica em Empréstimos, não no Saldo Anterior', (tester) async {
+    final cycle = CycleSchedule(7).cycleFor(DateTime.now());
+    // Ciclo 07/10 a 06/11/2026: 3.820,79 de aportes, 3.859,11 pagos, 1.734,09
+    // emprestados e devolvidos, e 252,49 de outras entradas
+    final summary = FinancialCycleSummary(
+      cycle: cycle,
+      totalContributions: const Money(382079),
+      totalExpensesPaid: const Money(385911),
+      committedFutureExpenses: const Money.zero(),
+      folego: const Money(21417),
+      memberContributions: const {},
+      memberExpensesPaid: const {},
+      houseLoansFunded: const Money(173409),
+      houseLoansReturned: const Money(173409),
+    );
+    expect(summary.openingBalance, const Money(198658));
+    expect(summary.previousBalance, const Money(25249));
+    expect(summary.houseLoansNet, const Money.zero());
+
+    await tester.pumpWidget(MaterialApp(
+      home: Scaffold(
+        body: SingleChildScrollView(
+          child: FolegoGaugeCard(
+            summary: summary,
+            cycle: cycle,
+            onPreviousCycle: () {},
+            onNextCycle: () {},
+          ),
+        ),
+      ),
+    ));
+
+    expect(find.byKey(const Key('folego_extra_metrics')), findsOneWidget);
+    expect(find.text(const Money(25249).format()), findsOneWidget);
+    expect(find.text(const Money(198658).format()), findsNothing);
+    expect(find.text(const Money(173409).format()), findsNothing);
+  });
+
   testWidgets('em tela estreita o valor e o "Pagar" descem para baixo do título', (tester) async {
     tester.view.devicePixelRatio = 1.0;
     addTearDown(tester.view.resetPhysicalSize);
