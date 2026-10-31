@@ -67,7 +67,7 @@ void main() {
     });
   });
 
-  testWidgets('mostra saldo anterior e empréstimos que entram na conta do fôlego', (tester) async {
+  testWidgets('empréstimos entram no fôlego, mas o card não mostra a linha', (tester) async {
     final cycle = CycleSchedule(5).cycleFor(DateTime.now());
     Future<void> show({required Money loans, required Money folego}) => tester.pumpWidget(MaterialApp(
           home: Scaffold(
@@ -95,15 +95,16 @@ void main() {
     await show(loans: const Money.zero(), folego: const Money(-127758));
     expect(find.byKey(const Key('folego_extra_metrics')), findsNothing);
 
-    // -1.277,58 a vencer - 1.325,28 de empréstimos = -2.602,86
+    // -1.277,58 a vencer - 1.325,28 de empréstimos = -2.602,86: o detalhe do
+    // empréstimo fica só na seção Empréstimos
     await show(loans: const Money(132528), folego: const Money(-260286));
-    expect(find.byKey(const Key('folego_extra_metrics')), findsOneWidget);
-    expect(find.text('Empréstimos'), findsOneWidget);
-    expect(find.text(const Money(132528).format()), findsOneWidget);
-    expect(find.text('Saldo Anterior'), findsOneWidget);
+    expect(find.text(const Money(-260286).format()), findsOneWidget);
+    expect(find.byKey(const Key('folego_extra_metrics')), findsNothing);
+    expect(find.text('Empréstimos'), findsNothing);
+    expect(find.text(const Money(132528).format()), findsNothing);
   });
 
-  testWidgets('empréstimo pago de volta fica em Empréstimos, não no Saldo Anterior', (tester) async {
+  testWidgets('empréstimo pago de volta não entra no Saldo Anterior', (tester) async {
     final cycle = CycleSchedule(7).cycleFor(DateTime.now());
     // Ciclo 07/10 a 06/11/2026: 3.820,79 de aportes, 3.859,11 pagos, 1.734,09
     // emprestados e devolvidos, e 252,49 de outras entradas
@@ -139,6 +140,7 @@ void main() {
     expect(find.text(const Money(25249).format()), findsOneWidget);
     expect(find.text(const Money(198658).format()), findsNothing);
     expect(find.text(const Money(173409).format()), findsNothing);
+    expect(find.text('Empréstimos'), findsNothing);
   });
 
   testWidgets('em tela estreita o valor e o "Pagar" descem para baixo do título', (tester) async {

@@ -260,12 +260,9 @@ class FolegoGaugeCard extends StatelessWidget {
                       ),
                     ],
                   ),
-                  // O fôlego também soma a sobra anterior e desconta os empréstimos
-                  // que o Caixa libera no ciclo; sem essas linhas a conta não fecha.
-                  // Empréstimo pago de volta fica em Empréstimos (líquido), não na sobra.
-                  if (!summary.previousBalance.isZero ||
-                      !summary.houseLoansFunded.isZero ||
-                      !summary.houseLoansReturned.isZero) ...[
+                  // O fôlego também soma a sobra anterior. Os empréstimos do Caixa
+                  // entram na conta, mas o detalhe fica só na seção Empréstimos.
+                  if (!summary.previousBalance.isZero) ...[
                     const SizedBox(height: 12),
                     Row(
                       key: const Key('folego_extra_metrics'),
@@ -279,14 +276,7 @@ class FolegoGaugeCard extends StatelessWidget {
                             color: AppColors.creditGreen,
                           ),
                         ),
-                        Expanded(
-                          child: _buildMetricColumn(
-                            context,
-                            label: 'Empréstimos',
-                            value: summary.houseLoansNet.format(),
-                            color: AppColors.folegoWarning,
-                          ),
-                        ),
+                        const Expanded(child: SizedBox.shrink()),
                         const Expanded(child: SizedBox.shrink()),
                       ],
                     ),
