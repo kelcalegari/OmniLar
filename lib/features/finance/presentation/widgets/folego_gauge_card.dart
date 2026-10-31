@@ -260,6 +260,34 @@ class FolegoGaugeCard extends StatelessWidget {
                       ),
                     ],
                   ),
+                  // O fôlego também soma a sobra anterior e desconta os empréstimos
+                  // que o Caixa libera no ciclo; sem essas linhas a conta não fecha
+                  if (!summary.openingBalance.isZero || !summary.houseLoansFunded.isZero) ...[
+                    const SizedBox(height: 12),
+                    Row(
+                      key: const Key('folego_extra_metrics'),
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Expanded(
+                          child: _buildMetricColumn(
+                            context,
+                            label: 'Saldo Anterior',
+                            value: summary.openingBalance.format(),
+                            color: AppColors.creditGreen,
+                          ),
+                        ),
+                        Expanded(
+                          child: _buildMetricColumn(
+                            context,
+                            label: 'Empréstimos',
+                            value: summary.houseLoansFunded.format(),
+                            color: AppColors.folegoWarning,
+                          ),
+                        ),
+                        const Expanded(child: SizedBox.shrink()),
+                      ],
+                    ),
+                  ],
                   // Indicador de Gasto Diário Seguro (Burn Rate - Fase 2.1)
                   // Só no ciclo em andamento: em ciclo passado ou futuro não há "dias restantes"
                   if (isCurrentCycle) ...[
