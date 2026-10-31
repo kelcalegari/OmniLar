@@ -18,6 +18,7 @@ import '../../domain/entities/financial_cycle_summary.dart';
 import '../../domain/entities/audit_entry.dart';
 import '../../domain/entities/cycle_funding_estimate.dart';
 import '../../domain/services/cycle_funding_estimator.dart';
+import '../../domain/services/self_funded_expenses.dart';
 import '../../domain/entities/house_member.dart';
 import '../../domain/entities/house_initial_balance.dart';
 import '../../domain/entities/closing_defaults.dart';
@@ -356,9 +357,16 @@ class FinanceCubit extends Cubit<FinanceState> {
         cycle: cycle,
         members: members,
         categories: categories,
-        currentCycleExpenses: applyOpenInvoiceChoices(expenses, paymentMethods, const {}),
+        // Despesa paga com saldo próprio (VA, 0122) não pede aporte
+        currentCycleExpenses: SelfFundedExpenses.funded(
+          applyOpenInvoiceChoices(expenses, paymentMethods, const {}),
+          SelfFundedExpenses.methodIds(paymentMethods),
+        ),
         historicalExpenses: const [],
-        historicalExpensesByCycle: _historicalByCycle,
+        historicalExpensesByCycle: [
+          for (final past in _historicalByCycle)
+            SelfFundedExpenses.funded(past, SelfFundedExpenses.methodIds(paymentMethods)),
+        ],
         currentCycleContributions: contributions,
         currentHouseBalance: _openingBalanceOf(summary),
         mode: mode,
@@ -652,7 +660,13 @@ class FinanceCubit extends Cubit<FinanceState> {
           : state.expenses.where((e) => e.id != expenseId).toList();
 
       FinancialCycleSummary? updatedSummary = state.summary;
-      if (deleted != null && state.summary != null) {
+      // Despesa paga com saldo próprio (VA, 0122) nunca entrou no Fôlego
+      final selfFunded = deleted != null &&
+          SelfFundedExpenses.isSelfFunded(
+            deleted,
+            SelfFundedExpenses.methodIds(state.paymentMethods),
+          );
+      if (deleted != null && state.summary != null && !selfFunded) {
         final currentSummary = state.summary!;
         final deletedAmount = deleted.amount;
         if (deleted.isPaid) {

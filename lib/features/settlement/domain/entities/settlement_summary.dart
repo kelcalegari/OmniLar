@@ -44,6 +44,10 @@ class SettlementSummary {
   /// Empréstimos que o Caixa liberou neste ciclo (0086): saem do saldo.
   final Money houseLoansFunded;
 
+  /// Parte de [totalHouseExpenses] paga com saldo próprio, como o VA (0122):
+  /// conta como despesa da casa, mas não consome o aporte de ninguém.
+  final Money selfFundedExpenses;
+
   /// O ciclo já foi fechado antes e está reaberto: só entra no acerto o que
   /// mudou desde o último fechamento.
   final bool isReopened;
@@ -71,6 +75,7 @@ class SettlementSummary {
     this.surplusRefunded = const Money.zero(),
     this.houseLoanReceipts = const Money.zero(),
     this.houseLoansFunded = const Money.zero(),
+    this.selfFundedExpenses = const Money.zero(),
     this.isReopened = false,
     this.dataVersion,
   });
@@ -93,9 +98,12 @@ class SettlementSummary {
     return Money(cents);
   }
 
-  /// Total de despesas estritamente compartilhadas da Casa
+  /// Total de despesas estritamente compartilhadas da Casa (sem as pagas com
+  /// saldo próprio, que não entram no rateio)
   Money get totalSharedHouseExpenses {
-    final diff = totalHouseExpenses.cents - totalPersonalExpensesInBills.cents;
+    final diff = totalHouseExpenses.cents -
+        selfFundedExpenses.cents -
+        totalPersonalExpensesInBills.cents;
     return diff > 0 ? Money(diff) : totalHouseExpenses;
   }
 
@@ -118,6 +126,7 @@ class SettlementSummary {
     Money? surplusRefunded,
     Money? houseLoanReceipts,
     Money? houseLoansFunded,
+    Money? selfFundedExpenses,
     bool? isReopened,
     String? dataVersion,
   }) {
@@ -140,6 +149,7 @@ class SettlementSummary {
       surplusRefunded: surplusRefunded ?? this.surplusRefunded,
       houseLoanReceipts: houseLoanReceipts ?? this.houseLoanReceipts,
       houseLoansFunded: houseLoansFunded ?? this.houseLoansFunded,
+      selfFundedExpenses: selfFundedExpenses ?? this.selfFundedExpenses,
       isReopened: isReopened ?? this.isReopened,
       dataVersion: dataVersion ?? this.dataVersion,
     );

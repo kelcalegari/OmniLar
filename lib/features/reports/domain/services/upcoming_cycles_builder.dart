@@ -184,6 +184,8 @@ class UpcomingCyclesBuilder {
         contributions: const [],
         loans: loansInCycle,
         customContributionTargets: customTargets,
+        // Despesa paga com saldo próprio (VA, 0122) fica fora do acerto
+        paymentMethods: paymentMethods,
       );
       final preview = const CyclePreviewBuilder().build(
         summary: summary,

@@ -424,7 +424,7 @@ extension _SettingsGroupViews on _SettingsPageState {
         final payerText = payer == null ? '' : ' • Fatura: ${payer.name.split(' ').first}';
         return 'Fecha dia ${pm.closingDay} • Vence dia ${pm.dueDay}$payerText';
       }
-      return switch (pm.type) {
+      final kind = switch (pm.type) {
         PaymentMethodType.card => 'Cartão de crédito',
         PaymentMethodType.vr => 'Vale-refeição',
         PaymentMethodType.va => 'Vale-alimentação',
@@ -432,6 +432,8 @@ extension _SettingsGroupViews on _SettingsPageState {
         PaymentMethodType.cash => 'Dinheiro',
         _ => 'Conta / débito imediato',
       };
+      // Saldo próprio (0122)
+      return pm.consumesContributions ? kind : '$kind • Não consome aportes';
     }
 
     final financeCubit = context.read<FinanceCubit>();

@@ -58,6 +58,11 @@ class PaymentMethod extends Equatable {
   /// Em qual ciclo as compras deste cartão contam (0104).
   final CardCycleAssignment cycleAssignment;
 
+  /// Falso para saldo próprio, como o vale-alimentação (0122): a despesa paga
+  /// com esta forma conta como despesa da casa, mas não entra no rateio, não
+  /// gera reembolso, não sai do Caixa e não mexe no Fôlego.
+  final bool consumesContributions;
+
   const PaymentMethod({
     required this.id,
     required this.name,
@@ -68,6 +73,7 @@ class PaymentMethod extends Equatable {
     this.colorHex,
     this.usualInvoicePayerId,
     this.cycleAssignment = CardCycleAssignment.invoiceDue,
+    this.consumesContributions = true,
   });
 
   bool get isBenefit => type == PaymentMethodType.vr || type == PaymentMethodType.va;
@@ -88,6 +94,7 @@ class PaymentMethod extends Equatable {
     String? usualInvoicePayerId,
     bool clearUsualInvoicePayer = false,
     CardCycleAssignment? cycleAssignment,
+    bool? consumesContributions,
   }) {
     return PaymentMethod(
       id: id ?? this.id,
@@ -100,9 +107,10 @@ class PaymentMethod extends Equatable {
       usualInvoicePayerId:
           clearUsualInvoicePayer ? null : (usualInvoicePayerId ?? this.usualInvoicePayerId),
       cycleAssignment: cycleAssignment ?? this.cycleAssignment,
+      consumesContributions: consumesContributions ?? this.consumesContributions,
     );
   }
 
   @override
-  List<Object?> get props => [id, name, type, ownerMemberId, closingDay, dueDay, colorHex, usualInvoicePayerId, cycleAssignment];
+  List<Object?> get props => [id, name, type, ownerMemberId, closingDay, dueDay, colorHex, usualInvoicePayerId, cycleAssignment, consumesContributions];
 }

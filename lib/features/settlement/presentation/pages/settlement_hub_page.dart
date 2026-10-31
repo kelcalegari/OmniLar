@@ -1046,6 +1046,34 @@ class _SettlementHubContent extends StatelessWidget {
                 ],
               ),
             ],
+            // Pago com saldo próprio (VA, 0122): é despesa da casa, mas não
+            // sai do Caixa nem do aporte de ninguém
+            if (summary.selfFundedExpenses.cents > 0) ...[
+              const SizedBox(height: 4),
+              Row(
+                key: const ValueKey('settlement_self_funded_expenses'),
+                children: [
+                  Expanded(
+                    child: Text(
+                      '↳ Pago com saldo próprio (não consome aportes)',
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w500,
+                        color: Colors.grey.shade600,
+                      ),
+                    ),
+                  ),
+                  PrivacySensitiveText(
+                    summary.selfFundedExpenses.formatted,
+                    style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w600,
+                      color: Colors.grey.shade600,
+                    ),
+                  ),
+                ],
+              ),
+            ],
             const Divider(height: 20),
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,

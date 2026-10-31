@@ -1639,6 +1639,8 @@ class _SettingsPageState extends State<SettingsPage> {
     // Em qual ciclo a compra conta (0104)
     CardCycleAssignment cycleAssignment =
         existingPm?.cycleAssignment ?? CardCycleAssignment.invoiceDue;
+    // Saldo próprio, como o VA (0122): conta como despesa sem consumir aportes
+    bool consumesContributions = existingPm?.consumesContributions ?? true;
     int closingDay = existingPm?.closingDay ?? 25;
     int dueDay = existingPm?.dueDay ?? 5;
     final isEditing = existingPm != null;
@@ -1919,6 +1921,25 @@ class _SettingsPageState extends State<SettingsPage> {
                       },
                     ),
                   ],
+                  // Cartão é pago pela fatura; o saldo próprio vale para as demais formas
+                  if (selectedType != PaymentMethodType.card) ...[
+                    const SizedBox(height: 8),
+                    SwitchListTile(
+                      key: const ValueKey('pm_consumes_contributions'),
+                      contentPadding: EdgeInsets.zero,
+                      title: const Text(
+                        'Não consome aportes',
+                        style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+                      ),
+                      subtitle: const Text(
+                        'Saldo próprio, como o vale-alimentação: a despesa conta na casa, '
+                        'mas não entra no rateio, não gera reembolso e não sai do Caixa.',
+                        style: TextStyle(fontSize: 12),
+                      ),
+                      value: !consumesContributions,
+                      onChanged: (val) => setDialogState(() => consumesContributions = !val),
+                    ),
+                  ],
                 ],
               ),
             ),
@@ -1953,6 +1974,8 @@ class _SettingsPageState extends State<SettingsPage> {
                       cycleAssignment: selectedType == PaymentMethodType.card
                           ? cycleAssignment
                           : CardCycleAssignment.invoiceDue,
+                      consumesContributions:
+                          selectedType == PaymentMethodType.card || consumesContributions,
                     );
 
                     final messenger = ScaffoldMessenger.of(context);
@@ -1981,6 +2004,8 @@ class _SettingsPageState extends State<SettingsPage> {
                       cycleAssignment: selectedType == PaymentMethodType.card
                           ? cycleAssignment
                           : CardCycleAssignment.invoiceDue,
+                      consumesContributions:
+                          selectedType == PaymentMethodType.card || consumesContributions,
                     );
 
                     final messenger = ScaffoldMessenger.of(context);
