@@ -275,7 +275,7 @@ class _P2PPageContentState extends State<_P2PPageContent> {
                                   const Icon(Icons.check_circle_outline_rounded, color: Colors.grey, size: 20),
                                   const SizedBox(width: 8),
                                   Text(
-                                    'Histórico / Quitados (${state.settledLoans.length})',
+                                    'Histórico / Quitados (${groupInstallmentLoans(state.settledLoans, all: state.allLoans).length})',
                                     style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
                                   ),
                                 ],
@@ -379,7 +379,7 @@ class _P2PPageContentState extends State<_P2PPageContent> {
                             children: [
                               const Icon(Icons.people_alt_outlined, size: 16, color: AppColors.primary),
                               const SizedBox(width: 4),
-                              Text('Todos (${activeAllLoans.length})'),
+                              Text('Todos (${groupInstallmentLoans(activeAllLoans, all: state.allLoans).length})'),
                             ],
                           ),
                         ),
@@ -389,7 +389,7 @@ class _P2PPageContentState extends State<_P2PPageContent> {
                             children: [
                               const Icon(Icons.check_circle_outline_rounded, size: 16, color: Colors.grey),
                               const SizedBox(width: 4),
-                              Text('Quitados (${state.settledLoans.length})'),
+                              Text('Quitados (${groupInstallmentLoans(state.settledLoans, all: state.allLoans).length})'),
                             ],
                           ),
                         ),
