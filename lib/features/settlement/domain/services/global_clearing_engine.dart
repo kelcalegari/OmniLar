@@ -85,6 +85,11 @@ class GlobalClearingEngine {
     final Map<String, List<ExpenseShareAudit>> memberExpenseShares = {
       for (final m in members) m.id: [],
     };
+    // Empréstimos que o Caixa liberou neste ciclo (0086): o dinheiro saiu dele
+    final houseLoansFundedCents = loans
+        .where((loan) => loan.fundedFromCycle(cycle))
+        .fold<int>(0, (acc, loan) => acc + loan.totalAmount.cents);
+
     int bucketDeficitCents = 0;
     int deficitCoveredCents = 0;
     int deficitAlreadyCoveredCents = 0;
@@ -265,14 +270,34 @@ class GlobalClearingEngine {
         ),
         ...openingParts.where((p) => p.rule == OpeningBalanceRule.reduceQuotas),
       ];
-      for (final part in covering) {
-        final onExcessCents = part.amount.cents.clamp(0, bucketDeficitCents).toInt();
+      // O que o Caixa emprestou neste ciclo já saiu do dinheiro de abertura e
+      // não cobre o excedente: a devolução do empréstimo volta pela Reserva e
+      // seria contada duas vezes. Sai primeiro do que veio dos empréstimos e
+      // das caixinhas, por último das entradas de fora.
+      final freeCents = [for (final part in covering) part.amount.cents];
+      var lentCents = houseLoansFundedCents;
+      for (final kind in const [
+        OpeningInflowKind.houseLoansRepaid,
+        OpeningInflowKind.vaultWithdrawal,
+        OpeningInflowKind.rolledSurplus,
+        OpeningInflowKind.thirdParty,
+      ]) {
+        for (var i = 0; i < covering.length && lentCents > 0; i++) {
+          if (covering[i].kind != kind) continue;
+          final taken = math.min(lentCents, freeCents[i]);
+          freeCents[i] -= taken;
+          lentCents -= taken;
+        }
+      }
+      for (var i = 0; i < covering.length; i++) {
+        final part = covering[i];
+        final onExcessCents = freeCents[i].clamp(0, bucketDeficitCents).toInt();
         bucketDeficitCents -= onExcessCents;
         // Abater os aportes: o que a parte não usou no excedente reduz o valor
         // fixo de cada um, na proporção dele
         if (part.rule == OpeningBalanceRule.reduceQuotas) {
           applyOpeningBalanceToTargets(
-            part.amount.cents - onExcessCents,
+            freeCents[i] - onExcessCents,
             {for (final m in members) m.id: customContributionTargets[m.id]?.cents ?? 0},
             'Rateio proporcional ao aporte fixo',
             title: abatementTitle(part),
@@ -493,11 +518,6 @@ class GlobalClearingEngine {
         houseLoanReceiptsCents += installment.remainingAmount.cents;
       }
     }
-
-    // Empréstimos que o Caixa liberou neste ciclo (0086): o dinheiro saiu dele
-    final houseLoansFundedCents = loans
-        .where((loan) => loan.fundedFromCycle(cycle))
-        .fold<int>(0, (acc, loan) => acc + loan.totalAmount.cents);
 
     int treasuryAfterClosing() =>
         openingBalance.cents +
@@ -770,6 +790,7 @@ class GlobalClearingEngine {
       thirdPartyInflows: Money(math.max(0, openingInflows?.thirdParty.cents ?? 0)),
       surplusRefunded: Money(surplusRefundedCents),
       houseLoanReceipts: Money(houseLoanReceiptsCents),
+      houseLoansFunded: Money(houseLoansFundedCents),
     );
   }
 

@@ -807,6 +807,11 @@ class _SettlementHubContent extends StatelessWidget {
       summary.houseTreasuryBalance.cents + summary.surplusRefunded.cents,
     );
     final isSettled = summary.status == SettlementStatus.settled;
+    // Aporte devido menos o pago: positivo ainda vai entrar, negativo entrou a mais
+    final contributionGap = Money(
+      summary.memberBalances.fold<int>(0, (acc, m) => acc + m.contributionDue.cents) -
+          summary.totalContributions.cents,
+    );
 
     return Card(
       elevation: 0,
@@ -941,6 +946,54 @@ class _SettlementHubContent extends StatelessWidget {
               ],
             ),
             const SizedBox(height: 6),
+            // O saldo conta o aporte devido, não o pago: a diferença tem linha
+            // própria para a conta da tela fechar
+            if (contributionGap.cents != 0) ...[
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Expanded(
+                    child: Text(
+                      contributionGap.cents > 0
+                          ? 'Aportes ainda a receber:'
+                          : 'Aportes acima do devido (fora do saldo):',
+                      style: const TextStyle(color: Colors.grey),
+                    ),
+                  ),
+                  PrivacySensitiveText(
+                    contributionGap.cents > 0
+                        ? contributionGap.formatted
+                        : '-${Money(-contributionGap.cents).formatted}',
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      color: contributionGap.cents > 0 ? AppColors.creditGreen : Colors.grey,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 6),
+            ],
+            if (summary.houseLoansFunded.cents > 0) ...[
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Expanded(
+                    child: Text(
+                      'Empréstimos pagos pelo Caixa:',
+                      style: TextStyle(color: Colors.grey),
+                    ),
+                  ),
+                  PrivacySensitiveText(
+                    '-${summary.houseLoansFunded.formatted}',
+                    style: const TextStyle(
+                      fontWeight: FontWeight.bold,
+                      color: AppColors.debtRed,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 6),
+            ],
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
