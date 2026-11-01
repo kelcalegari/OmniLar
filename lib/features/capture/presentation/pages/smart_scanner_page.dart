@@ -89,6 +89,11 @@ class _SmartScannerPageState extends State<SmartScannerPage>
   // Boleto nasce a pagar; nota e cupom, já pagos (os dois podem ser trocados)
   bool _alreadyPaid = false;
 
+  /// Boleto de conta do mês (luz, água, condomínio...): já entra como conta
+  /// recorrente, que se repete todo mês no dia deste vencimento.
+  bool _markRecurring = false;
+  bool _recurringVariable = true;
+
   /// Nota e cupom: dia da compra (já paga) ou do vencimento (a pagar).
   DateTime _documentDate = DateTime.now();
   DateTime _paidOn = DateTime.now();
@@ -182,6 +187,8 @@ class _SmartScannerPageState extends State<SmartScannerPage>
       selectedPaymentMethodId: _selectedPaymentMethodId,
       dueDate: _dueDate,
       alreadyPaid: _alreadyPaid,
+      markRecurring: _markRecurring,
+      recurringVariable: _recurringVariable,
       documentDate: _documentDate,
       paidOn: _paidOn,
       attachmentFile: _scannedAttachmentFile,
@@ -228,6 +235,8 @@ class _SmartScannerPageState extends State<SmartScannerPage>
       _selectedPaymentMethodId = draft.selectedPaymentMethodId;
       _dueDate = draft.dueDate;
       _alreadyPaid = draft.alreadyPaid;
+      _markRecurring = isBoleto && draft.markRecurring;
+      _recurringVariable = draft.recurringVariable;
       _documentDate = draft.documentDate;
       _paidOn = draft.paidOn;
       _scannedAttachmentFile = draft.attachmentFile;
@@ -1051,7 +1060,7 @@ class _SmartScannerPageState extends State<SmartScannerPage>
     final typedTitle = _titleController.text.trim();
 
     final known = _useKnownBill;
-    final HouseExpense pending;
+    HouseExpense pending;
     if (known != null) {
       pending = known.copyWith(
         amount: proposal.totalAmount,
@@ -1129,6 +1138,16 @@ class _SmartScannerPageState extends State<SmartScannerPage>
         attachmentSizeBytes: attachmentPath != null
             ? _scannedAttachmentFile?.sizeBytes
             : null,
+      );
+    }
+
+    // Conta recorrente: este lançamento vira a matriz da série, que se repete
+    // todo mês no dia do vencimento (como "Repetir todo mês" no lançamento manual)
+    if (_markRecurring && _canMarkRecurring) {
+      pending = pending.copyWith(
+        isRecurring: true,
+        isVariable: _recurringVariable,
+        dueDay: dueDate.day,
       );
     }
 
@@ -1586,6 +1605,9 @@ class _SmartScannerPageState extends State<SmartScannerPage>
     });
 
     if (proposal.documentType == DocumentType.boleto) {
+      final recurringNote = _markRecurring && _canMarkRecurring
+          ? ' Repete todo mês no dia ${_dueDate!.day}.'
+          : '';
       try {
         await _confirmBoleto(proposal);
         if (!mounted) return;
@@ -1604,8 +1626,8 @@ class _SmartScannerPageState extends State<SmartScannerPage>
                   ? 'Código guardado na fatura ${_useInvoice!.card.name} que vence em '
                         '${DateFormat('dd/MM').format(_useInvoice!.dueDate)}.'
                   : _alreadyPaid
-                  ? 'Boleto lançado como pago (${proposal.totalAmount.format()}).'
-                  : 'Boleto lançado como conta a pagar, vence em ${DateFormat('dd/MM').format(_dueDate!)}.',
+                  ? 'Boleto lançado como pago (${proposal.totalAmount.format()}).$recurringNote'
+                  : 'Boleto lançado como conta a pagar, vence em ${DateFormat('dd/MM').format(_dueDate!)}.$recurringNote',
             ),
           ),
         );
@@ -2246,6 +2268,8 @@ class _SmartScannerPageState extends State<SmartScannerPage>
       _selectedCategoryId = null;
       _dueDate = isBoleto ? proposal.dueDate : null;
       _alreadyPaid = !isBoleto;
+      _markRecurring = false;
+      _recurringVariable = true;
       _documentDate = proposal.date;
       _paidOn = DateTime.now();
       _knownBills = const [];
@@ -3161,8 +3185,108 @@ class _SmartScannerPageState extends State<SmartScannerPage>
             style: theme.textTheme.bodySmall?.copyWith(fontSize: 12),
           ),
         const SizedBox(height: 12),
+        if (_canMarkRecurring) ...[
+          _recurringToggle(theme),
+          const SizedBox(height: 12),
+        ],
       ],
     ];
+  }
+
+  /// Dá para marcar como recorrente: não é boleto de fatura e a conta prevista
+  /// escolhida (se houver) ainda não faz parte de uma série.
+  bool get _canMarkRecurring {
+    if (_useInvoice != null) return false;
+    final known = _useKnownBill;
+    return known == null ||
+        (!known.isRecurring && known.recurringSeriesId == null);
+  }
+
+  /// "Repetir todo mês": a conta (luz, água, condomínio...) passa a ser
+  /// prevista nos próximos meses, no dia do vencimento deste boleto.
+  Widget _recurringToggle(ThemeData theme) {
+    final dueDay = _dueDate?.day;
+    return Material(
+      color: _markRecurring
+          ? AppColors.primary.withValues(alpha: 0.06)
+          : theme.cardColor,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+        side: BorderSide(
+          color: _markRecurring
+              ? AppColors.primary.withValues(alpha: 0.4)
+              : theme.dividerColor,
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          SwitchListTile(
+            key: const Key('scan_mark_recurring'),
+            secondary: Icon(
+              Icons.repeat_rounded,
+              color: _markRecurring ? AppColors.primary : Colors.grey,
+            ),
+            title: const Text(
+              'Repetir todo mês (conta recorrente)',
+              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+            ),
+            subtitle: Text(
+              _markRecurring
+                  ? 'Fica prevista todo mês${dueDay != null ? ', vencendo no dia $dueDay' : ''}.'
+                  : 'Para contas como luz, água, gás, internet ou condomínio.',
+              style: const TextStyle(fontSize: 12),
+            ),
+            value: _markRecurring,
+            onChanged: _isSubmitting
+                ? null
+                : (value) {
+                    setState(() => _markRecurring = value);
+                    _scheduleDraftSave();
+                  },
+          ),
+          if (_markRecurring)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: ChoiceChip(
+                      avatar: const Icon(Icons.trending_up_rounded, size: 16),
+                      label: const Center(child: Text('Valor variável')),
+                      selected: _recurringVariable,
+                      selectedColor: AppColors.primary.withValues(alpha: 0.15),
+                      onSelected: _isSubmitting
+                          ? null
+                          : (selected) {
+                              if (!selected) return;
+                              setState(() => _recurringVariable = true);
+                              _scheduleDraftSave();
+                            },
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: ChoiceChip(
+                      avatar: const Icon(Icons.lock_clock_rounded, size: 16),
+                      label: const Center(child: Text('Valor fixo')),
+                      selected: !_recurringVariable,
+                      selectedColor: AppColors.primary.withValues(alpha: 0.15),
+                      onSelected: _isSubmitting
+                          ? null
+                          : (selected) {
+                              if (!selected) return;
+                              setState(() => _recurringVariable = false);
+                              _scheduleDraftSave();
+                            },
+                    ),
+                  ),
+                ],
+              ),
+            ),
+        ],
+      ),
+    );
   }
 }
 

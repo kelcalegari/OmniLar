@@ -20,6 +20,10 @@ class CaptureDraft {
   final String? selectedPaymentMethodId;
   final DateTime? dueDate;
   final bool alreadyPaid;
+
+  /// Boleto: cadastrar como conta recorrente (e se o valor varia todo mês).
+  final bool markRecurring;
+  final bool recurringVariable;
   final DateTime documentDate;
   final DateTime paidOn;
   final ReceiptAttachmentFile? attachmentFile;
@@ -35,6 +39,8 @@ class CaptureDraft {
     this.selectedPaymentMethodId,
     this.dueDate,
     required this.alreadyPaid,
+    this.markRecurring = false,
+    this.recurringVariable = true,
     required this.documentDate,
     required this.paidOn,
     this.attachmentFile,
@@ -130,6 +136,8 @@ class CaptureDraftCodec {
       if (draft.selectedPaymentMethodId != null) 'selectedPaymentMethodId': draft.selectedPaymentMethodId,
       if (draft.dueDate != null) 'dueDate': draft.dueDate!.toIso8601String(),
       'alreadyPaid': draft.alreadyPaid,
+      if (draft.markRecurring) 'markRecurring': true,
+      if (!draft.recurringVariable) 'recurringVariable': false,
       'documentDate': draft.documentDate.toIso8601String(),
       'paidOn': draft.paidOn.toIso8601String(),
       if (canPersistBytes)
@@ -177,6 +185,8 @@ class CaptureDraftCodec {
         selectedPaymentMethodId: json['selectedPaymentMethodId'] as String?,
         dueDate: DateTime.tryParse(json['dueDate'] as String? ?? ''),
         alreadyPaid: json['alreadyPaid'] as bool? ?? (proposal.documentType != DocumentType.boleto),
+        markRecurring: json['markRecurring'] as bool? ?? false,
+        recurringVariable: json['recurringVariable'] as bool? ?? true,
         documentDate: DateTime.tryParse(json['documentDate'] as String? ?? '') ?? proposal.date,
         paidOn: DateTime.tryParse(json['paidOn'] as String? ?? '') ?? DateTime.now(),
         attachmentFile: attachment,
