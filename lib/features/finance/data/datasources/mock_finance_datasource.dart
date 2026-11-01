@@ -983,6 +983,9 @@ class MockFinanceDataSource implements FinanceDataSource {
   Future<HouseInitialBalance> getHouseInitialBalance() async => _initialBalance;
 
   @override
+  Future<Map<String, Money>?> getSettledContributionDues(FinancialCycle cycle) async => null;
+
+  @override
   Future<HouseInitialBalance> setHouseInitialBalance({
     required Money reserve,
     required Money cash,

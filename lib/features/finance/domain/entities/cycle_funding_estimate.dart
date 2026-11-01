@@ -39,6 +39,10 @@ class MemberFundingQuote {
   final Money pendingAmount;
   final String ruleDescription;
 
+  /// Ciclo já fechado: a cota é a gravada no fechamento e o que faltava foi
+  /// acertado nele. Mudar o rateio depois não mexe nela.
+  final bool settledAtClosing;
+
   const MemberFundingQuote({
     required this.memberId,
     required this.memberName,
@@ -47,9 +51,10 @@ class MemberFundingQuote {
     this.paidOutOfPocket = const Money.zero(),
     required this.pendingAmount,
     required this.ruleDescription,
+    this.settledAtClosing = false,
   });
 
-  bool get isFulfilled => pendingAmount.isZero;
+  bool get isFulfilled => settledAtClosing || pendingAmount.isZero;
 }
 
 /// Projeção completa de aportes necessários no início do ciclo financeiro
@@ -77,6 +82,10 @@ class CycleFundingEstimate {
     required this.netFundingRequired,
     required this.memberQuotes,
   });
+
+  /// Ciclo fechado: as cotas são as do fechamento, não uma estimativa.
+  bool get isSettled =>
+      memberQuotes.isNotEmpty && memberQuotes.every((q) => q.settledAtClosing);
 
   Money get totalVariablesEstimated => variableCategoryEstimates.fold(
     const Money.zero(),

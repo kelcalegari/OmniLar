@@ -1686,7 +1686,7 @@ class _SettlementHubContent extends StatelessWidget {
                             'Sobra de ${availableSurplus(summary, state.options).formatted} fica no Caixa como folga do próximo ciclo.',
                           SurplusAction.toVault => targetVault != null
                               ? 'Sobra de ${availableSurplus(summary, state.options).formatted} será guardada na caixinha "${targetVault.name}".'
-                              : 'Sobra de ${availableSurplus(summary, state.options).formatted} não será movimentada: crie uma caixinha para guardá-la.',
+                              : 'Sobra de ${availableSurplus(summary, state.options).formatted} fica no Caixa como folga do próximo ciclo (nenhuma caixinha criada).',
                         },
                         style: const TextStyle(
                           fontSize: 12,
@@ -2192,7 +2192,7 @@ class _SettlementHubContent extends StatelessWidget {
       SurplusAction.rollover => 'Deixar no Caixa como folga do próximo ciclo',
       SurplusAction.toVault => targetVault != null
           ? 'Guardar sobra na caixinha "${targetVault.name}"'
-          : 'Não será movimentada (nenhuma caixinha criada)',
+          : 'Fica no Caixa como folga do próximo ciclo (nenhuma caixinha criada)',
     };
 
     final cubit = context.read<SettlementCubit>();

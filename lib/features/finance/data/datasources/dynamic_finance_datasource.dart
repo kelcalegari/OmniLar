@@ -163,6 +163,10 @@ class DynamicFinanceDataSource implements FinanceDataSource {
   Future<HouseInitialBalance> getHouseInitialBalance() => _active.getHouseInitialBalance();
 
   @override
+  Future<Map<String, Money>?> getSettledContributionDues(FinancialCycle cycle) =>
+      _active.getSettledContributionDues(cycle);
+
+  @override
   Future<HouseInitialBalance> setHouseInitialBalance({
     required Money reserve,
     required Money cash,

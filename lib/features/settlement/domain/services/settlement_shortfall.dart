@@ -46,3 +46,15 @@ Money availableSurplus(SettlementSummary summary, SettlementOptions? options) {
       summary.houseTreasuryBalance.cents - unpaidToHouse(summary, options).cents;
   return Money(cents > 0 ? cents : 0);
 }
+
+/// A sobra fica no Caixa como folga do próximo ciclo: por escolha, ou porque
+/// "guardar na caixinha" ficou sem caixinha de destino. Sem isso ela sumiria:
+/// nem iria para uma caixinha, nem viraria o Saldo Anterior do próximo ciclo.
+bool surplusStaysInCaixa(SettlementOptions? options) {
+  final o = options ?? const SettlementOptions();
+  return switch (o.surplusAction) {
+    SurplusAction.rollover => true,
+    SurplusAction.toVault => o.targetVaultId == null,
+    SurplusAction.refund => false,
+  };
+}

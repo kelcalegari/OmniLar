@@ -292,8 +292,7 @@ class SupabaseSettlementDataSource implements SettlementDataSource {
     }
 
     // Sobra deixada no Caixa como folga do próximo ciclo
-    final surplusRolledCents =
-        options?.surplusAction == SurplusAction.rollover ? surplus.cents : 0;
+    final surplusRolledCents = surplusStaysInCaixa(options) ? surplus.cents : 0;
 
     // Excedente do balde coberto pela Caixinha escolhida
     if (summary.deficitCoveredByVault.cents > 0 && options?.deficitVaultId != null) {
