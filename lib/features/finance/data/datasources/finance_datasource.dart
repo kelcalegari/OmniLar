@@ -104,6 +104,10 @@ abstract class FinanceDataSource {
   /// Dinheiro que a casa já tinha ao começar (0093).
   Future<HouseInitialBalance> getHouseInitialBalance();
 
+  /// Cota de cada morador gravada no fechamento de [cycle] (memberId -> valor).
+  /// Nulo se o ciclo não está fechado ou o fechamento não guardou o retrato.
+  Future<Map<String, Money>?> getSettledContributionDues(FinancialCycle cycle);
+
   /// Grava a reserva guardada (na Reserva da Casa) e o saldo na conta da casa
   /// (sobra do ciclo que começa em [cycleStart]). Gravar de novo troca os
   /// valores, sem somar. Só administradores.

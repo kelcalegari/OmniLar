@@ -338,7 +338,7 @@ class MockSettlementDataSource implements SettlementDataSource {
     }
 
     // Sobra deixada no Caixa como folga do próximo ciclo ou devolvida aos moradores
-    if (options?.surplusAction == SurplusAction.rollover && surplus.cents > 0) {
+    if (surplusStaysInCaixa(options) && surplus.cents > 0) {
       _surplusRolled[summary.cycle] =
           (_surplusRolled[summary.cycle] ?? 0) + surplus.cents;
     }

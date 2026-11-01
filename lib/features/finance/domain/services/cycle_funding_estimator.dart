@@ -34,6 +34,7 @@ class CycleFundingEstimator {
     OpeningInflowRules openingInflowRules = const OpeningInflowRules(),
     List<SavingsVault> vaults = const [],
     DateTime? today,
+    Map<String, Money>? settledQuotas,
   }) {
     // Meta mensal das caixinhas marcadas para entrar na cota (0102). As não
     // marcadas não somam nada: o planejador se comporta como antes.
@@ -134,7 +135,7 @@ class CycleFundingEstimator {
     final netFundingRequired = Money(netFundingCents);
 
     // 5. Repartição das cotas recomendadas entre os membros
-    final memberQuotes = _calculateMemberQuotes(
+    final calculatedQuotes = _calculateMemberQuotes(
       members: members,
       houseExpenses: houseExpenses,
       variableRemainder: Money(variableRemainderCents + vaultGoalsCents),
@@ -147,6 +148,22 @@ class CycleFundingEstimator {
       ),
       contributions: currentCycleContributions,
     );
+    // Ciclo fechado: vale a cota gravada no fechamento, não o rateio de agora
+    final memberQuotes = settledQuotas == null
+        ? calculatedQuotes
+        : [
+            for (final q in calculatedQuotes)
+              MemberFundingQuote(
+                memberId: q.memberId,
+                memberName: q.memberName,
+                recommendedAmount: settledQuotas[q.memberId] ?? const Money.zero(),
+                alreadyContributed: q.alreadyContributed,
+                paidOutOfPocket: q.paidOutOfPocket,
+                pendingAmount: const Money.zero(),
+                ruleDescription: 'Cota do fechamento do ciclo',
+                settledAtClosing: true,
+              ),
+          ];
 
     return CycleFundingEstimate(
       cycle: cycle,

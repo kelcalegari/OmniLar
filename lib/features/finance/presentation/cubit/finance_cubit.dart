@@ -200,6 +200,10 @@ class FinanceCubit extends Cubit<FinanceState> {
         () => _memberSettings?.load(),
       ).catchError((_) => null);
       // Renda dos moradores que o banco libera para este usuário (0102)
+      // Cotas gravadas no fechamento, se o ciclo já foi fechado
+      final settledQuotasFuture = Future<Map<String, Money>?>.sync(
+        () => _repository.getSettledContributionDues(targetCycle),
+      ).catchError((_) => null);
       final incomesFuture = Future<Map<String, Money>?>.sync(
         () => _repository.getMemberIncomes(),
       ).catchError((_) => null);
@@ -227,6 +231,7 @@ class FinanceCubit extends Cubit<FinanceState> {
         initialBalanceFuture,
         memberSettingsFuture,
         incomesFuture,
+        settledQuotasFuture,
       ]);
       // Outro ciclo foi pedido enquanto este carregava: o dele é que vale
       if (sequence != _loadSequence || isClosed) return;
@@ -264,6 +269,7 @@ class FinanceCubit extends Cubit<FinanceState> {
 
       // Sem histórico (primeiro ciclo da casa), a média sai do próprio ciclo
       _historicalByCycle = historicalByCycle.any((c) => c.isNotEmpty) ? historicalByCycle : [expenses];
+      _settledQuotas = await settledQuotasFuture;
       final keepSessionChoices = state.houseSettings == settings;
       final mode = keepSessionChoices ? state.fundingEstimateMode : settings.plannerMode;
       final overrides = keepSessionChoices ? state.customCategoryOverrides : settings.categoryOverrides;
@@ -319,6 +325,9 @@ class FinanceCubit extends Cubit<FinanceState> {
   /// Histórico usado nas médias do planejador: as despesas de cada ciclo
   /// anterior (quantos a casa escolheu), do mais recente para o mais antigo.
   List<List<HouseExpense>> _historicalByCycle = const [];
+
+  /// Cotas do fechamento do ciclo carregado (nulo se ele ainda está aberto).
+  Map<String, Money>? _settledQuotas;
 
   Future<List<List<HouseExpense>>> _expensesOf(Iterable<FinancialCycle> cycles) =>
       Future.wait<List<HouseExpense>>([
@@ -378,6 +387,7 @@ class FinanceCubit extends Cubit<FinanceState> {
         openingInflowRules: (settings ?? state.houseSettings).inflowRules,
         // Só as caixinhas marcadas somam a meta mensal à cota (0102)
         vaults: vaults ?? state.savingsVaults,
+        settledQuotas: _settledQuotas,
       );
 
   /// Sobra que o ciclo anterior deixou no Caixa. O fôlego já desconta as

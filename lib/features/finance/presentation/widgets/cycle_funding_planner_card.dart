@@ -209,8 +209,10 @@ class CycleFundingPlannerCard extends StatelessWidget {
             const Divider(height: 20),
 
             // Cotas por Membro
-            const Text(
-              'Cota Recomendada no Início do Ciclo:',
+            Text(
+              estimate.isSettled
+                  ? 'Cotas Gravadas no Fechamento:'
+                  : 'Cota Recomendada no Início do Ciclo:',
               style: TextStyle(fontWeight: FontWeight.w600, fontSize: 12),
             ),
             const SizedBox(height: 8),
@@ -295,7 +297,16 @@ class CycleFundingPlannerCard extends StatelessWidget {
                       fontSize: 13,
                     ),
                   ),
-                  if (quote.isFulfilled)
+                  if (quote.settledAtClosing)
+                    const Text(
+                      'Ciclo fechado',
+                      style: TextStyle(
+                        fontSize: 10,
+                        color: AppColors.creditGreen,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    )
+                  else if (quote.isFulfilled)
                     const Text(
                       '100% Aportado',
                       style: TextStyle(

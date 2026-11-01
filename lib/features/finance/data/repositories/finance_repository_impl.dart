@@ -159,6 +159,10 @@ class FinanceRepositoryImpl implements FinanceRepository {
   Future<HouseInitialBalance> getHouseInitialBalance() => _dataSource.getHouseInitialBalance();
 
   @override
+  Future<Map<String, Money>?> getSettledContributionDues(FinancialCycle cycle) =>
+      _dataSource.getSettledContributionDues(cycle);
+
+  @override
   Future<HouseInitialBalance> setHouseInitialBalance({
     required Money reserve,
     required Money cash,

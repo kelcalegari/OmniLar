@@ -29,6 +29,7 @@ import '../../domain/services/cycle_expense_filter.dart';
 import '../../domain/services/credit_card_invoice_calculator.dart';
 import 'finance_datasource.dart';
 import '../../../../core/offline/offline_snapshot.dart';
+import '../settled_contribution_dues.dart';
 
 class SupabaseFinanceDataSource implements FinanceDataSource {
   final SupabaseClient client;
@@ -1677,6 +1678,26 @@ class SupabaseFinanceDataSource implements FinanceDataSource {
     } catch (_) {
       // Colunas da 0093 ainda não aplicadas no banco: a casa começou do zero
       return const HouseInitialBalance();
+    }
+  }
+
+  @override
+  Future<Map<String, Money>?> getSettledContributionDues(FinancialCycle cycle) async {
+    final start = cycle.startDate.toIso8601String().split('T')[0];
+    try {
+      final row = await OfflineSnapshot.instance.row(
+        'settled_dues_${_houseId}_$start',
+        () async => await client
+            .from('settlements')
+            .select('status, summary_snapshot')
+            .eq('house_id', _houseId)
+            .eq('cycle_start_date', start)
+            .maybeSingle(),
+      );
+      return settledContributionDuesFromRow(row);
+    } catch (_) {
+      // Sem fechamento legível: o planejador segue calculando com o rateio atual
+      return null;
     }
   }
 

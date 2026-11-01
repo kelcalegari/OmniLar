@@ -135,6 +135,8 @@ class _FakeFinanceRepository implements FinanceRepository {
   @override
   Future<HouseInitialBalance> getHouseInitialBalance() async => const HouseInitialBalance();
   @override
+  Future<Map<String, Money>?> getSettledContributionDues(FinancialCycle cycle) async => null;
+  @override
   Future<HouseInitialBalance> setHouseInitialBalance({
     required Money reserve,
     required Money cash,
