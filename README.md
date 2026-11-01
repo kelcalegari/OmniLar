@@ -80,6 +80,10 @@ Aplique as migrations de `supabase/migrations` no seu projeto. Sem os `--dart-de
 
 Comece por [`plano_diretor_unificado.md`](Documentacao/plano_diretor_unificado.md) (o que funciona e o que falta) e [`arquitetura_tecnica.md`](Documentacao/arquitetura_tecnica.md).
 
+## Licença
+
+[PolyForm Noncommercial 1.0.0](LICENSE): o código pode ser lido, estudado e usado para fins não comerciais. Uso comercial não está incluído.
+
 ## Autor
 
 Kelvynn Bordin Calegari · [LinkedIn](https://www.linkedin.com/in/kelvynn-bordin-calegari)
