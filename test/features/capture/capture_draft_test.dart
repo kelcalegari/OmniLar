@@ -63,6 +63,8 @@ void main() {
         selectedPaymentMethodId: 'pm_caixa',
         dueDate: DateTime(2026, 10, 25, 12),
         alreadyPaid: false,
+        markRecurring: true,
+        recurringVariable: false,
         documentDate: DateTime(2026, 10, 25, 12),
         paidOn: DateTime(2026, 10, 22, 12),
         attachmentFile: attachment,
@@ -79,6 +81,8 @@ void main() {
       expect(restored.selectedCategoryId, 'cat_food');
       expect(restored.selectedPaymentMethodId, 'pm_caixa');
       expect(restored.alreadyPaid, isFalse);
+      expect(restored.markRecurring, isTrue);
+      expect(restored.recurringVariable, isFalse);
       expect(restored.attachmentFile?.name, 'cupom.jpg');
       expect(restored.attachmentFile?.bytes, [10, 20, 30, 40]);
     });

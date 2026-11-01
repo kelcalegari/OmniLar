@@ -6,6 +6,7 @@ import 'package:omni_lar/core/domain/value_objects/money.dart';
 import 'package:omni_lar/features/capture/domain/entities/capture_proposal.dart';
 import 'package:omni_lar/features/capture/presentation/pages/smart_scanner_page.dart';
 import 'package:omni_lar/features/finance/domain/entities/house_expense.dart';
+import 'package:omni_lar/features/finance/domain/repositories/finance_repository.dart';
 import 'package:omni_lar/features/finance/presentation/cubit/finance_cubit.dart';
 
 void main() {
@@ -130,5 +131,122 @@ void main() {
     final saved = cubit.state.expenses.where((e) => e.title == 'Condomínio teste com itens').single;
     expect(saved.items.map((i) => i.title), ['Taxa ordinária', 'Água', 'Fundo de reserva']);
     expect(saved.items.every((i) => i.responsibleMemberId == null), isTrue);
+  });
+
+  testWidgets('boleto de luz pode entrar como conta recorrente, no dia do vencimento', (tester) async {
+    tester.view.physicalSize = const Size(800, 2200);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.resetPhysicalSize);
+
+    final cubit = sl<FinanceCubit>();
+    cubit.goToCurrentCycle();
+    await cubit.loadCycleData();
+    final now = DateTime.now();
+    final due = DateTime(now.year, now.month, now.day, 12).add(const Duration(days: 5));
+    final proposal = CaptureProposal(
+      id: 'prop_luz_recorrente_teste',
+      documentType: DocumentType.boleto,
+      title: 'Luz recorrente teste',
+      totalAmount: const Money(18734),
+      date: due,
+      dueDate: due,
+      capturedAt: now,
+    );
+
+    await tester.pumpWidget(BlocProvider<FinanceCubit>.value(
+      value: cubit,
+      child: MaterialApp(
+        home: Scaffold(
+          body: Builder(
+            builder: (context) => Center(
+              child: ElevatedButton(
+                onPressed: () => Navigator.of(context).push(MaterialPageRoute<void>(
+                  builder: (_) => Scaffold(
+                    body: SingleChildScrollView(child: SmartScannerPage(initialProposal: proposal)),
+                  ),
+                )),
+                child: const Text('abrir'),
+              ),
+            ),
+          ),
+        ),
+      ),
+    ));
+    await tester.tap(find.text('abrir'));
+    await tester.pumpAndSettle();
+
+    final toggle = find.byKey(const Key('scan_mark_recurring'));
+    await tester.ensureVisible(toggle);
+    await tester.tap(toggle);
+    await tester.pumpAndSettle();
+    expect(find.textContaining('vencendo no dia ${due.day}'), findsOneWidget);
+    expect(find.text('Valor variável'), findsOneWidget);
+
+    final confirm = find.text('Confirmar Lançamento');
+    await tester.ensureVisible(confirm);
+    await tester.tap(confirm);
+    await tester.pumpAndSettle();
+
+    // O vencimento pode cair no ciclo seguinte: lê o ciclo dele
+    final ofDueCycle = await sl<FinanceRepository>().getExpensesForCycle(cubit.cycleSchedule.cycleFor(due));
+    final saved = ofDueCycle.where((e) => e.title == 'Luz recorrente teste').single;
+    expect(saved.isRecurring, isTrue);
+    expect(saved.isVariable, isTrue);
+    expect(saved.dueDay, due.day);
+    expect(saved.status, ExpenseStatus.pending);
+  });
+
+  testWidgets('boleto sem marcar continua como conta avulsa', (tester) async {
+    tester.view.physicalSize = const Size(800, 2200);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.resetPhysicalSize);
+
+    final cubit = sl<FinanceCubit>();
+    cubit.goToCurrentCycle();
+    await cubit.loadCycleData();
+    final now = DateTime.now();
+    final due = DateTime(now.year, now.month, now.day, 12).add(const Duration(days: 6));
+    final proposal = CaptureProposal(
+      id: 'prop_boleto_avulso_teste',
+      documentType: DocumentType.boleto,
+      title: 'Boleto avulso teste',
+      totalAmount: const Money(9911),
+      date: due,
+      dueDate: due,
+      capturedAt: now,
+    );
+
+    await tester.pumpWidget(BlocProvider<FinanceCubit>.value(
+      value: cubit,
+      child: MaterialApp(
+        home: Scaffold(
+          body: Builder(
+            builder: (context) => Center(
+              child: ElevatedButton(
+                onPressed: () => Navigator.of(context).push(MaterialPageRoute<void>(
+                  builder: (_) => Scaffold(
+                    body: SingleChildScrollView(child: SmartScannerPage(initialProposal: proposal)),
+                  ),
+                )),
+                child: const Text('abrir'),
+              ),
+            ),
+          ),
+        ),
+      ),
+    ));
+    await tester.tap(find.text('abrir'));
+    await tester.pumpAndSettle();
+
+    final confirm = find.text('Confirmar Lançamento');
+    await tester.ensureVisible(confirm);
+    await tester.tap(confirm);
+    await tester.pumpAndSettle();
+
+    // O vencimento pode cair no ciclo seguinte: lê o ciclo dele
+    final ofDueCycle = await sl<FinanceRepository>().getExpensesForCycle(cubit.cycleSchedule.cycleFor(due));
+    final saved = ofDueCycle.where((e) => e.title == 'Boleto avulso teste').single;
+    expect(saved.isRecurring, isFalse);
+    expect(saved.dueDay, isNull);
   });
 }
