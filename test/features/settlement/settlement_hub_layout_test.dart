@@ -52,6 +52,9 @@ void main() {
     expect(find.text('Auditar'), findsNothing);
 
     await tester.ensureVisible(find.text('Auditar memória de cálculo'));
+    // ensureVisible só agenda a rolagem: sem um frame, o tap usa a posição
+    // antiga do botão, que pode estar fora da tela conforme o tamanho do ciclo.
+    await tester.pumpAndSettle();
     await tester.tap(find.text('Auditar memória de cálculo'));
     await tester.pumpAndSettle();
     expect(find.text('Auditoria do Cálculo'), findsOneWidget);
