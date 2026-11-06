@@ -1,3 +1,4 @@
+import 'package:clock/clock.dart';
 import 'dart:convert';
 
 import '../../../../core/domain/value_objects/money.dart';
@@ -98,7 +99,7 @@ class StatementParser {
       return _validDate(year < 100 ? 2000 + year : year, month, day);
     }
 
-    final today = now ?? DateTime.now();
+    final today = now ?? clock.now();
     final sameYear = _validDate(today.year, month, day);
     if (sameYear == null) return null;
     return sameYear.isAfter(today.add(const Duration(days: 31)))

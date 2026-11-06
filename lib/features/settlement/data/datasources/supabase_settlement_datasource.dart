@@ -1,3 +1,4 @@
+import 'package:clock/clock.dart';
 import '../../domain/services/open_invoice_choices.dart';
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -602,7 +603,7 @@ class SupabaseSettlementDataSource implements SettlementDataSource {
 
   /// Agora, ou o fim do ciclo quando ele já terminou.
   DateTime _paidAtWithin(FinancialCycle cycle) {
-    final now = DateTime.now();
+    final now = clock.now();
     return now.isAfter(cycle.endDate) ? cycle.endDate : now;
   }
 

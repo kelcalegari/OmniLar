@@ -1,3 +1,4 @@
+import 'package:clock/clock.dart';
 import '../../../core/errors/failures.dart';
 import '../../../core/utils/uuid.dart';
 import '../../finance/data/datasources/finance_datasource.dart';
@@ -182,7 +183,7 @@ class MockImportRepository implements ImportRepository {
           total: session.totals.file,
           linesCount: plan.lineRecords.length,
           createdCount: plan.lineRecords.where((r) => r.outcome == LineOutcome.created).length,
-          createdAt: DateTime.now(),
+          createdAt: clock.now(),
         ),
         plan.lineRecords,
         payerId: session.payerMemberId,

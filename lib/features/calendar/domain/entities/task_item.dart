@@ -1,3 +1,4 @@
+import 'package:clock/clock.dart';
 import 'package:equatable/equatable.dart';
 import '../../../../core/domain/value_objects/money.dart';
 
@@ -94,7 +95,7 @@ class TaskItem extends Equatable {
 
   bool get isOverdue {
     if (isCompleted || dueDate == null) return false;
-    final now = DateTime.now();
+    final now = clock.now();
     return dueDate!.isBefore(DateTime(now.year, now.month, now.day));
   }
 

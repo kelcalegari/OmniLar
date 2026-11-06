@@ -1,3 +1,4 @@
+import 'package:clock/clock.dart';
 import 'dart:async';
 
 import '../../domain/entities/app_notification.dart';
@@ -28,7 +29,7 @@ class MockNotificationsDataSource implements NotificationsDataSource {
     );
   }
 
-  late final List<AppNotification> _items = _seed(DateTime.now());
+  late final List<AppNotification> _items = _seed(clock.now());
 
   static List<AppNotification> _seed(DateTime now) => [
         AppNotification(
@@ -83,13 +84,13 @@ class MockNotificationsDataSource implements NotificationsDataSource {
   Future<void> markAsRead(String id) async {
     final index = _items.indexWhere((n) => n.id == id);
     if (index < 0 || _items[index].isRead) return;
-    _items[index] = _items[index].copyWith(readAt: DateTime.now());
+    _items[index] = _items[index].copyWith(readAt: clock.now());
     _changes.add(null);
   }
 
   @override
   Future<void> markAllAsRead() async {
-    final now = DateTime.now();
+    final now = clock.now();
     for (var i = 0; i < _items.length; i++) {
       if (!_items[i].isRead) _items[i] = _items[i].copyWith(readAt: now);
     }

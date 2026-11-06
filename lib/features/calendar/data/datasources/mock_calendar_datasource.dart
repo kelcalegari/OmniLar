@@ -1,3 +1,4 @@
+import 'package:clock/clock.dart';
 import 'dart:async';
 import '../../../../core/domain/value_objects/money.dart';
 import '../../../../core/domain/enums/recurrence.dart';
@@ -14,8 +15,8 @@ class MockCalendarDataSource implements CalendarDataSource {
       title: 'Jantar de Aniversário de Carlos',
       description: 'Restaurante italiano no centro da cidade',
       location: 'Cantina do Gigi',
-      startTime: DateTime.now().add(const Duration(days: 2, hours: 4)),
-      endTime: DateTime.now().add(const Duration(days: 2, hours: 7)),
+      startTime: clock.now().add(const Duration(days: 2, hours: 4)),
+      endTime: clock.now().add(const Duration(days: 2, hours: 7)),
       createdByMemberId: 'member_carlos',
       participants: const [
         EventParticipant(
@@ -41,8 +42,8 @@ class MockCalendarDataSource implements CalendarDataSource {
       title: 'Dedetização do Apartamento',
       description: 'Precisa esvaziar armários e sair por 4 horas',
       location: 'Em Casa',
-      startTime: DateTime.now().add(const Duration(days: 4, hours: 2)),
-      endTime: DateTime.now().add(const Duration(days: 4, hours: 6)),
+      startTime: clock.now().add(const Duration(days: 4, hours: 2)),
+      endTime: clock.now().add(const Duration(days: 4, hours: 6)),
       createdByMemberId: 'member_marina',
       participants: const [
         EventParticipant(
@@ -68,8 +69,8 @@ class MockCalendarDataSource implements CalendarDataSource {
       title: 'Visita do Técnico da Internet',
       description: 'Troca de modem de fibra óptica',
       location: 'Em Casa',
-      startTime: DateTime.now().add(const Duration(days: 6, hours: 1)),
-      endTime: DateTime.now().add(const Duration(days: 6, hours: 3)),
+      startTime: clock.now().add(const Duration(days: 6, hours: 1)),
+      endTime: clock.now().add(const Duration(days: 6, hours: 3)),
       createdByMemberId: 'member_marina',
       participants: const [
         EventParticipant(
@@ -97,55 +98,55 @@ class MockCalendarDataSource implements CalendarDataSource {
       id: 'task_1',
       title: 'Comprar botijão de gás',
       description: 'Pedir pelo app com entrega até as 18h',
-      dueDate: DateTime.now(),
+      dueDate: clock.now(),
       assignedToMemberId: 'member_marina',
       assignedToMemberName: 'Marina',
       isCompleted: false,
       priority: TaskPriority.high,
       cost: const Money(12000), // R$ 120,00
       createdByMemberId: 'member_marina',
-      createdAt: DateTime.now().subtract(const Duration(days: 1)),
+      createdAt: clock.now().subtract(const Duration(days: 1)),
     ),
     TaskItem(
       id: 'task_2',
       title: 'Lavar tapetes da sala',
       description: 'Levar na lavanderia express ou lavar no quintal',
-      dueDate: DateTime.now().add(const Duration(days: 2)),
+      dueDate: clock.now().add(const Duration(days: 2)),
       assignedToMemberId: 'member_carlos',
       assignedToMemberName: 'Carlos',
       isCompleted: false,
       priority: TaskPriority.medium,
       createdByMemberId: 'member_carlos',
-      createdAt: DateTime.now().subtract(const Duration(days: 2)),
+      createdAt: clock.now().subtract(const Duration(days: 2)),
     ),
     TaskItem(
       id: 'task_3',
       title: 'Trocar lâmpada do corredor',
       description: 'Lâmpada LED amarela',
-      dueDate: DateTime.now().subtract(const Duration(days: 1)),
+      dueDate: clock.now().subtract(const Duration(days: 1)),
       assignedToMemberId: 'member_carlos',
       assignedToMemberName: 'Carlos',
       isCompleted: true,
-      completedAt: DateTime.now().subtract(const Duration(hours: 12)),
+      completedAt: clock.now().subtract(const Duration(hours: 12)),
       completedByMemberId: 'member_carlos',
       priority: TaskPriority.low,
       cost: const Money(2200), // R$ 22,00
       createdByMemberId: 'member_marina',
-      createdAt: DateTime.now().subtract(const Duration(days: 3)),
+      createdAt: clock.now().subtract(const Duration(days: 3)),
     ),
     TaskItem(
       id: 'task_archived_1',
       title: 'Consertar torneira do jardim',
       description: 'Troca de vedação e fita veda-rosca',
-      dueDate: DateTime.now().subtract(const Duration(days: 20)),
+      dueDate: clock.now().subtract(const Duration(days: 20)),
       assignedToMemberId: 'member_carlos',
       assignedToMemberName: 'Carlos',
       isCompleted: true,
-      completedAt: DateTime.now().subtract(const Duration(days: 18)),
+      completedAt: clock.now().subtract(const Duration(days: 18)),
       completedByMemberId: 'member_carlos',
       priority: TaskPriority.low,
       createdByMemberId: 'member_carlos',
-      createdAt: DateTime.now().subtract(const Duration(days: 25)),
+      createdAt: clock.now().subtract(const Duration(days: 25)),
     ),
   ];
 
@@ -159,7 +160,7 @@ class MockCalendarDataSource implements CalendarDataSource {
       return;
     }
 
-    final seriesId = event.seriesId ?? 'series_${DateTime.now().millisecondsSinceEpoch}_${event.id}';
+    final seriesId = event.seriesId ?? 'series_${clock.now().millisecondsSinceEpoch}_${event.id}';
     final masterEvent = event.copyWith(seriesId: seriesId);
     _events.insert(0, masterEvent);
 
@@ -345,7 +346,7 @@ class MockCalendarDataSource implements CalendarDataSource {
       if (p.memberId == memberId) {
         return p.copyWith(
           rsvpStatus: status,
-          respondedAt: DateTime.now(),
+          respondedAt: clock.now(),
         );
       }
       return p;
@@ -380,7 +381,7 @@ class MockCalendarDataSource implements CalendarDataSource {
     if (includeArchived) {
       return List.unmodifiable(_tasks);
     }
-    final cutoff = DateTime.now().subtract(const Duration(days: 15));
+    final cutoff = clock.now().subtract(const Duration(days: 15));
     final filtered = _tasks.where((t) {
       if (!t.isCompleted) return true;
       final completedTime = t.completedAt ?? t.createdAt;
@@ -394,7 +395,7 @@ class MockCalendarDataSource implements CalendarDataSource {
     yield await getTasks(includeArchived: includeArchived);
     yield* _tasksController.stream.map((tasks) {
       if (includeArchived) return tasks;
-      final cutoff = DateTime.now().subtract(const Duration(days: 15));
+      final cutoff = clock.now().subtract(const Duration(days: 15));
       return tasks.where((t) {
         if (!t.isCompleted) return true;
         final completedTime = t.completedAt ?? t.createdAt;
@@ -422,7 +423,7 @@ class MockCalendarDataSource implements CalendarDataSource {
 
     _tasks[taskIndex] = task.copyWith(
       isCompleted: isDone,
-      completedAt: isDone ? DateTime.now() : null,
+      completedAt: isDone ? clock.now() : null,
       completedByMemberId: isDone ? completedByMemberId : null,
     );
     if (isDone) _spawnNextOccurrence(taskIndex);
@@ -440,7 +441,7 @@ class MockCalendarDataSource implements CalendarDataSource {
     if (taskIndex == -1) return;
     _tasks[taskIndex] = _tasks[taskIndex].copyWith(
       isCompleted: completed,
-      completedAt: completed ? (at ?? DateTime.now()) : null,
+      completedAt: completed ? (at ?? clock.now()) : null,
       completedByMemberId: completed ? completedByMemberId : null,
     );
     if (completed) _spawnNextOccurrence(taskIndex);
@@ -451,7 +452,7 @@ class MockCalendarDataSource implements CalendarDataSource {
   /// próxima ocorrência, com o próximo do rodízio, e a concluída deixa de se repetir.
   void _spawnNextOccurrence(int index) {
     final done = _tasks[index];
-    final now = DateTime.now();
+    final now = clock.now();
     final next = done.nextOccurrence(id: 'task_${now.microsecondsSinceEpoch}', now: now);
     if (next == null) return;
     _tasks[index] = done.copyWith(recurrence: TaskRecurrence.none);

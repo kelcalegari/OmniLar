@@ -1,3 +1,4 @@
+import 'package:clock/clock.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
@@ -260,7 +261,7 @@ class _HomePageContentState extends State<_HomePageContent> {
     if (_cycleSettledFuture == null || _cycleSettledKey != key) {
       _cycleSettledKey = key;
       final cycle = state.currentCycle;
-      _cycleSettledFuture = cycle.contains(DateTime.now()) ||
+      _cycleSettledFuture = cycle.contains(clock.now()) ||
               !sl.isRegistered<SettlementRepository>()
           ? Future.value(null)
           : sl<SettlementRepository>()

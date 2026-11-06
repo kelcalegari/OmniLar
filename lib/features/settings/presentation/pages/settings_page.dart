@@ -1,3 +1,4 @@
+import 'package:clock/clock.dart';
 import '../../../../core/domain/value_objects/cycle_schedule.dart';
 import '../../../finance/domain/entities/loan_acceptance.dart';
 import '../../../finance/domain/entities/house_permissions.dart';
@@ -707,7 +708,7 @@ class _SettingsPageState extends State<SettingsPage> {
                   }
 
                   final newCat = ExpenseCategory(
-                    id: 'cat_${DateTime.now().millisecondsSinceEpoch}',
+                    id: 'cat_${clock.now().millisecondsSinceEpoch}',
                     name: name,
                     icon: 'category',
                     colorHex: '#0F766E',
@@ -1990,7 +1991,7 @@ class _SettingsPageState extends State<SettingsPage> {
                     );
                   } else {
                     final newPm = PaymentMethod(
-                      id: 'pm_${DateTime.now().millisecondsSinceEpoch}',
+                      id: 'pm_${clock.now().millisecondsSinceEpoch}',
                       name: name,
                       type: selectedType,
                       ownerMemberId: selectedOwnerId,

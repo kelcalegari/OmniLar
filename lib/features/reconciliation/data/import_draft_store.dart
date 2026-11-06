@@ -1,3 +1,4 @@
+import 'package:clock/clock.dart';
 import 'dart:convert';
 
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
@@ -38,7 +39,7 @@ class ImportDraftStore {
   }
 
   Future<void> save(String paymentMethodId, String fileName, Map<String, dynamic> session) async {
-    final draft = (savedAt: DateTime.now(), fileName: fileName, session: session);
+    final draft = (savedAt: clock.now(), fileName: fileName, session: session);
     _cache[paymentMethodId] = draft;
     _cleared.remove(paymentMethodId);
     try {

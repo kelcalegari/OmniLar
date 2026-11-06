@@ -1,3 +1,4 @@
+import 'package:clock/clock.dart';
 import '../../../finance/domain/services/pending_payment.dart';
 import 'dart:async';
 
@@ -453,9 +454,9 @@ class _ImportPageState extends State<ImportPage> {
     if (session == null) return;
     final picked = await showDatePicker(
       context: context,
-      initialDate: session.invoicePaidAt ?? DateTime.now(),
+      initialDate: session.invoicePaidAt ?? clock.now(),
       firstDate: DateTime(2015, 1, 1),
-      lastDate: DateTime(DateTime.now().year + 2, 12, 31),
+      lastDate: DateTime(clock.now().year + 2, 12, 31),
       helpText: 'Dia em que a fatura foi paga',
     );
     if (picked == null || !mounted) return;
@@ -544,7 +545,7 @@ class _ImportPageState extends State<ImportPage> {
 
   /// Fatura de exemplo do modo demo, para ver a tela sem ter um arquivo.
   Future<void> _useSample(PaymentMethod source) async {
-    final now = DateTime.now();
+    final now = clock.now();
     ImportedStatementLine line(
       int index,
       int daysAgo,
@@ -919,14 +920,14 @@ class _ImportPageState extends State<ImportPage> {
 
   Future<void> _pickDueDate() async {
     final session = _session!;
-    final initial = session.invoiceDueDate ?? DateTime.now();
+    final initial = session.invoiceDueDate ?? clock.now();
     final picked = await showDatePicker(
       context: context,
       initialDate: initial,
       firstDate: DateTime(
         [
           initial.year - 5,
-          DateTime.now().year - 10,
+          clock.now().year - 10,
           2015,
         ].reduce((a, b) => a < b ? a : b),
         1,
@@ -935,7 +936,7 @@ class _ImportPageState extends State<ImportPage> {
       lastDate: DateTime(
         [
           initial.year + 5,
-          DateTime.now().year + 10,
+          clock.now().year + 10,
           2035,
         ].reduce((a, b) => a > b ? a : b),
         12,
@@ -1113,7 +1114,7 @@ class _ImportPageState extends State<ImportPage> {
                     firstDate: DateTime(
                       [
                         date.year - 5,
-                        DateTime.now().year - 10,
+                        clock.now().year - 10,
                         2015,
                       ].reduce((a, b) => a < b ? a : b),
                       1,
@@ -1122,7 +1123,7 @@ class _ImportPageState extends State<ImportPage> {
                     lastDate: DateTime(
                       [
                         date.year + 5,
-                        DateTime.now().year + 2,
+                        clock.now().year + 2,
                         2035,
                       ].reduce((a, b) => a > b ? a : b),
                       12,

@@ -1,3 +1,4 @@
+import 'package:clock/clock.dart';
 import '../../../finance/domain/services/expense_launch_defaults.dart';
 import 'dart:async';
 import '../../../../core/domain/value_objects/money.dart';
@@ -131,7 +132,7 @@ class MockShoppingDataSource implements ShoppingDataSource {
       final newBought = !item.isBought;
       _items[index] = item.copyWith(
         isBought: newBought,
-        boughtAt: newBought ? DateTime.now() : null,
+        boughtAt: newBought ? clock.now() : null,
       );
       _notifyItems(item.listId);
     }
@@ -142,7 +143,7 @@ class MockShoppingDataSource implements ShoppingDataSource {
     final index = _items.indexWhere((i) => i.id == itemId);
     if (index == -1) return;
     final item = _items[index];
-    _items[index] = item.copyWith(isBought: bought, boughtAt: bought ? (at ?? DateTime.now()) : null);
+    _items[index] = item.copyWith(isBought: bought, boughtAt: bought ? (at ?? clock.now()) : null);
     _notifyItems(item.listId);
   }
 
@@ -185,7 +186,7 @@ class MockShoppingDataSource implements ShoppingDataSource {
     Money? personalItemsAmount,
     String? personalDebtorMemberId,
   }) async {
-    final now = DateTime.now();
+    final now = clock.now();
 
     // 1. Desconta itens pessoais do gasto coletivo da casa
     final personalCents = personalItemsAmount?.cents ?? 0;

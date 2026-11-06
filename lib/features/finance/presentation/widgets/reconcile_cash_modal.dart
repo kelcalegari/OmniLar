@@ -1,3 +1,4 @@
+import 'package:clock/clock.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../../../core/domain/value_objects/money.dart';
@@ -58,7 +59,7 @@ class _ReconcileCashModalState extends State<ReconcileCashModal> {
   final TextEditingController _reasonController = TextEditingController(
     text: 'Conciliação com o saldo bancário',
   );
-  DateTime _selectedDate = DateTime.now();
+  DateTime _selectedDate = clock.now();
   ReconcileImpact _impact = ReconcileImpact.cashAndStatementOnly;
   bool _isSaving = false;
 

@@ -1,3 +1,4 @@
+import 'package:clock/clock.dart';
 import 'dart:async';
 
 import 'package:firebase_messaging/firebase_messaging.dart';
@@ -192,7 +193,7 @@ class PushService {
         'user_id': userId,
         'token': token,
         'platform': _platform,
-        'last_seen_at': DateTime.now().toUtc().toIso8601String(),
+        'last_seen_at': clock.now().toUtc().toIso8601String(),
       }, onConflict: 'token');
       _currentUserId = userId;
       lastError = null;
