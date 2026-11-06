@@ -1,3 +1,4 @@
+import 'package:clock/clock.dart';
 import '../../../finance/domain/services/cycle_expense_grouping.dart';
 import 'package:intl/intl.dart';
 import '../../../../core/utils/clipboard_helper.dart';
@@ -95,8 +96,8 @@ class _SmartScannerPageState extends State<SmartScannerPage>
   bool _recurringVariable = true;
 
   /// Nota e cupom: dia da compra (já paga) ou do vencimento (a pagar).
-  DateTime _documentDate = DateTime.now();
-  DateTime _paidOn = DateTime.now();
+  DateTime _documentDate = clock.now();
+  DateTime _paidOn = clock.now();
   List<HouseExpense> _knownBills = const [];
   HouseExpense? _useKnownBill;
   bool _knownBillDismissed = false;
@@ -177,7 +178,7 @@ class _SmartScannerPageState extends State<SmartScannerPage>
     final proposal = _currentProposal;
     if (proposal == null) return null;
     return CaptureDraft(
-      savedAt: DateTime.now(),
+      savedAt: clock.now(),
       proposal: proposal,
       titleText: _titleController.text,
       amountText: _amountController.text,
@@ -867,14 +868,14 @@ class _SmartScannerPageState extends State<SmartScannerPage>
     try {
       final code = BoletoCodeReader.read(raw);
       return CaptureProposal(
-        id: 'prop_boleto_${DateTime.now().millisecondsSinceEpoch}',
+        id: 'prop_boleto_${clock.now().millisecondsSinceEpoch}',
         documentType: DocumentType.boleto,
         title: code.suggestedTitle,
         totalAmount: code.amount ?? const Money(0),
-        date: DateTime.now(),
+        date: clock.now(),
         dueDate: code.dueDate,
         rawCode: code.digitableLine,
-        capturedAt: DateTime.now(),
+        capturedAt: clock.now(),
       );
     } on BoletoCodeError catch (e) {
       if (!quiet && mounted) {
@@ -938,14 +939,14 @@ class _SmartScannerPageState extends State<SmartScannerPage>
   }
 
   Future<void> _pickDueDate(CaptureProposal proposal) async {
-    final initial = _dueDate ?? DateTime.now();
+    final initial = _dueDate ?? clock.now();
     final picked = await showDatePicker(
       context: context,
       initialDate: initial,
       firstDate: DateTime(
         [
           initial.year - 5,
-          DateTime.now().year - 10,
+          clock.now().year - 10,
           2015,
         ].reduce((a, b) => a < b ? a : b),
         1,
@@ -954,7 +955,7 @@ class _SmartScannerPageState extends State<SmartScannerPage>
       lastDate: DateTime(
         [
           initial.year + 5,
-          DateTime.now().year + 10,
+          clock.now().year + 10,
           2035,
         ].reduce((a, b) => a > b ? a : b),
         12,
@@ -976,7 +977,7 @@ class _SmartScannerPageState extends State<SmartScannerPage>
     required String? categoryId,
     required String payerId,
   }) {
-    final stamp = DateTime.now().millisecondsSinceEpoch;
+    final stamp = clock.now().millisecondsSinceEpoch;
     return [
       for (final item in proposal.items)
         () {
@@ -1005,7 +1006,7 @@ class _SmartScannerPageState extends State<SmartScannerPage>
       firstDate: DateTime(
         [
           _paidOn.year - 5,
-          DateTime.now().year - 10,
+          clock.now().year - 10,
           2015,
         ].reduce((a, b) => a < b ? a : b),
         1,
@@ -1014,7 +1015,7 @@ class _SmartScannerPageState extends State<SmartScannerPage>
       lastDate: DateTime(
         [
           _paidOn.year + 2,
-          DateTime.now().year + 2,
+          clock.now().year + 2,
           2035,
         ].reduce((a, b) => a > b ? a : b),
         12,
@@ -1542,7 +1543,7 @@ class _SmartScannerPageState extends State<SmartScannerPage>
                     if (name.isEmpty || cents <= 0) return;
 
                     final newItem = InvoiceItemDraft(
-                      id: 'item_${DateTime.now().millisecondsSinceEpoch}',
+                      id: 'item_${clock.now().millisecondsSinceEpoch}',
                       name: name,
                       unitPrice: Money(cents),
                       totalPrice: Money(cents),
@@ -1691,13 +1692,13 @@ class _SmartScannerPageState extends State<SmartScannerPage>
       );
 
       // 4. Mapear sub-itens reconhecidos (InvoiceItemDraft -> HouseExpenseItem)
-      final expenseId = 'exp_scan_${DateTime.now().millisecondsSinceEpoch}';
+      final expenseId = 'exp_scan_${clock.now().millisecondsSinceEpoch}';
       final expenseItems = proposal.items.map((item) {
         final respMemberId = item.isPersonal
             ? (item.assignedMemberId ?? paidByMemberId)
             : null;
         return HouseExpenseItem(
-          id: 'item_${DateTime.now().millisecondsSinceEpoch}_${item.id}',
+          id: 'item_${clock.now().millisecondsSinceEpoch}_${item.id}',
           expenseId: expenseId,
           title: item.name,
           amount: item.totalPrice,
@@ -2271,7 +2272,7 @@ class _SmartScannerPageState extends State<SmartScannerPage>
       _markRecurring = false;
       _recurringVariable = true;
       _documentDate = proposal.date;
-      _paidOn = DateTime.now();
+      _paidOn = clock.now();
       _knownBills = const [];
       _useKnownBill = null;
       _knownBillDismissed = false;
@@ -2907,7 +2908,7 @@ class _SmartScannerPageState extends State<SmartScannerPage>
       firstDate: DateTime(
         [
           _documentDate.year - 5,
-          DateTime.now().year - 10,
+          clock.now().year - 10,
           2015,
         ].reduce((a, b) => a < b ? a : b),
         1,
@@ -2916,7 +2917,7 @@ class _SmartScannerPageState extends State<SmartScannerPage>
       lastDate: DateTime(
         [
           _documentDate.year + 5,
-          DateTime.now().year + 10,
+          clock.now().year + 10,
           2035,
         ].reduce((a, b) => a > b ? a : b),
         12,
@@ -2958,7 +2959,7 @@ class _SmartScannerPageState extends State<SmartScannerPage>
                 setState(() {
                   _alreadyPaid = value.first;
                   // Já paga não pode ficar no futuro
-                  final now = DateTime.now();
+                  final now = clock.now();
                   if (_alreadyPaid && _documentDate.isAfter(now)) {
                     _documentDate = DateTime(now.year, now.month, now.day, 12);
                   }

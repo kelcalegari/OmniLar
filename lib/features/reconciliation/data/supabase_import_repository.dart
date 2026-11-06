@@ -1,3 +1,4 @@
+import 'package:clock/clock.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../core/domain/value_objects/money.dart';
@@ -304,7 +305,7 @@ class SupabaseImportRepository implements ImportRepository {
       if (activeOnly) query = query.eq('status', 'active');
       final planRows = await query;
       // Plano cuja última parcela venceu há mais de dois meses já terminou
-      final cutoff = DateTime.now().subtract(const Duration(days: 60));
+      final cutoff = clock.now().subtract(const Duration(days: 60));
       final rows = [
         for (final row in planRows)
           if (_lastDueOf(row)?.isBefore(cutoff) != true) row,
@@ -429,7 +430,7 @@ class SupabaseImportRepository implements ImportRepository {
               'destination': _destinationToDb(rule.destination),
               'category_id': isUuid(rule.categoryId) ? rule.categoryId : null,
               'assigned_member_id': isUuid(rule.assignedMemberId) ? rule.assignedMemberId : null,
-              'updated_at': DateTime.now().toUtc().toIso8601String(),
+              'updated_at': clock.now().toUtc().toIso8601String(),
             },
         ],
         onConflict: 'house_id,payment_method_id,match_key',

@@ -13,6 +13,8 @@ import 'package:omni_lar/features/reconciliation/domain/entities/imported_statem
 import 'package:omni_lar/features/reconciliation/domain/services/import_session.dart';
 import 'package:omni_lar/features/reconciliation/presentation/pages/import_page.dart';
 
+import '../../helpers/fixed_date.dart';
+
 const _card = PaymentMethod(
   id: 'pm_nubank',
   name: 'Nubank',
@@ -104,15 +106,15 @@ void main() {
   });
 
   group('Na tela', () {
-    setUpAll(() async {
+    setUpAll(() => atDate(testToday, () async {
       if (!sl.isRegistered<AuthCubit>()) {
         await initServiceLocator();
       }
       await sl<AuthCubit>().signInDemo(memberId: 'member_carlos');
       await sl<FinanceCubit>().loadCycleData();
-    });
+    }));
 
-    testWidgets('dividir uma linha do exemplo e juntar de novo', (tester) async {
+    testWidgets('dividir uma linha do exemplo e juntar de novo', (tester) => atDate(testToday, () async {
       tester.view.physicalSize = const Size(1200, 3000);
       tester.view.devicePixelRatio = 1;
       addTearDown(tester.view.reset);
@@ -146,6 +148,6 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.text('Todas (5)'), findsOneWidget);
       expect(find.textContaining('Parte 1 de 2'), findsNothing);
-    });
+    }));
   });
 }

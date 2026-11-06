@@ -985,7 +985,7 @@ class _CycleDayBlockState extends State<_CycleDayBlock> {
                             ),
                           );
                         }
-                        final now = DateTime.now();
+                        final now = clock.now();
                         final after = schedule.withChange(schedule.planChange(now, _selectedDay));
                         final current = after.cycleFor(now);
                         final transition = after.next(current);

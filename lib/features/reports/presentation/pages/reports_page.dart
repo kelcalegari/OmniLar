@@ -1,3 +1,4 @@
+import 'package:clock/clock.dart';
 import 'dart:convert';
 import 'dart:typed_data';
 
@@ -180,7 +181,7 @@ class _ReportsPageContent extends StatelessWidget {
                   children: [
                     // Seletor de Ciclo
                     _buildCycleSelector(context, state, cubit),
-                    if (!state.currentCycle.contains(DateTime.now()))
+                    if (!state.currentCycle.contains(clock.now()))
                       Center(
                         child: TextButton.icon(
                           key: const Key('reports_back_to_current_cycle'),
@@ -339,7 +340,7 @@ class _ReportsPageContent extends StatelessWidget {
 
   /// Rótulo do ciclo mostrado: o de hoje, um que já terminou ou um futuro.
   String _cycleLabel(FinanceState state) {
-    final now = DateTime.now();
+    final now = clock.now();
     final today = DateTime(now.year, now.month, now.day);
     final cycle = state.currentCycle;
     if (cycle.endDate.isBefore(today)) return 'Ciclo encerrado';
@@ -930,7 +931,7 @@ class _ReportsPageContent extends StatelessWidget {
         summary: state.summary,
         preview: sameCycle ? reports.preview : null,
         insights: sameCycle ? reports.insights : null,
-        generatedAt: DateTime.now(),
+        generatedAt: clock.now(),
       );
       final saved = await FilePicker.saveFile(
         fileName: CycleReportPdf.fileNameFor(state.currentCycle),

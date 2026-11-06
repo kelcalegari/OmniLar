@@ -1,3 +1,4 @@
+import 'package:clock/clock.dart';
 import '../../../../core/domain/value_objects/money.dart';
 import '../../../../core/utils/uuid.dart';
 import '../../../finance/domain/entities/house_expense.dart';
@@ -131,7 +132,7 @@ class InstallmentPurchase {
       );
     }
 
-    final createdAt = now ?? DateTime.now();
+    final createdAt = now ?? clock.now();
     final lender = card.ownerMemberId ?? P2PLoan.houseLenderId;
     final who = debtorName == null ? '' : ' — $debtorName';
     final upfront = count == 1;

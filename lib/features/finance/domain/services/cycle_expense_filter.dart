@@ -1,3 +1,4 @@
+import 'package:clock/clock.dart';
 import '../../../../core/domain/value_objects/financial_cycle.dart';
 import '../entities/house_expense.dart';
 import '../entities/payment_method.dart';
@@ -32,7 +33,7 @@ bool expenseBelongsToCycle(
     return cycle.contains(expense.date);
   }
 
-  final cycleHasStarted = !cycle.startDate.isAfter(now ?? DateTime.now());
+  final cycleHasStarted = !cycle.startDate.isAfter(now ?? clock.now());
   final isOverdueLiability =
       cycleHasStarted &&
       expense.isPending &&

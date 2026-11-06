@@ -1,3 +1,4 @@
+import 'package:clock/clock.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
@@ -303,7 +304,7 @@ Future<bool> showThirdPartyReceiptForm(
   final payerController = TextEditingController();
   final descriptionController = TextEditingController();
   var cents = 0;
-  var day = DateTime.now();
+  var day = clock.now();
   // De saída, a caixinha que já tem cara de repasse
   var vaultId = (vaults.where((v) => v.name.toLowerCase().contains('repasse')).firstOrNull ?? vaults.first).id;
   String? cardId;
@@ -341,7 +342,7 @@ Future<bool> showThirdPartyReceiptForm(
                     context: context,
                     initialDate: day,
                     firstDate: DateTime(day.year - 1),
-                    lastDate: DateTime.now(),
+                    lastDate: clock.now(),
                   );
                   if (picked != null) setDialogState(() => day = picked);
                 },

@@ -1,3 +1,4 @@
+import 'package:clock/clock.dart';
 import '../../../../core/network/offline_queue.dart';
 import '../../../../core/network/offline_sync_service.dart';
 import '../../../../core/utils/uuid.dart';
@@ -44,7 +45,7 @@ class ShoppingRepositoryImpl implements ShoppingRepository {
   @override
   Future<bool> setItemBought(String itemId, {required bool bought}) async {
     final sync = _offlineSync;
-    final at = DateTime.now();
+    final at = clock.now();
     // Só o que já tem id real pode ser reenviado depois
     if (sync == null || !sync.isActive || !isUuid(itemId)) {
       await _dataSource.setItemBought(itemId, bought: bought, at: at);

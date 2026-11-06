@@ -1,3 +1,4 @@
+import 'package:clock/clock.dart';
 import 'dart:async';
 
 import 'house_expense_payload.dart';
@@ -307,7 +308,7 @@ class SupabaseFinanceDataSource implements FinanceDataSource {
 
       // Ciclo atual ou futuro: o banco cria as contas recorrentes que ainda
       // não existem até o fim dele. Falhar aqui não impede a leitura.
-      if (!cycle.endDate.isBefore(DateTime.now())) {
+      if (!cycle.endDate.isBefore(clock.now())) {
         try {
           await client.rpc('generate_recurring_expenses', params: {
             'p_house_id': _houseId,
@@ -637,7 +638,7 @@ class SupabaseFinanceDataSource implements FinanceDataSource {
 
       return rows.map((r) {
         final dateStr = (r['paid_at'] ?? r['date'] ?? r['cycle_start_date'] ?? r['created_at']) as String?;
-        final date = dateStr != null ? (DateTime.tryParse(dateStr)?.toLocal() ?? DateTime.now()) : DateTime.now();
+        final date = dateStr != null ? (DateTime.tryParse(dateStr)?.toLocal() ?? clock.now()) : clock.now();
         return Contribution(
           id: r['id'] as String,
           memberId: r['member_id'] as String,
@@ -923,7 +924,7 @@ class SupabaseFinanceDataSource implements FinanceDataSource {
     RecurrenceScope scope = RecurrenceScope.thisInstanceOnly,
   }) async {
     try {
-      final nowIso = DateTime.now().toUtc().toIso8601String();
+      final nowIso = clock.now().toUtc().toIso8601String();
 
       // 1. Tenta RPC com security definer no Supabase passando o escopo
       try {
@@ -1903,7 +1904,7 @@ class SupabaseFinanceDataSource implements FinanceDataSource {
     try {
       if (!_isUuid(paymentMethodId)) return const [];
 
-      final since = DateTime.now().subtract(const Duration(days: 62));
+      final since = clock.now().subtract(const Duration(days: 62));
       final rows = await client
           .from('house_expenses')
           .select('*, house_expense_items(*), split_rules(*)')
@@ -1985,7 +1986,7 @@ class SupabaseFinanceDataSource implements FinanceDataSource {
         'payment_method_id': paymentMethodId,
         'due_date': dueDate,
         'barcode': code,
-        'updated_at': DateTime.now().toUtc().toIso8601String(),
+        'updated_at': clock.now().toUtc().toIso8601String(),
       }, onConflict: 'payment_method_id,due_date');
     } catch (e) {
       throw ServerFailure('Erro ao guardar o código da fatura: $e');
@@ -1999,7 +2000,7 @@ class SupabaseFinanceDataSource implements FinanceDataSource {
   Future<List<ThirdPartyReceipt>> getThirdPartyReceipts() async {
     try {
       if (!_isUuid(_houseId)) return const [];
-      final usedSince = DateTime.now().subtract(const Duration(days: _usedReceiptsDays));
+      final usedSince = clock.now().subtract(const Duration(days: _usedReceiptsDays));
       final rows = await client
           .from('third_party_receipts')
           .select(

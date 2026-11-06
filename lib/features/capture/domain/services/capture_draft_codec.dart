@@ -1,3 +1,4 @@
+import 'package:clock/clock.dart';
 import 'dart:convert';
 import 'dart:typed_data';
 
@@ -115,7 +116,7 @@ class CaptureDraftCodec {
             itemFromJson((item as Map).cast<String, dynamic>()),
         ],
         imageUrl: json['imageUrl'] as String?,
-        capturedAt: DateTime.tryParse(json['capturedAt'] as String? ?? '') ?? DateTime.now(),
+        capturedAt: DateTime.tryParse(json['capturedAt'] as String? ?? '') ?? clock.now(),
       );
 
   static Map<String, dynamic> toJson(CaptureDraft draft, {bool includeAttachmentBytes = true}) {
@@ -188,7 +189,7 @@ class CaptureDraftCodec {
         markRecurring: json['markRecurring'] as bool? ?? false,
         recurringVariable: json['recurringVariable'] as bool? ?? true,
         documentDate: DateTime.tryParse(json['documentDate'] as String? ?? '') ?? proposal.date,
-        paidOn: DateTime.tryParse(json['paidOn'] as String? ?? '') ?? DateTime.now(),
+        paidOn: DateTime.tryParse(json['paidOn'] as String? ?? '') ?? clock.now(),
         attachmentFile: attachment,
       );
     } catch (_) {

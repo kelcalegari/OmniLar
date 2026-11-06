@@ -1,3 +1,4 @@
+import 'package:clock/clock.dart';
 import 'dart:async';
 
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -76,7 +77,7 @@ class SupabaseNotificationsDataSource implements NotificationsDataSource {
         'category': group.name,
         'in_app': preference.inApp,
         'push': preference.push,
-        'updated_at': DateTime.now().toUtc().toIso8601String(),
+        'updated_at': clock.now().toUtc().toIso8601String(),
       });
     } catch (e) {
       if (e is Failure) rethrow;
@@ -93,7 +94,7 @@ class SupabaseNotificationsDataSource implements NotificationsDataSource {
         'quiet_hours_end': _formatTime(preferences.quietEnd),
         'hide_amounts': preferences.hideAmounts,
         'weekly_summary': preferences.weeklySummary,
-        'updated_at': DateTime.now().toUtc().toIso8601String(),
+        'updated_at': clock.now().toUtc().toIso8601String(),
       });
     } catch (e) {
       if (e is Failure) rethrow;
@@ -128,7 +129,7 @@ class SupabaseNotificationsDataSource implements NotificationsDataSource {
     try {
       await client
           .from('notifications')
-          .update({'read_at': DateTime.now().toUtc().toIso8601String()})
+          .update({'read_at': clock.now().toUtc().toIso8601String()})
           .eq('id', id)
           .filter('read_at', 'is', null);
     } catch (e) {
@@ -141,7 +142,7 @@ class SupabaseNotificationsDataSource implements NotificationsDataSource {
     try {
       await client
           .from('notifications')
-          .update({'read_at': DateTime.now().toUtc().toIso8601String()})
+          .update({'read_at': clock.now().toUtc().toIso8601String()})
           .eq('user_id', _userId)
           .filter('read_at', 'is', null);
     } catch (e) {

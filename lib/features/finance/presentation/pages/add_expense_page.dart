@@ -1,3 +1,4 @@
+import 'package:clock/clock.dart';
 import '../../../capture/domain/services/boleto_code.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -94,11 +95,11 @@ class _AddExpensePageState extends State<AddExpensePage> {
   Map<String, double>? _categoryPercentages;
   // Os padrões de quem lança entram uma vez só, quando as listas chegam
   bool _launchDefaultsApplied = false;
-  DateTime _selectedDate = DateTime.now();
+  DateTime _selectedDate = clock.now();
 
   late bool _isRecurring;
   bool _isVariable = false;
-  int _dueDay = DateTime.now().day;
+  int _dueDay = clock.now().day;
   ExpenseStatus _expenseStatus = ExpenseStatus.paid;
 
   int _cents = 0;
@@ -425,7 +426,7 @@ class _AddExpensePageState extends State<AddExpensePage> {
       }
     }
 
-    final now = DateTime.now();
+    final now = clock.now();
     DateTime expenseDate = _selectedDate;
     DateTime? dueDate;
 
@@ -564,7 +565,7 @@ class _AddExpensePageState extends State<AddExpensePage> {
         clearBarcode: !waitsForInvoice && _barcodeController.text.trim().isEmpty,
         // Conta que estava pendente e foi marcada como paga agora
         paidAt: editedStatus == ExpenseStatus.paid && oldExpense.isPending && !wasWaitingForInvoice
-            ? DateTime.now()
+            ? clock.now()
             : null,
         clearPaidAt: editedStatus == ExpenseStatus.pending,
         isRecurring: _isRecurring,
@@ -611,7 +612,7 @@ class _AddExpensePageState extends State<AddExpensePage> {
     if (_isSaving) return;
     setState(() => _isSaving = true);
 
-    final expenseId = 'exp_${DateTime.now().millisecondsSinceEpoch}';
+    final expenseId = 'exp_${clock.now().millisecondsSinceEpoch}';
 
     String? uploadedPath;
     if (_pendingAttachmentFile != null) {
@@ -2425,7 +2426,7 @@ class _AddExpensePageState extends State<AddExpensePage> {
   }
 
   Widget _buildDateAndStatusCard(ThemeData theme) {
-    final now = DateTime.now();
+    final now = clock.now();
     final today = DateTime(now.year, now.month, now.day);
     final selectedDay = DateTime(_selectedDate.year, _selectedDate.month, _selectedDate.day);
     final isPast = selectedDay.isBefore(today);

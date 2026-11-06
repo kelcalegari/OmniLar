@@ -1,3 +1,4 @@
+import 'package:clock/clock.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -12,14 +13,16 @@ import 'package:omni_lar/features/finance/presentation/widgets/card_invoice_paym
 import 'package:omni_lar/features/p2p/presentation/cubit/p2p_cubit.dart';
 import 'package:omni_lar/features/reconciliation/presentation/pages/import_page.dart';
 
+import '../../helpers/fixed_date.dart';
+
 void main() {
-  setUpAll(() async {
+  setUpAll(() => atDate(testToday, () async {
     if (!sl.isRegistered<AuthCubit>()) {
       await initServiceLocator();
     }
     await sl<AuthCubit>().signInDemo(memberId: 'member_carlos');
     await sl<FinanceCubit>().loadCycleData();
-  });
+  }));
 
   Future<void> payWith(WidgetTester tester, {required String id, String? option}) async {
     tester.view.physicalSize = const Size(800, 1600);
@@ -28,12 +31,12 @@ void main() {
 
     final cubit = sl<FinanceCubit>();
     final card = cubit.state.paymentMethods.firstWhere((p) => p.id == 'pm_card_carlos');
-    final due = DateTime.now().add(Duration(days: 40 + id.length));
+    final due = clock.now().add(Duration(days: 40 + id.length));
     await tester.runAsync(() => cubit.addExpense(HouseExpense(
           id: id,
           title: 'Compra $id',
           amount: const Money(8000),
-          date: DateTime.now(),
+          date: clock.now(),
           dueDate: due,
           categoryId: 'cat_moradia',
           paymentMethodId: card.id,
@@ -74,26 +77,26 @@ void main() {
 
   Future<HouseExpense> stored(WidgetTester tester, String id) async {
     final repository = sl<FinanceRepository>();
-    final cycle = sl<FinanceCubit>().cycleSchedule.cycleFor(DateTime.now());
+    final cycle = sl<FinanceCubit>().cycleSchedule.cycleFor(clock.now());
     final rows = (await tester.runAsync(() => repository.getExpensesForCycle(cycle)))!;
     return rows.where((e) => e.id == id).firstOrNull ?? saved(id);
   }
 
-  testWidgets('pagar a fatura com o meio do titular: ele é reembolsado', (tester) async {
+  testWidgets('pagar a fatura com o meio do titular: ele é reembolsado', (tester) => atDate(testToday, () async {
     await payWith(tester, id: 'fatura_titular');
     final expense = await stored(tester, 'fatura_titular');
     expect(expense.paidAt, isNotNull);
     expect(expense.paidOutOfPocket, isTrue);
-  });
+  }));
 
-  testWidgets('pagar a fatura com um meio da casa: sai do Caixa, sem reembolso', (tester) async {
+  testWidgets('pagar a fatura com um meio da casa: sai do Caixa, sem reembolso', (tester) => atDate(testToday, () async {
     await payWith(tester, id: 'fatura_casa_x', option: '(da casa)');
     final expense = await stored(tester, 'fatura_casa_x');
     expect(expense.paidAt, isNotNull);
     expect(expense.paidOutOfPocket, isFalse);
-  });
+  }));
 
-  testWidgets('importação: "Fatura já paga?" com meio da casa marca pago pelo Caixa', (tester) async {
+  testWidgets('importação: "Fatura já paga?" com meio da casa marca pago pelo Caixa', (tester) => atDate(testToday, () async {
     tester.view.physicalSize = const Size(1200, 3000);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.reset);
@@ -122,5 +125,5 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.textContaining('pelo Caixa'), findsOneWidget);
-  });
+  }));
 }

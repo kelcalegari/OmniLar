@@ -1,3 +1,4 @@
+import 'package:clock/clock.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:intl/intl.dart';
@@ -112,8 +113,8 @@ class _AddEventSheetState extends State<AddEventSheet> {
       _locationController = TextEditingController();
       _descriptionController = TextEditingController();
 
-      final baseDate = widget.initialDate ?? DateTime.now();
-      final now = DateTime.now();
+      final baseDate = widget.initialDate ?? clock.now();
+      final now = clock.now();
       final isToday = baseDate.year == now.year && baseDate.month == now.month && baseDate.day == now.day;
       final startHour = isToday ? (now.hour + 1) : 9;
 
@@ -266,8 +267,8 @@ class _AddEventSheetState extends State<AddEventSheet> {
     final picked = await showDatePicker(
       context: context,
       initialDate: initialDate,
-      firstDate: DateTime.now().subtract(const Duration(days: 365)),
-      lastDate: DateTime.now().add(const Duration(days: 365 * 2)),
+      firstDate: clock.now().subtract(const Duration(days: 365)),
+      lastDate: clock.now().add(const Duration(days: 365 * 2)),
     );
     if (picked != null) {
       setState(() {
@@ -352,7 +353,7 @@ class _AddEventSheetState extends State<AddEventSheet> {
         return;
       }
 
-      final eventId = widget.initialEvent?.id ?? 'event_${DateTime.now().millisecondsSinceEpoch}';
+      final eventId = widget.initialEvent?.id ?? 'event_${clock.now().millisecondsSinceEpoch}';
 
       // Monta a lista de participantes
       final participants = <EventParticipant>[];
@@ -376,7 +377,7 @@ class _AddEventSheetState extends State<AddEventSheet> {
                 memberName: _memberNames[memberId] ?? 'Membro',
                 role: role,
                 rsvpStatus: isCreator ? RsvpStatus.accepted : RsvpStatus.pending,
-                respondedAt: isCreator ? DateTime.now() : null,
+                respondedAt: isCreator ? clock.now() : null,
               ),
             );
           }

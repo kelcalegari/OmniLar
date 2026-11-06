@@ -1,3 +1,4 @@
+import 'package:clock/clock.dart';
 import 'dart:typed_data';
 import '../../../finance/domain/entities/house_expense.dart';
 import 'dart:convert';
@@ -1206,7 +1207,7 @@ class _ProjectsHubPageState extends State<ProjectsHubPage> {
                 onPressed: !canSave
                     ? null
                     : () async {
-                        final now = DateTime.now();
+                        final now = clock.now();
                         final participants = [
                           for (int i = 0; i < active.length; i++)
                             ProjectParticipant(
@@ -1329,7 +1330,7 @@ class _ProjectsHubPageState extends State<ProjectsHubPage> {
                               onPressed: () async {
                                 final picked = await showDatePicker(
                                   context: dialogCtx,
-                                  initialDate: startDate ?? DateTime.now(),
+                                  initialDate: startDate ?? clock.now(),
                                   firstDate: DateTime(2020),
                                   lastDate: DateTime(2035),
                                 );
@@ -1350,7 +1351,7 @@ class _ProjectsHubPageState extends State<ProjectsHubPage> {
                               onPressed: () async {
                                 final picked = await showDatePicker(
                                   context: dialogCtx,
-                                  initialDate: endDate ?? (startDate ?? DateTime.now()),
+                                  initialDate: endDate ?? (startDate ?? clock.now()),
                                   firstDate: DateTime(2020),
                                   lastDate: DateTime(2035),
                                 );
@@ -1451,7 +1452,7 @@ class _ProjectsHubPageState extends State<ProjectsHubPage> {
                           status: selectedStatus,
                           vaultId: selectedVaultId,
                           clearVaultId: selectedVaultId == null,
-                          updatedAt: DateTime.now(),
+                          updatedAt: clock.now(),
                         ),
                       );
                       if (context.mounted) {

@@ -1,3 +1,4 @@
+import 'package:clock/clock.dart';
 import 'dart:convert';
 
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
@@ -29,7 +30,7 @@ class CaptureDraftStore {
   static String _key(String scope) => 'omnilar_capture_draft_$scope';
 
   static bool isExpired(DateTime savedAt, [DateTime? now]) {
-    final ref = now ?? DateTime.now();
+    final ref = now ?? clock.now();
     return ref.difference(savedAt) > expiration;
   }
 

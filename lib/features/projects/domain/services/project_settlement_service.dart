@@ -1,3 +1,4 @@
+import 'package:clock/clock.dart';
 import '../../../../core/domain/value_objects/money.dart';
 import '../../../finance/domain/entities/house_expense.dart';
 import '../../../finance/domain/entities/split_rule.dart';
@@ -41,7 +42,7 @@ class ProjectSettlementService {
         id: idOrUserId,
         projectId: project.id,
         externalName: idOrUserId,
-        createdAt: DateTime.now(),
+        createdAt: clock.now(),
       );
       activeParticipants.add(newParticipant);
       return newParticipant;
