@@ -6,12 +6,14 @@ import '../../../core/errors/failures.dart';
 import '../../../core/utils/uuid.dart';
 import '../../finance/data/datasources/house_expense_payload.dart';
 import '../../finance/data/datasources/house_expense_row.dart';
+import '../../finance/domain/entities/card_invoice_breakdown.dart';
 import '../../p2p/data/datasources/p2p_loan_payload.dart';
 import '../domain/entities/imported_statement_line.dart';
 import '../domain/entities/installment_plan.dart';
 import '../domain/repositories/import_repository.dart';
 import '../domain/services/import_session.dart';
 import '../domain/services/installment_purchase.dart';
+import '../domain/services/invoice_breakdown_lines.dart';
 
 String _dateOnly(DateTime date) => date.toIso8601String().split('T')[0];
 
@@ -207,6 +209,70 @@ class SupabaseImportRepository implements ImportRepository {
       ];
     } catch (e) {
       throw _failure('Erro ao carregar o histórico de importações', e);
+    }
+  }
+
+  @override
+  Future<CardInvoiceBreakdown> cardInvoiceBreakdown({
+    required String paymentMethodId,
+    required DateTime dueDate,
+  }) async {
+    if (!isUuid(paymentMethodId)) return CardInvoiceBreakdown(lines: const [], houseExpenses: const {});
+    final due = _dateOnly(dueDate);
+    try {
+      final batches = await client
+          .from('import_batches')
+          .select('id, payer_id, total_cents')
+          .eq('house_id', _houseId)
+          .eq('payment_method_id', paymentMethodId)
+          .eq('invoice_due_date', due)
+          .eq('status', 'confirmed')
+          .order('created_at');
+      final payerOf = {for (final b in batches) b['id'] as String: b['payer_id'] as String?};
+
+      final lines = <InvoiceFileLine>[];
+      if (payerOf.isNotEmpty) {
+        final rows = await client
+            .from('import_lines')
+            .select(
+              'batch_id, amount_cents, kind, signature, split_destination, '
+              'assigned_member_id, decision, expense_id, loan_id',
+            )
+            .eq('house_id', _houseId)
+            .inFilter('batch_id', payerOf.keys.toList())
+            .inFilter('kind', ['purchase', 'refund']);
+        // Na ordem das importações, para a mais antiga ficar com a linha repetida
+        final order = payerOf.keys.toList();
+        final sorted = [...rows]
+          ..sort((a, b) => order.indexOf(a['batch_id'] as String).compareTo(order.indexOf(b['batch_id'] as String)));
+        for (final row in sorted) {
+          final line = invoiceFileLineFromRow(row, payerId: payerOf[row['batch_id']]);
+          if (line != null) lines.add(line);
+        }
+      }
+
+      // Compras da Casa da fatura, como em getOpenCardInvoices (pagas ou não)
+      final expenses = await client
+          .from('house_expenses')
+          .select('id, amount_cents, is_recurring')
+          .eq('house_id', _houseId)
+          .eq('payment_method_id', paymentMethodId)
+          .eq('due_date', due)
+          .isFilter('project_id', null)
+          .isFilter('deleted_at', null);
+
+      // O arquivo mais completo: a prévia e a fatura fechada têm totais diferentes
+      final fileTotals = [for (final b in batches) (b['total_cents'] as num?)?.toInt() ?? 0];
+      return CardInvoiceBreakdown(
+        lines: lines,
+        importedFileTotal: fileTotals.isEmpty ? null : Money(fileTotals.reduce((a, b) => a > b ? a : b)),
+        houseExpenses: {
+          for (final e in expenses)
+            if (e['is_recurring'] != true) e['id'] as String: Money((e['amount_cents'] as num).toInt()),
+        },
+      );
+    } catch (e) {
+      throw _failure('Erro ao montar a fatura inteira', e);
     }
   }
 

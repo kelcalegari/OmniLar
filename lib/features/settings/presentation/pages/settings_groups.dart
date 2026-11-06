@@ -545,6 +545,8 @@ extension _SettingsGroupViews on _SettingsPageState {
                   child: CardInvoicePaymentSheet(
                     card: pm,
                     memberNames: {for (final m in members) m.id: m.name.split(' ').first},
+                    loadBreakdown: (dueDate) =>
+                        sl<ImportRepository>().cardInvoiceBreakdown(paymentMethodId: pm.id, dueDate: dueDate),
                     repository: sl<FinanceRepository>(),
                     financeCubit: financeCubit,
                     cycleSchedule: financeCubit.cycleSchedule,
