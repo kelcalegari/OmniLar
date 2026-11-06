@@ -6,6 +6,7 @@ import 'package:omni_lar/core/domain/value_objects/cycle_schedule.dart';
 import 'package:omni_lar/core/domain/value_objects/money.dart';
 import 'package:omni_lar/features/finance/domain/entities/financial_cycle_summary.dart';
 import 'package:omni_lar/features/finance/domain/entities/house_expense.dart';
+import 'package:omni_lar/features/finance/domain/entities/opening_inflows.dart';
 import 'package:omni_lar/features/finance/domain/entities/split_rule.dart';
 import 'package:omni_lar/features/finance/presentation/cubit/finance_cubit.dart';
 import 'package:omni_lar/features/finance/presentation/widgets/expense_timeline_item.dart';
@@ -139,6 +140,45 @@ void main() {
     expect(find.text(const Money(25249).format()), findsOneWidget);
     expect(find.text(const Money(198658).format()), findsNothing);
     expect(find.text(const Money(173409).format()), findsNothing);
+  });
+
+  testWidgets('entrada de fora fica em Outras entradas, não no Saldo Anterior', (tester) async {
+    final cycle = CycleSchedule(7).cycleFor(DateTime.now());
+    // Ciclo 07/11 a 30/11/2026: nada sobrou do fechamento, 467,57 de entrada de
+    // fora ("Saldo do inter"), 4.291,38 a vencer e 1.490,28 emprestados
+    final summary = FinancialCycleSummary(
+      cycle: cycle,
+      totalContributions: const Money.zero(),
+      totalExpensesPaid: const Money.zero(),
+      committedFutureExpenses: const Money(429138),
+      folego: const Money(-531409),
+      memberContributions: const {},
+      memberExpensesPaid: const {},
+      houseLoansFunded: const Money(149028),
+      openingInflows: const OpeningInflows(thirdParty: Money(46757)),
+    );
+    expect(summary.openingBalance, const Money(46757));
+    expect(summary.otherInflows, const Money(46757));
+    expect(summary.previousBalance, const Money.zero());
+
+    await tester.pumpWidget(MaterialApp(
+      home: Scaffold(
+        body: SingleChildScrollView(
+          child: FolegoGaugeCard(
+            summary: summary,
+            cycle: cycle,
+            onPreviousCycle: () {},
+            onNextCycle: () {},
+          ),
+        ),
+      ),
+    ));
+
+    expect(find.byKey(const Key('folego_extra_metrics')), findsOneWidget);
+    expect(find.text('Saldo Anterior'), findsOneWidget);
+    expect(find.text(const Money.zero().format()), findsWidgets);
+    expect(find.text('Outras entradas'), findsOneWidget);
+    expect(find.text(const Money(46757).format()), findsOneWidget);
   });
 
   testWidgets('em tela estreita o valor e o "Pagar" descem para baixo do título', (tester) async {

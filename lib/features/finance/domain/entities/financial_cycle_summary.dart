@@ -66,10 +66,19 @@ class FinancialCycleSummary extends Equatable {
     return Money(cents > 0 ? cents : 0);
   }
 
-  /// O que entrou no Caixa sem ser aporte, fora os empréstimos pagos de volta
-  /// (esses aparecem em [houseLoansNet]). É o "Saldo Anterior" do card.
+  /// Entradas de fora lançadas no ciclo (Pix de terceiros, outras entradas).
+  /// Não são saldo anterior: o card mostra em "Outras entradas".
+  Money get otherInflows {
+    final cents = openingInflows?.thirdParty.cents ?? 0;
+    return Money(cents > 0 ? cents : 0);
+  }
+
+  /// O que o ciclo anterior deixou no Caixa: a sobra do fechamento e os
+  /// resgates das caixinhas. Fica de fora o empréstimo pago de volta (vai em
+  /// [houseLoansNet]) e as entradas de fora (vão em [otherInflows]). É o
+  /// "Saldo Anterior" do card.
   Money get previousBalance {
-    final cents = openingBalance.cents - houseLoansReturned.cents;
+    final cents = openingBalance.cents - houseLoansReturned.cents - otherInflows.cents;
     return Money(cents > 0 ? cents : 0);
   }
 
