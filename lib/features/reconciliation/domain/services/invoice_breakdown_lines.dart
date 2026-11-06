@@ -43,6 +43,7 @@ InvoiceFileLine? invoiceFileLineOf(ImportLineRecord record, {String? payerId}) {
     memberId: kind == InvoicePartKind.personal ? payerId : line.assignedMemberId,
     signature: line.signature,
     expenseId: record.expenseId,
+    loanId: record.loanId,
   );
 }
 
@@ -68,5 +69,6 @@ InvoiceFileLine? invoiceFileLineFromRow(Map<String, dynamic> row, {String? payer
     memberId: kind == InvoicePartKind.personal ? payerId : row['assigned_member_id'] as String?,
     signature: row['signature'] as String?,
     expenseId: expenseId,
+    loanId: loanId,
   );
 }

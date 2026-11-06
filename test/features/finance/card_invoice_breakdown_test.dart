@@ -111,6 +111,35 @@ void main() {
       expect((ignored.amount, ignored.counted), (const Money(-345167), false));
     });
 
+    test('parcelas do morador lançadas à mão entram como empréstimo, e não como compra sem lançamento', () {
+      final breakdown = CardInvoiceBreakdown(
+        lines: const [
+          InvoiceFileLine(amount: Money(327182), kind: InvoicePartKind.house, expenseId: 'casa'),
+          InvoiceFileLine(amount: Money(16500), kind: InvoicePartKind.loan, memberId: 'cristiano', loanId: 'beer'),
+        ],
+        importedFileTotal: const Money(369172),
+        houseExpenses: const {'casa': Money(327182)},
+        manualLoans: const [
+          (memberId: 'cristiano', amount: Money(10990)),
+          (memberId: 'cristiano', amount: Money(14500)),
+        ],
+      );
+      expect(breakdown.notLaunched, const Money.zero());
+      expect(breakdown.total, const Money(369172));
+      final manual = breakdown.parts.singleWhere((p) => p.extra == InvoicePartExtra.manualLoan);
+      expect((manual.memberId, manual.amount, manual.count), ('cristiano', const Money(25490), 2));
+    });
+
+    test('sem importação, as compras de morador lançadas à mão somam à parte da Casa', () {
+      final breakdown = CardInvoiceBreakdown(
+        lines: const [],
+        houseExpenses: const {'a': Money(1000)},
+        manualLoans: const [(memberId: 'cristiano', amount: Money(500))],
+      );
+      expect(breakdown.knowsMoreThanHouse, isTrue);
+      expect(breakdown.total, const Money(1500));
+    });
+
     test('a mesma compra em duas importações conta uma vez', () {
       final breakdown = CardInvoiceBreakdown(
         lines: const [

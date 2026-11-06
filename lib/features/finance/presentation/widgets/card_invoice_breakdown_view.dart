@@ -77,7 +77,9 @@ class CardInvoiceBreakdownView extends StatelessWidget {
       case InvoicePartExtra.notLaunched:
         return 'No arquivo, sem lançamento no app';
       case InvoicePartExtra.outsideFile:
-        return 'Casa, lançado só no app';
+        return breakdown.hasImport ? 'Casa, lançado à mão' : 'Casa';
+      case InvoicePartExtra.manualLoan:
+        return 'Empréstimo a ${_name(part.memberId)}, lançado à mão';
       case null:
         break;
     }
@@ -94,6 +96,8 @@ class CardInvoiceBreakdownView extends StatelessWidget {
   String _detail(InvoicePart part) => switch (part.extra) {
     InvoicePartExtra.refunds || InvoicePartExtra.ignoredCredits => _count(part.count, 'linha', 'linhas'),
     InvoicePartExtra.notLaunched => 'a importação deu como já importadas; confira se estão no app',
+    InvoicePartExtra.manualLoan => _count(part.count, 'compra', 'compras'),
+    InvoicePartExtra.outsideFile when !breakdown.hasImport => _count(part.count, 'compra', 'compras'),
     InvoicePartExtra.outsideFile =>
       '${_count(part.count, 'compra', 'compras')} que não ${part.count == 1 ? 'está' : 'estão'} no arquivo importado',
     null => _count(part.count, 'compra', 'compras'),
@@ -104,7 +108,7 @@ class CardInvoiceBreakdownView extends StatelessWidget {
     final theme = Theme.of(context);
     final small = theme.textTheme.bodySmall?.copyWith(fontSize: 11, color: Colors.grey);
 
-    if (!breakdown.hasImport) {
+    if (!breakdown.knowsMoreThanHouse) {
       return Padding(
         padding: const EdgeInsets.only(bottom: 8),
         child: Text(
@@ -128,6 +132,7 @@ class CardInvoiceBreakdownView extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           const Text('Fatura inteira', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+          if (!breakdown.hasImport) Text('Fatura ainda não importada: só o que foi lançado no app.', style: small),
           const SizedBox(height: 6),
           for (final part in breakdown.parts)
             Padding(

@@ -261,11 +261,39 @@ class SupabaseImportRepository implements ImportRepository {
           .isFilter('project_id', null)
           .isFilter('deleted_at', null);
 
+      // Compras de morador lançadas à mão no cartão: empréstimo por parcela,
+      // pelo plano do cartão, que sai do Caixa no dia do vencimento
+      final plans = await client
+          .from('installment_plans')
+          .select('id')
+          .eq('house_id', _houseId)
+          .eq('payment_method_id', paymentMethodId);
+      final planIds = [for (final p in plans) p['id'] as String];
+      final linesLoans = {for (final line in lines) ?line.loanId};
+      final manualLoans = <({String memberId, Money amount})>[];
+      if (planIds.isNotEmpty) {
+        final loans = await client
+            .from('p2p_loans')
+            .select('id, borrower_id, total_amount_cents')
+            .eq('house_id', _houseId)
+            .eq('funded_on', due)
+            .neq('status', 'cancelled')
+            .overlaps('installment_plan_ids', planIds);
+        for (final loan in loans) {
+          if (linesLoans.contains(loan['id'])) continue;
+          manualLoans.add((
+            memberId: loan['borrower_id'] as String,
+            amount: Money((loan['total_amount_cents'] as num).toInt()),
+          ));
+        }
+      }
+
       // O arquivo mais completo: a prévia e a fatura fechada têm totais diferentes
       final fileTotals = [for (final b in batches) (b['total_cents'] as num?)?.toInt() ?? 0];
       return CardInvoiceBreakdown(
         lines: lines,
         importedFileTotal: fileTotals.isEmpty ? null : Money(fileTotals.reduce((a, b) => a > b ? a : b)),
+        manualLoans: manualLoans,
         houseExpenses: {
           for (final e in expenses)
             if (e['is_recurring'] != true) e['id'] as String: Money((e['amount_cents'] as num).toInt()),
