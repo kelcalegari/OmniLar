@@ -511,6 +511,14 @@ void main() {
       expect(parsed.toJson(), {'manual': true, 'import': false, 'house': true});
     });
 
+    test('interruptor geral: dispensa o aceite em todas as origens', () {
+      expect(const LoanAcceptance().anyRequired, isTrue);
+      expect(const LoanAcceptance.all(false).toJson(), {'manual': false, 'import': false, 'house': false});
+      expect(const LoanAcceptance.all(false).anyRequired, isFalse);
+      expect(const LoanAcceptance.all(true), const LoanAcceptance());
+      expect(const LoanAcceptance(manual: false, import: false).anyRequired, isTrue);
+    });
+
     test('outro devedor: o aceite de quem devia antes não vale', () async {
       await firstInvoice(_card(), debtor: 'cristiano');
       final planId = (await repository.installmentPlans('pm_magalu')).single.id;
