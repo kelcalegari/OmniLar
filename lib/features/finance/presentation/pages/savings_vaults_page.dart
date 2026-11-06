@@ -1,3 +1,4 @@
+import 'package:clock/clock.dart';
 import '../../domain/repositories/finance_repository.dart';
 import '../../../finance/domain/entities/house_permissions.dart';
 import 'package:flutter/material.dart';
@@ -112,7 +113,7 @@ class _SavingsVaultsPageState extends State<SavingsVaultsPage> {
                           onPressed: targetCents <= 0
                               ? null
                               : () async {
-                                  final now = DateTime.now();
+                                  final now = clock.now();
                                   final picked = await showDatePicker(
                                     context: context,
                                     initialDate: targetDate ?? DateTime(now.year, now.month + 6, now.day),
@@ -235,12 +236,12 @@ class _SavingsVaultsPageState extends State<SavingsVaultsPage> {
                     ));
                   } else {
                     ok = await cubit.createSavingsVault(SavingsVault(
-                      id: 'vault_${DateTime.now().millisecondsSinceEpoch}',
+                      id: 'vault_${clock.now().millisecondsSinceEpoch}',
                       name: name,
                       targetAmount: Money(targetCents),
                       icon: selectedIcon,
                       colorHex: selectedColor,
-                      createdAt: DateTime.now(),
+                      createdAt: clock.now(),
                       targetDate: deadline,
                       countsInQuota: canEditQuota && countsInQuota,
                       monthlyGoal: canEditQuota && monthlyGoalCents > 0 ? Money(monthlyGoalCents) : null,
@@ -275,7 +276,7 @@ class _SavingsVaultsPageState extends State<SavingsVaultsPage> {
     const quickReasons = ['Aporte mensal', 'Sobra do mês', 'Reforço da meta', 'Presente'];
 
     // Do Caixa do ciclo em andamento só volta o que as caixinhas devolveram a ele
-    final currentCycle = cubit.cycleSchedule.cycleFor(DateTime.now());
+    final currentCycle = cubit.cycleSchedule.cycleFor(clock.now());
     var availableFromCycle = const Money.zero();
     try {
       availableFromCycle = await sl<FinanceRepository>().getVaultReturnsForCycle(currentCycle);
@@ -634,7 +635,7 @@ class _SavingsVaultsPageState extends State<SavingsVaultsPage> {
         : (authRepo.currentUser?.id ?? '');
     final descController = TextEditingController();
     // Ciclo em andamento: só ele pode receber o valor de volta no Caixa
-    final currentCycle = cubit.cycleSchedule.cycleFor(DateTime.now());
+    final currentCycle = cubit.cycleSchedule.cycleFor(clock.now());
     var returnToCycle = false;
     String? reasonError;
     const quickReasons = ['Emergência', 'Conserto', 'Despesa da casa', 'Reforçar o Caixa do ciclo'];
@@ -794,7 +795,7 @@ class _SavingsVaultsPageState extends State<SavingsVaultsPage> {
           final vaults = state.savingsVaults;
           final totalSavings = state.totalSavings;
           final members = state.members;
-          final today = DateTime.now();
+          final today = clock.now();
           _handleLink(context, state);
 
           return ResponsiveContainer(

@@ -1,3 +1,4 @@
+import 'package:clock/clock.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
@@ -93,7 +94,7 @@ class _NotificationsPageState extends State<NotificationsPage> {
       );
     }
 
-    final groups = groupNotificationsByDay(state.items, DateTime.now());
+    final groups = groupNotificationsByDay(state.items, clock.now());
     return RefreshIndicator(
       onRefresh: () => context.read<NotificationsCubit>().load(),
       child: ListView(

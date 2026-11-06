@@ -1,3 +1,4 @@
+import 'package:clock/clock.dart';
 import 'dart:convert';
 
 import 'package:file_picker/file_picker.dart';
@@ -176,7 +177,7 @@ class _AccountSecurityPanelState extends State<AccountSecurityPanel> {
     final messenger = ScaffoldMessenger.of(context);
     try {
       final json = await context.read<AuthCubit>().exportMyData();
-      final stamp = DateTime.now().toIso8601String().split('T').first;
+      final stamp = clock.now().toIso8601String().split('T').first;
       await FilePicker.saveFile(
         fileName: 'omnilar-meus-dados-$stamp.json',
         bytes: Uint8List.fromList(utf8.encode(json)),

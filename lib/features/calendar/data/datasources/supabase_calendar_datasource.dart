@@ -1,3 +1,4 @@
+import 'package:clock/clock.dart';
 import 'dart:async';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../../core/domain/enums/recurrence.dart';
@@ -427,7 +428,7 @@ class SupabaseCalendarDataSource implements CalendarDataSource {
           .from('event_participants')
           .update({
             'rsvp_status': status.name,
-            'responded_at': DateTime.now().toUtc().toIso8601String(),
+            'responded_at': clock.now().toUtc().toIso8601String(),
           })
           .eq('event_id', eventId)
           .eq('user_id', memberId);
@@ -497,7 +498,7 @@ class SupabaseCalendarDataSource implements CalendarDataSource {
           .eq('house_id', _houseId);
 
       if (!includeArchived) {
-        final cutoff = DateTime.now().subtract(const Duration(days: 15)).toUtc().toIso8601String();
+        final cutoff = clock.now().subtract(const Duration(days: 15)).toUtc().toIso8601String();
         query = query.or('is_completed.eq.false,completed_at.gte.$cutoff');
       }
 
@@ -585,7 +586,7 @@ class SupabaseCalendarDataSource implements CalendarDataSource {
         .eq('house_id', _houseId)
         .order('created_at', ascending: false)
         .map((rows) {
-          final cutoff = DateTime.now().subtract(const Duration(days: 15));
+          final cutoff = clock.now().subtract(const Duration(days: 15));
           return rows.where((r) {
             if (includeArchived) return true;
             final isCompleted = (r['is_completed'] as bool?) ?? false;
@@ -622,7 +623,7 @@ class SupabaseCalendarDataSource implements CalendarDataSource {
               priority: priority,
               cost: costCents != null ? Money(costCents) : null,
               createdByMemberId: r['created_by'] as String? ?? '',
-              createdAt: DateTime.tryParse(r['created_at'] as String? ?? '')?.toLocal() ?? DateTime.now(),
+              createdAt: DateTime.tryParse(r['created_at'] as String? ?? '')?.toLocal() ?? clock.now(),
               recurrence: TaskRecurrence.fromDb(r['recurrence']),
               rotationMemberIds: _uuidList(r['rotation_members']),
               nextAssigneeMemberId: r['next_assignee'] as String?,
@@ -692,7 +693,7 @@ class SupabaseCalendarDataSource implements CalendarDataSource {
 
       await client.from('tasks').update({
         'is_completed': isDone,
-        'completed_at': isDone ? DateTime.now().toUtc().toIso8601String() : null,
+        'completed_at': isDone ? clock.now().toUtc().toIso8601String() : null,
         'completed_by': isDone ? completedByMemberId : null,
       }).eq('id', taskId);
     } catch (e) {
@@ -710,7 +711,7 @@ class SupabaseCalendarDataSource implements CalendarDataSource {
     try {
       await client.from('tasks').update({
         'is_completed': completed,
-        'completed_at': completed ? (at ?? DateTime.now()).toUtc().toIso8601String() : null,
+        'completed_at': completed ? (at ?? clock.now()).toUtc().toIso8601String() : null,
         'completed_by': completed ? completedByMemberId : null,
       }).eq('id', taskId);
     } catch (e) {

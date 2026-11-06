@@ -1,3 +1,4 @@
+import 'package:clock/clock.dart';
 import 'package:flutter/material.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/widgets/privacy_toggle.dart';
@@ -49,7 +50,7 @@ class FolegoGaugeCard extends StatelessWidget {
     String statusText;
     IconData statusIcon;
 
-    final isCurrentCycle = cycle.contains(DateTime.now());
+    final isCurrentCycle = cycle.contains(clock.now());
 
     switch (status) {
       case FolegoStatus.positive:
@@ -297,7 +298,7 @@ class FolegoGaugeCard extends StatelessWidget {
                   const SizedBox(height: 14),
                   Builder(
                     builder: (context) {
-                      final now = DateTime.now();
+                      final now = clock.now();
                       final end = cycle.endDate;
                       final daysRemaining = end.isAfter(now)
                           ? end.difference(now).inDays + 1

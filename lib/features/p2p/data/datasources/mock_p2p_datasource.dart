@@ -1,3 +1,4 @@
+import 'package:clock/clock.dart';
 import '../../domain/entities/p2p_loan.dart';
 import '../../domain/entities/p2p_installment.dart';
 import '../../domain/entities/p2p_payment_record.dart';
@@ -11,7 +12,7 @@ class MockP2PDataSource implements P2PDataSource {
   final Map<String, List<P2PPaymentRecord>> _paymentsByLoan = {};
 
   MockP2PDataSource() {
-    final now = DateTime.now();
+    final now = clock.now();
 
     // 1. Camisa Zara (Marina deve para Carlos)
     final loan1Id = 'loan_zara';
@@ -173,7 +174,7 @@ class MockP2PDataSource implements P2PDataSource {
         final newPaidAmount = currentInst.paidAmount + amount;
         final updatedInst = currentInst.copyWith(
           paidAmount: newPaidAmount,
-          paidAt: DateTime.now(),
+          paidAt: clock.now(),
         );
 
         final updatedInstallments = List<P2PInstallment>.from(loan.installments);
@@ -181,7 +182,7 @@ class MockP2PDataSource implements P2PDataSource {
 
         _paymentsByLoan
             .putIfAbsent(loan.id, () => [])
-            .insert(0, P2PPaymentRecord(amount: amount, paidAt: DateTime.now()));
+            .insert(0, P2PPaymentRecord(amount: amount, paidAt: clock.now()));
 
         final isAllPaid = updatedInstallments
             .every((inst) => inst.isFullyPaid || inst.isCancelled || inst.isForgiven);

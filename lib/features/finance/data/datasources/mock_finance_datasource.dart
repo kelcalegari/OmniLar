@@ -1,3 +1,4 @@
+import 'package:clock/clock.dart';
 import '../../../../core/errors/failures.dart';
 import '../../domain/entities/house_permissions.dart';
 import '../../domain/entities/card_invoice.dart';
@@ -125,7 +126,7 @@ class MockFinanceDataSource implements FinanceDataSource {
   final List<HouseExpense> _expenses = [];
 
   MockFinanceDataSource() {
-    final now = DateTime.now();
+    final now = clock.now();
     final currentCycle = FinancialCycle.fromDate(
       date: now,
       cycleStartDay: 5,
@@ -335,7 +336,7 @@ class MockFinanceDataSource implements FinanceDataSource {
   @override
   Future<List<HouseExpense>> getExpensesForCycle(FinancialCycle cycle) async {
     // Como no banco: ciclo atual ou futuro ganha as contas recorrentes que faltam
-    if (!cycle.endDate.isBefore(DateTime.now())) _generateRecurringExpenses(cycle.endDate);
+    if (!cycle.endDate.isBefore(clock.now())) _generateRecurringExpenses(cycle.endDate);
     return _expenses.where((e) {
       final card = _paymentMethods
           .where((pm) => pm.id == e.paymentMethodId && pm.type == PaymentMethodType.card)
@@ -358,7 +359,7 @@ class MockFinanceDataSource implements FinanceDataSource {
   /// três meses à frente. A série é a primeira despesa (matriz) mais as
   /// ocorrências ligadas a ela por `recurringSeriesId`.
   void _generateRecurringExpenses(DateTime until) {
-    final now = DateTime.now();
+    final now = clock.now();
     final cap = DateTime(now.year, now.month + 3, now.day);
     final limit = until.isAfter(cap) ? cap : until;
 
@@ -452,7 +453,7 @@ class MockFinanceDataSource implements FinanceDataSource {
   @override
   Future<DateTime?> getHouseStartDate() async {
     // A casa demo existe há uns seis meses
-    final now = DateTime.now();
+    final now = clock.now();
     final dates = [
       DateTime(now.year, now.month - 6, now.day),
       for (final e in _expenses.where((e) => e.projectId == null)) ...[e.date, ?e.dueDate],
@@ -564,14 +565,14 @@ class MockFinanceDataSource implements FinanceDataSource {
     }
     _expenses.insert(0, toAdd);
     _auditLogs.add(AuditEntry(
-      id: 'aud_${DateTime.now().millisecondsSinceEpoch}_${expense.id}',
+      id: 'aud_${clock.now().millisecondsSinceEpoch}_${expense.id}',
       actorId: expense.paidByMemberId,
       actorName: _members.firstWhere((m) => m.id == expense.paidByMemberId, orElse: () => _members.first).name,
       entityType: 'house_expenses',
       entityId: expense.id,
       action: 'create',
       diff: {'title': expense.title, 'amount_cents': expense.amount.cents},
-      createdAt: DateTime.now(),
+      createdAt: clock.now(),
     ));
   }
 
@@ -587,14 +588,14 @@ class MockFinanceDataSource implements FinanceDataSource {
     }
     final current = _expenses[index];
     _auditLogs.add(AuditEntry(
-      id: 'aud_${DateTime.now().millisecondsSinceEpoch}_${expense.id}',
+      id: 'aud_${clock.now().millisecondsSinceEpoch}_${expense.id}',
       actorId: expense.paidByMemberId,
       actorName: _members.firstWhere((m) => m.id == expense.paidByMemberId, orElse: () => _members.first).name,
       entityType: 'house_expenses',
       entityId: expense.id,
       action: 'update',
       diff: {'title': expense.title, 'amount_cents': expense.amount.cents},
-      createdAt: DateTime.now(),
+      createdAt: clock.now(),
     ));
 
     switch (scope) {
@@ -665,14 +666,14 @@ class MockFinanceDataSource implements FinanceDataSource {
     if (index == -1) return;
     final current = _expenses[index];
     _auditLogs.add(AuditEntry(
-      id: 'aud_${DateTime.now().millisecondsSinceEpoch}_$expenseId',
+      id: 'aud_${clock.now().millisecondsSinceEpoch}_$expenseId',
       actorId: current.paidByMemberId,
       actorName: _members.firstWhere((m) => m.id == current.paidByMemberId, orElse: () => _members.first).name,
       entityType: 'house_expenses',
       entityId: expenseId,
       action: 'soft_delete',
       diff: {'title': current.title, 'amount_cents': current.amount.cents},
-      createdAt: DateTime.now(),
+      createdAt: clock.now(),
     ));
 
     switch (scope) {
@@ -838,7 +839,7 @@ class MockFinanceDataSource implements FinanceDataSource {
       currentBalance: const Money(340000), // R$ 3.400,00 (56%)
       icon: 'shield',
       colorHex: '#10B981',
-      createdAt: DateTime.now().subtract(const Duration(days: 90)),
+      createdAt: clock.now().subtract(const Duration(days: 90)),
     ),
     SavingsVault(
       id: 'vault_viagem',
@@ -847,7 +848,7 @@ class MockFinanceDataSource implements FinanceDataSource {
       currentBalance: const Money(180000), // R$ 1.800,00 (60%)
       icon: 'flight',
       colorHex: '#3B82F6',
-      createdAt: DateTime.now().subtract(const Duration(days: 45)),
+      createdAt: clock.now().subtract(const Duration(days: 45)),
     ),
     SavingsVault(
       id: 'vault_reforma',
@@ -856,7 +857,7 @@ class MockFinanceDataSource implements FinanceDataSource {
       currentBalance: const Money(85000), // R$ 850,00 (42%)
       icon: 'home',
       colorHex: '#8B5CF6',
-      createdAt: DateTime.now().subtract(const Duration(days: 30)),
+      createdAt: clock.now().subtract(const Duration(days: 30)),
     ),
   ];
 
@@ -1013,13 +1014,13 @@ class MockFinanceDataSource implements FinanceDataSource {
       _initialReserveTransactionId = null;
       if (!reserve.isZero) {
         final tx = SavingsTransaction(
-          id: old?.id ?? 'tx_initial_${DateTime.now().microsecondsSinceEpoch}',
+          id: old?.id ?? 'tx_initial_${clock.now().microsecondsSinceEpoch}',
           vaultId: vault.id,
           memberId: old?.memberId ?? 'member_carlos',
           amount: reserve,
           type: 'deposit',
           description: 'Saldo inicial da casa',
-          date: old?.date ?? DateTime.now(),
+          date: old?.date ?? clock.now(),
         );
         _savingsTransactions.add(tx);
         _initialReserveTransactionId = tx.id;
@@ -1085,7 +1086,7 @@ class MockFinanceDataSource implements FinanceDataSource {
     }
     _savingsVaults[from] = _savingsVaults[from].copyWith(currentBalance: _savingsVaults[from].currentBalance - amount);
     _savingsVaults[to] = _savingsVaults[to].copyWith(currentBalance: _savingsVaults[to].currentBalance + amount);
-    final now = DateTime.now();
+    final now = clock.now();
     _savingsTransactions.add(SavingsTransaction(
       id: 'tx_${now.microsecondsSinceEpoch}_out',
       vaultId: fromVaultId,
@@ -1142,13 +1143,13 @@ class MockFinanceDataSource implements FinanceDataSource {
         currentBalance: current.currentBalance + amount,
       );
       _savingsTransactions.add(SavingsTransaction(
-        id: 'tx_${DateTime.now().millisecondsSinceEpoch}',
+        id: 'tx_${clock.now().millisecondsSinceEpoch}',
         vaultId: vaultId,
         memberId: memberId,
         amount: amount,
         type: 'deposit',
         description: description,
-        date: DateTime.now(),
+        date: clock.now(),
         cycleStartDate: fromCycleStart,
       ));
     }
@@ -1176,13 +1177,13 @@ class MockFinanceDataSource implements FinanceDataSource {
         currentBalance: current.currentBalance - amount,
       );
       _savingsTransactions.add(SavingsTransaction(
-        id: 'tx_${DateTime.now().millisecondsSinceEpoch}',
+        id: 'tx_${clock.now().millisecondsSinceEpoch}',
         vaultId: vaultId,
         memberId: memberId,
         amount: amount,
         type: 'withdraw',
         description: description,
-        date: DateTime.now(),
+        date: clock.now(),
         cycleStartDate: returnToCycleStart,
       ));
     }
@@ -1356,7 +1357,7 @@ class MockFinanceDataSource implements FinanceDataSource {
         use: use,
         paymentMethodId: paymentMethodId,
         dueDate: invoiceDueDate,
-        at: DateTime.now(),
+        at: clock.now(),
       );
     }
   }

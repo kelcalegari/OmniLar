@@ -1,3 +1,4 @@
+import 'package:clock/clock.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:intl/intl.dart';
@@ -44,7 +45,7 @@ class _AddTaskSheetState extends State<AddTaskSheet> {
   final _descriptionController = TextEditingController();
   final _costController = MoneyTextEditingController(allowEmpty: true);
 
-  DateTime? _dueDate = DateTime.now().add(const Duration(days: 1));
+  DateTime? _dueDate = clock.now().add(const Duration(days: 1));
   TaskPriority _priority = TaskPriority.medium;
   String? _assignedMemberId;
 
@@ -193,9 +194,9 @@ class _AddTaskSheetState extends State<AddTaskSheet> {
   Future<void> _pickDueDate() async {
     final picked = await showDatePicker(
       context: context,
-      initialDate: _dueDate ?? DateTime.now(),
-      firstDate: DateTime.now().subtract(const Duration(days: 30)),
-      lastDate: DateTime.now().add(const Duration(days: 365)),
+      initialDate: _dueDate ?? clock.now(),
+      firstDate: clock.now().subtract(const Duration(days: 30)),
+      lastDate: clock.now().add(const Duration(days: 365)),
     );
     if (picked != null) {
       setState(() => _dueDate = picked);
@@ -210,7 +211,7 @@ class _AddTaskSheetState extends State<AddTaskSheet> {
       cost = _costController.money;
     }
 
-    final now = DateTime.now();
+    final now = clock.now();
     final calendarCubit = context.read<CalendarCubit>();
 
     final edit = widget.taskToEdit;

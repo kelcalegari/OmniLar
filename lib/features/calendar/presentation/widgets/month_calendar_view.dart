@@ -1,3 +1,4 @@
+import 'package:clock/clock.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../../../../core/theme/app_colors.dart';
@@ -43,7 +44,7 @@ class MonthCalendarView extends StatelessWidget {
     const weekHeaders = ['Domingo', 'Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado'];
     const shortWeekHeaders = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
 
-    final now = DateTime.now();
+    final now = clock.now();
 
     final gridContent = Container(
       decoration: BoxDecoration(

@@ -1,3 +1,4 @@
+import 'package:clock/clock.dart';
 import 'package:intl/intl.dart';
 
 import '../../../../core/domain/value_objects/cycle_schedule.dart';
@@ -1541,7 +1542,7 @@ class ImportSession {
     DateTime? now,
     String Function() newId = generateUuidV4,
   }) {
-    final today = now ?? DateTime.now();
+    final today = now ?? clock.now();
     final memberNames = {
       for (final m in members) m.id: m.name.split(' ').first,
     };

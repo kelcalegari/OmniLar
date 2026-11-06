@@ -1,3 +1,4 @@
+import 'package:clock/clock.dart';
 import '../../../../core/domain/value_objects/cycle_schedule.dart';
 import '../../domain/entities/super_pix_transfer.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -135,7 +136,7 @@ class SettlementCubit extends BlocBase<SettlementState> {
   Future<void> _payOpenInvoices(FinancialCycle cycle) async {
     final finance = _financeRepository;
     if (finance == null) return;
-    final now = DateTime.now();
+    final now = clock.now();
     final paidAt = now.isAfter(cycle.endDate) ? cycle.endDate : now;
     for (final invoice in state.openInvoices) {
       final choice = state.options.openInvoiceChoices[invoice.key] ??

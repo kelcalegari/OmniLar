@@ -1,3 +1,4 @@
+import 'package:clock/clock.dart';
 import '../../../finance/domain/entities/savings_vault.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../../../core/domain/value_objects/money.dart';
@@ -102,7 +103,7 @@ class ProjectsCubit extends BlocBase<ProjectsState> {
     String? vaultId,
     ProjectStatus status = ProjectStatus.active,
   }) async {
-    final now = DateTime.now();
+    final now = clock.now();
     final projectId = 'proj_${now.millisecondsSinceEpoch}';
     final userId = currentUserId?.call() ?? demoUserId;
 
@@ -175,7 +176,7 @@ class ProjectsCubit extends BlocBase<ProjectsState> {
   Future<void> changeProjectStatus(SharedProject project, ProjectStatus newStatus) async {
     final updated = project.copyWith(
       status: newStatus,
-      updatedAt: DateTime.now(),
+      updatedAt: clock.now(),
     );
     await updateProject(updated);
   }

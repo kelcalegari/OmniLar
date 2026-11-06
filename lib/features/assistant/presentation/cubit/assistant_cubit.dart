@@ -1,3 +1,4 @@
+import 'package:clock/clock.dart';
 import 'package:equatable/equatable.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:omni_lar/features/assistant/domain/entities/assistant_message.dart';
@@ -52,7 +53,7 @@ class AssistantCubit extends Cubit<AssistantState> {
             content: 'Olá! Sou o Assistente Omni Lar. Posso consultar o caixa da casa, '
                 'acompanhar empréstimos pessoais, adicionar itens na lista de compras '
                 'ou checar compromissos da agenda. Como posso ajudar agora?',
-            createdAt: DateTime.now(),
+            createdAt: clock.now(),
             quickFollowups: const [
               'Quanto sobrou no Caixa?',
               'O que falta na lista de compras?',
@@ -74,10 +75,10 @@ class AssistantCubit extends Cubit<AssistantState> {
     if (query.isEmpty) return;
 
     final userMsg = AssistantMessage(
-      id: 'msg_u_${DateTime.now().millisecondsSinceEpoch}',
+      id: 'msg_u_${clock.now().millisecondsSinceEpoch}',
       role: AssistantRole.user,
       content: query,
-      createdAt: DateTime.now(),
+      createdAt: clock.now(),
     );
 
     emit(state.copyWith(
@@ -92,10 +93,10 @@ class AssistantCubit extends Cubit<AssistantState> {
       );
 
       final assistantMsg = AssistantMessage(
-        id: 'msg_a_${DateTime.now().millisecondsSinceEpoch}',
+        id: 'msg_a_${clock.now().millisecondsSinceEpoch}',
         role: AssistantRole.assistant,
         content: interpretation.textResponse,
-        createdAt: DateTime.now(),
+        createdAt: clock.now(),
         proposedActions: interpretation.actions,
         quickFollowups: interpretation.suggestions,
       );
@@ -107,11 +108,11 @@ class AssistantCubit extends Cubit<AssistantState> {
       ));
     } catch (e) {
       final errorMsg = AssistantMessage(
-        id: 'msg_err_${DateTime.now().millisecondsSinceEpoch}',
+        id: 'msg_err_${clock.now().millisecondsSinceEpoch}',
         role: AssistantRole.system,
         content: 'Desculpe, ocorreu um erro ao consultar os dados da casa. '
             'Você também pode acessar as abas correspondentes diretamente pelo menu.',
-        createdAt: DateTime.now(),
+        createdAt: clock.now(),
       );
 
       emit(state.copyWith(
@@ -149,10 +150,10 @@ class AssistantCubit extends Cubit<AssistantState> {
       }).toList();
 
       final confirmationFeedback = AssistantMessage(
-        id: 'msg_fdb_${DateTime.now().millisecondsSinceEpoch}',
+        id: 'msg_fdb_${clock.now().millisecondsSinceEpoch}',
         role: AssistantRole.assistant,
         content: 'Pronto! Ação "${proposal.title}" confirmada e executada com sucesso.',
-        createdAt: DateTime.now(),
+        createdAt: clock.now(),
       );
 
       emit(state.copyWith(

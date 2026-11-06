@@ -1,3 +1,4 @@
+import 'package:clock/clock.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../../../core/domain/value_objects/money.dart';
@@ -75,7 +76,7 @@ class CyclePreviewSection extends StatelessWidget {
     final preview = state.preview;
     String subtitle = '';
     if (preview != null) {
-      final today = DateTime.now();
+      final today = clock.now();
       final end = preview.cycle.endDate;
       if (preview.isSettled) {
         subtitle = preview.settledAt != null
