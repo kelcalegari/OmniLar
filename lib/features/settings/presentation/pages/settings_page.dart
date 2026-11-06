@@ -883,12 +883,23 @@ class _SettingsPageState extends State<SettingsPage> {
                                       ),
                                     ),
                                   ),
+                                  IconButton(
+                                    tooltip: 'Diminuir 1% de ${firstName(m)}',
+                                    icon: const Icon(Icons.remove, size: 18),
+                                    visualDensity: VisualDensity.compact,
+                                    onPressed: percentByMember[m.id]! > 0
+                                        ? () => setModalState(() {
+                                              percentByMember[m.id] = percentByMember[m.id]! - 1;
+                                            })
+                                        : null,
+                                  ),
                                   Expanded(
                                     child: Slider(
                                       value: percentByMember[m.id]!.toDouble().clamp(0, 100),
                                       min: 0,
                                       max: 100,
                                       divisions: 100,
+                                      label: '${percentByMember[m.id]}%',
                                       activeColor: AppColors.primary,
                                       inactiveColor: AppColors.accent.withValues(
                                         alpha: 0.3,
@@ -899,6 +910,16 @@ class _SettingsPageState extends State<SettingsPage> {
                                         });
                                       },
                                     ),
+                                  ),
+                                  IconButton(
+                                    tooltip: 'Aumentar 1% de ${firstName(m)}',
+                                    icon: const Icon(Icons.add, size: 18),
+                                    visualDensity: VisualDensity.compact,
+                                    onPressed: percentByMember[m.id]! < 100
+                                        ? () => setModalState(() {
+                                              percentByMember[m.id] = percentByMember[m.id]! + 1;
+                                            })
+                                        : null,
                                   ),
                                 ],
                               ),
@@ -960,21 +981,51 @@ class _SettingsPageState extends State<SettingsPage> {
                                 ),
                               ],
                             ),
-                            Slider(
-                              value: percent1.clamp(10, 90),
-                              min: 10,
-                              max: 90,
-                              divisions: 16,
-                              activeColor: AppColors.primary,
-                              inactiveColor: AppColors.accent.withValues(
-                                alpha: 0.3,
-                              ),
-                              onChanged: (val) {
-                                setModalState(() {
-                                  percent1 = val;
-                                  percent2 = 100 - val;
-                                });
-                              },
+                            Row(
+                              children: [
+                                IconButton(
+                                  tooltip: 'Diminuir 1% de $name1',
+                                  icon: const Icon(Icons.remove_circle_outline),
+                                  visualDensity: VisualDensity.compact,
+                                  onPressed: percent1.round() > 10
+                                      ? () => setModalState(() {
+                                            percent1 = percent1.round() - 1.0;
+                                            percent2 = 100 - percent1;
+                                          })
+                                      : null,
+                                ),
+                                Expanded(
+                                  // Passos de 1% (80 divisões entre 10 e 90)
+                                  child: Slider(
+                                    value: percent1.clamp(10, 90),
+                                    min: 10,
+                                    max: 90,
+                                    divisions: 80,
+                                    label: '${percent1.round()}% / ${percent2.round()}%',
+                                    activeColor: AppColors.primary,
+                                    inactiveColor: AppColors.accent.withValues(
+                                      alpha: 0.3,
+                                    ),
+                                    onChanged: (val) {
+                                      setModalState(() {
+                                        percent1 = val.roundToDouble();
+                                        percent2 = 100 - percent1;
+                                      });
+                                    },
+                                  ),
+                                ),
+                                IconButton(
+                                  tooltip: 'Aumentar 1% de $name1',
+                                  icon: const Icon(Icons.add_circle_outline),
+                                  visualDensity: VisualDensity.compact,
+                                  onPressed: percent1.round() < 90
+                                      ? () => setModalState(() {
+                                            percent1 = percent1.round() + 1.0;
+                                            percent2 = 100 - percent1;
+                                          })
+                                      : null,
+                                ),
+                              ],
                             ),
                             Wrap(
                               alignment: WrapAlignment.center,
