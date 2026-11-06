@@ -1,4 +1,6 @@
 import 'bill_code_field.dart';
+import 'card_invoice_breakdown_view.dart';
+import '../../domain/entities/card_invoice_breakdown.dart';
 import '../../domain/services/pending_payment.dart';
 import '../../../../core/domain/value_objects/cycle_schedule.dart';
 import 'package:flutter/material.dart';
@@ -31,6 +33,9 @@ class CardInvoicePaymentSheet extends StatefulWidget {
   /// Nomes dos moradores, para dizer de quem é o bolso.
   final Map<String, String> memberNames;
 
+  /// Carrega a fatura inteira de um vencimento, para conferir com o banco.
+  final Future<CardInvoiceBreakdown> Function(DateTime dueDate)? loadBreakdown;
+
   const CardInvoicePaymentSheet({
     super.key,
     required this.card,
@@ -40,6 +45,7 @@ class CardInvoicePaymentSheet extends StatefulWidget {
     required this.isCycleClosed,
     this.initialDueDate,
     this.memberNames = const {},
+    this.loadBreakdown,
   });
 
   @override
@@ -317,6 +323,15 @@ class _CardInvoicePaymentSheetState extends State<CardInvoicePaymentSheet> {
                             style: const TextStyle(fontSize: 12),
                           ),
                           onTap: _busy ? null : () => setState(() => _selected = invoice),
+                        ),
+                      if (selected != null && widget.loadBreakdown != null)
+                        CardInvoiceBreakdownLoader(
+                          key: ValueKey('sheet_breakdown_${selected.dueDate}'),
+                          reloadKey: selected.dueDate,
+                          load: () => widget.loadBreakdown!(selected.dueDate),
+                          builder: (context, breakdown) => breakdown == null
+                              ? const SizedBox.shrink()
+                              : CardInvoiceBreakdownView(breakdown: breakdown, memberNames: widget.memberNames),
                         ),
                       if (selected != null) ...[
                         const SizedBox(height: 4),

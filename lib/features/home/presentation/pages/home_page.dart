@@ -11,12 +11,14 @@ import '../../../../core/widgets/save_feedback.dart';
 import '../../../../core/widgets/theme_toggle_button.dart';
 import '../../../../core/widgets/house_switcher_sheet.dart';
 import '../../../../core/di/service_locator.dart';
+import '../../../reconciliation/domain/repositories/import_repository.dart';
 import '../../../finance/presentation/pages/add_contribution_page.dart';
 import '../../../auth/domain/repositories/auth_repository.dart';
 import '../../../auth/presentation/cubit/auth_cubit.dart';
 import '../../../auth/presentation/cubit/auth_state.dart';
 import '../../../finance/presentation/cubit/finance_cubit.dart';
 import '../../../finance/presentation/cubit/finance_state.dart';
+import '../../../finance/domain/entities/card_invoice_breakdown.dart';
 import '../../../finance/domain/entities/contribution.dart';
 import '../../../finance/domain/entities/house_expense.dart';
 import '../../../finance/domain/entities/house_inflow.dart';
@@ -27,6 +29,7 @@ import '../../../finance/domain/services/cycle_expense_grouping.dart';
 import '../../../finance/domain/services/expense_search.dart';
 import '../../../finance/presentation/widgets/expense_grid_table.dart';
 import '../../../../core/widgets/search_shortcut.dart';
+import '../../../finance/presentation/widgets/card_invoice_breakdown_view.dart';
 import '../../../finance/presentation/widgets/card_invoice_group_tile.dart';
 import '../../../finance/presentation/widgets/card_invoice_payment_sheet.dart';
 import '../../../finance/presentation/widgets/reconcile_cash_modal.dart';
@@ -998,8 +1001,23 @@ class _HomePageContentState extends State<_HomePageContent> {
                   // A fatura que guarda a despesa selecionada fica aberta
                   final expanded = _expandedInvoices.contains(entry.key) ||
                       entry.purchases.any((e) => e.id == _selectedExpenseId);
-                  return CardInvoiceGroupTile(
+                  final memberNames = {for (final m in state.members) m.id: m.name.split(' ').first};
+                  Future<CardInvoiceBreakdown> loadBreakdown(DateTime dueDate) =>
+                      sl<ImportRepository>().cardInvoiceBreakdown(paymentMethodId: entry.card.id, dueDate: dueDate);
+                  return CardInvoiceBreakdownLoader(
+                    key: ValueKey('breakdown_${entry.key}'),
+                    // Recarrega quando as compras da Casa da fatura mudam
+                    reloadKey: Object.hash(
+                      entry.key,
+                      entry.total.cents,
+                      entry.purchases.length,
+                      entry.paidAt,
+                    ),
+                    load: () => loadBreakdown(entry.dueDate),
+                    builder: (context, breakdown) => CardInvoiceGroupTile(
                     invoice: entry,
+                    breakdown: breakdown,
+                    memberNames: memberNames,
                     barcode: state.invoiceCodeFor(entry.card.id, entry.dueDate),
                     expanded: expanded,
                     onToggle: () => setState(() {
@@ -1023,7 +1041,8 @@ class _HomePageContentState extends State<_HomePageContent> {
                         child: CardInvoicePaymentSheet(
                           card: entry.card,
                           initialDueDate: entry.dueDate,
-                          memberNames: {for (final m in state.members) m.id: m.name.split(' ').first},
+                          memberNames: memberNames,
+                          loadBreakdown: loadBreakdown,
                           repository: sl<FinanceRepository>(),
                           financeCubit: financeCubit,
                           cycleSchedule: financeCubit.cycleSchedule,
@@ -1036,6 +1055,7 @@ class _HomePageContentState extends State<_HomePageContent> {
                     children: [
                       for (final expense in entry.purchases) item(expense, inInvoice: true),
                     ],
+                  ),
                   );
               }
             }),

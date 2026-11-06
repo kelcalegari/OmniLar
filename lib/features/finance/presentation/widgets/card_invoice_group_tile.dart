@@ -2,7 +2,9 @@ import '../../../../core/utils/clipboard_helper.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../../../../core/theme/app_colors.dart';
+import '../../domain/entities/card_invoice_breakdown.dart';
 import '../../domain/services/cycle_expense_grouping.dart';
+import 'card_invoice_breakdown_view.dart';
 
 /// Fatura de um cartão na lista de gastos do ciclo: mostra o total e, aberta,
 /// as compras dela. Não muda as despesas; só as junta na tela.
@@ -23,6 +25,12 @@ class CardInvoiceGroupTile extends StatelessWidget {
   /// Código do boleto da fatura, para copiar e pagar no app do banco.
   final String? barcode;
 
+  /// A fatura inteira (Casa, empréstimos, pessoal...), quando já carregou.
+  final CardInvoiceBreakdown? breakdown;
+
+  /// Nomes dos moradores, para a fatura inteira.
+  final Map<String, String> memberNames;
+
   const CardInvoiceGroupTile({
     super.key,
     required this.invoice,
@@ -32,6 +40,8 @@ class CardInvoiceGroupTile extends StatelessWidget {
     this.onRegisterPayment,
     this.onImport,
     this.barcode,
+    this.breakdown,
+    this.memberNames = const {},
   });
 
   static final _day = DateFormat('dd/MM');
@@ -42,6 +52,10 @@ class CardInvoiceGroupTile extends StatelessWidget {
     final paidAt = invoice.paidAt;
     final overdue = invoice.isOverdue(DateTime.now());
     final count = invoice.purchases.length;
+    // Com a fatura importada, o valor principal é o da fatura inteira; a parte
+    // da Casa fica embaixo, para não confundir com o que a Casa gastou
+    final whole = breakdown;
+    final showWhole = whole != null && whole.hasImport && whole.total != invoice.total;
 
     return Container(
       margin: const EdgeInsets.only(bottom: 10),
@@ -125,7 +139,8 @@ class CardInvoiceGroupTile extends StatelessWidget {
                       crossAxisAlignment: CrossAxisAlignment.end,
                       children: [
                         Text(
-                          invoice.total.format(),
+                          (showWhole ? whole.total : invoice.total).format(),
+                          key: Key('invoice_header_total_${invoice.key}'),
                           style: TextStyle(
                             fontWeight: FontWeight.bold,
                             fontSize: 15,
@@ -134,6 +149,11 @@ class CardInvoiceGroupTile extends StatelessWidget {
                                 : (overdue ? AppColors.debtRed : AppColors.folegoWarning),
                           ),
                         ),
+                        if (showWhole)
+                          Text(
+                            'Casa ${invoice.total.format()}',
+                            style: theme.textTheme.bodySmall?.copyWith(fontSize: 10, color: Colors.grey),
+                          ),
                         if (paidAt == null && onRegisterPayment != null) ...[
                           const SizedBox(height: 4),
                           InkWell(
@@ -181,6 +201,8 @@ class CardInvoiceGroupTile extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
+                    if (whole != null)
+                      CardInvoiceBreakdownView(breakdown: whole, memberNames: memberNames),
                     ...children,
                     if (onRegisterPayment != null || onImport != null)
                       Padding(

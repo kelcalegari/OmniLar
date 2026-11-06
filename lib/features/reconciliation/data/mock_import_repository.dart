@@ -1,12 +1,16 @@
 import '../../../core/errors/failures.dart';
 import '../../../core/utils/uuid.dart';
 import '../../finance/data/datasources/finance_datasource.dart';
+import '../../../core/domain/value_objects/financial_cycle.dart';
+import '../../../core/domain/value_objects/money.dart';
+import '../../finance/domain/entities/card_invoice_breakdown.dart';
 import '../../finance/domain/entities/house_expense.dart';
 import '../../p2p/data/datasources/p2p_datasource.dart';
 import '../domain/entities/installment_plan.dart';
 import '../domain/repositories/import_repository.dart';
 import '../domain/services/import_session.dart';
 import '../domain/services/installment_purchase.dart';
+import '../domain/services/invoice_breakdown_lines.dart';
 
 class _StoredImport {
   final ImportBatch batch;
@@ -21,9 +25,13 @@ class _StoredImport {
   final List<({String planId, int number, HouseExpense expense})> replacedForecasts;
   final List<InstallmentPlan> previousPlans;
 
+  /// Quem pagou a fatura (dono dos gastos pessoais).
+  final String? payerId;
+
   const _StoredImport(
     this.batch,
     this.records, {
+    this.payerId,
     this.createdPlanIds = const {},
     this.confirmedForecasts = const [],
     this.replacedForecasts = const [],
@@ -177,6 +185,7 @@ class MockImportRepository implements ImportRepository {
           createdAt: DateTime.now(),
         ),
         plan.lineRecords,
+        payerId: session.payerMemberId,
         createdPlanIds: createdPlanIds,
         confirmedForecasts: confirmedForecasts,
         replacedForecasts: replacedForecasts,
@@ -275,6 +284,38 @@ class MockImportRepository implements ImportRepository {
       ]..sort((a, b) => a.date.compareTo(b.date));
 
   @override
+  Future<CardInvoiceBreakdown> cardInvoiceBreakdown({
+    required String paymentMethodId,
+    required DateTime dueDate,
+  }) async {
+    bool sameDay(DateTime? a) =>
+        a != null && a.year == dueDate.year && a.month == dueDate.month && a.day == dueDate.day;
+    // Da importação mais antiga para a mais nova (as novas ficam antes na lista)
+    final lines = [
+      for (final stored in _imports.reversed)
+        if (!stored.batch.isUndone &&
+            stored.batch.paymentMethodId == paymentMethodId &&
+            sameDay(stored.batch.invoiceDueDate))
+          for (final record in stored.records) ?invoiceFileLineOf(record, payerId: stored.payerId),
+    ];
+    // Janela larga: a compra pode contar no ciclo da data dela, e não no do vencimento
+    final expenses = await finance.getExpensesForCycle(
+      FinancialCycle(start: dueDate.subtract(const Duration(days: 400)), end: dueDate.add(const Duration(days: 1))),
+    );
+    return CardInvoiceBreakdown(
+      lines: lines,
+      houseExpenses: <String, Money>{
+        for (final e in expenses)
+          if (e.paymentMethodId == paymentMethodId &&
+              sameDay(e.dueDate) &&
+              !e.isRecurring &&
+              !e.isProjectExpense)
+            e.id: e.amount,
+      },
+    );
+  }
+
+  @override
   Future<void> undoImport(String batchId) async {
     final index = _imports.indexWhere((stored) => stored.batch.id == batchId);
     if (index < 0) throw const NotFoundFailure('Importação não encontrada.');
@@ -347,6 +388,7 @@ class MockImportRepository implements ImportRepository {
         isUndone: true,
       ),
       stored.records,
+      payerId: stored.payerId,
       createdPlanIds: stored.createdPlanIds,
       confirmedForecasts: stored.confirmedForecasts,
       replacedForecasts: stored.replacedForecasts,
@@ -378,6 +420,13 @@ class DynamicImportRepository implements ImportRepository {
 
   @override
   Future<void> undoImport(String batchId) => _active.undoImport(batchId);
+
+  @override
+  Future<CardInvoiceBreakdown> cardInvoiceBreakdown({
+    required String paymentMethodId,
+    required DateTime dueDate,
+  }) =>
+      _active.cardInvoiceBreakdown(paymentMethodId: paymentMethodId, dueDate: dueDate);
 
   @override
   Future<List<LoanPurchase>> purchasesOfLoan(String loanId) => _active.purchasesOfLoan(loanId);
