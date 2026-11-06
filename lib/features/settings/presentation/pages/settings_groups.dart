@@ -187,7 +187,7 @@ extension _SettingsGroupViews on _SettingsPageState {
   ) {
     final blocks = switch (group) {
       _SettingsGroup.house => _houseBlocks(context, authState, financeState),
-      _SettingsGroup.split => _splitBlocks(context, financeState),
+      _SettingsGroup.split => _splitBlocks(context, authState, financeState),
       _SettingsGroup.payments => _paymentBlocks(context, financeState),
       _SettingsGroup.app => _appBlocks(context),
       _SettingsGroup.account => <Widget>[
@@ -282,7 +282,10 @@ extension _SettingsGroupViews on _SettingsPageState {
   }
   // --- Divisão das despesas ---
 
-  List<Widget> _splitBlocks(BuildContext context, FinanceState financeState) {
+  List<Widget> _splitBlocks(BuildContext context, AuthState authState, FinanceState financeState) {
+    // O aceite dos empréstimos é de quem criou a casa (0123): só essa pessoa vê o bloco
+    final isHouseCreator =
+        authState.house?.createdBy != null && authState.house?.createdBy == authState.user?.id;
     final financeCubit = context.read<FinanceCubit>();
     final members = financeState.members;
     final categories = financeState.categories;
@@ -308,7 +311,7 @@ extension _SettingsGroupViews on _SettingsPageState {
       _NewMemberSplitBlock(financeState: financeState),
       _IncomeSplitBlock(financeState: financeState),
       _ApprovalThresholdBlock(financeState: financeState),
-      _LoanAcceptanceBlock(financeState: financeState),
+      if (isHouseCreator) _LoanAcceptanceBlock(financeState: financeState),
       _PlanningSettingsBlock(financeState: financeState),
       _FolegoParamsBlock(financeState: financeState),
       _BudgetAlertBlock(financeState: financeState),
@@ -2962,8 +2965,10 @@ class _ApprovalThresholdBlockState extends State<_ApprovalThresholdBlock> {
 
 
 
-/// Por origem, se o empréstimo lançado por outra pessoa espera o aceite de
-/// quem deve (0116). Cada interruptor grava na hora.
+/// Se o empréstimo lançado por outra pessoa espera o aceite de quem deve
+/// (0116). Só quem criou a casa vê e muda (0123), e vale para todos os
+/// moradores. Um interruptor geral dispensa o aceite de vez; ligado, cada
+/// origem pode ser ajustada. Cada interruptor grava na hora.
 class _LoanAcceptanceBlock extends StatefulWidget {
   final FinanceState financeState;
 
@@ -2976,8 +2981,11 @@ class _LoanAcceptanceBlock extends StatefulWidget {
 class _LoanAcceptanceBlockState extends State<_LoanAcceptanceBlock> {
   bool _isSaving = false;
 
-  bool _canEdit() =>
-      widget.financeState.canDo(HousePermissionAction.editConfigurations, sl<AuthRepository>().currentUser?.id);
+  bool _canEdit() {
+    final house = sl<AuthRepository>().currentHouse;
+    final userId = sl<AuthRepository>().currentUser?.id;
+    return house?.createdBy != null && house!.createdBy == userId;
+  }
 
   Future<void> _save(LoanAcceptance value) async {
     setState(() => _isSaving = true);
@@ -3026,32 +3034,44 @@ class _LoanAcceptanceBlockState extends State<_LoanAcceptanceBlock> {
               padding: EdgeInsets.fromLTRB(16, 0, 16, 8),
               child: Text(
                 'Ligado: o empréstimo lançado por outra pessoa fica fora do fechamento até quem deve aceitar. '
-                'Desligado: ele já nasce aceito.',
+                'Desligado: ele já nasce aceito. Só quem criou a casa muda, e vale para todos os moradores.',
                 style: TextStyle(color: Colors.grey, fontSize: 13),
               ),
             ),
             const Divider(height: 1),
             toggle(
-              'manual',
-              'Lançado à mão',
-              'Empréstimo entre moradores e compra no cartão de um morador lançados no app.',
-              acceptance.manual,
-              (v) => acceptance.copyWith(manual: v),
+              'all',
+              'Pedir aceite de quem deve',
+              acceptance.anyRequired
+                  ? 'Desligue para todo empréstimo já nascer aceito, sem esperar o devedor.'
+                  : 'Todo empréstimo já nasce aceito. Ligue para voltar a pedir o aceite.',
+              acceptance.anyRequired,
+              (v) => LoanAcceptance.all(v),
             ),
-            toggle(
-              'import',
-              'Vindo da importação da fatura',
-              'Compra da fatura marcada para um morador, no cartão da Casa ou de morador.',
-              acceptance.import,
-              (v) => acceptance.copyWith(import: v),
-            ),
-            toggle(
-              'house',
-              'Do Caixa da Casa',
-              'Empréstimo do Caixa, saindo do ciclo ou de uma caixinha.',
-              acceptance.house,
-              (v) => acceptance.copyWith(house: v),
-            ),
+            if (acceptance.anyRequired) ...[
+              const Divider(height: 1, indent: 16, endIndent: 16),
+              toggle(
+                'manual',
+                'Lançado à mão',
+                'Empréstimo entre moradores e compra no cartão de um morador lançados no app.',
+                acceptance.manual,
+                (v) => acceptance.copyWith(manual: v),
+              ),
+              toggle(
+                'import',
+                'Vindo da importação da fatura',
+                'Compra da fatura marcada para um morador, no cartão da Casa ou de morador.',
+                acceptance.import,
+                (v) => acceptance.copyWith(import: v),
+              ),
+              toggle(
+                'house',
+                'Do Caixa da Casa',
+                'Empréstimo do Caixa, saindo do ciclo ou de uma caixinha.',
+                acceptance.house,
+                (v) => acceptance.copyWith(house: v),
+              ),
+            ],
             const SizedBox(height: 8),
           ],
         ),
