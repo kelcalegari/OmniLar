@@ -307,8 +307,19 @@ class MockImportRepository implements ImportRepository {
     final expenses = await finance.getExpensesForCycle(
       FinancialCycle(start: dueDate.subtract(const Duration(days: 400)), end: dueDate.add(const Duration(days: 1))),
     );
+    // Compras de morador lançadas à mão no cartão, pelo empréstimo de cada parcela
+    final manualLoanIds = {
+      for (final stored in _plans.values)
+        if (stored.plan.paymentMethodId == paymentMethodId) ...stored.loanIds,
+    }.difference({for (final line in lines) ?line.loanId});
+    final manualLoans = [
+      for (final loan in await p2p.getLoans())
+        if (manualLoanIds.contains(loan.id) && loan.fundedOn != null && sameDay(loan.fundedOn))
+          (memberId: loan.borrowerMemberId, amount: loan.totalAmount),
+    ];
     return CardInvoiceBreakdown(
       lines: lines,
+      manualLoans: manualLoans,
       importedFileTotal: batches.isEmpty
           ? null
           : batches.map((b) => b.batch.total).reduce((a, b) => a.cents >= b.cents ? a : b),

@@ -56,7 +56,7 @@ class CardInvoiceGroupTile extends StatelessWidget {
     // Com a fatura importada, o valor principal é o da fatura inteira; a parte
     // da Casa fica embaixo, para não confundir com o que a Casa gastou
     final whole = breakdown;
-    final showWhole = whole != null && whole.hasImport && whole.total != invoice.total;
+    final showWhole = whole != null && whole.knowsMoreThanHouse && whole.total != invoice.total;
 
     return Container(
       margin: const EdgeInsets.only(bottom: 10),
