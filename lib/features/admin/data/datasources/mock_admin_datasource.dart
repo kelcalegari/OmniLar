@@ -1,3 +1,4 @@
+import 'package:clock/clock.dart';
 import 'dart:async';
 
 import '../../../../core/errors/failures.dart';
@@ -28,7 +29,7 @@ class MockAdminDataSource implements AdminDataSource {
 
   MockAdminDataSource({String Function()? currentUserId})
       : currentUserId = currentUserId ?? (() => 'member_carlos') {
-    final now = DateTime.now();
+    final now = clock.now();
     _accounts = [
       AdminAccount(
         userId: 'member_carlos',
@@ -102,8 +103,8 @@ class MockAdminDataSource implements AdminDataSource {
     for (final a in _accounts) {
       byPlan[a.plan] = (byPlan[a.plan] ?? 0) + 1;
     }
-    final weekAgo = DateTime.now().subtract(const Duration(days: 7));
-    final in30 = DateTime.now().add(const Duration(days: 30));
+    final weekAgo = clock.now().subtract(const Duration(days: 7));
+    final in30 = clock.now().add(const Duration(days: 30));
     return AdminOverview(
       accountsTotal: _accounts.length,
       accountsByStatus: byStatus,
@@ -177,7 +178,7 @@ class MockAdminDataSource implements AdminDataSource {
       _audit.insert(
         0,
         AdminAuditEntry(
-          createdAt: DateTime.now(),
+          createdAt: clock.now(),
           action: 'set_status',
           actorName: 'Carlos Demo',
           targetUserId: id,
@@ -214,10 +215,10 @@ class MockAdminDataSource implements AdminDataSource {
       autoApproveInvited: settings.autoApproveInvited,
       autoApproveDomains: domains,
       autoApproveEmails: emails,
-      updatedAt: DateTime.now(),
+      updatedAt: clock.now(),
       updatedByName: 'Carlos Demo',
     );
-    _audit.insert(0, AdminAuditEntry(createdAt: DateTime.now(), action: 'update_settings', actorName: 'Carlos Demo'));
+    _audit.insert(0, AdminAuditEntry(createdAt: clock.now(), action: 'update_settings', actorName: 'Carlos Demo'));
   }
 
   @override
@@ -225,7 +226,7 @@ class MockAdminDataSource implements AdminDataSource {
 
   @override
   Future<int> setPlan(List<String> userIds, AccountPlan plan, {DateTime? expiresAt, String? note}) async {
-    if (plan == AccountPlan.premium && expiresAt != null && !expiresAt.isAfter(DateTime.now())) {
+    if (plan == AccountPlan.premium && expiresAt != null && !expiresAt.isAfter(clock.now())) {
       throw const ServerFailure('A validade do Premium precisa ser uma data futura.');
     }
     final cleanNote = (note?.trim().isEmpty ?? true) ? null : note!.trim();
@@ -246,7 +247,7 @@ class MockAdminDataSource implements AdminDataSource {
       _audit.insert(
         0,
         AdminAuditEntry(
-          createdAt: DateTime.now(),
+          createdAt: clock.now(),
           action: 'set_plan',
           actorName: 'Carlos Demo',
           targetUserId: id,
@@ -277,7 +278,7 @@ class MockAdminDataSource implements AdminDataSource {
     _audit.insert(
       0,
       AdminAuditEntry(
-        createdAt: DateTime.now(),
+        createdAt: clock.now(),
         action: 'set_plan_limit',
         actorName: 'Carlos Demo',
         details: {'plan': plan.name, 'resource': resource.key, 'from': old, 'to': maxValue},
@@ -299,7 +300,7 @@ class MockAdminDataSource implements AdminDataSource {
     _audit.insert(
       0,
       AdminAuditEntry(
-        createdAt: DateTime.now(),
+        createdAt: clock.now(),
         action: isAdmin ? 'grant_admin' : 'revoke_admin',
         actorName: 'Carlos Demo',
         targetUserId: userId,

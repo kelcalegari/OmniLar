@@ -1,3 +1,4 @@
+import 'package:clock/clock.dart';
 import 'package:flutter/material.dart';
 import '../../../finance/domain/entities/house_permissions.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -28,7 +29,7 @@ class _CreateLoanPageState extends State<CreateLoanPage> {
 
   int _cents = 0;
   int _installmentsCount = 1;
-  DateTime _firstDueDate = DateTime.now().add(const Duration(days: 30));
+  DateTime _firstDueDate = clock.now().add(const Duration(days: 30));
   late String _borrowerId;
   late String _lenderId;
 
@@ -87,7 +88,7 @@ class _CreateLoanPageState extends State<CreateLoanPage> {
   /// Marca de onde o dinheiro do Caixa saiu (e para onde os pagamentos voltam).
   P2PLoan _withFunding(P2PLoan loan) {
     if (!_fromHouse) return loan;
-    final now = DateTime.now();
+    final now = clock.now();
     return loan.copyWith(
       houseFunding: _houseFunding,
       fundedOn: DateTime(now.year, now.month, now.day),
@@ -344,7 +345,7 @@ class _CreateLoanPageState extends State<CreateLoanPage> {
       return;
     }
 
-    final loanId = 'loan_${DateTime.now().millisecondsSinceEpoch}';
+    final loanId = 'loan_${clock.now().millisecondsSinceEpoch}';
     final allPaid = _installments.every((i) => i.isFullyPaid);
 
     final finalInstallments = [
@@ -369,7 +370,7 @@ class _CreateLoanPageState extends State<CreateLoanPage> {
       lenderMemberId: _lenderId,
       borrowerMemberId: _borrowerId,
       installmentsCount: finalInstallments.length,
-      createdAt: _isHistorical ? _firstDueDate : DateTime.now(),
+      createdAt: _isHistorical ? _firstDueDate : clock.now(),
       firstDueDate: _firstDueDate,
       status: allPaid ? LoanStatus.paid : LoanStatus.active,
       installments: finalInstallments,
@@ -417,7 +418,7 @@ class _CreateLoanPageState extends State<CreateLoanPage> {
       return;
     }
 
-    final loanId = 'loan_${DateTime.now().millisecondsSinceEpoch}';
+    final loanId = 'loan_${clock.now().millisecondsSinceEpoch}';
     final installments = P2PCalculator.buildOpenEndedInstallment(
       loanId: loanId,
       totalAmount: totalAmount,
@@ -433,7 +434,7 @@ class _CreateLoanPageState extends State<CreateLoanPage> {
       lenderMemberId: _lenderId,
       borrowerMemberId: _borrowerId,
       installmentsCount: 1,
-      createdAt: DateTime.now(),
+      createdAt: clock.now(),
       firstDueDate: P2PLoan.openEndedPlaceholderDueDate,
       status: isFullyPaid ? LoanStatus.paid : LoanStatus.active,
       installments: installments,

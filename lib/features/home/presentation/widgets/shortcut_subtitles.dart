@@ -1,3 +1,4 @@
+import 'package:clock/clock.dart';
 import '../../../calendar/domain/entities/task_item.dart';
 import '../../../shopping/domain/entities/shopping_item.dart';
 
@@ -14,7 +15,7 @@ String shoppingShortcutSubtitle(List<ShoppingItem> items, {required bool loaded}
 /// depois as pendentes sem data para hoje.
 String tasksShortcutSubtitle(List<TaskItem> tasks, {required bool loaded, DateTime? now}) {
   if (!loaded) return 'Da casa';
-  final today = now ?? DateTime.now();
+  final today = now ?? clock.now();
   final pending = tasks.where((t) => !t.isCompleted).toList();
   final overdue = pending.where((t) => t.isOverdue).length;
   if (overdue > 0) return overdue == 1 ? '1 atrasada' : '$overdue atrasadas';

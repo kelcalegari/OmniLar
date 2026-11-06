@@ -1,3 +1,4 @@
+import 'package:clock/clock.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../../../../core/domain/value_objects/financial_cycle.dart';
@@ -103,7 +104,7 @@ class _TransactionsFilterSheetState extends State<TransactionsFilterSheet> with 
   }
 
   void _applyPreset(DateRangePreset preset) {
-    final now = DateTime.now();
+    final now = clock.now();
     DateTime start;
     DateTime end = now;
 
@@ -132,7 +133,7 @@ class _TransactionsFilterSheetState extends State<TransactionsFilterSheet> with 
   }
 
   Future<void> _pickCustomDateRange() async {
-    final now = DateTime.now();
+    final now = clock.now();
     final picked = await showDateRangePicker(
       context: context,
       firstDate: DateTime(2015, 1, 1),

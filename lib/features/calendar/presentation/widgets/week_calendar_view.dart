@@ -1,3 +1,4 @@
+import 'package:clock/clock.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../../../../core/theme/app_colors.dart';
@@ -37,7 +38,7 @@ class WeekCalendarView extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final days = _daysOfWeek;
-    final now = DateTime.now();
+    final now = clock.now();
 
     const weekDayNames = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
     const fullWeekDayNames = [

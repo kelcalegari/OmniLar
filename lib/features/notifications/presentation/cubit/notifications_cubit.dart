@@ -1,3 +1,4 @@
+import 'package:clock/clock.dart';
 import 'dart:async';
 
 import 'package:equatable/equatable.dart';
@@ -108,7 +109,7 @@ class NotificationsCubit extends Cubit<NotificationsState> {
     if (index < 0 || state.items[index].isRead) return;
     final previous = state.items;
     final updated = [...previous];
-    updated[index] = updated[index].copyWith(readAt: DateTime.now());
+    updated[index] = updated[index].copyWith(readAt: clock.now());
     emit(state.copyWith(items: updated));
     try {
       await _dataSource.markAsRead(id);
@@ -120,7 +121,7 @@ class NotificationsCubit extends Cubit<NotificationsState> {
   Future<void> markAllAsRead() async {
     if (state.unreadCount == 0) return;
     final previous = state.items;
-    final now = DateTime.now();
+    final now = clock.now();
     emit(state.copyWith(items: [for (final n in previous) n.isRead ? n : n.copyWith(readAt: now)]));
     try {
       await _dataSource.markAllAsRead();

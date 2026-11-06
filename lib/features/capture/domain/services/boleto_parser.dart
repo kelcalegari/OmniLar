@@ -1,3 +1,4 @@
+import 'package:clock/clock.dart';
 import '../../../../core/domain/value_objects/money.dart';
 import '../entities/capture_proposal.dart';
 
@@ -63,7 +64,7 @@ class BoletoParser {
   /// Calcula a data de vencimento a partir do fator de vencimento FEBRABAN/BACEN.
   /// Trata o rollover de 22/02/2025, onde o fator de 4 dígitos reiniciou em 1000.
   static DateTime calculateDueDateFromFactor(int factor, {DateTime? referenceDate}) {
-    final now = referenceDate ?? DateTime.now();
+    final now = referenceDate ?? clock.now();
     if (factor <= 0) {
       return now.add(const Duration(days: 5));
     }
@@ -105,14 +106,14 @@ class BoletoParser {
       final amount = Money(cents);
 
       return CaptureProposal(
-        id: 'prop_${DateTime.now().millisecondsSinceEpoch}',
+        id: 'prop_${clock.now().millisecondsSinceEpoch}',
         documentType: DocumentType.boleto,
         title: title ?? 'Boleto Bancário',
         totalAmount: amount,
         date: dueDate,
         dueDate: dueDate,
         rawCode: rawLine,
-        capturedAt: DateTime.now(),
+        capturedAt: clock.now(),
       );
     } catch (_) {
       return null;
@@ -124,13 +125,13 @@ class BoletoParser {
   /// usuário completa na revisão.
   static CaptureProposal parseNfceQrCodeUrl(String url) {
     return CaptureProposal(
-      id: 'prop_nfce_${DateTime.now().millisecondsSinceEpoch}',
+      id: 'prop_nfce_${clock.now().millisecondsSinceEpoch}',
       documentType: DocumentType.nfce,
       title: 'Nota Fiscal (NFC-e)',
       totalAmount: Money(nfceTotalCentsFromUrl(url) ?? 0),
-      date: DateTime.now(),
+      date: clock.now(),
       rawCode: url,
-      capturedAt: DateTime.now(),
+      capturedAt: clock.now(),
     );
   }
 
@@ -149,14 +150,14 @@ class BoletoParser {
   /// Cupom de mercado fictício, só para o botão de simulação do modo demo.
   static CaptureProposal demoNfceProposal() {
     return CaptureProposal(
-      id: 'prop_nfce_${DateTime.now().millisecondsSinceEpoch}',
+      id: 'prop_nfce_${clock.now().millisecondsSinceEpoch}',
       documentType: DocumentType.nfce,
       title: 'Nota Fiscal (NFC-e)',
       totalAmount: const Money(14250),
-      date: DateTime.now(),
+      date: clock.now(),
       merchantOrBeneficiary: 'Supermercado Pão de Açúcar',
       rawCode: 'https://sefaz.sp.gov.br/nfce/qrcode?p=3526101234567890',
-      capturedAt: DateTime.now(),
+      capturedAt: clock.now(),
       items: [
         const InvoiceItemDraft(
           id: 'item_1',

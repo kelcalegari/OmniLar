@@ -1,3 +1,4 @@
+import 'package:clock/clock.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:sentry_flutter/sentry_flutter.dart';
 
@@ -11,7 +12,7 @@ class OmniBlocObserver extends BlocObserver {
   void onError(BlocBase bloc, Object error, StackTrace stackTrace) {
     super.onError(bloc, error, stackTrace);
     _lastErrorBloc = bloc;
-    _lastErrorTime = DateTime.now();
+    _lastErrorTime = clock.now();
 
     Sentry.captureException(
       error,
@@ -39,7 +40,7 @@ class OmniBlocObserver extends BlocObserver {
 
     // Se já foi reportado via onError nos últimos 1.5s pelo mesmo bloc,
     // não duplica o alerta no Sentry, apenas adiciona breadcrumb.
-    final now = DateTime.now();
+    final now = clock.now();
     final recentlyReported = _lastErrorBloc == bloc &&
         _lastErrorTime != null &&
         now.difference(_lastErrorTime!).inMilliseconds < 1500;

@@ -1,3 +1,4 @@
+import 'package:clock/clock.dart';
 import '../../../../core/domain/value_objects/cycle_schedule.dart';
 import 'dart:async';
 import 'dart:convert';
@@ -553,7 +554,7 @@ class SupabaseAuthDataSource implements AuthDataSource {
     }
     final user = _currentUser;
     if (user != null) {
-      _currentUser = given ? user.copyWith(aiConsentAt: DateTime.now()) : user.copyWith(clearAiConsent: true);
+      _currentUser = given ? user.copyWith(aiConsentAt: clock.now()) : user.copyWith(clearAiConsent: true);
       _authStateController.add(_currentUser);
     }
   }
@@ -678,7 +679,7 @@ class SupabaseAuthDataSource implements AuthDataSource {
 
       final updateData = <String, dynamic>{
         'full_name': trimmedName,
-        'updated_at': DateTime.now().toUtc().toIso8601String(),
+        'updated_at': clock.now().toUtc().toIso8601String(),
       };
       if (emailChanged && activeEmail == trimmedEmail) {
         updateData['email'] = trimmedEmail;
@@ -778,7 +779,7 @@ class SupabaseAuthDataSource implements AuthDataSource {
       final current = _currentHouse?.id == houseId ? _currentHouse : null;
       if (cycleStartDay != null && cycleStartDay != current?.cycleStartDay) {
         final schedule = current?.cycleSchedule ?? CycleSchedule(cycleStartDay);
-        final change = schedule.planChange(DateTime.now(), cycleStartDay);
+        final change = schedule.planChange(clock.now(), cycleStartDay);
         await _client.rpc('change_house_cycle_start_day', params: {
           'p_house_id': houseId,
           'p_new_day': cycleStartDay,
@@ -792,7 +793,7 @@ class SupabaseAuthDataSource implements AuthDataSource {
         if (pixKeyType != null) 'pix_key_type': pixKeyType,
         if (pixKeyHolderName != null) 'pix_key_holder_name': pixKeyHolderName.trim().isEmpty ? null : pixKeyHolderName.trim(),
         if (pixKeyBank != null) 'pix_key_bank': pixKeyBank.trim().isEmpty ? null : pixKeyBank.trim(),
-        'updated_at': DateTime.now().toUtc().toIso8601String(),
+        'updated_at': clock.now().toUtc().toIso8601String(),
       };
 
       final updatedRow = await _client
@@ -1070,7 +1071,7 @@ class SupabaseAuthDataSource implements AuthDataSource {
   Future<void> _saveInitialBalance(House house, int reserveCents, int cashCents) async {
     if (reserveCents <= 0 && cashCents <= 0) return;
     try {
-      final cycleStart = house.cycleSchedule.cycleFor(DateTime.now()).startDate;
+      final cycleStart = house.cycleSchedule.cycleFor(clock.now()).startDate;
       await _client.rpc('set_house_initial_balance', params: {
         'p_house_id': house.id,
         'p_reserve_cents': reserveCents > 0 ? reserveCents : 0,
@@ -1161,7 +1162,7 @@ class SupabaseAuthDataSource implements AuthDataSource {
           role: r['role'] as String? ?? 'member',
           joinedAt:
               DateTime.tryParse(r['joined_at'] as String? ?? '')?.toLocal() ??
-              DateTime.now(),
+              clock.now(),
           profile: UserProfile(
             id: r['user_id'] as String,
             email: prof?['email'] as String? ?? '',
@@ -1198,7 +1199,7 @@ class SupabaseAuthDataSource implements AuthDataSource {
             role: r['role'] as String? ?? 'member',
             joinedAt:
                 DateTime.tryParse(r['joined_at'] as String? ?? '')?.toLocal() ??
-                DateTime.now(),
+                clock.now(),
             profile: UserProfile(
               id: uId,
               email: prof?['email'] as String? ?? '',
@@ -1224,7 +1225,7 @@ class SupabaseAuthDataSource implements AuthDataSource {
         'house_id': houseId,
         'code': code,
         'created_by': ?currentUserId,
-        'expires_at': DateTime.now()
+        'expires_at': clock.now()
             .toUtc()
             .add(const Duration(days: 7))
             .toIso8601String(),

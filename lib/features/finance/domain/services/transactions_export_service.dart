@@ -1,3 +1,4 @@
+import 'package:clock/clock.dart';
 import 'dart:typed_data';
 import 'package:intl/intl.dart';
 import 'package:pdf/pdf.dart';
@@ -91,7 +92,7 @@ class TransactionsExportService {
                   ],
                 ),
                 pw.Text(
-                  'Gerado em ${_formatDate(DateTime.now())}',
+                  'Gerado em ${_formatDate(clock.now())}',
                   style: const pw.TextStyle(fontSize: 10, color: greyColor),
                 ),
               ],

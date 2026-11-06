@@ -1,3 +1,4 @@
+import 'package:clock/clock.dart';
 import 'package:equatable/equatable.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../../../core/domain/value_objects/cycle_schedule.dart';
@@ -145,7 +146,7 @@ class ReportsCubit extends Cubit<ReportsState> {
   }) : _p2pRepository = p2pRepository,
        _financeRepository = financeRepository,
        _importRepository = importRepository,
-       _now = now ?? DateTime.now,
+       _now = now ?? clock.now,
        super(const ReportsState());
 
   /// Número da carga mais recente: resposta de uma carga antiga é descartada.

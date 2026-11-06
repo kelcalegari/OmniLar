@@ -1,3 +1,4 @@
+import 'package:clock/clock.dart';
 import '../../../finance/data/datasources/house_expense_payload.dart';
 import '../../../finance/domain/services/credit_card_invoice_calculator.dart';
 import '../../../p2p/data/datasources/p2p_loan_payload.dart';
@@ -219,7 +220,7 @@ class SupabaseShoppingDataSource implements ShoppingDataSource {
       await client.from('shopping_items').update({
         'is_bought': newBought,
         'bought_by': newBought ? userId : null,
-        'bought_at': newBought ? DateTime.now().toUtc().toIso8601String() : null,
+        'bought_at': newBought ? clock.now().toUtc().toIso8601String() : null,
       }).eq('id', itemId);
     } catch (e) {
       throw ServerFailure('Erro ao alternar status do item de compras: $e');
@@ -232,7 +233,7 @@ class SupabaseShoppingDataSource implements ShoppingDataSource {
       await client.from('shopping_items').update({
         'is_bought': bought,
         'bought_by': bought ? client.auth.currentUser?.id : null,
-        'bought_at': bought ? (at ?? DateTime.now()).toUtc().toIso8601String() : null,
+        'bought_at': bought ? (at ?? clock.now()).toUtc().toIso8601String() : null,
       }).eq('id', itemId);
     } catch (e) {
       throw ServerFailure('Erro ao marcar item de compras: $e');
@@ -306,7 +307,7 @@ class SupabaseShoppingDataSource implements ShoppingDataSource {
     String? personalDebtorMemberId,
   }) async {
     try {
-      final now = DateTime.now();
+      final now = clock.now();
 
       // 1. Desconta itens pessoais do gasto coletivo da casa
       final personalCents = personalItemsAmount?.cents ?? 0;

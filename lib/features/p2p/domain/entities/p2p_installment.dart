@@ -1,3 +1,4 @@
+import 'package:clock/clock.dart';
 import 'package:equatable/equatable.dart';
 import '../../../../core/domain/value_objects/money.dart';
 
@@ -46,7 +47,7 @@ class P2PInstallment extends Equatable {
   /// Vencida: o dia do vencimento já passou (no próprio dia ainda está em dia,
   /// a mesma regra das contas da casa).
   bool get isPastDue {
-    final now = DateTime.now();
+    final now = clock.now();
     final today = DateTime(now.year, now.month, now.day);
     return DateTime(dueDate.year, dueDate.month, dueDate.day).isBefore(today);
   }
