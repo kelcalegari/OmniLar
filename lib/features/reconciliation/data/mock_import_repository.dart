@@ -291,12 +291,16 @@ class MockImportRepository implements ImportRepository {
     bool sameDay(DateTime? a) =>
         a != null && a.year == dueDate.year && a.month == dueDate.month && a.day == dueDate.day;
     // Da importação mais antiga para a mais nova (as novas ficam antes na lista)
-    final lines = [
+    final batches = [
       for (final stored in _imports.reversed)
         if (!stored.batch.isUndone &&
             stored.batch.paymentMethodId == paymentMethodId &&
             sameDay(stored.batch.invoiceDueDate))
-          for (final record in stored.records) ?invoiceFileLineOf(record, payerId: stored.payerId),
+          stored,
+    ];
+    final lines = [
+      for (final stored in batches)
+        for (final record in stored.records) ?invoiceFileLineOf(record, payerId: stored.payerId),
     ];
     // Janela larga: a compra pode contar no ciclo da data dela, e não no do vencimento
     final expenses = await finance.getExpensesForCycle(
@@ -304,6 +308,9 @@ class MockImportRepository implements ImportRepository {
     );
     return CardInvoiceBreakdown(
       lines: lines,
+      importedFileTotal: batches.isEmpty
+          ? null
+          : batches.map((b) => b.batch.total).reduce((a, b) => a.cents >= b.cents ? a : b),
       houseExpenses: <String, Money>{
         for (final e in expenses)
           if (e.paymentMethodId == paymentMethodId &&

@@ -82,14 +82,33 @@ void main() {
       expect(breakdown.houseOutsideFile.keys, ['manual']);
 
       final parts = breakdown.parts;
-      expect(parts.map((p) => (p.kind, p.memberId, p.amount.cents, p.outsideFile)), [
-        (InvoicePartKind.house, null, 288636, false),
-        (InvoicePartKind.loan, 'cristiano', 56531, false),
-        (InvoicePartKind.personal, 'kelvynn', 3000, false),
-        (null, null, -1000, false),
-        (InvoicePartKind.house, null, 2000, true),
+      expect(parts.map((p) => (p.kind, p.extra, p.memberId, p.amount.cents)), [
+        (InvoicePartKind.house, null, null, 288636),
+        (InvoicePartKind.loan, null, 'cristiano', 56531),
+        (InvoicePartKind.personal, null, 'kelvynn', 3000),
+        (null, InvoicePartExtra.refunds, null, -1000),
+        (null, InvoicePartExtra.outsideFile, null, 2000),
       ]);
       expect(breakdown.differenceFrom(Money(breakdown.total.cents)), const Money.zero());
+    });
+
+    test('fatura Inter de 12/11: pagamento lido como crédito, parcelas sem linha e compras só no app', () {
+      final breakdown = CardInvoiceBreakdown(
+        lines: const [
+          InvoiceFileLine(amount: Money(327182), kind: InvoicePartKind.house, expenseId: 'casa'),
+          InvoiceFileLine(amount: Money(16500), kind: InvoicePartKind.loan, memberId: 'cristiano'),
+          // "PAGAMENTO ON LINE" da fatura anterior, ignorado na revisão
+          InvoiceFileLine(amount: Money(345167), kind: InvoicePartKind.ignored, isRefund: true),
+        ],
+        importedFileTotal: const Money(369172),
+        houseExpenses: const {'casa': Money(327182), 'pizza': Money(7802), 'cafe': Money(2703)},
+      );
+      expect(breakdown.notLaunched, const Money(25490));
+      expect(breakdown.fileTotal, const Money(369172));
+      // O app tem 105,05 a mais que o banco: as duas compras lançadas só no app
+      expect(breakdown.differenceFrom(const Money(369172)), const Money(-10505));
+      final ignored = breakdown.parts.singleWhere((p) => p.extra == InvoicePartExtra.ignoredCredits);
+      expect((ignored.amount, ignored.counted), (const Money(-345167), false));
     });
 
     test('a mesma compra em duas importações conta uma vez', () {
@@ -164,15 +183,16 @@ void main() {
     await repository.confirmImport(session, plan);
 
     final breakdown = await repository.cardInvoiceBreakdown(paymentMethodId: _card.id, dueDate: _due);
-    expect(breakdown.total, const Money(10000 + 5000 + 3000 - 1000 + 2000));
+    // O estorno sem compra para abater fica fora do total
+    expect(breakdown.total, const Money(10000 + 5000 + 3000 + 2000));
     expect(
-      {for (final p in breakdown.parts) (p.kind, p.memberId, p.outsideFile): p.amount.cents},
+      {for (final p in breakdown.parts) (p.kind, p.extra, p.memberId): p.amount.cents},
       {
-        (InvoicePartKind.house, null, false): 10000,
-        (InvoicePartKind.loan, 'cristiano', false): 5000,
-        (InvoicePartKind.personal, 'kelvynn', false): 3000,
-        (null, null, false): -1000,
-        (InvoicePartKind.house, null, true): 2000,
+        (InvoicePartKind.house, null, null): 10000,
+        (InvoicePartKind.loan, null, 'cristiano'): 5000,
+        (InvoicePartKind.personal, null, 'kelvynn'): 3000,
+        (null, InvoicePartExtra.ignoredCredits, null): -1000,
+        (null, InvoicePartExtra.outsideFile, null): 2000,
       },
     );
 

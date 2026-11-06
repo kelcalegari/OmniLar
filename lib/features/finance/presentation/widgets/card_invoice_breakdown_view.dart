@@ -69,8 +69,18 @@ class CardInvoiceBreakdownView extends StatelessWidget {
   static String _count(int n, String one, String many) => '$n ${n == 1 ? one : many}';
 
   String _label(InvoicePart part) {
-    if (part.outsideFile) return 'Casa, lançado só no app';
-    if (part.isRefunds) return 'Estornos e créditos';
+    switch (part.extra) {
+      case InvoicePartExtra.refunds:
+        return 'Estornos e créditos';
+      case InvoicePartExtra.ignoredCredits:
+        return 'Créditos ignorados (fora do total)';
+      case InvoicePartExtra.notLaunched:
+        return 'No arquivo, sem lançamento no app';
+      case InvoicePartExtra.outsideFile:
+        return 'Casa, lançado só no app';
+      case null:
+        break;
+    }
     return switch (part.kind!) {
       InvoicePartKind.house => 'Casa',
       InvoicePartKind.loan => 'Empréstimo a ${_name(part.memberId)}',
@@ -81,13 +91,13 @@ class CardInvoiceBreakdownView extends StatelessWidget {
     };
   }
 
-  String _detail(InvoicePart part) {
-    if (part.outsideFile) {
-      return '${_count(part.count, 'compra', 'compras')} que não ${part.count == 1 ? 'está' : 'estão'} no arquivo importado';
-    }
-    if (part.isRefunds) return _count(part.count, 'linha', 'linhas');
-    return _count(part.count, 'compra', 'compras');
-  }
+  String _detail(InvoicePart part) => switch (part.extra) {
+    InvoicePartExtra.refunds || InvoicePartExtra.ignoredCredits => _count(part.count, 'linha', 'linhas'),
+    InvoicePartExtra.notLaunched => 'a importação deu como já importadas; confira se estão no app',
+    InvoicePartExtra.outsideFile =>
+      '${_count(part.count, 'compra', 'compras')} que não ${part.count == 1 ? 'está' : 'estão'} no arquivo importado',
+    null => _count(part.count, 'compra', 'compras'),
+  };
 
   @override
   Widget build(BuildContext context) {
@@ -139,7 +149,7 @@ class CardInvoiceBreakdownView extends StatelessWidget {
                     style: TextStyle(
                       fontSize: 13,
                       fontWeight: FontWeight.w600,
-                      color: part.outsideFile ? AppColors.folegoWarning : null,
+                      color: part.needsAttention ? AppColors.folegoWarning : (part.counted ? null : Colors.grey),
                     ),
                   ),
                 ],

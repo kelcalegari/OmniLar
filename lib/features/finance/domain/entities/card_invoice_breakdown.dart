@@ -52,31 +52,44 @@ class InvoiceFileLine extends Equatable {
   List<Object?> get props => [amount, isRefund, kind, memberId, signature, expenseId];
 }
 
+/// Partes que não são uma linha comum do arquivo.
+enum InvoicePartExtra {
+  /// Estornos e créditos aplicados a compras (valor negativo).
+  refunds,
+
+  /// Créditos que a importação ignorou: ficam fora do total (o pagamento da
+  /// fatura anterior às vezes chega assim).
+  ignoredCredits,
+
+  /// Compras do arquivo que a importação não lançou nem registrou (deu como
+  /// já importadas): estão no total do arquivo, mas não no app.
+  notLaunched,
+
+  /// Compras da Casa lançadas no app que não estão em nenhum arquivo.
+  outsideFile,
+}
+
 /// Uma parte da fatura inteira: Casa, empréstimo de alguém, pessoal...
 class InvoicePart extends Equatable {
+  /// Para onde foram as compras; null nas partes de [extra].
   final InvoicePartKind? kind;
+  final InvoicePartExtra? extra;
 
   /// Morador da parte (empréstimo ou pessoal).
   final String? memberId;
   final Money amount;
   final int count;
 
-  /// Compras da Casa lançadas no app que não estão em nenhum arquivo.
-  final bool outsideFile;
+  /// Entra no total da fatura.
+  bool get counted => extra != InvoicePartExtra.ignoredCredits;
 
-  /// Estornos e créditos da fatura (valor negativo).
-  bool get isRefunds => kind == null && !outsideFile;
+  /// Pede atenção: o app e o arquivo não concordam aqui.
+  bool get needsAttention => extra == InvoicePartExtra.outsideFile || extra == InvoicePartExtra.notLaunched;
 
-  const InvoicePart({
-    required this.kind,
-    required this.amount,
-    required this.count,
-    this.memberId,
-    this.outsideFile = false,
-  });
+  const InvoicePart({required this.amount, required this.count, this.kind, this.extra, this.memberId});
 
   @override
-  List<Object?> get props => [kind, memberId, amount, count, outsideFile];
+  List<Object?> get props => [kind, extra, memberId, amount, count];
 }
 
 /// A fatura inteira de um cartão em um vencimento, somando o que foi para a
@@ -90,7 +103,11 @@ class CardInvoiceBreakdown extends Equatable {
   /// Compras da Casa no app nessa fatura: id e valor.
   final Map<String, Money> houseExpenses;
 
-  CardInvoiceBreakdown({required Iterable<InvoiceFileLine> lines, required this.houseExpenses})
+  /// Soma das compras do arquivo mais completo importado para a fatura (o
+  /// total que a importação mostrou), para achar compras que ficaram sem linha.
+  final Money? importedFileTotal;
+
+  CardInvoiceBreakdown({required Iterable<InvoiceFileLine> lines, required this.houseExpenses, this.importedFileTotal})
     : lines = _dedupe(lines);
 
   /// A mesma compra em duas importações (prévia e fatura fechada) conta uma vez.
@@ -118,26 +135,37 @@ class CardInvoiceBreakdown extends Equatable {
 
   static Money _sum(Iterable<Money> values) => Money(values.fold<int>(0, (acc, m) => acc + m.cents));
 
-  /// Total do arquivo: compras menos estornos.
-  Money get fileTotal =>
-      Money(lines.fold<int>(0, (acc, line) => acc + (line.isRefund ? -line.amount.cents : line.amount.cents)));
+  /// Compras com linha registrada.
+  Money get _purchases => _sum([
+    for (final line in lines)
+      if (!line.isRefund) line.amount,
+  ]);
+
+  /// Créditos aplicados a compras; os ignorados ficam fora.
+  Iterable<InvoiceFileLine> get _appliedRefunds =>
+      lines.where((line) => line.isRefund && line.kind != InvoicePartKind.ignored);
+
+  /// Compras do arquivo que ficaram sem linha registrada.
+  Money get notLaunched {
+    final file = importedFileTotal;
+    if (file == null) return const Money.zero();
+    final missing = file - _purchases;
+    return missing.isPositive ? missing : const Money.zero();
+  }
+
+  /// Total do arquivo: compras (com as que ficaram sem linha) menos créditos aplicados.
+  Money get fileTotal => _purchases + notLaunched - _sum(_appliedRefunds.map((l) => l.amount));
 
   /// Fatura inteira: o arquivo mais as compras da Casa lançadas só no app.
   /// Sem importação, é a parte da Casa.
   Money get total => fileTotal + _sum(houseOutsideFile.values);
 
   /// As partes, na ordem de mostrar: Casa, empréstimos, pessoal, terceiros,
-  /// ignorado, fora por ciclo fechado, estornos e Casa fora do arquivo.
+  /// ignorado, fora por ciclo fechado, e depois as de [InvoicePartExtra].
   List<InvoicePart> get parts {
     final grouped = <(InvoicePartKind, String?), ({int cents, int count})>{};
-    var refunds = 0;
-    var refundCount = 0;
     for (final line in lines) {
-      if (line.isRefund) {
-        refunds += line.amount.cents;
-        refundCount++;
-        continue;
-      }
+      if (line.isRefund) continue;
       final member = line.kind == InvoicePartKind.loan || line.kind == InvoicePartKind.personal ? line.memberId : null;
       final key = (line.kind, member);
       final current = grouped[key] ?? (cents: 0, count: 0);
@@ -149,6 +177,8 @@ class CardInvoiceBreakdown extends Equatable {
         final byKind = a.key.$1.index.compareTo(b.key.$1.index);
         return byKind != 0 ? byKind : b.value.cents.compareTo(a.value.cents);
       });
+    final applied = _appliedRefunds.toList();
+    final ignored = lines.where((line) => line.isRefund && line.kind == InvoicePartKind.ignored).toList();
     final outside = houseOutsideFile;
     return [
       for (final entry in ordered)
@@ -158,13 +188,20 @@ class CardInvoiceBreakdown extends Equatable {
           amount: Money(entry.value.cents),
           count: entry.value.count,
         ),
-      if (refundCount > 0) InvoicePart(kind: null, amount: Money(-refunds), count: refundCount),
-      if (outside.isNotEmpty)
+      if (!notLaunched.isZero) InvoicePart(extra: InvoicePartExtra.notLaunched, amount: notLaunched, count: 0),
+      if (applied.isNotEmpty)
         InvoicePart(
-          kind: InvoicePartKind.house,
-          amount: _sum(outside.values),
-          count: outside.length,
-          outsideFile: true,
+          extra: InvoicePartExtra.refunds,
+          amount: -_sum(applied.map((l) => l.amount)),
+          count: applied.length,
+        ),
+      if (outside.isNotEmpty)
+        InvoicePart(extra: InvoicePartExtra.outsideFile, amount: _sum(outside.values), count: outside.length),
+      if (ignored.isNotEmpty)
+        InvoicePart(
+          extra: InvoicePartExtra.ignoredCredits,
+          amount: -_sum(ignored.map((l) => l.amount)),
+          count: ignored.length,
         ),
     ];
   }
@@ -174,5 +211,5 @@ class CardInvoiceBreakdown extends Equatable {
   Money differenceFrom(Money bankAmount) => bankAmount - total;
 
   @override
-  List<Object?> get props => [lines, houseExpenses];
+  List<Object?> get props => [lines, houseExpenses, importedFileTotal];
 }

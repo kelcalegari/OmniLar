@@ -221,7 +221,7 @@ class SupabaseImportRepository implements ImportRepository {
     try {
       final batches = await client
           .from('import_batches')
-          .select('id, payer_id')
+          .select('id, payer_id, total_cents')
           .eq('house_id', _houseId)
           .eq('payment_method_id', paymentMethodId)
           .eq('invoice_due_date', due)
@@ -260,8 +260,11 @@ class SupabaseImportRepository implements ImportRepository {
           .isFilter('project_id', null)
           .isFilter('deleted_at', null);
 
+      // O arquivo mais completo: a prévia e a fatura fechada têm totais diferentes
+      final fileTotals = [for (final b in batches) (b['total_cents'] as num?)?.toInt() ?? 0];
       return CardInvoiceBreakdown(
         lines: lines,
+        importedFileTotal: fileTotals.isEmpty ? null : Money(fileTotals.reduce((a, b) => a > b ? a : b)),
         houseExpenses: {
           for (final e in expenses)
             if (e['is_recurring'] != true) e['id'] as String: Money((e['amount_cents'] as num).toInt()),
