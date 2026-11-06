@@ -1,3 +1,4 @@
+import 'package:clock/clock.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
@@ -379,7 +380,7 @@ Future<void> _changePlan(BuildContext context, AdminAccount account) async {
                     Expanded(
                       child: OutlinedButton.icon(
                         onPressed: () async {
-                          final now = DateTime.now();
+                          final now = clock.now();
                           final picked = await showDatePicker(
                             context: context,
                             initialDate: expiresAt ?? DateTime(now.year, now.month + 1, now.day),

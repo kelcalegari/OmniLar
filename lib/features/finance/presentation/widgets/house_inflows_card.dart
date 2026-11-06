@@ -1,3 +1,4 @@
+import 'package:clock/clock.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
@@ -194,7 +195,7 @@ Future<bool> showHouseInflowForm(
   final descriptionController = TextEditingController(text: editing?.description ?? '');
   final payerController = TextEditingController();
   var cents = editing?.amount.cents ?? 0;
-  final now = DateTime.now();
+  final now = clock.now();
   final today = DateTime(now.year, now.month, now.day);
   var day = editing?.receivedOn ?? (state.currentCycle.contains(today) ? today : state.currentCycle.startDate);
   var source = editing?.source ?? HouseInflowSource.thirdPartyPix;
@@ -500,7 +501,7 @@ Future<bool> showHouseInflowForm(
   }
 
   final inflow = HouseInflow(
-    id: editing?.id ?? 'inflow_${DateTime.now().millisecondsSinceEpoch}',
+    id: editing?.id ?? 'inflow_${clock.now().millisecondsSinceEpoch}',
     amount: Money(cents),
     receivedOn: DateTime(day.year, day.month, day.day),
     description: descriptionController.text.trim(),

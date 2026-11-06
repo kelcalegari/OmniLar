@@ -1,3 +1,4 @@
+import 'package:clock/clock.dart';
 import 'package:equatable/equatable.dart';
 import '../../../../core/domain/value_objects/money.dart';
 import 'house_expense_item.dart';
@@ -92,7 +93,7 @@ class HouseExpense extends Equatable {
   /// Verifica se a despesa está vencida/em atraso (pendente e com data anterior a hoje)
   bool get isOverdue {
     if (!isPending) return false;
-    final now = DateTime.now();
+    final now = clock.now();
     final today = DateTime(now.year, now.month, now.day);
     final due = DateTime(effectiveDueDate.year, effectiveDueDate.month, effectiveDueDate.day);
     return due.isBefore(today);
@@ -101,7 +102,7 @@ class HouseExpense extends Equatable {
   /// Quantidade de dias corridos em atraso
   int get daysOverdue {
     if (!isOverdue) return 0;
-    final now = DateTime.now();
+    final now = clock.now();
     final today = DateTime(now.year, now.month, now.day);
     final due = DateTime(effectiveDueDate.year, effectiveDueDate.month, effectiveDueDate.day);
     return today.difference(due).inDays;

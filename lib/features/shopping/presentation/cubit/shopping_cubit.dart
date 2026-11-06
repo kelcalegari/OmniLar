@@ -1,3 +1,4 @@
+import 'package:clock/clock.dart';
 import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -89,7 +90,7 @@ class ShoppingCubit extends BlocBase<ShoppingState> {
     if (state.selectedList == null) return false;
     try {
       final item = ShoppingItem(
-        id: 'item_${DateTime.now().millisecondsSinceEpoch}',
+        id: 'item_${clock.now().millisecondsSinceEpoch}',
         listId: state.selectedList!.id,
         name: name,
         quantity: quantity,
@@ -147,7 +148,7 @@ class ShoppingCubit extends BlocBase<ShoppingState> {
         if (!sent) {
           emit(state.copyWith(items: [
             for (final i in state.items)
-              i.id == itemId ? i.copyWith(isBought: bought, boughtAt: bought ? DateTime.now() : null) : i,
+              i.id == itemId ? i.copyWith(isBought: bought, boughtAt: bought ? clock.now() : null) : i,
           ]));
           return;
         }

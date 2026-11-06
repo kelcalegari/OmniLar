@@ -1,3 +1,4 @@
+import 'package:clock/clock.dart';
 import 'dart:async';
 
 import 'package:flutter/foundation.dart';
@@ -190,7 +191,7 @@ class CaptureBackgroundQueue {
     final isBoleto = proposal.documentType == DocumentType.boleto;
     final itemsSum = proposal.items.fold<int>(0, (sum, i) => sum + i.totalPrice.cents);
     final draft = CaptureDraft(
-      savedAt: DateTime.now(),
+      savedAt: clock.now(),
       proposal: proposal,
       titleText: proposal.title,
       amountText: proposal.totalAmount.cents > 0
@@ -201,7 +202,7 @@ class CaptureBackgroundQueue {
       dueDate: isBoleto ? proposal.dueDate : null,
       alreadyPaid: !isBoleto,
       documentDate: proposal.date,
-      paidOn: DateTime.now(),
+      paidOn: clock.now(),
       attachmentFile: attachment,
     );
 
@@ -213,7 +214,7 @@ class CaptureBackgroundQueue {
 
     // RN20: notificação genérica sem valor nem nome do estabelecimento
     _pushSafeNotification(
-      id: 'notif_capture_ready_${DateTime.now().millisecondsSinceEpoch}',
+      id: 'notif_capture_ready_${clock.now().millisecondsSinceEpoch}',
       type: 'capture_ready',
       title: 'Uma captura está pronta para revisar',
       body: 'Toque para conferir os dados antes de confirmar o lançamento.',
@@ -233,7 +234,7 @@ class CaptureBackgroundQueue {
   ) async {
     final manual = CaptureService.manualProposal(fileName);
     final draft = CaptureDraft(
-      savedAt: DateTime.now(),
+      savedAt: clock.now(),
       proposal: manual,
       titleText: manual.title,
       amountText: '',
@@ -241,7 +242,7 @@ class CaptureBackgroundQueue {
       originalItems: const [],
       alreadyPaid: manual.documentType != DocumentType.boleto,
       documentDate: manual.date,
-      paidOn: DateTime.now(),
+      paidOn: clock.now(),
       attachmentFile: attachment,
     );
 
@@ -250,7 +251,7 @@ class CaptureBackgroundQueue {
     }
 
     _pushSafeNotification(
-      id: 'notif_capture_failed_${DateTime.now().millisecondsSinceEpoch}',
+      id: 'notif_capture_failed_${clock.now().millisecondsSinceEpoch}',
       type: 'capture_failed',
       title: 'Captura salva para preenchimento manual',
       body: 'Não foi possível ler automaticamente. Sua foto está guardada para revisar.',
@@ -279,7 +280,7 @@ class CaptureBackgroundQueue {
         body: body,
         deeplink: '/captura/revisar',
         isEssential: true,
-        createdAt: DateTime.now(),
+        createdAt: clock.now(),
       ),
     );
   }

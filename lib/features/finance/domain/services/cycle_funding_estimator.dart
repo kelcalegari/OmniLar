@@ -1,3 +1,4 @@
+import 'package:clock/clock.dart';
 import '../../../../core/domain/value_objects/money.dart';
 import '../../../../core/domain/value_objects/financial_cycle.dart';
 import '../entities/category.dart';
@@ -40,7 +41,7 @@ class CycleFundingEstimator {
     // marcadas não somam nada: o planejador se comporta como antes.
     final vaultGoalsCents = vaults.fold<int>(
       0,
-      (acc, v) => acc + v.quotaContribution(today ?? DateTime.now()).cents,
+      (acc, v) => acc + v.quotaContribution(today ?? clock.now()).cents,
     );
     // A conta é a do ciclo inteiro, como no fechamento: tudo o que o ciclo custa
     // (o que já foi pago e o que ainda vence), menos a sobra que veio do ciclo

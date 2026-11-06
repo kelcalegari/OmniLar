@@ -1,3 +1,4 @@
+import 'package:clock/clock.dart';
 import '../../../../core/domain/value_objects/cycle_schedule.dart';
 import '../../../finance/domain/entities/house_permissions.dart';
 import 'package:flutter/material.dart';
@@ -51,7 +52,7 @@ class SettlementHubPage extends StatelessWidget {
       final financeCycle = context.read<FinanceCubit>().state.currentCycle;
       return financeCycle;
     } catch (_) {
-      final now = DateTime.now();
+      final now = clock.now();
       return FinancialCycle.fromDate(
         date: now,
         cycleStartDay: FinanceCubit.defaultCycleStartDay,
@@ -674,7 +675,7 @@ class _SettlementHubContent extends StatelessWidget {
     SettlementSummary summary,
     SettlementState state,
   ) {
-    final now = DateTime.now();
+    final now = clock.now();
     final isPastCycle = summary.cycle.endDate.isBefore(now);
     final isSettled = summary.status == SettlementStatus.settled;
 

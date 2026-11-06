@@ -1,3 +1,4 @@
+import 'package:clock/clock.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
@@ -40,7 +41,7 @@ class CalendarPage extends StatefulWidget {
 }
 
 class _CalendarPageState extends State<CalendarPage> {
-  DateTime _selectedDate = DateTime.now();
+  DateTime _selectedDate = clock.now();
   CalendarViewMode _viewMode = CalendarViewMode.month;
 
   @override
@@ -137,12 +138,12 @@ class _CalendarPageState extends State<CalendarPage> {
 
   void _goToToday() {
     setState(() {
-      _selectedDate = DateTime.now();
+      _selectedDate = clock.now();
     });
   }
 
   bool get _isCurrentPeriodToday {
-    final now = DateTime.now();
+    final now = clock.now();
     switch (_viewMode) {
       case CalendarViewMode.day:
         return _isSameDay(_selectedDate, now);

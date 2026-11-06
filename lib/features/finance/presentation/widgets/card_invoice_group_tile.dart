@@ -1,3 +1,4 @@
+import 'package:clock/clock.dart';
 import '../../../../core/utils/clipboard_helper.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
@@ -50,7 +51,7 @@ class CardInvoiceGroupTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final paidAt = invoice.paidAt;
-    final overdue = invoice.isOverdue(DateTime.now());
+    final overdue = invoice.isOverdue(clock.now());
     final count = invoice.purchases.length;
     // Com a fatura importada, o valor principal é o da fatura inteira; a parte
     // da Casa fica embaixo, para não confundir com o que a Casa gastou

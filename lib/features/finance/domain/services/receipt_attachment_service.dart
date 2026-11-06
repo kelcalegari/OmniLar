@@ -1,3 +1,4 @@
+import 'package:clock/clock.dart';
 import 'dart:typed_data';
 import 'package:file_picker/file_picker.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -77,7 +78,7 @@ class ReceiptAttachmentService {
   }) async {
     final ext = _extensionFromName(file.name);
     final targetExpenseId = expenseId ?? generateUuidV4();
-    final timestamp = DateTime.now().millisecondsSinceEpoch;
+    final timestamp = clock.now().millisecondsSinceEpoch;
     final path = '$houseId/expenses/${targetExpenseId}_$timestamp.$ext';
 
     await _supabase.storage.from(bucketName).uploadBinary(

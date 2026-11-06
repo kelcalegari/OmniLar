@@ -1,3 +1,4 @@
+import 'package:clock/clock.dart';
 import 'bill_code_field.dart';
 import 'card_invoice_breakdown_view.dart';
 import '../../domain/entities/card_invoice_breakdown.dart';
@@ -57,7 +58,7 @@ class _CardInvoicePaymentSheetState extends State<CardInvoicePaymentSheet> {
 
   late Future<({List<CardInvoice> open, List<CardInvoice> paid})> _invoices = _load();
   CardInvoice? _selected;
-  DateTime _paidOn = DateTime.now();
+  DateTime _paidOn = clock.now();
   bool _busy = false;
 
   late final List<InvoicePaymentOption> _options = invoicePaymentOptions(
@@ -112,7 +113,7 @@ class _CardInvoicePaymentSheetState extends State<CardInvoicePaymentSheet> {
       context: context,
       initialDate: _paidOn,
       firstDate: DateTime(_paidOn.year - 1),
-      lastDate: DateTime.now(),
+      lastDate: clock.now(),
     );
     if (picked != null) setState(() => _paidOn = picked);
   }

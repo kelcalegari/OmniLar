@@ -1,3 +1,4 @@
+import 'package:clock/clock.dart';
 import '../../../../core/network/offline_queue.dart';
 import '../../../../core/network/offline_sync_service.dart';
 import '../../../../core/utils/uuid.dart';
@@ -101,7 +102,7 @@ class CalendarRepositoryImpl implements CalendarRepository {
     required String completedByMemberId,
   }) async {
     final sync = _offlineSync;
-    final at = DateTime.now();
+    final at = clock.now();
     Future<void> write() => _dataSource.setTaskCompleted(
           taskId: taskId,
           completed: completed,

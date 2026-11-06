@@ -1,3 +1,4 @@
+import 'package:clock/clock.dart';
 import 'dart:convert';
 import 'dart:typed_data';
 import 'package:file_picker/file_picker.dart';
@@ -155,7 +156,7 @@ class _TransactionsPageState extends State<TransactionsPage> {
     );
 
     try {
-      final dateStr = DateFormat('yyyy-MM-dd').format(DateTime.now());
+      final dateStr = DateFormat('yyyy-MM-dd').format(clock.now());
       final saved = await FilePicker.saveFile(
         fileName: 'omnilar_extrato_$dateStr.csv',
         bytes: Uint8List.fromList(utf8.encode(csv)),
@@ -194,7 +195,7 @@ class _TransactionsPageState extends State<TransactionsPage> {
         metrics: metrics,
       );
 
-      final dateStr = DateFormat('yyyy-MM-dd').format(DateTime.now());
+      final dateStr = DateFormat('yyyy-MM-dd').format(clock.now());
       final saved = await FilePicker.saveFile(
         fileName: 'omnilar_extrato_$dateStr.pdf',
         bytes: bytes,
@@ -225,7 +226,7 @@ class _TransactionsPageState extends State<TransactionsPage> {
   }
 
   String _formatDayHeader(DateTime date) {
-    final now = DateTime.now();
+    final now = clock.now();
     final today = DateTime(now.year, now.month, now.day);
     final yesterday = today.subtract(const Duration(days: 1));
 

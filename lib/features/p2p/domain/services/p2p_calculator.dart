@@ -1,3 +1,4 @@
+import 'package:clock/clock.dart';
 import '../../../../core/domain/value_objects/money.dart';
 import '../entities/p2p_installment.dart';
 import '../entities/p2p_loan.dart';
@@ -72,7 +73,7 @@ class P2PCalculator {
         amount: totalAmount,
         paidAmount: Money(paidCents),
         dueDate: P2PLoan.openEndedPlaceholderDueDate,
-        paidAt: paidCents > 0 ? (paidAt ?? DateTime.now()) : null,
+        paidAt: paidCents > 0 ? (paidAt ?? clock.now()) : null,
       ),
     ];
   }
