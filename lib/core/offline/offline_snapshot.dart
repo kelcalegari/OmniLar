@@ -1,3 +1,4 @@
+import 'package:clock/clock.dart';
 import 'dart:async';
 import 'dart:convert';
 
@@ -69,7 +70,7 @@ class OfflineSnapshot {
     try {
       await _storage.write(
         storageKey,
-        jsonEncode({'savedAt': DateTime.now().toUtc().toIso8601String(), 'data': data}),
+        jsonEncode({'savedAt': clock.now().toUtc().toIso8601String(), 'data': data}),
       );
     } catch (_) {}
   }

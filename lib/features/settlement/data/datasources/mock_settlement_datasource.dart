@@ -1,3 +1,4 @@
+import 'package:clock/clock.dart';
 import '../../domain/services/open_invoice_choices.dart';
 import '../../../finance/domain/entities/split_rule.dart';
 import 'package:flutter/foundation.dart' show debugPrint;
@@ -183,7 +184,7 @@ class MockSettlementDataSource implements SettlementDataSource {
               lenderMemberId: t.toMemberId,
               borrowerMemberId: t.fromMemberId,
               installmentsCount: 1,
-              createdAt: DateTime.now(),
+              createdAt: clock.now(),
               firstDueDate: newDueDate,
               installments: P2PCalculator.generateInstallments(
                 loanId: newLoanId,
@@ -227,7 +228,7 @@ class MockSettlementDataSource implements SettlementDataSource {
             lenderMemberId: t.toMemberId,
             borrowerMemberId: t.fromMemberId,
             installmentsCount: isNoDueDate ? 1 : resolution.loanInstallmentsCount,
-            createdAt: DateTime.now(),
+            createdAt: clock.now(),
             firstDueDate: newDueDate,
             installments: installments,
             repaymentMode: isNoDueDate
@@ -282,7 +283,7 @@ class MockSettlementDataSource implements SettlementDataSource {
                 lenderMemberId: P2PLoan.houseLenderId,
                 borrowerMemberId: t.fromMemberId,
                 installmentsCount: installmentsCount,
-                createdAt: DateTime.now(),
+                createdAt: clock.now(),
                 firstDueDate: newDueDate,
                 installments: installments,
                 repaymentMode: isNoDueDate
@@ -300,7 +301,7 @@ class MockSettlementDataSource implements SettlementDataSource {
         confirmedTransfers.add(
           t.copyWith(
             status: TransferStatus.confirmed,
-            paidAt: DateTime.now(),
+            paidAt: clock.now(),
             amount: resolution.amountPaid,
             explanation:
                 '${t.explanation ?? ""} (Parcial: ${resolution.amountPaid.formatted} pago, ${resolution.shortfall.formatted} financiado)',
@@ -309,7 +310,7 @@ class MockSettlementDataSource implements SettlementDataSource {
       } else {
         // Pagamento 100% integral
         confirmedTransfers.add(
-          t.copyWith(status: TransferStatus.confirmed, paidAt: DateTime.now()),
+          t.copyWith(status: TransferStatus.confirmed, paidAt: clock.now()),
         );
       }
     }
@@ -355,7 +356,7 @@ class MockSettlementDataSource implements SettlementDataSource {
       if (balance.contributionRefund.cents > 0) {
         await financeDataSource.addContribution(
           Contribution(
-            id: 'contrib_refund_${DateTime.now().microsecondsSinceEpoch}_${balance.memberId}',
+            id: 'contrib_refund_${clock.now().microsecondsSinceEpoch}_${balance.memberId}',
             memberId: balance.memberId,
             amount: Money(-balance.contributionRefund.cents),
             date: summary.cycle.startDate,
@@ -400,17 +401,17 @@ class MockSettlementDataSource implements SettlementDataSource {
       final exp = frozen(original);
       // Tudo o que entra neste acerto: se o ciclo for reaberto, não é reembolsado de novo
       if (exp.isPaid && exp.settledAt == null) {
-        await financeDataSource.updateExpense(exp.copyWith(settledAt: DateTime.now()));
+        await financeDataSource.updateExpense(exp.copyWith(settledAt: clock.now()));
       }
       if (exp.isPending) {
         await financeDataSource.updateExpense(
           exp.copyWith(
             status: ExpenseStatus.paid,
-            settledAt: DateTime.now(),
+            settledAt: clock.now(),
             // A baixa pertence ao ciclo fechado, mesmo que o fechamento seja feito depois
-            paidAt: DateTime.now().isAfter(summary.cycle.endDate)
+            paidAt: clock.now().isAfter(summary.cycle.endDate)
                 ? summary.cycle.endDate
-                : DateTime.now(),
+                : clock.now(),
           ),
         );
       }
@@ -430,7 +431,7 @@ class MockSettlementDataSource implements SettlementDataSource {
       status: SettlementStatus.settled,
       // Ciclo reaberto: o histórico do fechamento anterior continua visível
       transfers: [...?_reopenedTransfers.remove(summary.cycle), ...confirmedTransfers],
-      settledAt: DateTime.now(),
+      settledAt: clock.now(),
     );
   }
 

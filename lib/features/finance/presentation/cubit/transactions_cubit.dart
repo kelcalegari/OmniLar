@@ -1,3 +1,4 @@
+import 'package:clock/clock.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../../../core/domain/value_objects/cycle_schedule.dart';
 import '../../../../core/domain/value_objects/financial_cycle.dart';
@@ -45,7 +46,7 @@ class TransactionsCubit extends Cubit<TransactionsState> {
   }) async {
     emit(state.copyWith(status: TransactionsStatus.loading));
     try {
-      final currentCycle = initialCycle ?? cycleSchedule.cycleFor(DateTime.now());
+      final currentCycle = initialCycle ?? cycleSchedule.cycleFor(clock.now());
 
       // 1. Carregar dependências de domínio se não foram injetadas
       _categories = categories ?? await repository.getCategories();
@@ -198,8 +199,8 @@ class TransactionsCubit extends Cubit<TransactionsState> {
         receipts.addAll(await recFuture);
       } else {
         // Modo Intervalo de Datas: Identifica os ciclos abrangidos pelo intervalo
-        final start = filter.startDate ?? DateTime.now().subtract(const Duration(days: 30));
-        final end = filter.endDate ?? DateTime.now();
+        final start = filter.startDate ?? clock.now().subtract(const Duration(days: 30));
+        final end = filter.endDate ?? clock.now();
 
         var cycleStart = cycleSchedule.cycleFor(start);
         final cycleEnd = cycleSchedule.cycleFor(end);

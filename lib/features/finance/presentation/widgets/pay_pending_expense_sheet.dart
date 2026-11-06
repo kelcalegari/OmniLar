@@ -1,3 +1,4 @@
+import 'package:clock/clock.dart';
 import 'bill_code_field.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
@@ -32,7 +33,7 @@ class _PayPendingExpenseSheetState extends State<PayPendingExpenseSheet> {
 
   /// Código do boleto como está agora (pode ser informado nesta tela).
   late String? _barcode = widget.expense.barcode;
-  DateTime _paidOn = DateTime.now();
+  DateTime _paidOn = clock.now();
   late String? _methodId = _initialMethodId();
   bool _busy = false;
 
@@ -73,7 +74,7 @@ class _PayPendingExpenseSheetState extends State<PayPendingExpenseSheet> {
       context: context,
       initialDate: _paidOn,
       firstDate: DateTime(_paidOn.year - 1),
-      lastDate: DateTime.now(),
+      lastDate: clock.now(),
       helpText: 'Dia do pagamento',
     );
     if (picked != null) setState(() => _paidOn = DateTime(picked.year, picked.month, picked.day, 12));

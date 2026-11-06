@@ -1,3 +1,4 @@
+import 'package:clock/clock.dart';
 import 'dart:convert';
 import 'dart:typed_data';
 import 'package:supabase_flutter/supabase_flutter.dart' show FunctionException;
@@ -107,15 +108,15 @@ class CaptureService {
     final issued = DateTime.tryParse(analysis['issue_date'] as String? ?? '');
 
     return CaptureProposal(
-      id: 'prop_nfce_${DateTime.now().millisecondsSinceEpoch}',
+      id: 'prop_nfce_${clock.now().millisecondsSinceEpoch}',
       documentType: DocumentType.nfce,
       title: merchant != null && merchant.isNotEmpty ? merchant : 'Nota Fiscal (NFC-e)',
       totalAmount: Money(total > 0 ? total : itemsSum),
-      date: issued != null ? DateTime(issued.year, issued.month, issued.day, 12) : DateTime.now(),
+      date: issued != null ? DateTime(issued.year, issued.month, issued.day, 12) : clock.now(),
       merchantOrBeneficiary: merchant,
       rawCode: qrUrl,
       items: items,
-      capturedAt: DateTime.now(),
+      capturedAt: clock.now(),
     );
   }
 
@@ -207,7 +208,7 @@ class CaptureService {
           }
           final isItemized = analysis['is_itemized'] as bool? ?? false;
 
-          DateTime date = DateTime.now();
+          DateTime date = clock.now();
           DateTime? dueDate;
           final dueDateStr = analysis['due_date'] as String?;
           if (dueDateStr != null && dueDateStr.isNotEmpty) {
@@ -258,7 +259,7 @@ class CaptureService {
               title.toLowerCase().contains('fatura');
 
           return CaptureProposal(
-            id: 'prop_${DateTime.now().millisecondsSinceEpoch}',
+            id: 'prop_${clock.now().millisecondsSinceEpoch}',
             documentType: isBoleto ? DocumentType.boleto : (isItemized ? DocumentType.nfce : DocumentType.generic),
             title: title,
             totalAmount: Money(finalTotalCents),
@@ -267,7 +268,7 @@ class CaptureService {
             merchantOrBeneficiary: merchant ?? codeProposal?.merchantOrBeneficiary,
             rawCode: barcode,
             items: items,
-            capturedAt: DateTime.now(),
+            capturedAt: clock.now(),
           );
         }
       }
@@ -298,15 +299,15 @@ class CaptureService {
     final isPdf = fileName.toLowerCase().endsWith('.pdf');
 
     return CaptureProposal(
-      id: 'prop_${DateTime.now().millisecondsSinceEpoch}',
+      id: 'prop_${clock.now().millisecondsSinceEpoch}',
       documentType: isPdf ? DocumentType.boleto : DocumentType.generic,
       title: cleanName.isNotEmpty ? cleanName : (isPdf ? 'Boleto / Documento PDF' : 'Cupom / Recibo'),
       totalAmount: const Money(0),
-      date: DateTime.now(),
+      date: clock.now(),
       merchantOrBeneficiary: null,
       rawCode: null,
       items: const [],
-      capturedAt: DateTime.now(),
+      capturedAt: clock.now(),
     );
   }
 }

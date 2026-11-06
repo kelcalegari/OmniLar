@@ -1,3 +1,4 @@
+import 'package:clock/clock.dart';
 import '../../../../core/domain/value_objects/cycle_schedule.dart';
 import '../../../finance/domain/entities/folego_params.dart';
 import '../../../finance/domain/services/expense_launch_defaults.dart';
@@ -71,7 +72,7 @@ class AssistantInterpreterService {
     final effectiveMemberId = activeMemberId ?? authRepository?.currentUser?.id ?? 'member_carlos';
     final cycle = currentCycle ??
         (authRepository?.currentHouse?.cycleSchedule ?? const CycleSchedule(5))
-            .cycleFor(DateTime.now());
+            .cycleFor(clock.now());
 
     // =========================================================================
     // 1. ATALHOS RÁPIDOS SEM IA (Economia de Quota & Velocidade Máxima)
@@ -140,7 +141,7 @@ class AssistantInterpreterService {
             final actions = rawActions.map((a) {
               final actMap = a as Map<String, dynamic>;
               return AssistantActionProposal(
-                id: actMap['id'] as String? ?? 'act_${DateTime.now().millisecondsSinceEpoch}',
+                id: actMap['id'] as String? ?? 'act_${clock.now().millisecondsSinceEpoch}',
                 title: actMap['title'] as String? ?? 'Proposta de Ação',
                 description: actMap['description'] as String? ?? '',
                 toolName: actMap['toolName'] as String? ?? '',
@@ -260,7 +261,7 @@ class AssistantInterpreterService {
 
         if (pendingCents > 0) {
           final action = AssistantActionProposal(
-            id: 'act_${DateTime.now().millisecondsSinceEpoch}',
+            id: 'act_${clock.now().millisecondsSinceEpoch}',
             title: 'Lançar Despesa da Casa',
             description: '$pendingTitle: ${Money(pendingCents).format()} • Meio de pagamento: ${matchedPm.name}',
             toolName: 'finance.addExpense',
@@ -367,7 +368,7 @@ class AssistantInterpreterService {
           final matchedPm = _matchPaymentMethod(lower, paymentMethods);
 
           final action = AssistantActionProposal(
-            id: 'act_${DateTime.now().millisecondsSinceEpoch}',
+            id: 'act_${clock.now().millisecondsSinceEpoch}',
             title: 'Registrar Aporte no Caixa',
             description: 'Aporte de ${parsedMoney.format()} para o Caixa da Casa${matchedPm != null ? " • via ${matchedPm.name}" : ""}',
             toolName: 'finance.addContribution',
@@ -417,7 +418,7 @@ class AssistantInterpreterService {
 
       if (itemText.isNotEmpty) {
         final action = AssistantActionProposal(
-          id: 'act_${DateTime.now().millisecondsSinceEpoch}',
+          id: 'act_${clock.now().millisecondsSinceEpoch}',
           title: 'Adicionar à Lista de Compras',
           description: 'Adicionar "$itemText" na lista da casa',
           toolName: 'shopping.addItem',
@@ -538,7 +539,7 @@ class AssistantInterpreterService {
 
           // Se já informou o meio de pagamento, cria a proposta de ação
           final action = AssistantActionProposal(
-            id: 'act_${DateTime.now().millisecondsSinceEpoch}',
+            id: 'act_${clock.now().millisecondsSinceEpoch}',
             title: 'Lançar Despesa da Casa',
             description: '$cleanTitle: ${parsedMoney.format()} • Meio de pagamento: ${matchedPm.name}',
             toolName: 'finance.addExpense',
@@ -769,7 +770,7 @@ class AssistantInterpreterService {
           }
         }
         final item = ShoppingItem(
-          id: 'shop_${DateTime.now().millisecondsSinceEpoch}',
+          id: 'shop_${clock.now().millisecondsSinceEpoch}',
           listId: targetListId,
           name: proposal.arguments['name'] as String? ?? 'Item',
           quantity: (proposal.arguments['quantity'] as num?)?.toDouble() ?? 1.0,
@@ -829,10 +830,10 @@ class AssistantInterpreterService {
         }
 
         final expense = HouseExpense(
-          id: 'exp_${DateTime.now().millisecondsSinceEpoch}',
+          id: 'exp_${clock.now().millisecondsSinceEpoch}',
           title: proposal.arguments['title'] as String? ?? 'Despesa',
           amount: Money(proposal.arguments['cents'] as int? ?? 0),
-          date: DateTime.now(),
+          date: clock.now(),
           categoryId: category?.id ?? '',
           paidByMemberId: payerId,
           paymentMethodId: paymentMethodId,
@@ -850,10 +851,10 @@ class AssistantInterpreterService {
       case 'finance.addContribution':
         final memberId = proposal.arguments['memberId'] as String? ?? effectivePayerId;
         final contrib = Contribution(
-          id: 'contrib_${DateTime.now().millisecondsSinceEpoch}',
+          id: 'contrib_${clock.now().millisecondsSinceEpoch}',
           memberId: memberId,
           amount: Money(proposal.arguments['cents'] as int? ?? 0),
-          date: DateTime.now(),
+          date: clock.now(),
           paymentMethodId: proposal.arguments['paymentMethodId'] as String?,
         );
         await financeRepository.addContribution(contrib);
@@ -862,14 +863,14 @@ class AssistantInterpreterService {
       case 'calendar.addEvent':
         final title = proposal.arguments['title'] as String? ?? 'Compromisso';
         final dateStr = proposal.arguments['dateIso'] as String?;
-        DateTime start = DateTime.now().add(const Duration(hours: 1));
+        DateTime start = clock.now().add(const Duration(hours: 1));
         if (dateStr != null) {
           try {
             start = DateTime.parse(dateStr);
           } catch (_) {}
         }
         final event = CalendarEvent(
-          id: 'event_${DateTime.now().millisecondsSinceEpoch}',
+          id: 'event_${clock.now().millisecondsSinceEpoch}',
           title: title,
           description: proposal.arguments['description'] as String?,
           startTime: start,
@@ -889,12 +890,12 @@ class AssistantInterpreterService {
           } catch (_) {}
         }
         final task = TaskItem(
-          id: 'task_${DateTime.now().millisecondsSinceEpoch}',
+          id: 'task_${clock.now().millisecondsSinceEpoch}',
           title: title,
           dueDate: dueDate,
           assignedToMemberId: proposal.arguments['assignedToMemberId'] as String?,
           createdByMemberId: effectivePayerId,
-          createdAt: DateTime.now(),
+          createdAt: clock.now(),
         );
         await calendarRepository.addTask(task);
         break;

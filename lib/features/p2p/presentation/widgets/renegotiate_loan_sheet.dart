@@ -1,3 +1,4 @@
+import 'package:clock/clock.dart';
 import 'package:flutter/material.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../domain/entities/p2p_loan.dart';
@@ -19,7 +20,7 @@ class RenegotiateLoanSheet extends StatefulWidget {
 
 class _RenegotiateLoanSheetState extends State<RenegotiateLoanSheet> {
   int _installmentsCount = 3;
-  DateTime _firstDueDate = DateTime.now().add(const Duration(days: 30));
+  DateTime _firstDueDate = clock.now().add(const Duration(days: 30));
 
   @override
   Widget build(BuildContext context) {
@@ -137,8 +138,8 @@ class _RenegotiateLoanSheetState extends State<RenegotiateLoanSheet> {
                 final picked = await showDatePicker(
                   context: context,
                   initialDate: _firstDueDate,
-                  firstDate: DateTime.now(),
-                  lastDate: DateTime.now().add(const Duration(days: 365)),
+                  firstDate: clock.now(),
+                  lastDate: clock.now().add(const Duration(days: 365)),
                 );
                 if (picked != null) {
                   setState(() {

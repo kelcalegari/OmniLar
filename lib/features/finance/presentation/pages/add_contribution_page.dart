@@ -1,3 +1,4 @@
+import 'package:clock/clock.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../../../core/theme/app_colors.dart';
@@ -29,7 +30,7 @@ class AddContributionPage extends StatefulWidget {
 class _AddContributionPageState extends State<AddContributionPage> {
   late String? _selectedMemberId = widget.initialMemberId ?? widget.editing?.memberId;
   late int _cents = widget.initialAmount?.cents ?? widget.editing?.amount.cents ?? 0;
-  late DateTime _date = widget.editing?.date ?? DateTime.now();
+  late DateTime _date = widget.editing?.date ?? clock.now();
 
   Future<void> _submit() async {
     if (_cents <= 0) {
@@ -73,7 +74,7 @@ class _AddContributionPageState extends State<AddContributionPage> {
     }
 
     final contribution = Contribution(
-      id: 'contrib_${DateTime.now().millisecondsSinceEpoch}',
+      id: 'contrib_${clock.now().millisecondsSinceEpoch}',
       memberId: memberId,
       amount: Money(_cents),
       date: _date,
@@ -235,7 +236,7 @@ class _AddContributionPageState extends State<AddContributionPage> {
                     context: context,
                     initialDate: _date,
                     firstDate: DateTime(2020),
-                    lastDate: DateTime.now().add(const Duration(days: 365)),
+                    lastDate: clock.now().add(const Duration(days: 365)),
                   );
                   if (picked != null) {
                     setState(() {

@@ -1,3 +1,4 @@
+import 'package:clock/clock.dart';
 import '../../domain/entities/card_invoice.dart';
 import '../../domain/entities/split_rule.dart';
 import 'dart:async';
@@ -62,7 +63,7 @@ class FinanceCubit extends Cubit<FinanceState> {
           FinanceState(
             currentCycle: (_cycleScheduleOf?.call() ??
                     CycleSchedule(_cycleStartDayOf?.call() ?? defaultCycleStartDay))
-                .cycleFor(DateTime.now()),
+                .cycleFor(clock.now()),
           ),
         );
 
@@ -113,7 +114,7 @@ class FinanceCubit extends Cubit<FinanceState> {
     _stopWatchingHouseChanges();
     emit(
       FinanceState(
-        currentCycle: cycleSchedule.cycleFor(DateTime.now()),
+        currentCycle: cycleSchedule.cycleFor(clock.now()),
       ),
     );
   }
@@ -125,7 +126,7 @@ class FinanceCubit extends Cubit<FinanceState> {
     if (schedule.cycleFor(cycle.startDate) == cycle) {
       return cycle;
     }
-    final now = DateTime.now();
+    final now = clock.now();
     return schedule.cycleFor(cycle.contains(now) ? now : cycle.startDate);
   }
 
@@ -569,7 +570,7 @@ class FinanceCubit extends Cubit<FinanceState> {
   DateTime get initialCashCycleStart =>
       state.initialBalance.cashCycleStart ??
       firstCycle?.startDate ??
-      cycleSchedule.cycleFor(DateTime.now()).startDate;
+      cycleSchedule.cycleFor(clock.now()).startDate;
 
   /// Saldo inicial mudado nos Ajustes: grava e refaz o ciclo (a sobra do
   /// primeiro ciclo e a Reserva mudam). Devolve a mensagem de erro, ou null
@@ -620,7 +621,7 @@ class FinanceCubit extends Cubit<FinanceState> {
 
   /// Volta para o ciclo em andamento hoje.
   void goToCurrentCycle() {
-    loadCycleData(cycle: cycleSchedule.cycleFor(DateTime.now()));
+    loadCycleData(cycle: cycleSchedule.cycleFor(clock.now()));
   }
 
   Future<bool> addExpense(HouseExpense expense) async {

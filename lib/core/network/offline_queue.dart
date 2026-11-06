@@ -1,3 +1,4 @@
+import 'package:clock/clock.dart';
 import 'dart:async';
 import 'dart:convert';
 import 'package:equatable/equatable.dart';
@@ -116,10 +117,10 @@ class OfflineQueueManager {
 
   void enqueue(OfflineActionType type, Map<String, dynamic> payload) {
     final action = OfflineQueuedAction(
-      id: 'offline_${DateTime.now().millisecondsSinceEpoch}_${_queue.length}',
+      id: 'offline_${clock.now().millisecondsSinceEpoch}_${_queue.length}',
       type: type,
       payload: payload,
-      createdAt: DateTime.now(),
+      createdAt: clock.now(),
     );
     _queue.add(action);
     _controller.add(List.unmodifiable(_queue));

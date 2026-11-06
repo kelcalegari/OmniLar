@@ -1,3 +1,4 @@
+import 'package:clock/clock.dart';
 import '../../../../core/domain/value_objects/money.dart';
 import '../../domain/entities/project_participant.dart';
 import '../../domain/entities/shared_project.dart';
@@ -7,7 +8,7 @@ class MockProjectsRepository implements ProjectsRepository {
   final List<SharedProject> _projects = [];
 
   MockProjectsRepository() {
-    final now = DateTime.now();
+    final now = clock.now();
     _projects.addAll([
       SharedProject(
         id: 'proj_trip_praia',

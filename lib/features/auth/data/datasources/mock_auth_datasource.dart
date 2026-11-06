@@ -1,3 +1,4 @@
+import 'package:clock/clock.dart';
 import 'dart:convert';
 import 'dart:async';
 import '../../domain/entities/account_deletion_preview.dart';
@@ -174,7 +175,7 @@ class MockAuthDataSource implements AuthDataSource {
       throw const AuthFailure('Este e-mail já está em uso.');
     }
 
-    final newId = 'user_${DateTime.now().millisecondsSinceEpoch}';
+    final newId = 'user_${clock.now().millisecondsSinceEpoch}';
     final newUser = UserProfile(
       id: newId,
       email: normalizedEmail,
@@ -271,7 +272,7 @@ class MockAuthDataSource implements AuthDataSource {
   Future<void> setAiConsent(bool given) async {
     final user = _currentUser;
     if (user == null) return;
-    _currentUser = given ? user.copyWith(aiConsentAt: DateTime.now()) : user.copyWith(clearAiConsent: true);
+    _currentUser = given ? user.copyWith(aiConsentAt: clock.now()) : user.copyWith(clearAiConsent: true);
     _authStateController.add(_currentUser);
   }
 
@@ -466,7 +467,7 @@ class MockAuthDataSource implements AuthDataSource {
     }
 
     await Future.delayed(const Duration(milliseconds: 300));
-    final houseId = 'house_${DateTime.now().millisecondsSinceEpoch}';
+    final houseId = 'house_${clock.now().millisecondsSinceEpoch}';
     final newHouse = House(
       id: houseId,
       name: name.trim(),
@@ -477,11 +478,11 @@ class MockAuthDataSource implements AuthDataSource {
     _houses[houseId] = newHouse;
 
     final memberInfo = HouseMemberInfo(
-      id: 'member_info_${DateTime.now().millisecondsSinceEpoch}',
+      id: 'member_info_${clock.now().millisecondsSinceEpoch}',
       houseId: houseId,
       userId: _currentUser!.id,
       role: 'owner',
-      joinedAt: DateTime.now(),
+      joinedAt: clock.now(),
       profile: _currentUser,
     );
 
@@ -489,7 +490,7 @@ class MockAuthDataSource implements AuthDataSource {
 
     // Gera um código de convite padrão
     final inviteCode =
-        'LAR${DateTime.now().millisecondsSinceEpoch.toString().substring(7, 10)}';
+        'LAR${clock.now().millisecondsSinceEpoch.toString().substring(7, 10)}';
     _invites[inviteCode] = houseId;
 
     _currentHouse = newHouse;
@@ -516,7 +517,7 @@ class MockAuthDataSource implements AuthDataSource {
     // Como no banco: a troca do dia vale a partir do fim do ciclo em andamento
     var schedule = existing.cycleSchedule;
     if (cycleStartDay != null && cycleStartDay != existing.cycleStartDay) {
-      schedule = schedule.withChange(schedule.planChange(DateTime.now(), cycleStartDay));
+      schedule = schedule.withChange(schedule.planChange(clock.now(), cycleStartDay));
     }
 
     final updated = existing.copyWith(
@@ -558,11 +559,11 @@ class MockAuthDataSource implements AuthDataSource {
 
     if (!currentMembers.any((m) => m.userId == _currentUser!.id)) {
       final newMember = HouseMemberInfo(
-        id: 'member_info_${DateTime.now().millisecondsSinceEpoch}',
+        id: 'member_info_${clock.now().millisecondsSinceEpoch}',
         houseId: houseId,
         userId: _currentUser!.id,
         role: 'member',
-        joinedAt: DateTime.now(),
+        joinedAt: clock.now(),
         profile: _currentUser,
       );
       currentMembers.add(newMember);
@@ -616,7 +617,7 @@ class MockAuthDataSource implements AuthDataSource {
       throw const AuthFailure('Você precisa ter pelo menos uma casa ativa no Omni Lar.');
     }
 
-    _houses[houseId] = house.copyWith(archivedAt: DateTime.now());
+    _houses[houseId] = house.copyWith(archivedAt: clock.now());
     if (_currentHouse?.id == houseId) {
       _currentHouse = activeHouses.first;
       _lastSelectedHouseIdByUser[_currentUser!.id] = _currentHouse!.id;

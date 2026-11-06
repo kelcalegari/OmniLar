@@ -1,3 +1,4 @@
+import 'package:clock/clock.dart';
 import 'dart:typed_data';
 
 import 'package:intl/intl.dart';
@@ -31,7 +32,7 @@ class ProjectReportExport {
     String Function(String id)? resolvePayerName,
   }) async {
     final doc = pw.Document();
-    final now = DateTime.now();
+    final now = clock.now();
     final dateFormat = DateFormat('dd/MM/yyyy');
 
     String sanitize(String text) {

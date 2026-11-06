@@ -1,3 +1,4 @@
+import 'package:clock/clock.dart';
 import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -242,7 +243,7 @@ class CalendarCubit extends Cubit<CalendarState> {
               t.id == taskId
                   ? t.copyWith(
                       isCompleted: completed,
-                      completedAt: completed ? DateTime.now() : null,
+                      completedAt: completed ? clock.now() : null,
                       completedByMemberId: completed ? state.activeMemberId : null,
                     )
                   : t,

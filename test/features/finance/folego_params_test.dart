@@ -10,6 +10,8 @@ import 'package:omni_lar/features/finance/domain/entities/folego_params.dart';
 import 'package:omni_lar/features/finance/domain/entities/house_settings.dart';
 import 'package:omni_lar/features/finance/presentation/widgets/folego_gauge_card.dart';
 
+import '../../helpers/fixed_date.dart';
+
 FinancialCycleSummary summary({required int contributions, required int folego}) => FinancialCycleSummary(
       cycle: FinancialCycle(start: DateTime(2026, 10, 5), end: DateTime(2026, 11, 4)),
       totalContributions: Money(contributions),
@@ -96,13 +98,13 @@ void main() {
       ));
     }
 
-    testWidgets('o selo segue o limite da casa', (tester) async {
+    testWidgets('o selo segue o limite da casa', (tester) => atDate(testToday, () async {
       final s = summary(contributions: 100000, folego: 20000);
       await show(tester, s, const FolegoParams());
       expect(find.text('Saudável'), findsOneWidget);
       await show(tester, s, const FolegoParams(warningPercent: 30));
       expect(find.text('Atenção'), findsOneWidget);
-    });
+    }));
   });
 
   group('Transição do ciclo', () {
