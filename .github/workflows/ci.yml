@@ -53,7 +53,9 @@ jobs:
       - name: Setup Supabase CLI
         uses: supabase/setup-cli@v1
         with:
-          version: latest
+          # Fixada na 2.x: a 3.0.0 (02/11/2026) faz o `db push` mirar o banco local por padrão
+          # e trocou --project-ref por --remote, o que quebrou este passo
+          version: 2.122.1
 
       - name: Sync Migrations to Supabase
         run: |
