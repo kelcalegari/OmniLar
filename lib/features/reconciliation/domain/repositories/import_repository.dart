@@ -1,4 +1,5 @@
 import '../../../../core/domain/value_objects/money.dart';
+import '../../../finance/domain/entities/card_invoice_breakdown.dart';
 import '../entities/imported_statement_line.dart';
 import '../entities/installment_plan.dart';
 import '../services/import_session.dart';
@@ -86,6 +87,13 @@ abstract class ImportRepository {
   /// Guarda as regras; a de um estabelecimento que já tinha regra é trocada.
   Future<void> saveRules(String paymentMethodId, List<ImportRule> rules);
   Future<void> deleteRule(String ruleId);
+
+  /// A fatura inteira do cartão que vence em [dueDate]: as linhas das
+  /// importações ativas dela e as compras da Casa lançadas no app.
+  Future<CardInvoiceBreakdown> cardInvoiceBreakdown({
+    required String paymentMethodId,
+    required DateTime dueDate,
+  });
 
   /// Compras de importações ativas que formam o empréstimo [loanId], por data.
   Future<List<LoanPurchase>> purchasesOfLoan(String loanId);

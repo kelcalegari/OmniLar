@@ -15,6 +15,13 @@ class LoanAcceptance extends Equatable {
 
   const LoanAcceptance({this.manual = true, this.import = true, this.house = true});
 
+  /// Todas as origens com a mesma regra: `all(false)` dispensa o aceite em
+  /// qualquer empréstimo da casa.
+  const LoanAcceptance.all(bool required) : manual = required, import = required, house = required;
+
+  /// Alguma origem ainda espera o aceite do devedor.
+  bool get anyRequired => manual || import || house;
+
   factory LoanAcceptance.fromJson(Object? json) {
     if (json is! Map) return const LoanAcceptance();
     bool flag(String key) => json[key] is bool ? json[key] as bool : true;

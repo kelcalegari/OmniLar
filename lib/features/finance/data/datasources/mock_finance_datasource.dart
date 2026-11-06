@@ -967,8 +967,9 @@ class MockFinanceDataSource implements FinanceDataSource {
     if (changes.containsKey('approval_threshold_cents') && !canEdit) {
       throw const ServerFailure('Você não tem permissão para mudar a aprovação por valor.');
     }
-    if (changes.containsKey('loan_acceptance') && !canEdit) {
-      throw const ServerFailure('Você não tem permissão para mudar quando o empréstimo pede aceite.');
+    // Só quem criou a casa (no mock, o morador "owner"), como na 0123
+    if (changes.containsKey('loan_acceptance') && viewer?.role != 'owner') {
+      throw const ServerFailure('Só quem criou a casa muda quando o empréstimo pede aceite.');
     }
     _houseSettingsRow = {..._houseSettingsRow, ...changes};
     if (changes.containsKey('split_basis')) _applyIncomeSplit();
