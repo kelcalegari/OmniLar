@@ -638,6 +638,21 @@ class FinanceCubit extends Cubit<FinanceState> {
     }
   }
 
+  /// Nota paga com mais de um meio de pagamento: uma despesa por meio (0124).
+  Future<bool> addExpenseGroup(List<HouseExpense> parts) async {
+    try {
+      await _repository.addExpenseGroup(parts);
+      await loadCycleData(cycle: state.currentCycle);
+      return true;
+    } catch (e) {
+      emit(state.copyWith(
+        status: FinanceStatus.failure,
+        errorMessage: 'Erro ao adicionar despesa: $e',
+      ));
+      return false;
+    }
+  }
+
   Future<bool> updateExpense(
     HouseExpense expense, {
     RecurrenceScope scope = RecurrenceScope.thisInstanceOnly,

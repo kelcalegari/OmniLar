@@ -437,6 +437,13 @@ Future<void> initServiceLocator() async {
       (payload) => sl<FinanceDataSource>().addExpense(houseExpenseFromJson(payload)),
     )
     ..registerHandler(
+      OfflineActionType.addExpenseGroup,
+      (payload) => sl<FinanceDataSource>().addExpenseGroup([
+        for (final part in (payload['parts'] as List))
+          houseExpenseFromJson((part as Map).cast<String, dynamic>()),
+      ]),
+    )
+    ..registerHandler(
       OfflineActionType.addShoppingItem,
       (payload) => sl<ShoppingDataSource>().addItem(shoppingItemFromJson(payload)),
     )

@@ -790,6 +790,27 @@ class SupabaseFinanceDataSource implements FinanceDataSource {
     }
   }
 
+  @override
+  Future<void> addExpenseGroup(List<HouseExpense> parts) async {
+    try {
+      // As partes chegam prontas (ExpensePaymentSplit): a do cartão já com o
+      // vencimento da fatura. Todas entram juntas, ou nenhuma.
+      await client.rpc('create_house_expense_group', params: {
+        'p_expenses': [
+          for (final part in parts)
+            houseExpensePayload(
+              part,
+              houseId: _houseId,
+              currentUserId: client.auth.currentUser?.id,
+            ),
+        ],
+      });
+    } catch (e) {
+      if (e is Failure) rethrow;
+      throw ServerFailure('Erro ao adicionar despesa: $e');
+    }
+  }
+
   /// Substitui as regras de rateio gravadas para a despesa.
   Future<void> _syncSplitRules(String expenseId, HouseExpense expense) async {
     await client.from('split_rules').delete().eq('expense_id', expenseId);

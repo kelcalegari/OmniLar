@@ -43,6 +43,9 @@ abstract class FinanceRepository {
   Future<DateTime?> getHouseStartDate();
 
   Future<void> addExpense(HouseExpense expense);
+
+  /// Nota paga com mais de um meio: grava todas as partes ou nenhuma (0124).
+  Future<void> addExpenseGroup(List<HouseExpense> parts);
   Future<void> updateExpense(
     HouseExpense expense, {
     RecurrenceScope scope = RecurrenceScope.thisInstanceOnly,

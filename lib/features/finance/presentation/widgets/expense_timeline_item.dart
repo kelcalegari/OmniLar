@@ -486,6 +486,14 @@ class ExpenseTimelineItem extends StatelessWidget {
                           Text(paymentMethod?.name ?? 'Pix', style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
                         ],
                       ),
+                      if (expense.isPaymentGroupPart) ...[
+                        const SizedBox(height: 4),
+                        const Text(
+                          'Parte de uma nota paga com mais de um meio',
+                          key: Key('expense_payment_group_note'),
+                          style: TextStyle(fontSize: 12, color: Colors.grey),
+                        ),
+                      ],
                       const SizedBox(height: 6),
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -853,7 +861,7 @@ class ExpenseTimelineItem extends StatelessWidget {
                         children: [
                           Flexible(
                             child: Text(
-                              '$dateFormatted • ${paidByMember?.name ?? "Membro"}${paymentMethod != null ? " • ${paymentMethod!.name}" : ""}',
+                              '$dateFormatted • ${paidByMember?.name ?? "Membro"}${paymentMethod != null ? " • ${paymentMethod!.name}" : ""}${expense.isPaymentGroupPart ? " (parte)" : ""}',
                               style: theme.textTheme.bodySmall?.copyWith(fontSize: 12),
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,

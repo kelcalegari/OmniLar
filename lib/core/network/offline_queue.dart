@@ -18,6 +18,7 @@ enum OfflineActionType {
   setTaskCompleted,
   deleteShoppingItem,
   deleteTask,
+  addExpenseGroup,
 }
 
 class OfflineQueuedAction extends Equatable {

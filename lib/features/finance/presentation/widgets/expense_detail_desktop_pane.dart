@@ -251,7 +251,10 @@ class _ExpenseDetailDesktopPaneState extends State<ExpenseDetailDesktopPane> {
                 children: [
                   _buildMetaRow('Quem pagou / Responsável:', widget.paidByMember?.name ?? 'Membro'),
                   const SizedBox(height: 8),
-                  _buildMetaRow('Forma de Pagamento:', widget.paymentMethod?.name ?? 'Pix'),
+                  _buildMetaRow(
+                    'Forma de Pagamento:',
+                    '${widget.paymentMethod?.name ?? 'Pix'}${widget.expense.isPaymentGroupPart ? ' (parte da nota)' : ''}',
+                  ),
                   const SizedBox(height: 8),
                   _buildMetaRow('Modelo de Rateio:', _getSplitBadgeText()),
                   if (dueDateFormatted != null) ...[

@@ -72,6 +72,24 @@ class FinanceRepositoryImpl implements FinanceRepository {
   }
 
   @override
+  Future<void> addExpenseGroup(List<HouseExpense> parts) async {
+    // Ids definitivos nascem no aparelho: reenviar depois não duplica a nota
+    final groupId = parts.map((p) => p.paymentGroupId).firstWhere(isUuid, orElse: generateUuidV4);
+    final withIds = [
+      for (final p in parts)
+        p.copyWith(id: isUuid(p.id) ? p.id : generateUuidV4(), paymentGroupId: groupId),
+    ];
+    final sync = _offlineSync;
+    if (sync == null || !sync.isActive) return _dataSource.addExpenseGroup(withIds);
+
+    await sync.runOrQueue(
+      OfflineActionType.addExpenseGroup,
+      () => {'parts': [for (final p in withIds) houseExpenseToJson(p)]},
+      () => _dataSource.addExpenseGroup(withIds),
+    );
+  }
+
+  @override
   Future<void> updateExpense(
     HouseExpense expense, {
     RecurrenceScope scope = RecurrenceScope.thisInstanceOnly,

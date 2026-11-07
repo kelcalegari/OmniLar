@@ -549,6 +549,13 @@ class MockFinanceDataSource implements FinanceDataSource {
   }
 
   @override
+  Future<void> addExpenseGroup(List<HouseExpense> parts) async {
+    for (final part in parts) {
+      await addExpense(part);
+    }
+  }
+
+  @override
   Future<void> addExpense(HouseExpense expense) async {
     HouseExpense toAdd = expense;
     if (toAdd.dueDate == null && toAdd.paymentMethodId.isNotEmpty) {
@@ -675,6 +682,12 @@ class MockFinanceDataSource implements FinanceDataSource {
       diff: {'title': current.title, 'amount_cents': current.amount.cents},
       createdAt: clock.now(),
     ));
+
+    // Como no banco (0124): parte de uma nota com vários meios sai com a nota
+    if (current.paymentGroupId != null) {
+      _expenses.removeWhere((e) => e.paymentGroupId == current.paymentGroupId);
+      return;
+    }
 
     switch (scope) {
       case RecurrenceScope.thisInstanceOnly:

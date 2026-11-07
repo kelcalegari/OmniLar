@@ -79,6 +79,9 @@ class DynamicFinanceDataSource implements FinanceDataSource {
   Future<void> addExpense(HouseExpense expense) => _active.addExpense(expense);
 
   @override
+  Future<void> addExpenseGroup(List<HouseExpense> parts) => _active.addExpenseGroup(parts);
+
+  @override
   Future<void> updateExpense(
     HouseExpense expense, {
     RecurrenceScope scope = RecurrenceScope.thisInstanceOnly,
