@@ -343,4 +343,81 @@ void main() {
     expect(after.map((p) => p.amount.cents).toList()..sort(), [2000, 10000]);
     expect(after.map((p) => p.paymentGroupId).toSet(), hasLength(1));
   });
+
+  testWidgets('Cartão parcelado dentro da nota: parcelas e outra parte no mesmo grupo', (tester) async {
+    tester.view.physicalSize = const Size(800, 2000);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.resetPhysicalSize);
+
+    final cubit = sl<FinanceCubit>();
+    await cubit.loadCycleData();
+    final card = cubit.state.paymentMethods.firstWhere((m) => m.isCreditCard && m.closingDay != null);
+
+    await tester.pumpWidget(
+      BlocProvider<FinanceCubit>.value(
+        value: cubit,
+        child: const MaterialApp(home: AddExpensePage()),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.enterText(find.byType(TextField).first, '30000'); // R$ 300,00
+    await tester.enterText(find.widgetWithText(TextField, 'O que foi pago?'), 'Geladeira em duas formas');
+    await tester.pumpAndSettle();
+
+    // Cartão como meio principal
+    final methodField = find.byType(DropdownButtonFormField<String>).last;
+    await tester.ensureVisible(methodField);
+    await tester.tap(methodField);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text(card.name).last);
+    await tester.pumpAndSettle();
+
+    // Divide: o outro meio paga R$ 90,00
+    final splitSwitch = find.byKey(const Key('payment_split_switch'));
+    await tester.ensureVisible(splitSwitch);
+    await tester.tap(splitSwitch);
+    await tester.pumpAndSettle();
+    final extraAmount = find.descendant(
+      of: find.byKey(const Key('payment_split_amount_0')),
+      matching: find.byType(TextField),
+    );
+    await tester.ensureVisible(extraAmount);
+    await tester.enterText(extraAmount, '9000');
+    await tester.pumpAndSettle();
+
+    // E o cartão em 3 vezes
+    final installmentSwitch = find.byKey(const Key('expense_installment_switch'));
+    await tester.ensureVisible(installmentSwitch);
+    await tester.tap(installmentSwitch);
+    await tester.pumpAndSettle();
+    final count = find.byKey(const Key('expense_installments_count'));
+    await tester.ensureVisible(count);
+    await tester.tap(count);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('3x').last);
+    await tester.pumpAndSettle();
+
+    final saveButton = find.widgetWithText(ElevatedButton, 'Lançar Compra Parcelada');
+    await tester.ensureVisible(saveButton);
+    await tester.pumpAndSettle();
+    await tester.tap(saveButton);
+    await tester.pumpAndSettle();
+
+    final all = <String, HouseExpense>{};
+    final ds = sl<FinanceDataSource>();
+    for (final offset in [0, 35, 70, 105]) {
+      final cycle = FinancialCycle.fromDate(date: DateTime.now().add(Duration(days: offset)), cycleStartDay: 5);
+      for (final e in await ds.getExpensesForCycle(cycle)) {
+        if (e.title.startsWith('Geladeira em duas formas')) all[e.id] = e;
+      }
+    }
+    final parts = all.values.toList();
+    expect(parts, hasLength(4), reason: '3 parcelas do cartão + a parte do outro meio');
+    expect(parts.map((p) => p.paymentGroupId).toSet(), hasLength(1));
+    expect(parts.map((p) => p.paymentGroupTotalCents).toSet(), {30000});
+    expect(parts.fold<int>(0, (acc, p) => acc + p.amount.cents), 30000);
+    expect(parts.where((p) => p.paymentMethodId == card.id), hasLength(3));
+    expect(parts.where((p) => p.paymentMethodId != card.id).single.amount.cents, 9000);
+  });
 }

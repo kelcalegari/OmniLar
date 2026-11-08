@@ -161,6 +161,7 @@ class ExpensePaymentSplit {
       attachmentContentType: index == 0 ? note.attachmentContentType : null,
       attachmentSizeBytes: index == 0 ? note.attachmentSizeBytes : null,
       paymentGroupId: groupId,
+      paymentGroupTotalCents: note.amount.cents,
     );
   }
 

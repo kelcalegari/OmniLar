@@ -137,4 +137,65 @@ void main() {
     ], _methods);
     expect((partial.single as CardInvoiceEntry).paidAt, isNull);
   });
+
+  group('groupPaymentNotes', () {
+    HouseExpense part(String id, int cents, String method, {DateTime? dueDate, String group = 'g1', int? total}) =>
+        _expense(id, cents, DateTime(2026, 10, 10), method: method, dueDate: dueDate)
+            .copyWith(paymentGroupId: group, paymentGroupTotalCents: total);
+
+    test('as partes de uma nota viram uma linha só, no lugar da primeira solta', () {
+      final entries = groupPaymentNotes(groupCardInvoices([
+        _expense('luz', 5000, DateTime(2026, 10, 9), method: 'caixa'),
+        part('va', 5000, 'caixa'),
+        part('cartao', 10000, 'nubank', dueDate: due),
+        _expense('aluguel', 220000, DateTime(2026, 10, 10), method: 'caixa'),
+      ], _methods));
+
+      expect(entries.map((e) => e.runtimeType), [
+        SingleExpenseEntry,
+        PaymentNoteEntry,
+        CardInvoiceEntry,
+        SingleExpenseEntry,
+      ]);
+      final note = entries[1] as PaymentNoteEntry;
+      expect(note.groupId, 'g1');
+      expect(note.total.cents, 15000);
+      expect(note.hasHiddenParts, isFalse);
+      expect(note.parts.map((e) => e.id), ['cartao', 'va'], reason: 'da maior para a menor');
+      // A parte do cartão continua dentro da fatura
+      expect((entries[2] as CardInvoiceEntry).purchases.map((e) => e.id), ['cartao']);
+    });
+
+    test('duas partes soltas também viram uma linha, e o resto da lista fica igual', () {
+      final entries = groupPaymentNotes(groupCardInvoices([
+        part('pix', 3000, 'caixa'),
+        part('va', 2000, 'caixa'),
+      ], _methods));
+      expect(entries.single, isA<PaymentNoteEntry>());
+      expect((entries.single as PaymentNoteEntry).total.cents, 5000);
+    });
+
+    test('parcelas ainda por vir: o total é o da nota inteira', () {
+      final entries = groupPaymentNotes(groupCardInvoices([
+        part('va', 9000, 'caixa', total: 30000),
+        part('parcela1', 7000, 'nubank', dueDate: due, total: 30000),
+      ], _methods));
+      final note = entries.whereType<PaymentNoteEntry>().single;
+      expect(note.visibleTotal.cents, 16000);
+      expect(note.total.cents, 30000);
+      expect(note.hasHiddenParts, isTrue);
+    });
+
+    test('parte sozinha no ciclo (as outras estão em outro) segue como despesa solta', () {
+      final entries = groupPaymentNotes(groupCardInvoices([part('va', 5000, 'caixa')], _methods));
+      expect(entries.single, isA<SingleExpenseEntry>());
+    });
+
+    test('despesa sem grupo não muda', () {
+      final entries = groupPaymentNotes(groupCardInvoices([
+        _expense('a', 100, DateTime(2026, 10, 1), method: 'caixa'),
+      ], _methods));
+      expect(entries.single, isA<SingleExpenseEntry>());
+    });
+  });
 }

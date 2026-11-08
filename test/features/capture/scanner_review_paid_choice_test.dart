@@ -76,6 +76,67 @@ void main() {
     expect(saved.dueDate, day);
   });
 
+  testWidgets('nota lida pode ser paga com dois meios, valor digitado à mão', (tester) async {
+    tester.view.physicalSize = const Size(800, 2600);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.resetPhysicalSize);
+
+    final cubit = sl<FinanceCubit>();
+    cubit.goToCurrentCycle();
+    await cubit.loadCycleData();
+    final now = DateTime.now();
+    final day = DateTime(now.year, now.month, now.day, 12);
+    final proposal = CaptureProposal(
+      id: 'prop_nota_dividida_teste',
+      documentType: DocumentType.nfce,
+      title: 'Nota dividida teste',
+      totalAmount: const Money(15000),
+      date: day,
+      capturedAt: day,
+    );
+
+    await tester.pumpWidget(BlocProvider<FinanceCubit>.value(
+      value: cubit,
+      child: MaterialApp(
+        home: Scaffold(
+          body: SingleChildScrollView(child: SmartScannerPage(initialProposal: proposal)),
+        ),
+      ),
+    ));
+    await tester.pumpAndSettle();
+
+    final switchFinder = find.byKey(const Key('scan_payment_split_switch'));
+    await tester.ensureVisible(switchFinder);
+    await tester.tap(switchFinder);
+    await tester.pumpAndSettle();
+
+    final methodField = find.byKey(const Key('scan_payment_split_method_0'));
+    await tester.ensureVisible(methodField);
+    await tester.tap(methodField);
+    await tester.pumpAndSettle();
+    final otherName = cubit.state.paymentMethods.last.name;
+    await tester.tap(find.text(otherName).last);
+    await tester.pumpAndSettle();
+
+    final amount = find.descendant(
+      of: find.byKey(const Key('scan_payment_split_amount_0')),
+      matching: find.byType(TextField),
+    );
+    await tester.enterText(amount, '5000');
+    await tester.pumpAndSettle();
+    expect(find.textContaining('No meio principal: R\$\u00a0100,00'), findsOneWidget);
+
+    final confirm = find.text('Confirmar Lançamento');
+    await tester.ensureVisible(confirm);
+    await tester.tap(confirm);
+    await tester.pumpAndSettle();
+
+    final saved = cubit.state.expenses.where((e) => e.title == 'Nota dividida teste').toList();
+    expect(saved.map((e) => e.amount.cents).toList()..sort(), [5000, 10000]);
+    expect(saved.map((e) => e.paymentGroupId).toSet(), hasLength(1));
+    expect(saved.first.paymentGroupId, isNotNull);
+  });
+
   testWidgets('boleto de condomínio com demonstrativo grava os itens como da casa', (tester) async {
     tester.view.physicalSize = const Size(800, 2200);
     tester.view.devicePixelRatio = 1.0;

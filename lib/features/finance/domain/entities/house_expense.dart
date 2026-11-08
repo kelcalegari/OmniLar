@@ -42,6 +42,7 @@ class HouseExpense extends Equatable {
   final String? paidByParticipantId; // Quando o pagador é um participante externo do projeto (project_participants)
   final String? installmentPlanId; // Parcela de uma compra parcelada no cartão (installment_plans)
   final String? paymentGroupId; // Parte de uma nota paga com mais de um meio de pagamento (0124)
+  final int? paymentGroupTotalCents; // Valor da nota inteira, igual em todas as partes (0126)
 
   const HouseExpense({
     required this.id,
@@ -76,6 +77,7 @@ class HouseExpense extends Equatable {
     this.attachmentPurgedAt,
     this.installmentPlanId,
     this.paymentGroupId,
+    this.paymentGroupTotalCents,
   });
 
   bool get isPaid => status == ExpenseStatus.paid;
@@ -168,6 +170,7 @@ class HouseExpense extends Equatable {
     DateTime? attachmentPurgedAt,
     String? installmentPlanId,
     String? paymentGroupId,
+    int? paymentGroupTotalCents,
     bool clearPaymentGroupId = false,
   }) {
     return HouseExpense(
@@ -203,6 +206,8 @@ class HouseExpense extends Equatable {
       attachmentPurgedAt: clearAttachment ? null : (attachmentPurgedAt ?? this.attachmentPurgedAt),
       installmentPlanId: installmentPlanId ?? this.installmentPlanId,
       paymentGroupId: clearPaymentGroupId ? null : (paymentGroupId ?? this.paymentGroupId),
+      paymentGroupTotalCents:
+          clearPaymentGroupId ? null : (paymentGroupTotalCents ?? this.paymentGroupTotalCents),
     );
   }
 
@@ -240,5 +245,6 @@ class HouseExpense extends Equatable {
         attachmentPurgedAt,
         installmentPlanId,
         paymentGroupId,
+        paymentGroupTotalCents,
       ];
 }

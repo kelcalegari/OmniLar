@@ -20,6 +20,10 @@ class InstallmentPurchase {
   final List<HouseExpense> expenses;
   final List<P2PLoan> loans;
 
+  /// Partes da mesma nota pagas com outros meios (VA, Pix...), gravadas junto
+  /// com as parcelas (0126). Só na compra da Casa.
+  final List<HouseExpense> extraParts;
+
   /// Primeira parcela lançada: numa compra já em andamento, as de antes
   /// ficam de fora.
   final int firstNumber;
@@ -28,8 +32,30 @@ class InstallmentPurchase {
     required this.plan,
     this.expenses = const [],
     this.loans = const [],
+    this.extraParts = const [],
     this.firstNumber = 1,
   });
+
+  /// A mesma compra com as [parts] de outros meios, no grupo [groupId]: as
+  /// parcelas e as partes levam o grupo e o total da nota.
+  InstallmentPurchase withPaymentGroup({
+    required String groupId,
+    required int noteTotalCents,
+    required List<HouseExpense> parts,
+  }) =>
+      InstallmentPurchase(
+        plan: plan,
+        firstNumber: firstNumber,
+        loans: loans,
+        expenses: [
+          for (final e in expenses)
+            e.copyWith(paymentGroupId: groupId, paymentGroupTotalCents: noteTotalCents),
+        ],
+        extraParts: [
+          for (final e in parts)
+            e.copyWith(paymentGroupId: groupId, paymentGroupTotalCents: noteTotalCents),
+        ],
+      );
 
   /// Monta a compra de [total] em [count] vezes no cartão [card]. As parcelas
   /// caem uma por fatura, a partir da fatura da [purchaseDate]; o centavo que

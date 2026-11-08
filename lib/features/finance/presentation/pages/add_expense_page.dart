@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:intl/intl.dart';
 import '../../../../core/di/service_locator.dart';
+import '../../../../core/utils/uuid.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/domain/value_objects/money.dart';
 import '../../../../core/widgets/money_input_field.dart';
@@ -145,6 +146,10 @@ class _AddExpensePageState extends State<AddExpensePage> {
   /// Editando uma parte de nota com vários meios: a nota inteira é carregada
   /// (as partes podem estar em outros ciclos) e salva trocando todas as partes.
   bool _groupLoading = false;
+
+  /// A nota tem uma compra parcelada: aqui só se edita esta parte (os meios e
+  /// os valores ficam como foram lançados; para refazer, exclua a compra).
+  bool _groupLocked = false;
   List<HouseExpense> _groupParts = const [];
   HouseExpense? _groupNote;
   final List<_DraftExpenseItem> _draftItems = [];
@@ -203,7 +208,8 @@ class _AddExpensePageState extends State<AddExpensePage> {
           responsibleMemberId: it.responsibleMemberId,
         )));
       }
-      if (edit.isPaymentGroupPart) {
+      // Parcela de compra parcelada: a nota só se refaz pela compra inteira
+      if (edit.isPaymentGroupPart && edit.installmentPlanId == null) {
         _groupLoading = true;
         _loadPaymentGroup(edit);
       }
@@ -224,6 +230,13 @@ class _AddExpensePageState extends State<AddExpensePage> {
       final parts = await cubit.expensesInGroup(edit.paymentGroupId!);
       if (!mounted) return;
       if (parts.isEmpty) throw StateError('nota sem partes');
+      if (parts.any((p) => p.installmentPlanId != null)) {
+        setState(() {
+          _groupLoading = false;
+          _groupLocked = true;
+        });
+        return;
+      }
       final note = ExpensePaymentSplit.merge(parts, mainId: edit.id);
       final methods = {for (final m in cubit.state.paymentMethods) m.id: m};
       // Parte de cartão espera a fatura; o status da nota é o das outras
@@ -452,7 +465,10 @@ class _AddExpensePageState extends State<AddExpensePage> {
       );
       return;
     }
-    if (widget.expenseToEdit?.isPaymentGroupPart == true && _groupNote == null) {
+    if (widget.expenseToEdit?.isPaymentGroupPart == true &&
+        widget.expenseToEdit?.installmentPlanId == null &&
+        !_groupLocked &&
+        _groupNote == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('As partes da nota não foram carregadas. Feche e abra a despesa de novo.')),
       );
@@ -704,7 +720,7 @@ class _AddExpensePageState extends State<AddExpensePage> {
 
       // Nota com vários meios (ou que passa a ter): troca todas as partes de
       // uma vez; sem os meios extras, a nota volta a ser uma despesa só
-      final inGroup = widget.expenseToEdit!.isPaymentGroupPart;
+      final inGroup = widget.expenseToEdit!.isPaymentGroupPart && !_groupLocked;
       if (paymentParts != null || inGroup) {
         final noteId = updatedExpense.id;
         final parts = paymentParts == null
@@ -755,6 +771,7 @@ class _AddExpensePageState extends State<AddExpensePage> {
         categoryId: catId,
         paidById: paidById,
         rule: rule,
+        paymentParts: paymentParts,
       );
       return;
     }
@@ -886,7 +903,6 @@ class _AddExpensePageState extends State<AddExpensePage> {
       _editableAsSplit() &&
       !_isRecurring &&
       _selectedProjectId == null &&
-      !_isInstallment &&
       _installmentDebtorId == null &&
       state.paymentMethods.length >= 2;
 
@@ -922,6 +938,18 @@ class _AddExpensePageState extends State<AddExpensePage> {
       return const Padding(
         padding: EdgeInsets.only(bottom: 16),
         child: LinearProgressIndicator(key: Key('payment_split_loading')),
+      );
+    }
+    if (_groupLocked ||
+        (widget.expenseToEdit?.isPaymentGroupPart == true && widget.expenseToEdit?.installmentPlanId != null)) {
+      return Padding(
+        padding: const EdgeInsets.only(bottom: 16),
+        child: Text(
+          'Esta despesa é parte de uma nota com compra parcelada no cartão. '
+          'Aqui você altera só esta parte; para mudar os meios, exclua a compra parcelada e lance de novo.',
+          key: const Key('payment_split_locked_note'),
+          style: theme.textTheme.bodySmall,
+        ),
       );
     }
     if (!_canSplitPayment(state)) return const SizedBox.shrink();
@@ -1054,6 +1082,7 @@ class _AddExpensePageState extends State<AddExpensePage> {
     required String categoryId,
     required String paidById,
     required SplitRule rule,
+    List<PaymentPart>? paymentParts,
   }) async {
     void fail(String message) => ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(backgroundColor: Colors.red.shade700, content: Text(message)),
@@ -1077,10 +1106,14 @@ class _AddExpensePageState extends State<AddExpensePage> {
     if (_isSaving) return;
     setState(() => _isSaving = true);
 
+    // Nota com vários meios: o cartão parcela só a parte dele (a primeira); as
+    // outras partes entram como despesas comuns, no mesmo grupo (0126)
+    final cardCents = paymentParts?.first.amountCents ?? _cents;
+
     var purchase = InstallmentPurchase.build(
       title: _titleController.text.trim(),
       description: _descriptionText,
-      total: Money(_cents),
+      total: Money(cardCents),
       count: count,
       purchaseDate: _selectedDate,
       card: card,
@@ -1124,6 +1157,35 @@ class _AddExpensePageState extends State<AddExpensePage> {
       }
     }
 
+    if (paymentParts != null) {
+      final note = HouseExpense(
+        id: 'nota_${clock.now().millisecondsSinceEpoch}',
+        title: _titleController.text.trim(),
+        description: _descriptionText,
+        amount: Money(_cents),
+        date: _selectedDate,
+        categoryId: categoryId,
+        paidByMemberId: paidById,
+        paymentMethodId: card.id,
+        splitRule: rule,
+        createdBy: sl<AuthRepository>().currentUser?.id,
+      );
+      final parts = ExpensePaymentSplit.build(
+        note: note,
+        parts: paymentParts,
+        methods: {for (final m in state.paymentMethods) m.id: m},
+        groupId: generateUuidV4(),
+        partId: (i) => '${note.id}_$i',
+        status: _expenseStatus,
+        dueDate: _expenseStatus == ExpenseStatus.pending ? _selectedDate : null,
+      );
+      purchase = purchase.withPaymentGroup(
+        groupId: parts.first.paymentGroupId!,
+        noteTotalCents: _cents,
+        parts: parts.skip(1).toList(),
+      );
+    }
+
     final cubit = context.read<FinanceCubit>();
     String? error;
     try {
@@ -1139,7 +1201,9 @@ class _AddExpensePageState extends State<AddExpensePage> {
     showSaveFeedback(
       ScaffoldMessenger.of(context),
       ok: error == null,
-      success: debtorId == null
+      success: debtorId == null && paymentParts != null
+          ? 'Nota lançada: $count vezes no ${card.name} e o resto nos outros meios. 💳'
+          : debtorId == null
           ? 'Compra parcelada em $count vezes lançada! As parcelas ficam previstas até cada fatura. 💳'
           : count == 1
               ? 'Compra lançada como empréstimo! 💳'
@@ -1265,7 +1329,9 @@ class _AddExpensePageState extends State<AddExpensePage> {
 
   /// Compra no cartão: em quantas vezes.
   Widget _buildInstallmentSection(ThemeData theme, FinanceState state, PaymentMethod card) {
-    final parts = _cents > 0 ? Money(_cents).splitEqually(_installmentsCount) : const <Money>[];
+    // Nota com vários meios: o cartão parcela só a parte dele
+    final cardCents = _paymentSplitApplies(state) ? _paymentParts(card.id).first.amountCents : _cents;
+    final parts = cardCents > 0 ? Money(cardCents).splitEqually(_installmentsCount) : const <Money>[];
     final purchaseDue = CreditCardInvoiceCalculator.calculateInvoiceDueDate(
       purchaseDate: _selectedDate,
       closingDay: card.closingDay!,
@@ -2442,7 +2508,7 @@ class _AddExpensePageState extends State<AddExpensePage> {
                   final pm = state.paymentMethods
                       .where((p) => p.id == _selectedPaymentMethodId)
                       .firstOrNull;
-                  if (!_canBeInstallment(pm) || _isPaymentSplit) return const SizedBox.shrink();
+                  if (!_canBeInstallment(pm)) return const SizedBox.shrink();
                   return Padding(
                     padding: const EdgeInsets.only(bottom: 16),
                     child: Column(

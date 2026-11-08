@@ -385,6 +385,11 @@ class SupabaseImportRepository implements ImportRepository {
               },
           ],
           'loans': [for (final loan in purchase.loans) p2pLoanPayload(loan, houseId: _houseId)],
+          if (purchase.extraParts.isNotEmpty)
+            'extra_parts': [
+              for (final part in purchase.extraParts)
+                houseExpensePayload(part, houseId: _houseId, currentUserId: userId),
+            ],
         },
       });
     } catch (e) {

@@ -86,5 +86,6 @@ HouseExpense houseExpenseFromRow(Map<String, dynamic> r) {
     attachmentPurgedAt: r['attachment_purged_at'] != null ? DateTime.tryParse(r['attachment_purged_at'] as String)?.toLocal() : null,
     installmentPlanId: r['installment_plan_id'] as String?,
     paymentGroupId: r['payment_group_id'] as String?,
+    paymentGroupTotalCents: (r['payment_group_total_cents'] as num?)?.toInt(),
   );
 }
