@@ -53,7 +53,7 @@ class CycleReportCsv {
                 : 'Caixa da Casa');
       final kind = e.isRecurring
           ? (e.isVariable ? 'Recorrente variável' : 'Recorrente fixa')
-          : 'Avulsa';
+          : (e.isPaymentGroupPart ? 'Avulsa (parte de nota com vários meios)' : 'Avulsa');
       b.writeln(
         [
           _date(e.date),

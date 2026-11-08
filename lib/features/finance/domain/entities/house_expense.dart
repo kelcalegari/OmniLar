@@ -168,6 +168,7 @@ class HouseExpense extends Equatable {
     DateTime? attachmentPurgedAt,
     String? installmentPlanId,
     String? paymentGroupId,
+    bool clearPaymentGroupId = false,
   }) {
     return HouseExpense(
       id: id ?? this.id,
@@ -201,7 +202,7 @@ class HouseExpense extends Equatable {
       attachmentSizeBytes: clearAttachment ? null : (attachmentSizeBytes ?? this.attachmentSizeBytes),
       attachmentPurgedAt: clearAttachment ? null : (attachmentPurgedAt ?? this.attachmentPurgedAt),
       installmentPlanId: installmentPlanId ?? this.installmentPlanId,
-      paymentGroupId: paymentGroupId ?? this.paymentGroupId,
+      paymentGroupId: clearPaymentGroupId ? null : (paymentGroupId ?? this.paymentGroupId),
     );
   }
 

@@ -141,6 +141,12 @@ class _AddExpensePageState extends State<AddExpensePage> {
   /// meios além do principal. O principal fica com o que sobra do valor.
   bool _isPaymentSplit = false;
   final List<_DraftPaymentPart> _extraPayments = [];
+
+  /// Editando uma parte de nota com vários meios: a nota inteira é carregada
+  /// (as partes podem estar em outros ciclos) e salva trocando todas as partes.
+  bool _groupLoading = false;
+  List<HouseExpense> _groupParts = const [];
+  HouseExpense? _groupNote;
   final List<_DraftExpenseItem> _draftItems = [];
   ReceiptAttachmentFile? _pendingAttachmentFile;
   String? _existingAttachmentPath;
@@ -197,6 +203,10 @@ class _AddExpensePageState extends State<AddExpensePage> {
           responsibleMemberId: it.responsibleMemberId,
         )));
       }
+      if (edit.isPaymentGroupPart) {
+        _groupLoading = true;
+        _loadPaymentGroup(edit);
+      }
     } else {
       _isRecurring = widget.isRecurringDefault;
       if (_isRecurring) {
@@ -205,6 +215,67 @@ class _AddExpensePageState extends State<AddExpensePage> {
       _selectedProjectId = widget.initialProjectId;
     }
     _loadAvailableProjects();
+  }
+
+  /// Carrega a nota inteira de uma parte editada: valor total, meios e itens.
+  Future<void> _loadPaymentGroup(HouseExpense edit) async {
+    final cubit = context.read<FinanceCubit>();
+    try {
+      final parts = await cubit.expensesInGroup(edit.paymentGroupId!);
+      if (!mounted) return;
+      if (parts.isEmpty) throw StateError('nota sem partes');
+      final note = ExpensePaymentSplit.merge(parts, mainId: edit.id);
+      final methods = {for (final m in cubit.state.paymentMethods) m.id: m};
+      // Parte de cartão espera a fatura; o status da nota é o das outras
+      final direct = parts.where((p) => !ExpenseLaunchDefaults.waitsForInvoice(methods[p.paymentMethodId]));
+      setState(() {
+        _groupParts = parts;
+        _groupNote = note;
+        _cents = note.amount.cents;
+        _amountFieldVersion++;
+        _selectedPaymentMethodId = edit.paymentMethodId;
+        _expenseStatus = direct.isNotEmpty && direct.every((p) => p.isPending)
+            ? ExpenseStatus.pending
+            : ExpenseStatus.paid;
+        for (final item in _draftItems) {
+          item.dispose();
+        }
+        _draftItems
+          ..clear()
+          ..addAll(note.items.map((it) => _DraftExpenseItem(
+                title: it.title,
+                cents: it.amount.cents,
+                categoryId: it.categoryId,
+                responsibleMemberId: it.responsibleMemberId,
+              )));
+        _isItemized = note.items.isNotEmpty;
+        _existingAttachmentPath = note.attachmentPath;
+        _existingAttachmentName = note.attachmentName;
+        _existingAttachmentContentType = note.attachmentContentType;
+        _existingAttachmentSizeBytes = note.attachmentSizeBytes;
+        for (final part in _extraPayments) {
+          part.dispose();
+        }
+        _extraPayments
+          ..clear()
+          ..addAll([
+            for (final p in parts)
+              if (p.id != edit.id)
+                _DraftPaymentPart(methodId: p.paymentMethodId, cents: p.amount.cents),
+          ]);
+        _isPaymentSplit = _extraPayments.isNotEmpty;
+        _groupLoading = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _groupLoading = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          backgroundColor: Colors.red.shade700,
+          content: Text('Não foi possível carregar as outras partes da nota: $e'),
+        ),
+      );
+    }
   }
 
   /// Confere o código colado e usa o que ele traz: valor (se ainda vazio) e
@@ -375,6 +446,19 @@ class _AddExpensePageState extends State<AddExpensePage> {
       }
     }
 
+    if (_groupLoading) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Carregando as outras partes da nota. Tente de novo em instantes.')),
+      );
+      return;
+    }
+    if (widget.expenseToEdit?.isPaymentGroupPart == true && _groupNote == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('As partes da nota não foram carregadas. Feche e abra a despesa de novo.')),
+      );
+      return;
+    }
+
     final state = context.read<FinanceCubit>().state;
     final catId = _selectedCategoryId ?? state.categories.firstOrNull?.id ?? '';
     final paidById = _selectedPaidByMemberId ?? state.members.firstOrNull?.id ?? sl<AuthRepository>().currentUser?.id ?? '';
@@ -499,7 +583,7 @@ class _AddExpensePageState extends State<AddExpensePage> {
     }
 
     if (widget.expenseToEdit != null) {
-      final oldExpense = widget.expenseToEdit!;
+      final oldExpense = _groupNote ?? widget.expenseToEdit!;
       RecurrenceScope chosenScope = RecurrenceScope.thisInstanceOnly;
       if (oldExpense.isRecurring) {
         final scope = await showRecurrenceScopeDialog(
@@ -617,6 +701,39 @@ class _AddExpensePageState extends State<AddExpensePage> {
 
       if (!mounted) return;
       final cubit = context.read<FinanceCubit>();
+
+      // Nota com vários meios (ou que passa a ter): troca todas as partes de
+      // uma vez; sem os meios extras, a nota volta a ser uma despesa só
+      final inGroup = widget.expenseToEdit!.isPaymentGroupPart;
+      if (paymentParts != null || inGroup) {
+        final noteId = updatedExpense.id;
+        final parts = paymentParts == null
+            ? [updatedExpense.copyWith(clearPaymentGroupId: true)]
+            : ExpensePaymentSplit.build(
+                note: updatedExpense,
+                parts: paymentParts,
+                methods: {for (final m in state.paymentMethods) m.id: m},
+                groupId: 'grp_$noteId',
+                partId: (i) => '${noteId}_$i',
+                status: _expenseStatus,
+                dueDate: _expenseStatus == ExpenseStatus.pending ? _selectedDate : null,
+              );
+        final replaced = await cubit.replaceExpenses(
+          inGroup ? [for (final p in _groupParts) p.id] : [widget.expenseToEdit!.id],
+          parts,
+        );
+        if (!mounted) return;
+        setState(() => _isSaving = false);
+        if (replaced) Navigator.pop(context);
+        showSaveFeedback(
+          ScaffoldMessenger.of(context),
+          ok: replaced,
+          success: 'Despesa atualizada com sucesso! ✏️',
+          failure: cubit.state.errorMessage,
+        );
+        return;
+      }
+
       final ok = await cubit.updateExpense(updatedExpense, scope: chosenScope);
       if (!mounted) return;
       setState(() => _isSaving = false);
@@ -766,12 +883,19 @@ class _AddExpensePageState extends State<AddExpensePage> {
   /// Nota nova, à vista, fora de projeto e sem recorrência pode ser paga com
   /// mais de um meio (0124).
   bool _canSplitPayment(FinanceState state) =>
-      widget.expenseToEdit == null &&
+      _editableAsSplit() &&
       !_isRecurring &&
       _selectedProjectId == null &&
       !_isInstallment &&
       _installmentDebtorId == null &&
       state.paymentMethods.length >= 2;
+
+  /// Despesa nova, ou editada que não seja recorrente, parcelada nem de projeto
+  /// (o banco recusa a troca nesses casos).
+  bool _editableAsSplit() {
+    final edit = widget.expenseToEdit;
+    return edit == null || (!edit.isRecurring && edit.installmentPlanId == null && edit.projectId == null);
+  }
 
   bool _paymentSplitApplies(FinanceState state) =>
       _isPaymentSplit && _extraPayments.isNotEmpty && _canSplitPayment(state);
@@ -794,6 +918,12 @@ class _AddExpensePageState extends State<AddExpensePage> {
   }
 
   Widget _buildPaymentSplitSection(ThemeData theme, FinanceState state) {
+    if (_groupLoading) {
+      return const Padding(
+        padding: EdgeInsets.only(bottom: 16),
+        child: LinearProgressIndicator(key: Key('payment_split_loading')),
+      );
+    }
     if (!_canSplitPayment(state)) return const SizedBox.shrink();
     final extrasCents = _extraPayments.fold<int>(0, (acc, p) => acc + p.cents);
     final mainCents = _cents - extrasCents;

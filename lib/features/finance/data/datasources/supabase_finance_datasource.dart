@@ -811,6 +811,46 @@ class SupabaseFinanceDataSource implements FinanceDataSource {
     }
   }
 
+  @override
+  Future<List<HouseExpense>> getExpensesInGroup(String groupId) async {
+    try {
+      final rows = await client
+          .from('house_expenses')
+          .select('*, house_expense_items(*), split_rules(*)')
+          .eq('house_id', _houseId)
+          .eq('payment_group_id', groupId)
+          .isFilter('deleted_at', null)
+          .order('created_at');
+      return rows.map((r) => houseExpenseFromRow(r)).toList();
+    } catch (e) {
+      throw ServerFailure('Erro ao buscar as partes da nota: $e');
+    }
+  }
+
+  @override
+  Future<void> replaceExpenses(List<String> oldIds, List<HouseExpense> parts) async {
+    try {
+      await client.rpc('replace_house_expenses', params: {
+        'p_old_ids': oldIds,
+        'p_expenses': [
+          for (final part in parts)
+            houseExpensePayload(
+              part,
+              houseId: _houseId,
+              currentUserId: client.auth.currentUser?.id,
+            ),
+        ],
+      });
+    } on PostgrestException catch (e) {
+      // Recusa do próprio banco (ciclo fechado, fatura paga...): a mensagem já explica
+      if (e.code == 'P0001') throw ServerFailure(e.message);
+      throw ServerFailure('Erro ao alterar o pagamento da despesa: ${e.message}');
+    } catch (e) {
+      if (e is Failure) rethrow;
+      throw ServerFailure('Erro ao alterar o pagamento da despesa: $e');
+    }
+  }
+
   /// Substitui as regras de rateio gravadas para a despesa.
   Future<void> _syncSplitRules(String expenseId, HouseExpense expense) async {
     await client.from('split_rules').delete().eq('expense_id', expenseId);

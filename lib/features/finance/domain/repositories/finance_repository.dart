@@ -46,6 +46,14 @@ abstract class FinanceRepository {
 
   /// Nota paga com mais de um meio: grava todas as partes ou nenhuma (0124).
   Future<void> addExpenseGroup(List<HouseExpense> parts);
+
+  /// As partes ainda vivas de uma nota paga com mais de um meio (0124),
+  /// de qualquer ciclo.
+  Future<List<HouseExpense>> getExpensesInGroup(String groupId);
+
+  /// Troca [oldIds] (a nota inteira ou uma despesa avulsa) pelas [parts] novas,
+  /// tudo ou nada (0125). Uma parte só desfaz a divisão.
+  Future<void> replaceExpenses(List<String> oldIds, List<HouseExpense> parts);
   Future<void> updateExpense(
     HouseExpense expense, {
     RecurrenceScope scope = RecurrenceScope.thisInstanceOnly,

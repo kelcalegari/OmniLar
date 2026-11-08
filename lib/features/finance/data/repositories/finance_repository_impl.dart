@@ -90,6 +90,27 @@ class FinanceRepositoryImpl implements FinanceRepository {
   }
 
   @override
+  Future<List<HouseExpense>> getExpensesInGroup(String groupId) => _dataSource.getExpensesInGroup(groupId);
+
+  @override
+  Future<void> replaceExpenses(List<String> oldIds, List<HouseExpense> parts) {
+    // Ids definitivos nascem no aparelho. Nem o grupo nem as despesas novas
+    // reaproveitam os antigos: as antigas continuam gravadas, só excluídas.
+    final groupId = parts.length > 1 ? generateUuidV4() : null;
+    return _dataSource.replaceExpenses(
+      oldIds,
+      [
+        for (final p in parts)
+          p.copyWith(
+            id: generateUuidV4(),
+            paymentGroupId: groupId,
+            clearPaymentGroupId: groupId == null,
+          ),
+      ],
+    );
+  }
+
+  @override
   Future<void> updateExpense(
     HouseExpense expense, {
     RecurrenceScope scope = RecurrenceScope.thisInstanceOnly,

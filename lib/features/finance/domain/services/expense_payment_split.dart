@@ -31,7 +31,9 @@ class ExpensePaymentSplit {
       return 'Cada meio de pagamento precisa de um valor maior que zero.';
     }
     final ids = parts.map((p) => p.paymentMethodId).toSet();
-    if (ids.length != parts.length) return 'Use cada meio de pagamento uma vez só.';
+    if (ids.length != parts.length) {
+      return 'Use cada meio de pagamento uma vez só.';
+    }
     final sum = parts.fold<int>(0, (acc, p) => acc + p.amountCents);
     if (sum != totalCents) {
       return 'A soma dos meios (${Money(sum).format()}) deve ser igual ao valor da nota (${Money(totalCents).format()}).';
@@ -60,9 +62,13 @@ class ExpensePaymentSplit {
     final itemCuts = note.items.isEmpty
         ? null
         : cut([for (final i in note.items) i.amount.cents], partCents);
-    final fixed = note.splitRule.type == SplitType.fixed ? note.splitRule.fixedAmounts : null;
+    final fixed = note.splitRule.type == SplitType.fixed
+        ? note.splitRule.fixedAmounts
+        : null;
     final fixedIds = fixed?.keys.toList() ?? const <String>[];
-    final fixedCuts = fixed == null ? null : cut([for (final id in fixedIds) fixed[id]!.cents], partCents);
+    final fixedCuts = fixed == null
+        ? null
+        : cut([for (final id in fixedIds) fixed[id]!.cents], partCents);
 
     return [
       for (var p = 0; p < parts.length; p++)
@@ -85,7 +91,8 @@ class ExpensePaymentSplit {
               ? note.splitRule
               : SplitRule.fixed({
                   for (var m = 0; m < fixedIds.length; m++)
-                    if (fixedCuts[p][m] > 0) fixedIds[m]: Money(fixedCuts[p][m]),
+                    if (fixedCuts[p][m] > 0)
+                      fixedIds[m]: Money(fixedCuts[p][m]),
                 }),
         ),
     ];
@@ -103,7 +110,10 @@ class ExpensePaymentSplit {
     required List<(HouseExpenseItem, int)> items,
     required SplitRule splitRule,
   }) {
-    final waitsForInvoice = ExpenseLaunchDefaults.waitsForInvoice(method, projectId: note.projectId);
+    final waitsForInvoice = ExpenseLaunchDefaults.waitsForInvoice(
+      method,
+      projectId: note.projectId,
+    );
     final isHouseMethod = method == null
         ? part.paymentMethodId == 'pm_caixa'
         : (method.ownerMemberId == null || method.id == 'pm_caixa');
@@ -128,7 +138,9 @@ class ExpensePaymentSplit {
       splitRule: splitRule,
       status: waitsForInvoice ? ExpenseStatus.pending : status,
       paidOutOfPocket: waitsForInvoice ? false : !isHouseMethod,
-      paidAt: waitsForInvoice || status == ExpenseStatus.pending ? null : note.paidAt,
+      paidAt: waitsForInvoice || status == ExpenseStatus.pending
+          ? null
+          : note.paidAt,
       notes: note.notes,
       barcode: waitsForInvoice ? null : note.barcode,
       createdBy: note.createdBy,
@@ -152,6 +164,66 @@ class ExpensePaymentSplit {
     );
   }
 
+  /// A nota inteira a partir das suas [parts] (para editar): valor somado,
+  /// sub-itens iguais juntados e rateio fixo somado. O meio, o pagamento e o
+  /// comprovante são os da parte [mainId] (ou os da primeira que tiver
+  /// comprovante, no caso do anexo).
+  static HouseExpense merge(
+    List<HouseExpense> parts, {
+    required String mainId,
+  }) {
+    final main = parts.firstWhere(
+      (p) => p.id == mainId,
+      orElse: () => parts.first,
+    );
+    final items = <String, HouseExpenseItem>{};
+    for (final part in parts) {
+      for (final item in part.items) {
+        final key =
+            '${item.title}|${item.categoryId}|${item.responsibleMemberId}';
+        final seen = items[key];
+        items[key] = seen == null
+            ? item
+            : HouseExpenseItem(
+                id: seen.id,
+                expenseId: seen.expenseId,
+                title: seen.title,
+                amount: Money(seen.amount.cents + item.amount.cents),
+                categoryId: seen.categoryId,
+                responsibleMemberId: seen.responsibleMemberId,
+                splitRule: seen.splitRule,
+              );
+      }
+    }
+
+    var splitRule = main.splitRule;
+    if (splitRule.type == SplitType.fixed) {
+      final fixed = <String, int>{};
+      for (final part in parts) {
+        part.splitRule.fixedAmounts?.forEach((member, money) {
+          fixed[member] = (fixed[member] ?? 0) + money.cents;
+        });
+      }
+      splitRule = SplitRule.fixed({
+        for (final e in fixed.entries) e.key: Money(e.value),
+      });
+    }
+
+    final withAttachment = parts.firstWhere(
+      (p) => p.hasAttachment,
+      orElse: () => main,
+    );
+    return main.copyWith(
+      amount: Money(parts.fold<int>(0, (acc, p) => acc + p.amount.cents)),
+      items: items.values.toList(),
+      splitRule: splitRule,
+      attachmentPath: withAttachment.attachmentPath,
+      attachmentName: withAttachment.attachmentName,
+      attachmentContentType: withAttachment.attachmentContentType,
+      attachmentSizeBytes: withAttachment.attachmentSizeBytes,
+    );
+  }
+
   /// Corta os [pieces] (itens ou valores fixos, em ordem) entre as [parts],
   /// como uma fita: cada parte leva o trecho seguinte da soma, e só a peça na
   /// divisa entre duas partes é repartida. `resultado[p][i]` é quanto da peça
@@ -160,7 +232,9 @@ class ExpensePaymentSplit {
     final total = pieces.fold<int>(0, (a, b) => a + b);
     final partsTotal = parts.fold<int>(0, (a, b) => a + b);
     if (total != partsTotal) {
-      throw ArgumentError('Peças ($total) e partes ($partsTotal) com somas diferentes');
+      throw ArgumentError(
+        'Peças ($total) e partes ($partsTotal) com somas diferentes',
+      );
     }
     final result = [for (final _ in parts) List<int>.filled(pieces.length, 0)];
     var piece = 0;
