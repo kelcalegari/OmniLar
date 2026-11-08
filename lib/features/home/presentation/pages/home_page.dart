@@ -32,6 +32,7 @@ import '../../../finance/presentation/widgets/expense_grid_table.dart';
 import '../../../../core/widgets/search_shortcut.dart';
 import '../../../finance/presentation/widgets/card_invoice_breakdown_view.dart';
 import '../../../finance/presentation/widgets/card_invoice_group_tile.dart';
+import '../../../finance/presentation/widgets/payment_note_tile.dart';
 import '../../../finance/presentation/widgets/card_invoice_payment_sheet.dart';
 import '../../../finance/presentation/widgets/reconcile_cash_modal.dart';
 import '../../../settlement/domain/entities/settlement_summary.dart';
@@ -114,6 +115,7 @@ class _HomePageContentState extends State<_HomePageContent> {
 
   /// Faturas abertas na lista de gastos (pela chave da fatura).
   final Set<String> _expandedInvoices = {};
+  final Set<String> _expandedNotes = {};
 
   @override
   Widget build(BuildContext context) {
@@ -991,13 +993,33 @@ class _HomePageContentState extends State<_HomePageContent> {
               onSelect: (id) => setState(() => _selectedExpenseId = _selectedExpenseId == id ? null : id),
             )
           else
-            ...groupCardInvoices(filteredExpenses, state.paymentMethods).map((entry) {
+            ...groupPaymentNotes(groupCardInvoices(filteredExpenses, state.paymentMethods)).map((entry) {
               Widget item(HouseExpense expense, {bool inInvoice = false}) =>
                   _buildExpenseItem(state, expense, isDesktop: isDesktop, inInvoice: inInvoice);
 
               switch (entry) {
                 case SingleExpenseEntry(:final expense):
                   return item(expense);
+                case PaymentNoteEntry():
+                  // A nota que guarda a despesa selecionada fica aberta
+                  final noteOpen = _expandedNotes.contains(entry.groupId) ||
+                      entry.parts.any((e) => e.id == _selectedExpenseId);
+                  return PaymentNoteTile(
+                    note: entry,
+                    methods: {for (final m in state.paymentMethods) m.id: m},
+                    expanded: noteOpen,
+                    onToggle: () => setState(() {
+                      if (noteOpen) {
+                        _expandedNotes.remove(entry.groupId);
+                        if (entry.parts.any((e) => e.id == _selectedExpenseId)) {
+                          _selectedExpenseId = null;
+                        }
+                      } else {
+                        _expandedNotes.add(entry.groupId);
+                      }
+                    }),
+                    children: [for (final part in entry.parts) item(part, inInvoice: true)],
+                  );
                 case CardInvoiceEntry():
                   // A fatura que guarda a despesa selecionada fica aberta
                   final expanded = _expandedInvoices.contains(entry.key) ||

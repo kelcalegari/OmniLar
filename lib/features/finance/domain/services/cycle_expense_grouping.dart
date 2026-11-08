@@ -46,6 +46,80 @@ class CardInvoiceEntry extends CycleExpenseEntry {
       isOpen && dueDate.isBefore(DateTime(now.year, now.month, now.day));
 }
 
+/// Nota paga com mais de um meio (0124), mostrada como uma linha só: as partes
+/// que aparecem neste ciclo, inclusive a do cartão (que continua dentro da
+/// fatura dela). As outras partes podem estar em outros ciclos.
+class PaymentNoteEntry extends CycleExpenseEntry {
+  final String groupId;
+
+  /// Partes visíveis no ciclo, da maior para a menor.
+  final List<HouseExpense> parts;
+
+  const PaymentNoteEntry({required this.groupId, required this.parts});
+
+  String get title => parts.first.title;
+
+  /// Soma das partes que aparecem neste ciclo.
+  Money get visibleTotal => Money(parts.fold<int>(0, (acc, e) => acc + e.amount.cents));
+
+  /// A nota inteira, mesmo com partes (ou parcelas) em outros ciclos.
+  Money get total {
+    final whole = parts.map((e) => e.paymentGroupTotalCents).whereType<int>().firstOrNull;
+    return whole == null || whole < visibleTotal.cents ? visibleTotal : Money(whole);
+  }
+
+  /// Há partes (ou parcelas) fora deste ciclo.
+  bool get hasHiddenParts => total.cents > visibleTotal.cents;
+
+  DateTime get date => parts.first.date;
+}
+
+/// Troca as partes soltas de uma nota com vários meios por uma linha só
+/// ([PaymentNoteEntry]), no lugar da primeira delas. A parte do cartão fica
+/// também dentro da fatura. Nota com uma parte só neste ciclo segue como está.
+List<CycleExpenseEntry> groupPaymentNotes(List<CycleExpenseEntry> entries) {
+  final byGroup = <String, List<HouseExpense>>{};
+  for (final entry in entries) {
+    switch (entry) {
+      case SingleExpenseEntry(:final expense):
+        final id = expense.paymentGroupId;
+        if (id != null) byGroup.putIfAbsent(id, () => []).add(expense);
+      case CardInvoiceEntry():
+        for (final purchase in entry.purchases) {
+          final id = purchase.paymentGroupId;
+          if (id != null) byGroup.putIfAbsent(id, () => []).add(purchase);
+        }
+      case PaymentNoteEntry():
+        break;
+    }
+  }
+
+  final result = <CycleExpenseEntry>[];
+  final placed = <String>{};
+  for (final entry in entries) {
+    if (entry is SingleExpenseEntry && entry.expense.paymentGroupId != null) {
+      final id = entry.expense.paymentGroupId!;
+      final parts = byGroup[id]!;
+      // Uma parte só no ciclo: nada a juntar
+      if (parts.length < 2) {
+        result.add(entry);
+        continue;
+      }
+      if (placed.add(id)) {
+        result.add(
+          PaymentNoteEntry(
+            groupId: id,
+            parts: [...parts]..sort((a, b) => b.amount.cents.compareTo(a.amount.cents)),
+          ),
+        );
+      }
+      continue;
+    }
+    result.add(entry);
+  }
+  return result;
+}
+
 /// Junta em uma fatura as compras de cartão do ciclo, sem mudar nenhuma
 /// despesa: é só a forma de mostrar. A fatura fica no lugar da primeira compra
 /// dela na lista. É a fatura que se paga, então mesmo uma compra sozinha

@@ -9,6 +9,8 @@ import '../../../finance/domain/services/pending_payment.dart';
 import '../../../finance/presentation/cubit/finance_state.dart';
 import '../../domain/services/boleto_code.dart';
 import '../../../finance/domain/services/expense_launch_defaults.dart';
+import '../../../finance/domain/services/expense_payment_split.dart';
+import '../../../../core/widgets/money_input_field.dart';
 import 'dart:async' show Timer, unawaited;
 import 'dart:io' show Platform;
 import 'dart:typed_data' show Uint8List;
@@ -38,6 +40,7 @@ import '../../../finance/presentation/cubit/finance_cubit.dart';
 import '../../../finance/domain/entities/category.dart';
 import '../../../finance/domain/entities/house_expense.dart';
 import '../../../finance/domain/entities/house_expense_item.dart';
+import '../../../finance/domain/entities/payment_method.dart';
 import '../../../finance/domain/entities/split_rule.dart';
 import '../../../../core/widgets/save_feedback.dart';
 
@@ -75,6 +78,9 @@ class _SmartScannerPageState extends State<SmartScannerPage>
   String _processingMessage = 'Processando documento...';
   bool _isSubmitting = false;
   String? _selectedPaymentMethodId;
+  // Nota paga com mais de um meio: os outros meios e valores, editados à mão
+  // na revisão. O meio principal leva o resto da nota.
+  final List<_ScanPaymentPart> _extraPayments = [];
   // Título e categoria editados na revisão; voltam ao sugerido a cada documento lido
   final _titleController = TextEditingController();
   // Valor editado direto no campo da revisão (sem modal secundário)
@@ -461,6 +467,7 @@ class _SmartScannerPageState extends State<SmartScannerPage>
     if (_currentProposal != null && !_isSubmitting) {
       _saveDraftNow();
     }
+    _clearExtraPayments();
     _draftTimer?.cancel();
     _titleController.removeListener(_onTitleControllerChanged);
     _barcodeController.dispose();
@@ -1772,8 +1779,46 @@ class _SmartScannerPageState extends State<SmartScannerPage>
             : null,
       );
 
+      // Nota paga com mais de um meio: uma despesa por meio, no mesmo grupo
+      final extras = isPayable
+          ? <PaymentPart>[]
+          : [
+              for (final p in _extraPayments)
+                if (p.methodId != null || p.cents > 0)
+                  PaymentPart(
+                    paymentMethodId: p.methodId ?? '',
+                    amountCents: p.cents,
+                  ),
+            ];
+      final List<HouseExpense>? groupParts;
+      if (extras.isEmpty) {
+        groupParts = null;
+      } else {
+        final mainCents =
+            expense.amount.cents - extras.fold<int>(0, (a, p) => a + p.amountCents);
+        final parts = [
+          PaymentPart(paymentMethodId: finalPaymentMethodId, amountCents: mainCents),
+          ...extras,
+        ];
+        if (extras.any((p) => p.paymentMethodId.isEmpty)) {
+          throw const ValidationFailure('Escolha o meio de cada parte do pagamento.');
+        }
+        final error = ExpensePaymentSplit.validate(expense.amount.cents, parts);
+        if (error != null) throw ValidationFailure(error);
+        final groupId = generateUuidV4();
+        groupParts = ExpensePaymentSplit.build(
+          note: expense,
+          parts: parts,
+          methods: {for (final m in state.paymentMethods) m.id: m},
+          groupId: groupId,
+          partId: (i) => i == 0 ? expense.id : '${expense.id}_p$i',
+        );
+      }
+
       // Persistir no repositório (espera o Supabase concluir)
-      if (!await financeCubit.addExpense(expense)) {
+      if (!await (groupParts != null
+          ? financeCubit.addExpenseGroup(groupParts)
+          : financeCubit.addExpense(expense))) {
         throw ValidationFailure(
           financeCubit.state.errorMessage ?? kSaveFailedMessage,
         );
@@ -1808,6 +1853,110 @@ class _SmartScannerPageState extends State<SmartScannerPage>
         );
       }
     }
+  }
+
+  void _clearExtraPayments() {
+    for (final p in _extraPayments) {
+      p.dispose();
+    }
+    _extraPayments.clear();
+  }
+
+  /// Outros meios da nota, só para uma nota já paga (não conta a pagar).
+  Widget _buildPaymentSplitEditor(List<PaymentMethod> methods, Money total) {
+    final others = _extraPayments.fold<int>(0, (a, p) => a + p.cents);
+    final main = total.cents - others;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        SwitchListTile(
+          key: const Key('scan_payment_split_switch'),
+          contentPadding: EdgeInsets.zero,
+          title: const Text('Pagar com mais de um meio'),
+          subtitle: const Text('Ex.: parte no vale, parte no cartão'),
+          value: _extraPayments.isNotEmpty,
+          onChanged: (on) => setState(() {
+            if (on) {
+              _extraPayments.add(_ScanPaymentPart());
+            } else {
+              _clearExtraPayments();
+            }
+          }),
+        ),
+        for (final (index, part) in _extraPayments.indexed)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 8),
+            child: Row(
+              children: [
+                Expanded(
+                  flex: 3,
+                  child: DropdownButtonFormField<String>(
+                    key: Key('scan_payment_split_method_$index'),
+                    initialValue: part.methodId,
+                    isExpanded: true,
+                    decoration: InputDecoration(
+                      labelText: 'Também pago com',
+                      isDense: true,
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                    ),
+                    items: [
+                      for (final m in methods)
+                        if (m.id != _selectedPaymentMethodId)
+                          DropdownMenuItem(
+                            value: m.id,
+                            child: Text(m.name, overflow: TextOverflow.ellipsis),
+                          ),
+                    ],
+                    onChanged: (v) => setState(() => part.methodId = v),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  flex: 2,
+                  child: MoneyTextFormField(
+                    key: Key('scan_payment_split_amount_$index'),
+                    controller: part.controller,
+                    allowEmpty: true,
+                    decoration: InputDecoration(
+                      labelText: 'Valor',
+                      isDense: true,
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                    ),
+                    onChanged: (m) => setState(() => part.cents = m.cents),
+                  ),
+                ),
+                IconButton(
+                  tooltip: 'Remover meio',
+                  icon: const Icon(Icons.close_rounded),
+                  onPressed: () => setState(() {
+                    _extraPayments.removeAt(index).dispose();
+                  }),
+                ),
+              ],
+            ),
+          ),
+        if (_extraPayments.isNotEmpty) ...[
+          TextButton.icon(
+            onPressed: () => setState(() => _extraPayments.add(_ScanPaymentPart())),
+            icon: const Icon(Icons.add_rounded),
+            label: const Text('Adicionar meio'),
+          ),
+          Text(
+            main > 0
+                ? 'No meio principal: ${Money(main).format()}'
+                : 'Os outros meios passam do valor da nota.',
+            style: TextStyle(
+              color: main > 0 ? null : AppColors.debtRed,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ],
+      ],
+    );
   }
 
   @override
@@ -2847,6 +2996,13 @@ class _SmartScannerPageState extends State<SmartScannerPage>
                 );
               },
             ),
+          if (_alreadyPaid)
+            Builder(
+              builder: (context) => _buildPaymentSplitEditor(
+                context.watch<FinanceCubit>().state.paymentMethods,
+                proposal.totalAmount,
+              ),
+            ),
           const SizedBox(height: 20),
 
           // Botões de Confirmação
@@ -2859,6 +3015,7 @@ class _SmartScannerPageState extends State<SmartScannerPage>
                       : () {
                           _clearDraftStore();
                           setState(() {
+                            _clearExtraPayments();
                             _currentProposal = null;
                           });
                         },
@@ -3374,4 +3531,13 @@ class _AiRetryDialogState extends State<_AiRetryDialog> {
       ],
     );
   }
+}
+
+
+/// Um meio de pagamento a mais da nota lida (valor digitado à mão).
+class _ScanPaymentPart {
+  String? methodId;
+  int cents = 0;
+  final controller = MoneyTextEditingController();
+  void dispose() => controller.dispose();
 }

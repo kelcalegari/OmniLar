@@ -549,6 +549,35 @@ class MockFinanceDataSource implements FinanceDataSource {
   }
 
   @override
+  Future<List<HouseExpense>> getExpensesInGroup(String groupId) async =>
+      _expenses.where((e) => e.paymentGroupId == groupId).toList();
+
+  @override
+  Future<void> replaceExpenses(List<String> oldIds, List<HouseExpense> parts) async {
+    // Como no banco (0125): tudo ou nada, e a nota antiga sai inteira
+    final old = _expenses.where((e) => oldIds.contains(e.id)).toList();
+    if (old.length != oldIds.length) {
+      throw const ServerFailure('Alguma despesa a trocar não existe mais. Atualize a tela e tente de novo.');
+    }
+    if (old.any((e) => e.isRecurring || e.installmentPlanId != null || e.projectId != null)) {
+      throw const ServerFailure(
+        'Esta despesa (recorrente, parcelada, de projeto, importada ou de compra do mercado) não pode ter o pagamento dividido.',
+      );
+    }
+    _expenses.removeWhere((e) => oldIds.contains(e.id));
+    for (final part in parts) {
+      await addExpense(part);
+    }
+  }
+
+  @override
+  Future<void> addExpenseGroup(List<HouseExpense> parts) async {
+    for (final part in parts) {
+      await addExpense(part);
+    }
+  }
+
+  @override
   Future<void> addExpense(HouseExpense expense) async {
     HouseExpense toAdd = expense;
     if (toAdd.dueDate == null && toAdd.paymentMethodId.isNotEmpty) {
@@ -675,6 +704,12 @@ class MockFinanceDataSource implements FinanceDataSource {
       diff: {'title': current.title, 'amount_cents': current.amount.cents},
       createdAt: clock.now(),
     ));
+
+    // Como no banco (0124): parte de uma nota com vários meios sai com a nota
+    if (current.paymentGroupId != null) {
+      _expenses.removeWhere((e) => e.paymentGroupId == current.paymentGroupId);
+      return;
+    }
 
     switch (scope) {
       case RecurrenceScope.thisInstanceOnly:

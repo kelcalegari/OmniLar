@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:intl/intl.dart';
 import '../../../../core/di/service_locator.dart';
+import '../../../../core/utils/uuid.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/domain/value_objects/money.dart';
 import '../../../../core/widgets/money_input_field.dart';
@@ -14,6 +15,7 @@ import '../../domain/entities/house_expense.dart';
 import '../../domain/entities/house_expense_item.dart';
 import '../../domain/entities/split_rule.dart';
 import '../../domain/services/expense_launch_defaults.dart';
+import '../../domain/services/expense_payment_split.dart';
 import '../../domain/entities/category.dart';
 import '../../domain/entities/payment_method.dart';
 import '../../domain/services/credit_card_invoice_calculator.dart';
@@ -53,6 +55,18 @@ class _DraftExpenseItem {
     titleController.dispose();
     amountController.dispose();
   }
+}
+
+/// Um meio de pagamento a mais numa nota paga com vários (0124).
+class _DraftPaymentPart {
+  String? methodId;
+  int cents;
+  final MoneyTextEditingController amountController;
+
+  _DraftPaymentPart({this.methodId, this.cents = 0})
+      : amountController = MoneyTextEditingController(initialMoney: Money(cents), allowEmpty: true);
+
+  void dispose() => amountController.dispose();
 }
 
 class AddExpensePage extends StatefulWidget {
@@ -123,6 +137,21 @@ class _AddExpensePageState extends State<AddExpensePage> {
   /// Compra já em andamento: a parcela que vem na próxima fatura.
   int _installmentFirstNumber = 1;
   String? _installmentDebtorId;
+
+  /// Nota paga com mais de um meio (ex.: parte no VA, o resto no cartão): os
+  /// meios além do principal. O principal fica com o que sobra do valor.
+  bool _isPaymentSplit = false;
+  final List<_DraftPaymentPart> _extraPayments = [];
+
+  /// Editando uma parte de nota com vários meios: a nota inteira é carregada
+  /// (as partes podem estar em outros ciclos) e salva trocando todas as partes.
+  bool _groupLoading = false;
+
+  /// A nota tem uma compra parcelada: aqui só se edita esta parte (os meios e
+  /// os valores ficam como foram lançados; para refazer, exclua a compra).
+  bool _groupLocked = false;
+  List<HouseExpense> _groupParts = const [];
+  HouseExpense? _groupNote;
   final List<_DraftExpenseItem> _draftItems = [];
   ReceiptAttachmentFile? _pendingAttachmentFile;
   String? _existingAttachmentPath;
@@ -179,6 +208,11 @@ class _AddExpensePageState extends State<AddExpensePage> {
           responsibleMemberId: it.responsibleMemberId,
         )));
       }
+      // Parcela de compra parcelada: a nota só se refaz pela compra inteira
+      if (edit.isPaymentGroupPart && edit.installmentPlanId == null) {
+        _groupLoading = true;
+        _loadPaymentGroup(edit);
+      }
     } else {
       _isRecurring = widget.isRecurringDefault;
       if (_isRecurring) {
@@ -187,6 +221,74 @@ class _AddExpensePageState extends State<AddExpensePage> {
       _selectedProjectId = widget.initialProjectId;
     }
     _loadAvailableProjects();
+  }
+
+  /// Carrega a nota inteira de uma parte editada: valor total, meios e itens.
+  Future<void> _loadPaymentGroup(HouseExpense edit) async {
+    final cubit = context.read<FinanceCubit>();
+    try {
+      final parts = await cubit.expensesInGroup(edit.paymentGroupId!);
+      if (!mounted) return;
+      if (parts.isEmpty) throw StateError('nota sem partes');
+      if (parts.any((p) => p.installmentPlanId != null)) {
+        setState(() {
+          _groupLoading = false;
+          _groupLocked = true;
+        });
+        return;
+      }
+      final note = ExpensePaymentSplit.merge(parts, mainId: edit.id);
+      final methods = {for (final m in cubit.state.paymentMethods) m.id: m};
+      // Parte de cartão espera a fatura; o status da nota é o das outras
+      final direct = parts.where((p) => !ExpenseLaunchDefaults.waitsForInvoice(methods[p.paymentMethodId]));
+      setState(() {
+        _groupParts = parts;
+        _groupNote = note;
+        _cents = note.amount.cents;
+        _amountFieldVersion++;
+        _selectedPaymentMethodId = edit.paymentMethodId;
+        _expenseStatus = direct.isNotEmpty && direct.every((p) => p.isPending)
+            ? ExpenseStatus.pending
+            : ExpenseStatus.paid;
+        for (final item in _draftItems) {
+          item.dispose();
+        }
+        _draftItems
+          ..clear()
+          ..addAll(note.items.map((it) => _DraftExpenseItem(
+                title: it.title,
+                cents: it.amount.cents,
+                categoryId: it.categoryId,
+                responsibleMemberId: it.responsibleMemberId,
+              )));
+        _isItemized = note.items.isNotEmpty;
+        _existingAttachmentPath = note.attachmentPath;
+        _existingAttachmentName = note.attachmentName;
+        _existingAttachmentContentType = note.attachmentContentType;
+        _existingAttachmentSizeBytes = note.attachmentSizeBytes;
+        for (final part in _extraPayments) {
+          part.dispose();
+        }
+        _extraPayments
+          ..clear()
+          ..addAll([
+            for (final p in parts)
+              if (p.id != edit.id)
+                _DraftPaymentPart(methodId: p.paymentMethodId, cents: p.amount.cents),
+          ]);
+        _isPaymentSplit = _extraPayments.isNotEmpty;
+        _groupLoading = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _groupLoading = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          backgroundColor: Colors.red.shade700,
+          content: Text('Não foi possível carregar as outras partes da nota: $e'),
+        ),
+      );
+    }
   }
 
   /// Confere o código colado e usa o que ele traz: valor (se ainda vazio) e
@@ -277,6 +379,9 @@ class _AddExpensePageState extends State<AddExpensePage> {
     for (final item in _draftItems) {
       item.dispose();
     }
+    for (final part in _extraPayments) {
+      part.dispose();
+    }
     super.dispose();
   }
 
@@ -354,6 +459,22 @@ class _AddExpensePageState extends State<AddExpensePage> {
       }
     }
 
+    if (_groupLoading) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Carregando as outras partes da nota. Tente de novo em instantes.')),
+      );
+      return;
+    }
+    if (widget.expenseToEdit?.isPaymentGroupPart == true &&
+        widget.expenseToEdit?.installmentPlanId == null &&
+        !_groupLocked &&
+        _groupNote == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('As partes da nota não foram carregadas. Feche e abra a despesa de novo.')),
+      );
+      return;
+    }
+
     final state = context.read<FinanceCubit>().state;
     final catId = _selectedCategoryId ?? state.categories.firstOrNull?.id ?? '';
     final paidById = _selectedPaidByMemberId ?? state.members.firstOrNull?.id ?? sl<AuthRepository>().currentUser?.id ?? '';
@@ -375,6 +496,18 @@ class _AddExpensePageState extends State<AddExpensePage> {
               'A soma dos valores fixos (${Money(fixedSum).format()}) deve ser igual ao valor da despesa (${Money(_cents).format()}).',
             ),
           ),
+        );
+        return;
+      }
+    }
+
+    // Nota paga com mais de um meio: as partes precisam somar o valor
+    final paymentParts = _paymentSplitApplies(state) ? _paymentParts(pmId) : null;
+    if (paymentParts != null) {
+      final error = ExpensePaymentSplit.validate(_cents, paymentParts);
+      if (error != null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(backgroundColor: Colors.red.shade700, content: Text(error)),
         );
         return;
       }
@@ -466,7 +599,7 @@ class _AddExpensePageState extends State<AddExpensePage> {
     }
 
     if (widget.expenseToEdit != null) {
-      final oldExpense = widget.expenseToEdit!;
+      final oldExpense = _groupNote ?? widget.expenseToEdit!;
       RecurrenceScope chosenScope = RecurrenceScope.thisInstanceOnly;
       if (oldExpense.isRecurring) {
         final scope = await showRecurrenceScopeDialog(
@@ -584,6 +717,39 @@ class _AddExpensePageState extends State<AddExpensePage> {
 
       if (!mounted) return;
       final cubit = context.read<FinanceCubit>();
+
+      // Nota com vários meios (ou que passa a ter): troca todas as partes de
+      // uma vez; sem os meios extras, a nota volta a ser uma despesa só
+      final inGroup = widget.expenseToEdit!.isPaymentGroupPart && !_groupLocked;
+      if (paymentParts != null || inGroup) {
+        final noteId = updatedExpense.id;
+        final parts = paymentParts == null
+            ? [updatedExpense.copyWith(clearPaymentGroupId: true)]
+            : ExpensePaymentSplit.build(
+                note: updatedExpense,
+                parts: paymentParts,
+                methods: {for (final m in state.paymentMethods) m.id: m},
+                groupId: 'grp_$noteId',
+                partId: (i) => '${noteId}_$i',
+                status: _expenseStatus,
+                dueDate: _expenseStatus == ExpenseStatus.pending ? _selectedDate : null,
+              );
+        final replaced = await cubit.replaceExpenses(
+          inGroup ? [for (final p in _groupParts) p.id] : [widget.expenseToEdit!.id],
+          parts,
+        );
+        if (!mounted) return;
+        setState(() => _isSaving = false);
+        if (replaced) Navigator.pop(context);
+        showSaveFeedback(
+          ScaffoldMessenger.of(context),
+          ok: replaced,
+          success: 'Despesa atualizada com sucesso! ✏️',
+          failure: cubit.state.errorMessage,
+        );
+        return;
+      }
+
       final ok = await cubit.updateExpense(updatedExpense, scope: chosenScope);
       if (!mounted) return;
       setState(() => _isSaving = false);
@@ -605,6 +771,7 @@ class _AddExpensePageState extends State<AddExpensePage> {
         categoryId: catId,
         paidById: paidById,
         rule: rule,
+        paymentParts: paymentParts,
       );
       return;
     }
@@ -687,7 +854,17 @@ class _AddExpensePageState extends State<AddExpensePage> {
     );
 
     final cubit = context.read<FinanceCubit>();
-    final ok = await cubit.addExpense(expense);
+    final ok = paymentParts == null
+        ? await cubit.addExpense(expense)
+        : await cubit.addExpenseGroup(ExpensePaymentSplit.build(
+            note: expense,
+            parts: paymentParts,
+            methods: {for (final m in state.paymentMethods) m.id: m},
+            groupId: 'grp_$expenseId',
+            partId: (i) => '${expenseId}_$i',
+            status: _expenseStatus,
+            dueDate: _expenseStatus == ExpenseStatus.pending ? _selectedDate : null,
+          ));
     if (!mounted) return;
     setState(() => _isSaving = false);
     // Falhou: o formulário fica aberto, com o que foi digitado
@@ -695,7 +872,9 @@ class _AddExpensePageState extends State<AddExpensePage> {
     showSaveFeedback(
       ScaffoldMessenger.of(context),
       ok: ok,
-      success: _isRecurring
+      success: paymentParts != null
+          ? 'Nota lançada em ${paymentParts.length} formas de pagamento! 🎉'
+          : _isRecurring
           ? 'Despesa recorrente cadastrada com sucesso! 🔁'
           : (_isItemized
               ? 'Boleto composto lançado com ${items.length} sub-itens! 🏢'
@@ -718,6 +897,171 @@ class _AddExpensePageState extends State<AddExpensePage> {
 
   bool _installmentApplies(PaymentMethod? pm) => _isInstallment && _canBeInstallment(pm);
 
+  /// Nota nova, à vista, fora de projeto e sem recorrência pode ser paga com
+  /// mais de um meio (0124).
+  bool _canSplitPayment(FinanceState state) =>
+      _editableAsSplit() &&
+      !_isRecurring &&
+      _selectedProjectId == null &&
+      _installmentDebtorId == null &&
+      state.paymentMethods.length >= 2;
+
+  /// Despesa nova, ou editada que não seja recorrente, parcelada nem de projeto
+  /// (o banco recusa a troca nesses casos).
+  bool _editableAsSplit() {
+    final edit = widget.expenseToEdit;
+    return edit == null || (!edit.isRecurring && edit.installmentPlanId == null && edit.projectId == null);
+  }
+
+  bool _paymentSplitApplies(FinanceState state) =>
+      _isPaymentSplit && _extraPayments.isNotEmpty && _canSplitPayment(state);
+
+  /// O meio principal leva o que os outros não cobrem.
+  List<PaymentPart> _paymentParts(String mainMethodId) {
+    final extrasCents = _extraPayments.fold<int>(0, (acc, p) => acc + p.cents);
+    return [
+      PaymentPart(paymentMethodId: mainMethodId, amountCents: _cents - extrasCents),
+      for (final p in _extraPayments)
+        PaymentPart(paymentMethodId: p.methodId ?? '', amountCents: p.cents),
+    ];
+  }
+
+  void _addExtraPayment(FinanceState state) {
+    final used = {_selectedPaymentMethodId, for (final p in _extraPayments) p.methodId};
+    final next = state.paymentMethods.where((m) => !used.contains(m.id)).firstOrNull;
+    if (next == null) return;
+    _extraPayments.add(_DraftPaymentPart(methodId: next.id));
+  }
+
+  Widget _buildPaymentSplitSection(ThemeData theme, FinanceState state) {
+    if (_groupLoading) {
+      return const Padding(
+        padding: EdgeInsets.only(bottom: 16),
+        child: LinearProgressIndicator(key: Key('payment_split_loading')),
+      );
+    }
+    if (_groupLocked ||
+        (widget.expenseToEdit?.isPaymentGroupPart == true && widget.expenseToEdit?.installmentPlanId != null)) {
+      return Padding(
+        padding: const EdgeInsets.only(bottom: 16),
+        child: Text(
+          'Esta despesa é parte de uma nota com compra parcelada no cartão. '
+          'Aqui você altera só esta parte; para mudar os meios, exclua a compra parcelada e lance de novo.',
+          key: const Key('payment_split_locked_note'),
+          style: theme.textTheme.bodySmall,
+        ),
+      );
+    }
+    if (!_canSplitPayment(state)) return const SizedBox.shrink();
+    final extrasCents = _extraPayments.fold<int>(0, (acc, p) => acc + p.cents);
+    final mainCents = _cents - extrasCents;
+    final mainName =
+        state.paymentMethods.where((p) => p.id == _selectedPaymentMethodId).firstOrNull?.name ?? 'meio principal';
+    final used = {_selectedPaymentMethodId, for (final p in _extraPayments) p.methodId};
+    final canAddMore = state.paymentMethods.any((m) => !used.contains(m.id));
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          SwitchListTile(
+            key: const Key('payment_split_switch'),
+            contentPadding: EdgeInsets.zero,
+            title: const Text('Pagar com mais de um meio'),
+            subtitle: const Text('Ex.: parte no VA e o resto no cartão'),
+            value: _isPaymentSplit,
+            onChanged: (value) => setState(() {
+              _isPaymentSplit = value;
+              if (value && _extraPayments.isEmpty) _addExtraPayment(state);
+              if (!value) {
+                for (final p in _extraPayments) {
+                  p.dispose();
+                }
+                _extraPayments.clear();
+              }
+            }),
+          ),
+          if (_isPaymentSplit) ...[
+            for (final (index, part) in _extraPayments.indexed)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 8),
+                child: Row(
+                  children: [
+                    Expanded(
+                      flex: 3,
+                      child: DropdownButtonFormField<String>(
+                        key: Key('payment_split_method_$index'),
+                        initialValue: part.methodId,
+                        isExpanded: true,
+                        decoration: InputDecoration(
+                          labelText: 'Também pago com',
+                          isDense: true,
+                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                        ),
+                        items: [
+                          for (final m in state.paymentMethods)
+                            if (m.id != _selectedPaymentMethodId)
+                              DropdownMenuItem(value: m.id, child: Text(m.name, overflow: TextOverflow.ellipsis)),
+                        ],
+                        onChanged: (value) => setState(() => part.methodId = value),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      flex: 2,
+                      child: MoneyTextFormField(
+                        key: Key('payment_split_amount_$index'),
+                        controller: part.amountController,
+                        allowEmpty: true,
+                        decoration: InputDecoration(
+                          labelText: 'Valor',
+                          isDense: true,
+                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                        ),
+                        onChanged: (money) => setState(() => part.cents = money.cents),
+                      ),
+                    ),
+                    IconButton(
+                      tooltip: 'Remover meio',
+                      icon: const Icon(Icons.close_rounded),
+                      onPressed: () => setState(() {
+                        _extraPayments.removeAt(index).dispose();
+                        if (_extraPayments.isEmpty) _isPaymentSplit = false;
+                      }),
+                    ),
+                  ],
+                ),
+              ),
+            if (canAddMore)
+              Align(
+                alignment: Alignment.centerLeft,
+                child: TextButton.icon(
+                  onPressed: () => setState(() => _addExtraPayment(state)),
+                  icon: const Icon(Icons.add_rounded),
+                  label: const Text('Adicionar meio'),
+                ),
+              ),
+            Text(
+              'No $mainName: ${Money(mainCents).format()}',
+              key: const Key('payment_split_main_remaining'),
+              style: theme.textTheme.bodyMedium?.copyWith(
+                fontWeight: FontWeight.w600,
+                color: mainCents > 0 ? null : AppColors.debtRed,
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              'Cada parte segue a regra do próprio meio: a do cartão espera a fatura, '
+              'a do VA fica fora dos aportes.',
+              style: theme.textTheme.bodySmall,
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
   /// Compra à vista no cartão que um morador deve: um empréstimo, como a parcelada.
   bool _upfrontForDebtor(PaymentMethod? pm) =>
       !_isInstallment && _installmentDebtorId != null && _canBeInstallment(pm);
@@ -738,6 +1082,7 @@ class _AddExpensePageState extends State<AddExpensePage> {
     required String categoryId,
     required String paidById,
     required SplitRule rule,
+    List<PaymentPart>? paymentParts,
   }) async {
     void fail(String message) => ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(backgroundColor: Colors.red.shade700, content: Text(message)),
@@ -761,10 +1106,14 @@ class _AddExpensePageState extends State<AddExpensePage> {
     if (_isSaving) return;
     setState(() => _isSaving = true);
 
+    // Nota com vários meios: o cartão parcela só a parte dele (a primeira); as
+    // outras partes entram como despesas comuns, no mesmo grupo (0126)
+    final cardCents = paymentParts?.first.amountCents ?? _cents;
+
     var purchase = InstallmentPurchase.build(
       title: _titleController.text.trim(),
       description: _descriptionText,
-      total: Money(_cents),
+      total: Money(cardCents),
       count: count,
       purchaseDate: _selectedDate,
       card: card,
@@ -808,6 +1157,35 @@ class _AddExpensePageState extends State<AddExpensePage> {
       }
     }
 
+    if (paymentParts != null) {
+      final note = HouseExpense(
+        id: 'nota_${clock.now().millisecondsSinceEpoch}',
+        title: _titleController.text.trim(),
+        description: _descriptionText,
+        amount: Money(_cents),
+        date: _selectedDate,
+        categoryId: categoryId,
+        paidByMemberId: paidById,
+        paymentMethodId: card.id,
+        splitRule: rule,
+        createdBy: sl<AuthRepository>().currentUser?.id,
+      );
+      final parts = ExpensePaymentSplit.build(
+        note: note,
+        parts: paymentParts,
+        methods: {for (final m in state.paymentMethods) m.id: m},
+        groupId: generateUuidV4(),
+        partId: (i) => '${note.id}_$i',
+        status: _expenseStatus,
+        dueDate: _expenseStatus == ExpenseStatus.pending ? _selectedDate : null,
+      );
+      purchase = purchase.withPaymentGroup(
+        groupId: parts.first.paymentGroupId!,
+        noteTotalCents: _cents,
+        parts: parts.skip(1).toList(),
+      );
+    }
+
     final cubit = context.read<FinanceCubit>();
     String? error;
     try {
@@ -823,7 +1201,9 @@ class _AddExpensePageState extends State<AddExpensePage> {
     showSaveFeedback(
       ScaffoldMessenger.of(context),
       ok: error == null,
-      success: debtorId == null
+      success: debtorId == null && paymentParts != null
+          ? 'Nota lançada: $count vezes no ${card.name} e o resto nos outros meios. 💳'
+          : debtorId == null
           ? 'Compra parcelada em $count vezes lançada! As parcelas ficam previstas até cada fatura. 💳'
           : count == 1
               ? 'Compra lançada como empréstimo! 💳'
@@ -949,7 +1329,9 @@ class _AddExpensePageState extends State<AddExpensePage> {
 
   /// Compra no cartão: em quantas vezes.
   Widget _buildInstallmentSection(ThemeData theme, FinanceState state, PaymentMethod card) {
-    final parts = _cents > 0 ? Money(_cents).splitEqually(_installmentsCount) : const <Money>[];
+    // Nota com vários meios: o cartão parcela só a parte dele
+    final cardCents = _paymentSplitApplies(state) ? _paymentParts(card.id).first.amountCents : _cents;
+    final parts = cardCents > 0 ? Money(cardCents).splitEqually(_installmentsCount) : const <Money>[];
     final purchaseDue = CreditCardInvoiceCalculator.calculateInvoiceDueDate(
       purchaseDate: _selectedDate,
       closingDay: card.closingDay!,
@@ -1134,7 +1516,9 @@ class _AddExpensePageState extends State<AddExpensePage> {
         context: context,
         builder: (ctx) => AlertDialog(
           title: const Text('Excluir Despesa'),
-          content: Text('Tem certeza que deseja excluir "${exp.title}"?'),
+          content: Text(exp.isPaymentGroupPart
+              ? '"${exp.title}" foi paga com mais de um meio. Excluir apaga a nota inteira, com todas as partes.'
+              : 'Tem certeza que deseja excluir "${exp.title}"?'),
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(ctx, false),
@@ -2114,6 +2498,9 @@ class _AddExpensePageState extends State<AddExpensePage> {
                 },
               ),
               const SizedBox(height: 16),
+
+              // Nota paga com mais de um meio
+              _buildPaymentSplitSection(theme, state),
 
               // Compra parcelada no cartão
               Builder(

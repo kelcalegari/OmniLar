@@ -41,6 +41,8 @@ class HouseExpense extends Equatable {
   final DateTime? attachmentPurgedAt; // Data em que o anexo físico foi expurgado (Modelo A)
   final String? paidByParticipantId; // Quando o pagador é um participante externo do projeto (project_participants)
   final String? installmentPlanId; // Parcela de uma compra parcelada no cartão (installment_plans)
+  final String? paymentGroupId; // Parte de uma nota paga com mais de um meio de pagamento (0124)
+  final int? paymentGroupTotalCents; // Valor da nota inteira, igual em todas as partes (0126)
 
   const HouseExpense({
     required this.id,
@@ -74,6 +76,8 @@ class HouseExpense extends Equatable {
     this.attachmentSizeBytes,
     this.attachmentPurgedAt,
     this.installmentPlanId,
+    this.paymentGroupId,
+    this.paymentGroupTotalCents,
   });
 
   bool get isPaid => status == ExpenseStatus.paid;
@@ -116,6 +120,10 @@ class HouseExpense extends Equatable {
 
   /// Verifica se os sub-itens somam exatamente o total do boleto
   bool get isItemsBalanced => !isItemized || itemsTotalCents == amount.cents;
+
+  /// Parte de uma nota paga com mais de um meio (ex.: R$ 50 no VA + R$ 100 no
+  /// cartão): cada parte é uma despesa, com a regra do próprio meio.
+  bool get isPaymentGroupPart => paymentGroupId != null;
 
   /// Se a despesa possui um comprovante/cupom anexado
   bool get hasAttachment => attachmentPath != null && attachmentPath!.isNotEmpty;
@@ -161,6 +169,9 @@ class HouseExpense extends Equatable {
     int? attachmentSizeBytes,
     DateTime? attachmentPurgedAt,
     String? installmentPlanId,
+    String? paymentGroupId,
+    int? paymentGroupTotalCents,
+    bool clearPaymentGroupId = false,
   }) {
     return HouseExpense(
       id: id ?? this.id,
@@ -194,6 +205,9 @@ class HouseExpense extends Equatable {
       attachmentSizeBytes: clearAttachment ? null : (attachmentSizeBytes ?? this.attachmentSizeBytes),
       attachmentPurgedAt: clearAttachment ? null : (attachmentPurgedAt ?? this.attachmentPurgedAt),
       installmentPlanId: installmentPlanId ?? this.installmentPlanId,
+      paymentGroupId: clearPaymentGroupId ? null : (paymentGroupId ?? this.paymentGroupId),
+      paymentGroupTotalCents:
+          clearPaymentGroupId ? null : (paymentGroupTotalCents ?? this.paymentGroupTotalCents),
     );
   }
 
@@ -230,5 +244,7 @@ class HouseExpense extends Equatable {
         attachmentSizeBytes,
         attachmentPurgedAt,
         installmentPlanId,
+        paymentGroupId,
+        paymentGroupTotalCents,
       ];
 }

@@ -8,6 +8,7 @@ import 'package:omni_lar/features/finance/domain/entities/house_expense.dart';
 import 'package:omni_lar/features/finance/domain/entities/house_member.dart';
 import 'package:omni_lar/features/finance/domain/entities/payment_method.dart';
 import 'package:omni_lar/features/finance/domain/entities/split_rule.dart';
+import 'package:omni_lar/features/finance/domain/services/expense_payment_split.dart';
 import 'package:omni_lar/features/p2p/data/datasources/mock_p2p_datasource.dart';
 import 'package:omni_lar/features/p2p/domain/entities/p2p_loan.dart';
 import 'package:omni_lar/features/reconciliation/data/mock_import_repository.dart';
@@ -122,6 +123,76 @@ void main() {
 
   ImportedStatementLine lineOf(ImportSession session, String id) =>
       session.lines.firstWhere((l) => l.id == id);
+
+  group('nota paga com mais de um meio (0126)', () {
+    const va = PaymentMethod(
+      id: 'pm_va',
+      name: 'VA',
+      type: PaymentMethodType.va,
+      ownerMemberId: 'kelvynn',
+      consumesContributions: false,
+    );
+
+    test('as parcelas e as outras partes levam o mesmo grupo e o total da nota', () {
+      final purchase = _build(cents: 21000, count: 3);
+      final note = HouseExpense(
+        id: 'nota',
+        title: 'Geladeira',
+        amount: const Money(30000),
+        date: _purchase,
+        categoryId: 'cat_casa',
+        paidByMemberId: 'kelvynn',
+        paymentMethodId: 'pm_magalu',
+        splitRule: const SplitRule.percentage({'kelvynn': 60, 'cristiano': 40}),
+      );
+      final parts = ExpensePaymentSplit.build(
+        note: note,
+        parts: const [
+          PaymentPart(paymentMethodId: 'pm_magalu', amountCents: 21000),
+          PaymentPart(paymentMethodId: 'pm_va', amountCents: 9000),
+        ],
+        methods: {'pm_magalu': _card(), 'pm_va': va},
+        groupId: 'g',
+        partId: (i) => 'p$i',
+      );
+
+      final grouped = purchase.withPaymentGroup(groupId: 'g', noteTotalCents: 30000, parts: parts.skip(1).toList());
+
+      expect(grouped.expenses.map((e) => e.paymentGroupId).toSet(), {'g'});
+      expect(grouped.expenses.map((e) => e.paymentGroupTotalCents).toSet(), {30000});
+      expect(grouped.expenses.fold<int>(0, (acc, e) => acc + e.amount.cents), 21000);
+      expect(grouped.extraParts.single.paymentMethodId, 'pm_va');
+      expect(grouped.extraParts.single.amount.cents, 9000);
+      expect(grouped.extraParts.single.paymentGroupId, 'g');
+      expect(grouped.plan.id, purchase.plan.id);
+    });
+
+    test('no modo demo a compra grava as parcelas e a outra parte; excluir a compra leva a nota toda', () async {
+      final finance = MockFinanceDataSource();
+      final repository = MockImportRepository(finance: finance, p2p: MockP2PDataSource());
+      final purchase = _build(cents: 21000, count: 3, title: 'Geladeira da nota');
+      final extra = HouseExpense(
+        id: 'extra',
+        title: 'Geladeira da nota',
+        amount: const Money(9000),
+        date: _purchase,
+        categoryId: 'cat_casa',
+        paidByMemberId: 'kelvynn',
+        paymentMethodId: 'pm_caixa',
+        splitRule: const SplitRule.percentage({'kelvynn': 60, 'cristiano': 40}),
+      );
+
+      await repository.createInstallmentPurchase(
+        purchase.withPaymentGroup(groupId: 'g', noteTotalCents: 30000, parts: [extra]),
+      );
+      final inGroup = await finance.getExpensesInGroup('g');
+      expect(inGroup, hasLength(4));
+      expect(inGroup.fold<int>(0, (acc, e) => acc + e.amount.cents), 30000);
+
+      await repository.deleteInstallmentPurchase(purchase.plan.id);
+      expect(await finance.getExpensesInGroup('g'), isEmpty);
+    });
+  });
 
   group('montar a compra parcelada', () {
     test('da Casa: uma parcela prevista por fatura, o centavo que sobra nas primeiras', () {

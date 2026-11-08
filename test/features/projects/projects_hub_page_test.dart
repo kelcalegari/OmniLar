@@ -108,6 +108,12 @@ class _FakeFinanceRepository implements FinanceRepository {
   @override
   Future<void> addExpense(HouseExpense expense) async {}
   @override
+  Future<void> addExpenseGroup(List<HouseExpense> parts) async {}
+  @override
+  Future<List<HouseExpense>> getExpensesInGroup(String groupId) async => [];
+  @override
+  Future<void> replaceExpenses(List<String> oldIds, List<HouseExpense> parts) async {}
+  @override
   Future<void> updateExpense(HouseExpense expense, {RecurrenceScope scope = RecurrenceScope.thisInstanceOnly}) async {}
   @override
   Future<void> deleteExpense(String expenseId, {RecurrenceScope scope = RecurrenceScope.thisInstanceOnly}) async {}
