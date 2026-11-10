@@ -808,9 +808,13 @@ class _SettlementHubContent extends StatelessWidget {
       summary.houseTreasuryBalance.cents + summary.surplusRefunded.cents,
     );
     final isSettled = summary.status == SettlementStatus.settled;
-    // Aporte devido menos o pago: positivo ainda vai entrar, negativo entrou a mais
+    // Aporte devido menos o pago: positivo ainda vai entrar, negativo entrou a
+    // mais. O excesso que abateu empréstimos com o Caixa já está no saldo.
     final contributionGap = Money(
-      summary.memberBalances.fold<int>(0, (acc, m) => acc + m.contributionDue.cents) -
+      summary.memberBalances.fold<int>(
+            0,
+            (acc, m) => acc + m.contributionDue.cents + m.contributionExcessApplied.cents,
+          ) -
           summary.totalContributions.cents,
     );
 

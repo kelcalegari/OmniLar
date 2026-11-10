@@ -70,6 +70,11 @@ class _SettlementAuditSheetState extends State<SettlementAuditSheet> {
         '  (+) Devolução da Sobra (já aportada): ${audit.contributionRefund.formatted}',
       );
     }
+    if (audit.contributionExcessApplied.cents > 0) {
+      buffer.writeln(
+        '  (+) Aporte acima da meta (abate empréstimos com a Casa): ${audit.contributionExcessApplied.formatted}',
+      );
+    }
     buffer.writeln(
       '  (+) Empréstimos a Receber: ${audit.p2pLentTotal.formatted}',
     );
@@ -466,6 +471,13 @@ class _SettlementAuditSheetState extends State<SettlementAuditSheet> {
               iconColor: AppColors.creditGreen,
               label: 'Devolução da Sobra (já aportada)',
               value: '+${audit.contributionRefund.formatted}',
+            ),
+          if (audit.contributionExcessApplied.cents > 0)
+            _buildEquationLine(
+              icon: Icons.add_circle_outline_rounded,
+              iconColor: AppColors.creditGreen,
+              label: 'Aporte acima da meta (abate empréstimos com a Casa)',
+              value: '+${audit.contributionExcessApplied.formatted}',
             ),
           _buildEquationLine(
             icon: Icons.add_circle_outline_rounded,

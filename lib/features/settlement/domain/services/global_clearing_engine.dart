@@ -731,6 +731,25 @@ class GlobalClearingEngine {
         paidTowardsDue > due.cents ? paidTowardsDue - due.cents : 0,
       );
 
+      // Aporte acima da meta original: o dinheiro já está no Caixa, então
+      // abate o que o morador deve ao próprio Caixa neste fechamento
+      // (reposição de Caixinha fica de fora, volta para a Caixinha).
+      final excessCents = paidCents > originalDueCents ? paidCents - originalDueCents : 0;
+      int houseDebtCents = 0;
+      if (excessCents > 0) {
+        for (final loan in loans) {
+          if (!loan.isHouseLender ||
+              loan.borrowerMemberId != member.id ||
+              loan.repayToVaultId != null) {
+            continue;
+          }
+          for (final installment in loan.installmentsChargedIn(cycle)) {
+            houseDebtCents += installment.remainingAmount.cents;
+          }
+        }
+      }
+      final contributionExcessApplied = Money(math.min(excessCents, houseDebtCents));
+
       final balance = MemberNetBalance(
         memberId: member.id,
         memberName: member.name,
@@ -740,6 +759,7 @@ class GlobalClearingEngine {
         p2pLentDue: Money(p2pLentCents),
         p2pBorrowedDue: Money(p2pBorrowedCents),
         contributionRefund: contributionRefund,
+        contributionExcessApplied: contributionExcessApplied,
       );
       memberBalances.add(balance);
 
@@ -758,6 +778,7 @@ class GlobalClearingEngine {
         p2pBorrowedTotal: Money(p2pBorrowedCents),
         netBalance: balance.netBalance,
         contributionRefund: contributionRefund,
+        contributionExcessApplied: contributionExcessApplied,
         p2pPaidInCycle: p2pPaidInCycle,
         p2pReceivedInCycle: p2pReceivedInCycle,
         p2pPaidInCycleTotal: Money(p2pPaidInCycleCents),

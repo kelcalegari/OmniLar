@@ -105,6 +105,9 @@ class MemberAuditTrail {
   /// Sobra devolvida que o morador já tinha aportado (o Caixa devolve).
   final Money contributionRefund;
 
+  /// Aporte acima da meta usado para abater empréstimos com o Caixa da Casa.
+  final Money contributionExcessApplied;
+
   /// Parcelas de empréstimos/acordos pagas pelo morador durante este ciclo
   final List<P2PInstallmentAudit> p2pPaidInCycle;
 
@@ -132,6 +135,7 @@ class MemberAuditTrail {
     required this.p2pBorrowedTotal,
     required this.netBalance,
     this.contributionRefund = const Money.zero(),
+    this.contributionExcessApplied = const Money.zero(),
     this.p2pPaidInCycle = const [],
     this.p2pReceivedInCycle = const [],
     this.p2pPaidInCycleTotal = const Money.zero(),
@@ -175,7 +179,10 @@ class MemberAuditTrail {
 
   /// Total de créditos (+ a receber)
   Money get totalCredits {
-    return Money(outOfPocketTotal.cents + contributionRefund.cents + p2pLentTotal.cents);
+    return Money(outOfPocketTotal.cents +
+        contributionRefund.cents +
+        contributionExcessApplied.cents +
+        p2pLentTotal.cents);
   }
 
   /// Total de débitos (- a pagar)
