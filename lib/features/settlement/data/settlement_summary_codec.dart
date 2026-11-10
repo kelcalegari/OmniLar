@@ -42,6 +42,7 @@ Map<String, dynamic> settlementSummaryToJson(SettlementSummary s) => {
             'p2p_lent_cents': m.p2pLentDue.cents,
             'p2p_borrowed_cents': m.p2pBorrowedDue.cents,
             'contribution_refund_cents': m.contributionRefund.cents,
+            'contribution_excess_applied_cents': m.contributionExcessApplied.cents,
           },
       ],
       'transfers': [
@@ -71,6 +72,7 @@ Map<String, dynamic> _auditToJson(MemberAuditTrail a) => {
       'p2p_borrowed_total_cents': a.p2pBorrowedTotal.cents,
       'net_balance_cents': a.netBalance.cents,
       'contribution_refund_cents': a.contributionRefund.cents,
+      'contribution_excess_applied_cents': a.contributionExcessApplied.cents,
       'expense_shares': [
         for (final e in a.expenseShares)
           {
@@ -185,6 +187,7 @@ MemberAuditTrail _auditFromJson(Map<String, dynamic> j) => MemberAuditTrail(
       p2pBorrowedTotal: _money(j['p2p_borrowed_total_cents']),
       netBalance: _money(j['net_balance_cents']),
       contributionRefund: _money(j['contribution_refund_cents']),
+      contributionExcessApplied: _money(j['contribution_excess_applied_cents']),
       p2pPaidInCycle: [for (final p in _list(j['p2p_paid_in_cycle'])) _p2pFromJson(p)],
       p2pReceivedInCycle: [for (final p in _list(j['p2p_received_in_cycle'])) _p2pFromJson(p)],
       p2pPaidInCycleTotal: _money(j['p2p_paid_in_cycle_total_cents']),
@@ -215,6 +218,7 @@ SettlementSummary? settlementSummaryFromJson(
             p2pLentDue: _money(m['p2p_lent_cents']),
             p2pBorrowedDue: _money(m['p2p_borrowed_cents']),
             contributionRefund: _money(m['contribution_refund_cents']),
+            contributionExcessApplied: _money(m['contribution_excess_applied_cents']),
           ),
       ],
       transfers: [

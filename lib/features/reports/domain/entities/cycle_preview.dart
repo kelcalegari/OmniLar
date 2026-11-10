@@ -41,6 +41,9 @@ class MemberCyclePreview {
   final Money contributionPaid;
   final Money outOfPocket;
   final Money contributionRefund;
+
+  /// Aporte acima da meta que abateu empréstimos com o Caixa da Casa.
+  final Money contributionExcessApplied;
   final Money p2pToPay;
   final Money p2pToReceive;
 
@@ -73,6 +76,7 @@ class MemberCyclePreview {
     required this.contributionPaid,
     required this.outOfPocket,
     required this.contributionRefund,
+    this.contributionExcessApplied = const Money.zero(),
     required this.p2pToPay,
     required this.p2pToReceive,
     required this.net,

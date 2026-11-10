@@ -93,6 +93,7 @@ class CyclePreviewBuilder {
           contributionPaid: b.contributionPaid,
           outOfPocket: b.outOfPocketExpenses,
           contributionRefund: b.contributionRefund,
+          contributionExcessApplied: b.contributionExcessApplied,
           p2pToPay: b.p2pBorrowedDue,
           p2pToReceive: b.p2pLentDue,
           net: b.netBalance,

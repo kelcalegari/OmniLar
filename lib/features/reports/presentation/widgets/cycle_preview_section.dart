@@ -322,6 +322,12 @@ class _MemberPreviewCard extends StatelessWidget {
             _line('Pagou do bolso (reembolso)', member.outOfPocket, sign: '−'),
           if (member.contributionRefund.isPositive)
             _line('Sobra devolvida', member.contributionRefund, sign: '−'),
+          if (member.contributionExcessApplied.isPositive)
+            _line(
+              'Aporte acima da meta (abate empréstimos com a Casa)',
+              member.contributionExcessApplied,
+              sign: '−',
+            ),
           if (member.p2pToPay.isPositive)
             _line('Parcelas a pagar', member.p2pToPay, sign: '+'),
           for (final i in member.installmentsToPay) _installment(i),

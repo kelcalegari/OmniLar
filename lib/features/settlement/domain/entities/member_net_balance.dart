@@ -11,6 +11,8 @@ class MemberNetBalance {
   final Money
   p2pBorrowedDue; // Total de parcelas P2P que ele deve a outros no ciclo
   final Money contributionRefund; // Sobra devolvida que ele já tinha aportado
+  /// Aporte acima da meta usado para abater o que ele deve ao Caixa da Casa
+  final Money contributionExcessApplied;
 
   const MemberNetBalance({
     required this.memberId,
@@ -21,6 +23,7 @@ class MemberNetBalance {
     required this.p2pLentDue,
     required this.p2pBorrowedDue,
     this.contributionRefund = const Money.zero(),
+    this.contributionExcessApplied = const Money.zero(),
   });
 
   /// Aporte ainda pendente de pagamento para a Casa
@@ -37,12 +40,14 @@ class MemberNetBalance {
   /// Despesas da Casa pagas do bolso próprio (reembolso a receber)
   /// - Aporte pendente a pagar para a Casa
   /// + Sobra devolvida que já tinha sido aportada (o Caixa devolve)
+  /// + Aporte acima da meta que abate empréstimos com o Caixa da Casa
   /// + Empréstimos P2P a receber de outros membros
   /// - Empréstimos P2P a pagar para outros membros
   Money get netBalance {
     final houseNet = outOfPocketExpenses.cents -
         pendingContribution.cents +
-        contributionRefund.cents;
+        contributionRefund.cents +
+        contributionExcessApplied.cents;
     final p2pNet = p2pLentDue.cents - p2pBorrowedDue.cents;
     return Money(houseNet + p2pNet);
   }
