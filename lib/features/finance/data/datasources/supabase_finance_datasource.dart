@@ -29,6 +29,7 @@ import '../../domain/services/self_funded_expenses.dart';
 import '../../domain/services/cycle_expense_filter.dart';
 import '../../domain/services/credit_card_invoice_calculator.dart';
 import 'finance_datasource.dart';
+import '../../domain/services/receipt_attachment_service.dart';
 import '../../../../core/offline/offline_snapshot.dart';
 import '../settled_contribution_dues.dart';
 
@@ -984,6 +985,59 @@ class SupabaseFinanceDataSource implements FinanceDataSource {
     String expenseId, {
     RecurrenceScope scope = RecurrenceScope.thisInstanceOnly,
   }) async {
+    // Os comprovantes que podem sair junto, lidos antes: despesa excluída
+    // some da leitura (RLS)
+    final receipts = await _receiptsOf(expenseId);
+    await _deleteExpenseRows(expenseId, scope);
+    await _purgeDeletedReceipts(receipts);
+  }
+
+  /// Comprovantes da despesa [expenseId] e das despesas da série dela, por id.
+  Future<Map<String, String>> _receiptsOf(String expenseId) async {
+    try {
+      final current = await client
+          .from('house_expenses')
+          .select('id, recurring_series_id')
+          .eq('id', expenseId)
+          .maybeSingle();
+      final seriesId = current?['recurring_series_id'] as String? ?? expenseId;
+      final rows = await client
+          .from('house_expenses')
+          .select('id, attachment_path')
+          .eq('house_id', _houseId)
+          .or('id.eq.$expenseId,id.eq.$seriesId,recurring_series_id.eq.$seriesId')
+          .not('attachment_path', 'is', null)
+          .isFilter('attachment_purged_at', null)
+          .isFilter('deleted_at', null);
+      return {for (final row in rows) row['id'] as String: row['attachment_path'] as String};
+    } catch (_) {
+      return const {};
+    }
+  }
+
+  /// Apaga do Storage o comprovante das despesas de [receipts] que a exclusão
+  /// levou. O arquivo só sai quando nenhuma despesa viva ainda aponta para ele
+  /// (as partes de uma nota paga com vários meios podem dividir o mesmo).
+  Future<void> _purgeDeletedReceipts(Map<String, String> receipts) async {
+    if (receipts.isEmpty) return;
+    try {
+      final paths = receipts.values.toSet().toList();
+      final stillUsed = await client
+          .from('house_expenses')
+          .select('attachment_path')
+          .eq('house_id', _houseId)
+          .inFilter('attachment_path', paths)
+          .isFilter('deleted_at', null);
+      final keep = {for (final row in stillUsed) row['attachment_path'] as String};
+      final remove = [for (final path in paths) if (!keep.contains(path)) path];
+      if (remove.isEmpty) return;
+      await client.storage.from(ReceiptAttachmentService.bucketName).remove(remove);
+    } catch (_) {
+      // Melhor esforço: a despesa já foi excluída
+    }
+  }
+
+  Future<void> _deleteExpenseRows(String expenseId, RecurrenceScope scope) async {
     try {
       final nowIso = clock.now().toUtc().toIso8601String();
 
