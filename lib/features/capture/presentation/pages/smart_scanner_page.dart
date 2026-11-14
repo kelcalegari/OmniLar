@@ -35,6 +35,9 @@ import '../../domain/entities/capture_proposal.dart';
 import '../../domain/services/capture_draft_codec.dart';
 import '../../domain/services/boleto_parser.dart';
 import '../../domain/services/capture_service.dart';
+import '../../domain/services/personal_card_purchase.dart';
+import '../../../reconciliation/domain/repositories/import_repository.dart';
+import '../../../reconciliation/domain/services/installment_purchase.dart';
 import '../utils/camera_release.dart';
 import '../../../finance/presentation/cubit/finance_cubit.dart';
 import '../../../finance/domain/entities/category.dart';
@@ -1736,6 +1739,50 @@ class _SmartScannerPageState extends State<SmartScannerPage>
           !isPayable && ExpenseLaunchDefaults.waitsForInvoice(scannedMethod);
       final documentDate = _documentDate;
 
+      // Nota toda de um morador no cartão: empréstimo, como na importação da fatura
+      final debtorId = PersonalCardPurchase.debtorOf(
+        items: proposal.items,
+        card: scannedMethod,
+        alreadyPaid: !isPayable,
+        hasOtherPayments: _extraPayments.any((p) => p.methodId != null || p.cents > 0),
+        launcherId: paidByMemberId,
+      );
+      if (debtorId != null) {
+        final debtorName = state.members.where((m) => m.id == debtorId).firstOrNull?.name;
+        await sl<ImportRepository>().createInstallmentPurchase(
+          InstallmentPurchase.build(
+            title: title,
+            description: proposal.items.map((i) => i.name).join('; '),
+            total: proposal.totalAmount,
+            count: 1,
+            purchaseDate: documentDate,
+            card: scannedMethod!,
+            categoryId: finalCategoryId,
+            paidByMemberId: paidByMemberId,
+            splitRule: splitRule,
+            debtorMemberId: debtorId,
+            debtorName: debtorName,
+            createdBy: currentUserId,
+          ),
+        );
+        await financeCubit.loadCycleData(cycle: financeCubit.state.currentCycle);
+        _clearDraftStore();
+        widget.onProposalReady?.call(proposal);
+        if (mounted) {
+          Navigator.pop(context);
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              backgroundColor: AppColors.creditGreen,
+              content: Text(
+                'Compra de ${debtorName ?? 'morador'} lançada como empréstimo no ${scannedMethod.name} '
+                '(${proposal.totalAmount.format()}). 💳',
+              ),
+            ),
+          );
+        }
+        return;
+      }
+
       final isPremium =
           sl<AuthRepository>().isDemoMode ||
           (sl<AccountAccessCubit>().state.access?.isPremium ?? false);
@@ -2973,6 +3020,22 @@ class _SmartScannerPageState extends State<SmartScannerPage>
                 final isHouse =
                     currentPm.ownerMemberId == null ||
                     currentPm.id == 'pm_caixa';
+                final financeState = context.read<FinanceCubit>().state;
+                final debtorId = PersonalCardPurchase.debtorOf(
+                  items: proposal.items,
+                  card: currentPm,
+                  alreadyPaid: _alreadyPaid,
+                  hasOtherPayments: _extraPayments.isNotEmpty,
+                  launcherId: currentPm.ownerMemberId ??
+                      sl<AuthRepository>().currentUser?.id,
+                );
+                final debtorName = debtorId == null
+                    ? null
+                    : financeState.members
+                              .where((m) => m.id == debtorId)
+                              .firstOrNull
+                              ?.name ??
+                          'o morador';
 
                 return DropdownButtonFormField<String>(
                   initialValue: currentPm.id,
@@ -2982,7 +3045,9 @@ class _SmartScannerPageState extends State<SmartScannerPage>
                       borderRadius: BorderRadius.circular(12),
                     ),
                     prefixIcon: const Icon(Icons.credit_card_rounded),
-                    helperText: isHouse
+                    helperText: debtorName != null
+                        ? 'Tudo pessoal: vira empréstimo de $debtorName, como na fatura'
+                        : isHouse
                         ? 'Meio da Casa: despesa conjunta (sem reembolso pessoal)'
                         : 'Meio pessoal: a Casa reembolsa quem pagou',
                   ),

@@ -1,3 +1,4 @@
+import 'package:clock/clock.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:omni_lar/core/domain/value_objects/money.dart';
 import 'package:omni_lar/features/p2p/domain/entities/p2p_installment.dart';
@@ -30,7 +31,8 @@ void main() {
       expect(installments[2].dueDate, DateTime(2027, 1, 10));
     });
 
-    test('Calcula saldo restante e status da parcela', () {
+    // Antes do vencimento, para a parcela não virar atrasada com o calendário
+    test('Calcula saldo restante e status da parcela', () => withClock(Clock.fixed(DateTime(2026, 11, 1)), () {
       final inst = P2PInstallment(
         id: 'inst_1',
         loanId: 'loan_1',
@@ -57,7 +59,7 @@ void main() {
       final forgiven = inst.copyWith(isForgiven: true);
       expect(forgiven.status, InstallmentStatus.forgiven);
       expect(forgiven.remainingAmount.cents, 0);
-    });
+    }));
 
     test('Gera empréstimo antigo com parcelas já pagas no passado', () {
       final total = const Money(200000); // R$ 2.000,00
