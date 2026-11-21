@@ -6,6 +6,7 @@ import 'package:omni_lar/core/domain/value_objects/money.dart';
 import 'package:omni_lar/features/capture/domain/entities/capture_proposal.dart';
 import 'package:omni_lar/features/capture/presentation/pages/smart_scanner_page.dart';
 import 'package:omni_lar/features/finance/domain/entities/house_expense.dart';
+import 'package:omni_lar/features/finance/domain/entities/payment_method.dart';
 import 'package:omni_lar/features/finance/domain/repositories/finance_repository.dart';
 import 'package:omni_lar/features/finance/presentation/cubit/finance_cubit.dart';
 
@@ -114,7 +115,9 @@ void main() {
     await tester.ensureVisible(methodField);
     await tester.tap(methodField);
     await tester.pumpAndSettle();
-    final otherName = cubit.state.paymentMethods.last.name;
+    // Meio que não é cartão: no cartão a data da compra decide a fatura e a parte
+    // pode cair em outro ciclo conforme o dia em que o teste roda.
+    final otherName = cubit.state.paymentMethods.lastWhere((m) => m.type != PaymentMethodType.card).name;
     await tester.tap(find.text(otherName).last);
     await tester.pumpAndSettle();
 
