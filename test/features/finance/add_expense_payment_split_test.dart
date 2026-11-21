@@ -406,7 +406,8 @@ void main() {
 
     final all = <String, HouseExpense>{};
     final ds = sl<FinanceDataSource>();
-    for (final offset in [0, 35, 70, 105]) {
+    // Passos de 30 dias cobrem a compra e as 3 faturas, qualquer que seja o dia de hoje.
+    for (final offset in [0, 30, 60, 90, 120]) {
       final cycle = FinancialCycle.fromDate(date: DateTime.now().add(Duration(days: offset)), cycleStartDay: 5);
       for (final e in await ds.getExpensesForCycle(cycle)) {
         if (e.title.startsWith('Geladeira em duas formas')) all[e.id] = e;
