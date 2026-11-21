@@ -14,6 +14,7 @@ import '../../../../core/di/service_locator.dart';
 import '../../../auth/domain/repositories/auth_repository.dart';
 import '../../../auth/presentation/cubit/auth_cubit.dart';
 import '../../../auth/presentation/cubit/auth_state.dart';
+import '../../../finance/domain/entities/house_expense.dart';
 import '../../../finance/presentation/cubit/finance_cubit.dart';
 import '../cubit/calendar_cubit.dart';
 import '../cubit/calendar_state.dart';
@@ -593,13 +594,13 @@ class _CalendarPageState extends State<CalendarPage> {
             : _buildMobileMonthLayout(context, state, cubit, theme);
 
       case CalendarViewMode.month:
-        final billDates = <DateTime>[];
+        // Só contas pendentes com vencimento definido viram ponto amarelo.
+        final bills = <HouseExpense>[];
         try {
           final expenses = context.read<FinanceCubit>().state.expenses;
-          for (final exp in expenses) {
-            billDates.add(exp.effectiveDueDate);
-          }
+          bills.addAll(expenses.where((e) => e.isPending && e.dueDate != null));
         } catch (_) {}
+        final billDates = bills.map((e) => e.effectiveDueDate).toList();
 
         return isDesktop
             ? Padding(
@@ -624,7 +625,7 @@ class _CalendarPageState extends State<CalendarPage> {
                   ),
                 ),
               )
-            : _buildMobileMonthLayout(context, state, cubit, theme, billDates);
+            : _buildMobileMonthLayout(context, state, cubit, theme, billDates, bills);
       case CalendarViewMode.list:
         return _buildListView(context, state, cubit, theme, isDesktop);
     }
@@ -637,7 +638,9 @@ class _CalendarPageState extends State<CalendarPage> {
     CalendarCubit cubit,
     ThemeData theme, [
     List<DateTime> billDueDates = const [],
+    List<HouseExpense> bills = const [],
   ]) {
+    final dayBills = bills.where((b) => _isSameDay(b.effectiveDueDate, _selectedDate)).toList();
     final dayEvents = state.events.where((e) => _isSameDay(e.startTime, _selectedDate)).toList();
     String formattedSelectedDay;
     try {
@@ -708,9 +711,59 @@ class _CalendarPageState extends State<CalendarPage> {
 
         // Lista de compromissos do dia selecionado (rola de forma unificada)
         if (dayEvents.isEmpty)
-          _buildEmptyDayState(context, state, theme)
+          (dayBills.isEmpty
+              ? _buildEmptyDayState(context, state, theme)
+              : const SizedBox.shrink())
         else
           ...dayEvents.map((event) => _buildEventItem(context, event, state, cubit)),
+
+        if (dayBills.isNotEmpty) ...[
+          const SizedBox(height: 12),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 4),
+            child: Text(
+              'Contas a vencer (${dayBills.length})',
+              style: TextStyle(fontSize: 12, color: Colors.grey[600], fontWeight: FontWeight.bold),
+            ),
+          ),
+          const SizedBox(height: 8),
+          ...dayBills.map(
+            (b) => Container(
+              margin: const EdgeInsets.only(bottom: 8),
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+              decoration: BoxDecoration(
+                color: theme.cardColor,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: Colors.amber.withValues(alpha: 0.4)),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.receipt_long_outlined, size: 18, color: Colors.amber),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(b.title, maxLines: 1, overflow: TextOverflow.ellipsis),
+                  ),
+                  Text(b.amount.formatted, style: const TextStyle(fontWeight: FontWeight.bold)),
+                ],
+              ),
+            ),
+          ),
+        ],
+
+        // Legenda dos pontos do calendário
+        const SizedBox(height: 8),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Icon(Icons.circle, size: 8, color: AppColors.primary),
+            const SizedBox(width: 4),
+            Text('Compromisso', style: TextStyle(fontSize: 11, color: Colors.grey[600])),
+            const SizedBox(width: 14),
+            const Icon(Icons.circle, size: 8, color: Colors.amber),
+            const SizedBox(width: 4),
+            Text('Conta a vencer', style: TextStyle(fontSize: 11, color: Colors.grey[600])),
+          ],
+        ),
       ],
     );
   }
